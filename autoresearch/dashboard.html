@@ -115,9 +115,50 @@ pre{background:var(--soft);padding:14px;border-radius:12px;overflow:auto;font-si
 .ci.pass .pt{background:var(--green)}.ci.fail .pt{background:var(--red)}
 .ci.pass .span{background:color-mix(in srgb,var(--green) 30%,transparent)}.ci.fail .span{background:color-mix(in srgb,var(--red) 30%,transparent)}
 .matrix td.cell{text-align:center;font-variant-numeric:tabular-nums;border-radius:8px}
+.hcard{display:flex;flex-direction:column;gap:10px;transition:border-color .15s}.hcard:hover{border-color:var(--muted)}
+.hcard .row,.hrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.hcard .row .sub{margin-left:auto}
+.hcard .t{font-weight:620;font-size:16px}
+.hcard .sym{color:var(--muted);font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.hprog{display:flex;flex-direction:column;gap:7px;margin-top:4px}
+.hprog>div{display:grid;grid-template-columns:96px 1fr 54px;gap:10px;align-items:center;font-size:12px}
+.hprog span{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.hprog b{text-align:right;font-variant-numeric:tabular-nums}
+.hcard .meta{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;border-top:1px solid var(--border);padding-top:10px;margin-top:auto}
+.sbar{position:relative;height:8px;background:var(--soft);border-radius:99px}
+.sbar i{display:block;height:100%;border-radius:99px;background:var(--blue)}
+.sbar.champ i{background:var(--muted)}.sbar.up i{background:var(--green)}.sbar.down i{background:var(--red)}.sbar.warn i{background:var(--amber)}
+.sbar b{position:absolute;top:-4px;width:2px;height:16px;margin-left:-1px;background:var(--ink);opacity:.55;border-radius:1px}
+.lede{font-size:16px;margin:0 0 18px;max-width:760px}.hrow{margin:-6px 0 12px}
+.hgrid{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}
+.ex{display:flex;flex-direction:column;gap:10px}
+.exin{background:var(--soft);border-radius:12px;padding:14px 16px;font-size:14px;overflow-wrap:anywhere}
+.exo{display:flex;gap:12px;align-items:flex-start;border-radius:12px;padding:12px 16px;font-size:14px;overflow-wrap:anywhere}
+.exo span{font-weight:700}.exo div{min-width:0}
+.exo.bad{background:color-mix(in srgb,var(--red) 12%,transparent)}.exo.bad span{color:var(--red)}
+.exo.good{background:color-mix(in srgb,var(--green) 12%,transparent)}.exo.good span{color:var(--green)}
+.att{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1.2fr) 90px minmax(0,1fr) 90px;gap:18px;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)}
+.att.head{font-size:12px;color:var(--muted);padding-top:0;align-items:end}.att.head .sub{font-size:11.5px}
+.att:last-child{border:0}a.att:hover .nm b{color:var(--blue)}.att .nm .sub{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att .num{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.sc{display:flex;flex-direction:column;gap:6px}.frac{font-variant-numeric:tabular-nums;color:var(--muted);font-size:13px}.frac b{color:var(--ink);font-size:16px}
+.lbl{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:3px}
+.exnav{display:flex;gap:4px}.exnav button{all:unset;cursor:pointer;width:24px;height:24px;text-align:center;line-height:24px;border-radius:7px;background:var(--soft);color:var(--muted);font-size:12px}.exnav button.on{background:var(--ink);color:var(--card)}
+.ofw{font-size:13px;margin:-4px 0 12px}
+.att{grid-template-columns:minmax(0,1.3fr) minmax(0,1.2fr) 90px 100px minmax(0,1fr)}
+.pex{border-top:1px solid var(--border);margin-top:8px;padding-top:16px}
+.pexh{display:flex;align-items:center;gap:12px;margin-bottom:12px;font-size:13px}.lg{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px}.lg i{margin-left:8px}
+.prow{display:grid;grid-template-columns:140px 1fr;gap:12px;align-items:start;padding:5px 0}
+.pl{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:14px}
+.cells{display:flex;flex-wrap:wrap;gap:3px}
+.c{display:inline-block;width:14px;height:14px;border-radius:3px;background:var(--soft)}
+.c.s1{background:color-mix(in srgb,var(--green) 60%,transparent)}.c.s0{background:color-mix(in srgb,var(--muted) 28%,transparent)}
+.c.fx{background:var(--green);box-shadow:0 0 0 1.5px var(--card),0 0 0 3px var(--green)}.c.bk{background:var(--red);box-shadow:0 0 0 1.5px var(--card),0 0 0 3px var(--red)}
+.big{font-size:30px;font-weight:650;margin-bottom:10px;font-variant-numeric:tabular-nums}.big small{font-size:15px;color:var(--muted);font-weight:500}
+.meas{margin:0 0 12px;font-size:14px}
+.att:last-child{border:0}.att:hover .nm b{color:var(--blue)}.att .nm .sub{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att .num{text-align:right;font-variant-numeric:tabular-nums}.att .ctl{font-size:13px}
 .scroll{overflow-x:auto}
 .filters{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
-@media (max-width:900px){.app{grid-template-columns:1fr}nav{position:static;height:auto;flex-direction:row;flex-wrap:wrap;padding:12px 16px;gap:2px}.brand{padding:6px 10px 6px 4px;width:100%}nav .foot{display:none}nav a{padding:8px 10px;font-size:13px}main{padding:22px 16px 60px}.g4{grid-template-columns:repeat(2,minmax(0,1fr))}.g3,.g2{grid-template-columns:1fr}.hero{flex-direction:column}.charts,.cards{grid-template-columns:1fr}h1{font-size:23px}}
+@media (max-width:900px){.app{grid-template-columns:1fr}nav{position:static;height:auto;flex-direction:row;flex-wrap:wrap;padding:12px 16px;gap:2px}.brand{padding:6px 10px 6px 4px;width:100%}nav .foot{display:none}nav a{padding:8px 10px;font-size:13px}main{padding:22px 16px 60px}.hgrid{grid-template-columns:1fr}.att{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 50px}.att .ctl,.att>div:nth-child(4){display:none}.prow{grid-template-columns:1fr}.g4{grid-template-columns:repeat(2,minmax(0,1fr))}.g3,.g2{grid-template-columns:1fr}.hero{flex-direction:column}.charts,.cards{grid-template-columns:1fr}h1{font-size:23px}}
 </style>
 </head>
 <body>
@@ -126,7 +167,7 @@ pre{background:var(--soft);padding:14px;border-radius:12px;overflow:auto;font-si
 <main id="main"><div class="empty">Loading…</div></main>
 </div>
 <script>
-const S={state:null,detail:null,ok:true,lbDataset:null,lbSlice:null,archiveKind:'all'};
+const S={ex:{},state:null,detail:null,ok:true,lbDataset:null,lbSlice:null,archiveKind:'all'};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pct=x=>x==null?'—':(100*x).toFixed(1)+'%';
@@ -160,7 +201,7 @@ function tree(id,depth=0,seen=new Set([id])){return kids(id).filter(k=>!seen.has
 
 function renderNav(){
  const {r}=route();const st=S.state;
- const navOn={task:active().some(t=>t.id===route().arg)?'workbench':'archive',model:'models'}[r]||r;
+ const navOn={task:active().some(t=>t.id===route().arg)?'workbench':'archive',model:'models',hill:'hills'}[r]||r;
  const counts={workbench:st?active().length:0,hills:st?Object.values(st.hills).filter(h=>h.status==='open').length:0};
  $('#nav').innerHTML=`<div class="brand"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="#fff" stroke-width="1.6"><rect x="1" y="1" width="24" height="24" rx="7" opacity=".5"/><path d="M6 17l4.5-6 3.5 4 6-8"/></svg>Observatory</div>`+
  ROUTES.map(([k,l,i])=>`<a href="#${k}" class="${navOn===k?'on':''}">${ICON[i]}${l}${counts[k]?`<span class="count">${counts[k]}</span>`:''}</a>`).join('')+
@@ -273,7 +314,7 @@ function vModel(name){
  const g=st.gates[name],hill=st.hills[m.hill];
  const evs=st.tasks.filter(t=>t.model===name).slice(0,30);
  let h=topbar(name)+`<a class="back" href="#models">← Models</a><div class="card"><div class="hero"><div class="main">
-  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap"><span class="chip ${m.status}">${m.status}</span>${m.parent?`<span class="chip">from ${esc(m.parent)}</span>`:''}${hill?`<a class="chip" href="#hills">${esc(hill.title)}</a>`:''}</div>
+  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap"><span class="chip ${m.status}">${m.status}</span>${m.parent?`<span class="chip">from ${esc(m.parent)}</span>`:''}${hill?`<a class="chip" href="#hill/${encodeURIComponent(m.hill)}">${esc(hill.title)}</a>`:''}</div>
   <h2>${esc(m.title||name)}</h2>${m.change?`<p class="desc">${esc(m.change)}</p>`:''}${m.reason?`<p class="desc neg">${esc(m.reason)}</p>`:''}
   ${m.links?`<div class="links" style="margin-top:10px">${Object.entries(m.links).map(([k,v])=>`<a href="${esc(v)}" target="_blank" rel="noopener">${esc(k)} ↗</a>`).join('')}</div>`:''}</div>${g?ladderPills(g):''}</div></div>`;
  if(g&&!g.error){
@@ -287,16 +328,79 @@ function vModel(name){
  h+=`<div class="card section"><h2>Tasks</h2>${evs.length?`<table>${evs.map(t=>`<tr class="click" onclick="location.hash='task/${encodeURIComponent(t.id)}'"><td><b>${esc(t.title)}</b><div class="sub">${esc(t.kind)} · ${ago(t.updated)}</div></td><td><span class="chip ${t.status}">${t.status}</span></td><td class="num">${t.summary?.score!=null?pct(t.summary.score):''}</td></tr>`).join('')}</table>`:'<div class="empty">None</div>'}</div>`;
  return h;
 }
+// hills: small clickable cards; each hill's page explains it with its example, share and runs
+const firstLine=t=>String(t||'').split(/(?<=\.)\s/)[0];
+const frac=r=>r?`${Math.round(r.score*r.n)} / ${r.n}`:'—';
+function hillRuns(x){
+ const st=S.state,T=st.leaderboard[x.target]||{},C=x.control?st.leaderboard[x.control]||{}:{};
+ return Object.entries(T).map(([m,r])=>({m,r,c:C[m]})).sort((a,b)=>b.r.score-a.r.score);
+}
+function scoreBar(v,mark,cls=''){return `<div class="sbar ${cls}"><i style="width:${(100*(v||0)).toFixed(1)}%"></i>${mark!=null?`<b style="left:${(100*mark).toFixed(1)}%"></b>`:''}</div>`}
 function vHills(){
- const st=S.state,hs=Object.entries(st.hills);
- const ms=Object.entries(st.models).filter(([k,m])=>m.status!=='rejected').sort((a,b)=>a[1].created-b[1].created).map(([k])=>k);
- const champ=st.champion;
- let h=topbar('Hills')+`<div class="cards">${hs.map(([k,x])=>`<div class="card"><div style="display:flex;gap:8px;flex-wrap:wrap"><span class="chip ${x.status}">${x.status}</span>${x.found_in?`<span class="chip">found in ${esc(x.found_in)}</span>`:''}${x.climbed_by?`<span class="chip pass">climbed by ${esc(x.climbed_by)}</span>`:''}</div>
-  <h2 style="margin:12px 0 6px">${esc(x.title)}</h2>${x.problem?`<p class="desc" style="margin:0 0 12px">${esc(x.problem)}</p>`:''}
-  <div class="kv"><div><span>target</span><b>${esc(short(x.target))}</b> <span>${st.slices[x.target]?.n??''}</span></div>${x.control?`<div><span>control</span><b>${esc(short(x.control))}</b> <span>${st.slices[x.control]?.n??''}</span></div>`:''}</div></div>`).join('')}</div>`;
- if(hs.length){
-  h+=`<div class="card section"><h2>Regression matrix<span class="r">score on each hill's target</span></h2><div class="scroll"><table class="matrix"><tr><th>Model</th>${hs.map(([k,x])=>`<th class="num">${esc(x.title)}</th>`).join('')}</tr>${ms.map(m=>`<tr><td><b>${esc(m)}</b> ${m===champ?'<span class="chip champion">champion</span>':''}</td>${hs.map(([k,x])=>{const r=st.leaderboard[x.target]?.[m],c=st.leaderboard[x.target]?.[champ];if(!r)return '<td class="cell sub">·</td>';const d=c&&m!==champ?r.score-c.score:0;const col=d>0.005?'var(--green)':d<-0.005?'var(--red)':'var(--blue)';return `<td class="cell" style="background:color-mix(in srgb,${col} ${Math.round(8+Math.min(30,Math.abs(d)*150))}%,transparent)">${pct(r.score)}</td>`}).join('')}</tr>`).join('')}</table></div></div>`;
+ const st=S.state,champ=st.champion,order={open:0,climbed:1};
+ const hs=Object.entries(st.hills).sort((a,b)=>(order[a[1].status]??2)-(order[b[1].status]??2)||b[1].created-a[1].created);
+ if(!hs.length)return topbar('Hills')+'<div class="card empty">No hills</div>';
+ return topbar('Hills')+`<div class="cards hills">${hs.map(([k,x])=>{
+  const runs=hillRuns(x),now=runs.find(o=>o.m===champ),best=runs.find(o=>o.m!==champ);
+  return `<a class="card hcard" href="#hill/${encodeURIComponent(k)}">
+   <div class="row"><span class="chip ${x.status}">${x.status}</span>${x.share?`<span class="sub">${pct(x.share.count/x.share.of)} of failures</span>`:''}</div>
+   <div class="t">${esc(x.title)}</div>
+   <div class="sym">${esc(x.symptom||firstLine(x.problem))}</div>
+   <div class="hprog">
+    <div><span>${esc(champ||'champion')}</span>${scoreBar(now?.r.score,null,'champ')}<b>${now?solved(now.r)+' / '+now.r.n:'—'}</b></div>
+    <div><span>${esc(best?.m||'no attempt')}</span>${scoreBar(best?.r.score,now?.r.score)}<b>${best?solved(best.r)+' / '+best.r.n:'—'}</b></div>
+   </div>
+   <div class="meta"><span>dev set ${esc(short(x.target))} · ${st.slices[x.target]?.n??'—'} examples</span><span>${(n=>n+(n===1?' attempt':' attempts'))(runs.filter(o=>o.m!==champ).length)}</span></div></a>`}).join('')}</div>`;
+}
+const solved=r=>Math.round(r.score*r.n);
+function delta(d,n){if(d==null)return '';const k=Math.round(d*n);return `<span class="${k>0?'pos':k<0?'neg':'sub'}">${k>0?'+':''}${k} solved</span>`}
+// the hill's dev set: what it is, who solves how much of it, and which examples each attempt fixed or broke
+function flips(a,b){let f=0,k=0;for(const id in a){if(!(id in b))continue;const x=a[id]>=.5,y=b[id]>=.5;if(x&&!y)f++;if(!x&&y)k++}return {f,k}}
+function devSet(x,runs,now){
+ const st=S.state,champ=st.champion,sl=st.slices[x.target]||{},ctl=x.control?st.slices[x.control]:null;
+ const D=S.hill?.key===x._key?S.hill.data:null,T=D?.target,cr=T?.runs?.[champ];
+ const nT=sl.n,nC=ctl?.n;
+ const cell=r=>r?`<div class="sc"><div class="frac"><b>${solved(r)}</b> / ${r.n}</div>${scoreBar(r.score,null,'')}</div>`:'<span class="sub">not run</span>';
+ let h=`<div class="card section"><h2>Dev set <span class="chip">${esc(short(x.target))}</span><span class="r">${[nT!=null?nT+' examples':'',sl.kind,sl.hash?'#'+String(sl.hash).slice(0,8):''].filter(Boolean).map(esc).join(' · ')}${sl.url?` · <a href="${esc(sl.url)}" target="_blank" rel="noopener" style="color:var(--blue)">data ↗</a>`:''}</span></h2>
+  ${sl.description?`<p class="desc" style="margin:-6px 0 10px">${esc(sl.description)}</p>`:''}
+  ${x.measure||sl.metric?`<p class="meas">${esc(x.measure||sl.metric)}</p>`:''}`;
+ if(!runs.length)return h+'<div class="empty">No runs on this dev set yet</div></div>';
+ h+=`<div class="att head"><div>Model</div><div>Solved</div><div class="num">vs champion</div><div class="num">fixed · broke</div>${ctl?`<div class="ctl">Control<div class="sub">${esc(short(x.control))} · ${nC??'—'} examples</div></div>`:''}</div>`;
+ h+=runs.map(o=>{const me=o.m===champ,d=now&&!me?o.r.score-now.r.score:null,fl=!me&&cr&&T.runs[o.m]?flips(T.runs[o.m],cr):null,cd=now?.c&&o.c&&!me?o.c.score-now.c.score:null;
+  return `<a class="att" href="#model/${encodeURIComponent(o.m)}"><div class="nm"><b>${esc(o.m)}</b>${me?' <span class="chip champion">champion</span>':''}${st.models[o.m]?.change?`<div class="sub">${esc(st.models[o.m].change)}</div>`:''}</div>
+  <div>${cell(o.r)}</div><div class="num">${me?'':delta(d,o.r.n)}</div>
+  <div class="num">${fl?`<span class="pos">+${fl.f}</span> · <span class="neg">−${fl.k}</span>`:''}</div>
+  ${ctl?`<div class="ctl">${o.c?`<span class="frac"><b>${solved(o.c)}</b> / ${o.c.n}</span> ${me?'':delta(cd,o.c.n)}`:'<span class="sub">not run</span>'}</div>`:''}</a>`}).join('');
+ if(T&&T.ids.length){
+  const ms=runs.map(o=>o.m).filter(m=>T.runs[m]);
+  const ids=[...T.ids].sort((a,b)=>ms.filter(m=>T.runs[m][a]>=.5).length-ms.filter(m=>T.runs[m][b]>=.5).length);
+  h+=`<div class="pex"><div class="pexh"><b>Per example</b><span class="lg"><i class="c s1"></i>solved<i class="c s0"></i>wrong<i class="c s1 fx"></i>fixed<i class="c s0 bk"></i>broke</span></div>
+  ${ms.map(m=>{const r=T.runs[m],me=m===champ;return `<div class="prow"><div class="pl">${esc(m)}</div><div class="cells">${ids.map(id=>{const v=r[id];if(v==null)return `<i class="c na" title="${esc(id)} · not run"></i>`;const ok=v>=.5,c=!me&&cr&&id in cr?(ok&&cr[id]<.5?' fx':!ok&&cr[id]>=.5?' bk':''):'';return `<i class="c ${ok?'s1':'s0'}${c}" title="${esc(id)} · ${num(v,2)}"></i>`}).join('')}</div></div>`}).join('')}</div>`;
  }
+ return h+'</div>';
+}
+function vHill(key){
+ const st=S.state,champ=st.champion,x=st.hills[key]&&{...st.hills[key],_key:key};if(!x)return topbar('Not found');
+ const runs=hillRuns(x),now=runs.find(o=>o.m===champ);
+ const exs=x.examples||(x.example?[x.example]:[]),i=Math.min(S.ex?.[key]||0,Math.max(0,exs.length-1)),ex=exs[i]||{};
+ const nT=st.slices[x.target]?.n,nC=x.control?st.slices[x.control]?.n:null;
+ const cell=(r,base,n,mark)=>r?`<div class="sc"><div class="frac"><b>${solved(r)}</b> / ${r.n}</div>${scoreBar(r.score,mark,'')}</div>`:'<span class="sub">not run</span>';
+ let h=topbar(x.title)+`<a class="back" href="#hills">← Hills</a>
+ <div class="hrow"><span class="chip ${x.status}">${x.status}</span>${x.climbed_by?`<a class="chip pass" href="#model/${encodeURIComponent(x.climbed_by)}">climbed by ${esc(x.climbed_by)}</a>`:''}</div>
+ ${x.symptom?`<p class="lede">${esc(x.symptom)}</p>`:''}
+ <div class="grid ${x.share?'hgrid':''}">
+  <div class="card"><h2>Examples${exs.length>1?`<span class="r exnav">${exs.map((_,j)=>`<button class="${j===i?'on':''}" onclick="S.ex={...S.ex,['${esc(key)}']:${j}};render()">${j+1}</button>`).join('')}</span>`:''}</h2>
+   ${ex.input||ex.wrong?`<div class="ex">
+    ${ex.input?`<div class="exin"><div class="lbl">Question</div>${esc(ex.input)}</div>`:''}
+    ${ex.wrong?`<div class="exo bad"><span>✗</span><div><div class="lbl">Model answered</div>${esc(ex.wrong)}</div></div>`:''}
+    ${ex.right?`<div class="exo good"><span>✓</span><div><div class="lbl">Correct answer</div>${esc(ex.right)}</div></div>`:''}
+    ${ex.why?`<div class="sub">${esc(ex.why)}</div>`:''}</div>`:'<div class="empty">No example</div>'}</div>
+  ${x.share?`<div class="card"><h2>How common</h2><div class="big">${x.share.count}<small> of ${x.share.of}</small></div>
+   <div class="ofw">${esc(x.share.of_what||'analysed failures')}</div>${scoreBar(x.share.count/x.share.of,null,'warn')}
+   <div class="sub" style="margin-top:8px">${pct(x.share.count/x.share.of)} fall into this hill</div></div>`:''}
+ </div>
+ ${devSet(x,runs,now)}
+ ${x.problem||x.found_in?`<div class="card section"><details><summary>Pre-declared expectations</summary>${x.problem?`<p class="desc">${esc(x.problem)}</p>`:''}${x.found_in?`<p class="sub">Found in ${esc(x.found_in)}</p>`:''}</details></div>`:''}`;
  return h;
 }
 function vSlices(){
@@ -350,7 +454,7 @@ function render(){
  const {r,arg}=route();
  const v={overview:vOverview,workbench:vWorkbench,archive:vArchive,models:vModels,hills:vHills,slices:vSlices}[r];
  const y=scrollY,open=[...document.querySelectorAll('#main details')].map(d=>d.open);
- $('#main').innerHTML=v?v():r==='task'?vTask(arg):r==='model'?vModel(arg):vOverview();
+ $('#main').innerHTML=v?v():r==='task'?vTask(arg):r==='model'?vModel(arg):r==='hill'?vHill(arg):vOverview();
  document.querySelectorAll('#main details').forEach((d,i)=>{if(open[i])d.open=true});
  scrollTo(0,y);
 }
@@ -358,6 +462,7 @@ async function tick(){
  try{
   const s=await fetch('api/state',{cache:'no-store'});S.state=await s.json();S.ok=true;
   const {r,arg}=route();
+  if(r==='hill'&&arg){const d=await fetch('api/hill/'+encodeURIComponent(arg),{cache:'no-store'});S.hill=d.ok?{key:arg,data:await d.json()}:null}
   if(r==='task'&&arg){const d=await fetch('api/task/'+encodeURIComponent(arg),{cache:'no-store'});S.detail=d.ok?await d.json():null}
  }catch(e){S.ok=false}
  render();

@@ -130,7 +130,21 @@ def cmd_slice(a):
 
 def cmd_hill(a):
     p = Project()
-    h = p.open_hill(a.name, a.title, a.target, a.control, a.problem, a.found_in)
+    examples = json.loads(Path(a.examples_file).read_text()) if a.examples_file else None
+    ex = {k: v for k, v in dict(input=a.example_input, wrong=a.example_wrong, right=a.example_right, why=a.example_why).items() if v}
+    if ex:
+        examples = (examples or (p.hills().get(a.name) or {}).get("examples") or []) + [ex]
+    share = None
+    if a.share:
+        count, of = a.share.split("/")
+        share = dict(count=int(count), of=int(of), of_what=a.share_of)
+    explainer = dict(symptom=a.symptom, measure=a.measure, examples=examples, share=share)
+    if a.verb == "explain":
+        p.explain_hill(a.name, **explainer)
+        return print(f"hill {a.name} explained")
+    if not (a.title and a.target):
+        raise SystemExit("arx hill open needs --title and --target")
+    h = p.open_hill(a.name, a.title, a.target, a.control, a.problem, a.found_in, **explainer)
     print(f"hill {a.name} open: target {h['target']}, control {h.get('control')}")
 
 
@@ -254,8 +268,13 @@ def main(argv=None):
     s.add_argument("--url"); s.add_argument("--hill"); s.add_argument("--metric", help="what `score` means on this slice"); s.set_defaults(fn=cmd_slice)
 
     s = sp.add_parser("hill", help="open a hill (a named weakness) with its target and control slices")
-    s.add_argument("verb", choices=["open"]); s.add_argument("name"); s.add_argument("--title", required=True)
-    s.add_argument("--target", required=True); s.add_argument("--control"); s.add_argument("--problem"); s.add_argument("--found-in")
+    s.add_argument("verb", choices=["open", "explain"]); s.add_argument("name"); s.add_argument("--title")
+    s.add_argument("--target"); s.add_argument("--control"); s.add_argument("--problem"); s.add_argument("--found-in")
+    s.add_argument("--symptom", help="one plain line: what the model does wrong")
+    s.add_argument("--measure", help="what a target score of 1 means for one example")
+    s.add_argument("--example-input"); s.add_argument("--example-wrong"); s.add_argument("--example-right")
+    s.add_argument("--example-why", help="one clause: why the model gets it wrong"); s.add_argument("--examples-file", help="JSON list of {input, wrong, right, why}")
+    s.add_argument("--share", help="failures this hill explains, COUNT/OF, e.g. 63/495"); s.add_argument("--share-of", help="what OF counts, e.g. \"v1's wrong answers on full\"")
     s.set_defaults(fn=cmd_hill)
 
     s = sp.add_parser("model", help="register a version (candidate, or --champion for the baseline)")
