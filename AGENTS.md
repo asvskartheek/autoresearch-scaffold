@@ -12,6 +12,9 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
 ## Every piece of work is visible
 - Open the task *before* starting the work, not after. No step is too small: installs, downloads, data prep,
   error analysis, slice building, evals, training.
+- A task is a single job with a clear end. The project's goal, a hill or a candidate is not a task: those are
+  tracked in `research.json`, hills and models. Never open one task to cover the whole effort and hang other
+  work under it.
 - Anything that runs longer than a minute is a task: `arx.task(...)` in Python or `arx task start` from a shell.
   It shows as a Workbench card while it runs and moves to the Archive when it ends. Never run unlogged work.
 - Log as you go: `t.log(step=..., loss=...)` for curves, `t.note("...")` for decisions, `t.link("HF dataset", url)`
@@ -22,6 +25,10 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
   `arx task start --parent <id>`. Keep each card's latest note current; it is the line people read.
 - Long jobs: visible progress, bulk/concurrent calls, a wall-clock deadline. A stalled task (no heartbeat for
   10 minutes) shows red; fix or fail it, never leave it.
+- Time budgets: when the work has a time cap, put it on the task (`budget_s=`; shell `--budget-s`) and drive the
+  loop with `while t.ok():` / `t.check()` (shell: `while arx task left $id; do ...; done`). Sub-tasks and evals are
+  held to the tightest cap above them. Do not keep a separate clock next to the work. A task stopped by its budget
+  ends as `budget`.
 
 ## Evaluating
 - Run evals through `arx.evaluate(model, slice, run_one)`. It enforces the slice's exact IDs, counts errors as 0,
@@ -47,3 +54,8 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
 
 ## UI
 - Cut taglines, helper text and secondary labels. If a screen needs them to make sense, fix the layout.
+
+## Pull requests
+- Before opening a PR, run a local testing session on the change: start the dashboard (`arx up`), exercise the new
+  behaviour end to end in a scratch project, and note in the PR what you ran and what you saw.
+- Write the PR description with the `show-me` skill.

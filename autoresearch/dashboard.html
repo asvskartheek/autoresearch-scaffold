@@ -40,7 +40,7 @@ h2{font-size:17px;margin:0;font-weight:620}
 .tile .s{color:var(--muted);font-size:12.5px;margin-top:2px}
 .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:2px 9px;border-radius:7px;background:var(--soft);color:var(--muted);white-space:nowrap;font-weight:500}
 .chip.running{background:color-mix(in srgb,var(--blue) 14%,transparent);color:var(--blue)}
-.chip.stalled,.chip.failed,.chip.fail,.chip.rejected{background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red)}
+.chip.stalled,.chip.failed,.chip.budget,.chip.fail,.chip.rejected{background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red)}
 .chip.done,.chip.pass,.chip.climbed{background:color-mix(in srgb,var(--green) 14%,transparent);color:var(--green)}
 .chip.champion{background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--amber)}
 .chip.pending,.chip.open,.chip.candidate{background:color-mix(in srgb,var(--purple) 14%,transparent);color:var(--purple)}
@@ -264,7 +264,7 @@ function taskCard(t){
   ${last.length?`<div class="kv">${last.map(([k,v])=>`<div><span>${esc(k)}</span><b>${fmtv(v)}</b></div>`).join('')}</div>`:''}
   ${f!=null?`<div class="prog"><i style="width:${(f*100).toFixed(1)}%"></i></div>`:''}
   ${sub.length?`<div class="kids"><div class="sub" style="margin-bottom:4px">${live} running · ${sub.length} sub-tasks</div>${shown.map(kidRow).join('')}${sub.length>shown.length?`<a class="kid sub" href="#task/${encodeURIComponent(t.id)}">+${sub.length-shown.length} more</a>`:''}</div>`:''}
-  <div class="meta"><span>${pr.total?`${pr.done} / ${pr.total}`:''}${t.eta?` · ETA ${left(t.eta.eta_s)}`:''}</span><span>${dur(t.created)} · beat ${ago(t.heartbeat)}</span></div></div>`;
+  <div class="meta"><span>${pr.total?`${pr.done} / ${pr.total}`:''}${t.eta?` · ETA ${left(t.eta.eta_s)}`:''}</span><span>${dur(t.created)}${t.budget_s?' / '+left(t.budget_s):''} · beat ${ago(t.heartbeat)}</span></div></div>`;
 }
 
 // ---------- views

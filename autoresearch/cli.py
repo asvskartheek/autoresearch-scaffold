@@ -208,7 +208,7 @@ def cmd_task(a):
     p = Project()
     if a.action == "start":
         t = Task(p, a.kind, a.title, a.description, model=a.model, slice=a.slice, agent=a.agent, total=a.total,
-                 parent=a.parent)
+                 parent=a.parent, budget_s=a.budget_s)
         print(t.id)
         return
     t = Task(p, "", "", tid=a.id)
@@ -220,6 +220,11 @@ def cmd_task(a):
         t.link(a.values[0], a.values[1])
     elif a.action == "progress":
         t.progress(int(a.values[0]), int(a.values[1]) if len(a.values) > 1 else None)
+    elif a.action == "left":  # exit 3 once spent, so shell loops can `while arx task left $id; do ...; done`
+        left = t.left()
+        print("unlimited" if left is None else f"{left:.1f}s")
+        if not t.ok():
+            sys.exit(3)
     elif a.action == "finish":
         t.finish(a.status, summary=json.loads(Path(a.summary_file).read_text()) if a.summary_file else None)
     if a.action != "start" and not _port_open(json.loads((p.dir / "server.json").read_text()).get("port", 0)) if (p.dir / "server.json").exists() else True:
@@ -301,11 +306,12 @@ def main(argv=None):
     s.set_defaults(fn=cmd_eval_run)
 
     s = sp.add_parser("task", help="workbench tasks from a shell")
-    s.add_argument("action", choices=["start", "log", "note", "link", "progress", "finish"])
+    s.add_argument("action", choices=["start", "log", "note", "link", "progress", "left", "finish"])
     s.add_argument("id", nargs="?"); s.add_argument("values", nargs="*")
     s.add_argument("--kind", default="experiment"); s.add_argument("--title"); s.add_argument("--description")
     s.add_argument("--model"); s.add_argument("--slice"); s.add_argument("--agent"); s.add_argument("--total", type=int)
     s.add_argument("--parent", help="task id this one sits under (default $ARX_PARENT)")
+    s.add_argument("--budget-s", type=float, help="wall-clock seconds")
     s.add_argument("--step", type=int); s.add_argument("--level", default="info"); s.add_argument("--status", default="done")
     s.add_argument("--summary-file", help="JSON merged into the task summary on finish")
     s.set_defaults(fn=cmd_task)

@@ -6,7 +6,7 @@ truth. Gate results are never stored; they are derived from finished eval tasks 
 from __future__ import annotations
 
 import hashlib, json, math, os, random, statistics, sys, threading, time, uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 
 
@@ -323,16 +323,23 @@ class Project:
 _open: list["Task"] = []  # tasks running in this process, innermost last; new tasks nest under the top one
 
 
+class BudgetExceeded(Exception):
+    """Raised by `Task.check()` once a task (or one of its ancestors) has run out of time."""
+
+
 class Task:
     """A unit of visible work. Shows on the Workbench while running, in the Archive after.
 
     `parent` nests this task under another card. Left out, it is the innermost task still running in this process,
     else $ARX_PARENT (exported to child processes while a task runs), so a loop's evals sit under the loop.
+
+    `budget_s` caps wall-clock time. `t.left()` is the seconds remaining here or in any ancestor, whichever is
+    tighter, so a sub-task never outlives its parent's budget. Loop on `while t.ok():` or call `t.check()`.
     """
 
     def __init__(self, project: Project, kind: str, title: str, description: str = None, model: str = None,
                  slice: str = None, agent: str = None, total: int = None, links: dict = None, config: dict = None,
-                 tid: str = None, parent: str = None):
+                 tid: str = None, parent: str = None, budget_s: float = None):
         self.p = project
         self.id = tid or f"{time.strftime('%m%d-%H%M%S')}-{kind}-{uuid.uuid4().hex[:4]}"
         self.dir = project.task_dir(self.id)
@@ -347,7 +354,7 @@ class Task:
                              agent=agent, status="running", created=now(), updated=now(), heartbeat=now(),
                              progress=dict(done=0, total=total or (sl["n"] if sl else None)), links=links or {},
                              config=config or {}, summary={}, host=os.uname().nodename, pid=os.getpid(),
-                             command=" ".join(sys.argv))
+                             command=" ".join(sys.argv), budget_s=budget_s)
             self._flush()
             if kind != "eval":  # evals are leaves; anything else can hold sub-tasks
                 self._env = os.environ.get("ARX_PARENT")
@@ -367,6 +374,27 @@ class Task:
             _append(self.dir / "metrics.jsonl", dict(t=now(), step=self._step, **values))
             self.meta["last"] = values
             self._flush()
+
+    def left(self) -> float | None:
+        """Seconds left: the tightest over this task and its ancestors. None = no time budget anywhere."""
+        out, m = None, self.meta
+        while m:
+            if m.get("budget_s") is not None:
+                rem = m["budget_s"] - (now() - m["created"])
+                out = rem if out is None else min(out, rem)
+            tid = m.get("parent")
+            live = next((o for o in _open if o.id == tid), None)
+            m = live.meta if live else _read(self.p.task_dir(tid) / "task.json") if tid else None
+        return out
+
+    def ok(self) -> bool:
+        left = self.left()
+        return left is None or left > 0
+
+    def check(self):
+        """Raise BudgetExceeded once time is up. The task finishes as `budget` instead of `failed`."""
+        if not self.ok():
+            raise BudgetExceeded(f"{self.id}: time budget spent")
 
     def note(self, msg: str, level: str = "info"):
         with self._lock:
@@ -419,6 +447,10 @@ class Task:
         return self
 
     def __exit__(self, et, ev, tb):
+        if et is BudgetExceeded:
+            self.note(str(ev), "warn")
+            self.finish("budget")
+            return ev.args[0].startswith(self.id + ":")  # swallow our own; an ancestor's keeps unwinding to it
         if et:
             self.note(f"{et.__name__}: {ev}", "error")
         self.finish("failed" if et else "done")
@@ -430,35 +462,47 @@ def evaluate(project: Project, model: str, slice: str, run_one, workers: int = 8
              parent: str = None) -> Task:
     """Run `run_one(example_id) -> {"score": float, "cost": .., "latency_s": .., ...}` on every id of a slice.
 
-    Exceptions and deadline overruns become error rows (score 0). The card shows progress and running score live.
+    Exceptions and deadline overruns become error rows (score 0). The deadline also shrinks to whatever time the
+    parent task has left. The card shows progress and running score live.
     """
     sl = project.slice(slice)
     ids = [i for i in sl["ids"] for _ in range(repeats)]
     t = Task(project, "eval", title or f"{model} on {sl['name']}", description, model=model, slice=sl["name"],
-             agent=agent, total=len(ids), parent=parent, config=(config or {}) | {"workers": workers, "deadline_s": deadline_s, "repeats": repeats})
-    start, done, total_score = now(), 0, 0.0
+             agent=agent, total=len(ids), parent=parent, budget_s=deadline_s,
+             config=(config or {}) | {"workers": workers, "deadline_s": deadline_s, "repeats": repeats})
+    start, done, total_score, stop = now(), 0, 0.0, False
     pool = ThreadPoolExecutor(workers)
-    futs = {}
-    for i in ids:
-        futs[pool.submit(_timed, run_one, i)] = i
+    queue, futs = list(reversed(ids)), {}
     try:
-        for f in as_completed(futs, timeout=deadline_s):
-            row = f.result()
-            t.add_row(row)
-            done += 1
-            total_score += 0.0 if row.get("error") else float(row.get("score") or 0)
-            t.progress(done)
-            t.log(step=done, running_score=total_score / done, latency_s=row.get("latency_s"))
-            if sys.stderr.isatty() or done == len(ids) or done % 50 == 0:
-                sys.stderr.write(f"\r{t.id} {done}/{len(ids)} score={total_score / done:.3f} {now() - start:.0f}s")
-    except TimeoutError:
-        t.note(f"deadline {deadline_s}s reached; unfinished examples count as errors", "warn")
-        for f, i in futs.items():
-            if not f.done():
-                t.add_row(dict(id=i, score=0.0, error="deadline", latency_s=deadline_s))
+        while queue or futs:
+            stop = stop or not t.ok()
+            while queue and not stop and len(futs) < workers:  # submit lazily so a spent budget stops new calls
+                i = queue.pop()
+                futs[pool.submit(_timed, run_one, i)] = i
+            if not futs:
+                break
+            secs = t.left()
+            fin, _ = wait(futs, timeout=None if secs is None else max(0.0, secs), return_when=FIRST_COMPLETED)
+            if not fin:
+                stop = True
+                break
+            for f in fin:
+                futs.pop(f)
+                row = f.result()
+                t.add_row(row)
+                done += 1
+                total_score += 0.0 if row.get("error") else float(row.get("score") or 0)
+                t.progress(done)
+                t.log(step=done, running_score=total_score / done, latency_s=row.get("latency_s"))
+                if sys.stderr.isatty() or done == len(ids) or done % 50 == 0:
+                    sys.stderr.write(f"\r{t.id} {done}/{len(ids)} score={total_score / done:.3f} {now() - start:.0f}s")
     finally:
         pool.shutdown(wait=False, cancel_futures=True)
         sys.stderr.write("\n")
+    if stop:
+        t.note(f"deadline reached; {len(futs) + len(queue)} unfinished examples count as errors", "warn")
+        for i in [*futs.values(), *queue]:
+            t.add_row(dict(id=str(i), score=0.0, error="deadline", latency_s=round(now() - start, 3)))
     t.finish("done")
     return t
 
