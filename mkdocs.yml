@@ -1,0 +1,39 @@
+site_name: ARX
+site_description: Research infrastructure for AI agents that improve models
+repo_url: https://github.com/asvskartheek/autoresearch-scaffold
+repo_name: asvskartheek/autoresearch-scaffold
+edit_uri: edit/main/docs/
+theme:
+  name: material
+  features: [navigation.sections, navigation.top, content.code.copy, search.suggest]
+  palette:
+    - scheme: default
+      toggle: {icon: material/brightness-7, name: Dark mode}
+    - scheme: slate
+      toggle: {icon: material/brightness-4, name: Light mode}
+markdown_extensions:
+  - admonition
+  - tables
+  - toc: {permalink: true}
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+nav:
+  - Why ARX: index.md
+  - Getting started: getting-started.md
+  - How-to:
+      - Tasks and the Workbench: guides/tasks.md
+      - Slices and datasets: guides/slices.md
+      - Hills: guides/hills.md
+      - Evals: guides/evals.md
+      - The gate ladder: guides/gates.md
+      - arx run manifests: guides/run.md
+      - Budgets: guides/budgets.md
+  - Architecture: architecture.md
+  - Reference:
+      - Python API: reference/python.md
+      - CLI: reference/cli.md
+      - research.json: reference/config.md
