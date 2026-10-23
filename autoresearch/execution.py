@@ -1,4 +1,4 @@
-"""`arx eval run`: launch a reviewed command from a manifest and record what it produced.
+"""`arx run`: launch a reviewed command from a manifest and record what it produced.
 
 The manifest is JSON, pinned by its sha256 so what runs is exactly what was reviewed:
 
