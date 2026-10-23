@@ -1,6 +1,9 @@
 [project]
 name = "autoresearch"
 version = "0.1.0"
+description = "Research infrastructure for AI agents that improve models: gate ladder, ledger, live dashboard"
+readme = "README.md"
+license = {text = "MIT"}
 requires-python = ">=3.10"
 dependencies = []
 
