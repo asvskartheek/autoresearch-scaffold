@@ -55,3 +55,8 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
 
 ## UI
 - Cut taglines, helper text and secondary labels. If a screen needs them to make sense, fix the layout.
+
+## Pull requests
+- Before opening a PR, run a local testing session on the change: start the dashboard (`arx up`), exercise the new
+  behaviour end to end in a scratch project, and note in the PR what you ran and what you saw.
+- Write the PR description with the `show-me` skill.
