@@ -95,7 +95,7 @@ Shell-only work: `arx task start | log | note | link | progress | finish`.
 |---|---|
 | <img src="docs/workbench.png" alt="Workbench with live eval, training and data cards"> | <img src="docs/model-v8.png" alt="Gate checks for a candidate with paired deltas and CIs"> |
 | **Task page** | **Hills** |
-| <img src="docs/task.png" alt="Training task with loss, lr and grad norm curves"> | <img src="docs/hills.png" alt="Hills and the model × hill regression matrix"> |
+| <img src="docs/task.png" alt="Training task with loss, lr and grad norm curves"> | <img src="docs/hills.png" alt="A hill page: example, dev set results and per-example grid"> |
 
 | View | Shows |
 |---|---|
