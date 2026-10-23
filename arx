@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Run the ledger CLI from anywhere inside a research project.
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHONPATH="$here${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m autoresearch.cli "$@"

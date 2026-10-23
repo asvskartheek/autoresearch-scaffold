@@ -1,0 +1,43 @@
+# Agent rules for this research project
+
+Read `PROTOCOL.md` before changing a model, an eval or a slice. `research.json` holds the project's datasets,
+gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) reads only that.
+
+## Step 0: the dashboard, before anything else
+- `arx up` (also run by `arx init`) starts the dashboard in the background. Check it is up before doing other work,
+  and give the user the URL. If it goes down, `arx up` again.
+- Setup is work too: `arx init` opens a running "Project setup" task. Note every step on it (environment, installs,
+  model download, dataset prep) and finish it when the first eval can run.
+
+## Every piece of work is visible
+- Open the task *before* starting the work, not after. No step is too small: installs, downloads, data prep,
+  error analysis, slice building, evals, training.
+- Anything that runs longer than a minute is a task: `arx.task(...)` in Python or `arx task start` from a shell.
+  It shows as a Workbench card while it runs and moves to the Archive when it ends. Never run unlogged work.
+- Log as you go: `t.log(step=..., loss=...)` for curves, `t.note("...")` for decisions, `t.link("HF dataset", url)`
+  for anything stored elsewhere. Write the task's description so the card makes sense to someone who missed the chat.
+- Subagents get their own task (pass `agent="<subagent name>"`). One candidate per subagent / worktree.
+- Long jobs: visible progress, bulk/concurrent calls, a wall-clock deadline. A stalled task (no heartbeat for
+  10 minutes) shows red; fix or fail it, never leave it.
+
+## Evaluating
+- Run evals through `arx.evaluate(model, slice, run_one)`. It enforces the slice's exact IDs, counts errors as 0,
+  writes rows incrementally and keeps the card live. Rows stay aggregate-safe: id, score, cost, latency, error.
+  Do not put client text, answers or traces in rows.
+- Before a candidate runs a rung, the champion must have a run on the same slice with the same harness.
+  `arx gate <model>` names the next run; follow it, do not skip rungs.
+- Never edit a frozen slice. Make a new one with a new name.
+- Pre-declare what a change should move (in the hill's `problem` or the model's `change`) before running it.
+
+## Reporting
+- Every number names its slice and n. Show paired deltas vs the champion, not raw scores from different slices.
+- "Better" means the gate passed. A noisy delta on a dev slice is a lead, not a result.
+- Failed candidates stay in the ledger as rejected, with the reason. Negative results are results.
+
+## Data
+- Datasets and large slices live on Hugging Face as **private** repos; the slice keeps the URL and the ID hash.
+- Never commit secrets, client data, model weights or `rows.jsonl` from private datasets.
+- Scratch output (crops, temp files, screenshots) goes in `scratch/` (gitignored).
+
+## UI
+- Cut taglines, helper text and secondary labels. If a screen needs them to make sense, fix the layout.
