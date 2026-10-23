@@ -25,11 +25,10 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
   `arx task start --parent <id>`. Keep each card's latest note current; it is the line people read.
 - Long jobs: visible progress, bulk/concurrent calls, a wall-clock deadline. A stalled task (no heartbeat for
   10 minutes) shows red; fix or fail it, never leave it.
-- Budgets: when the work has a money or time cap, put it on the task (`budget_usd=`, `budget_s=`; shell
-  `--budget-usd/--budget-s`) and let arx keep the books. Report spend with `t.spend(usd)` (or `cost=` in `log()`,
-  or row `cost` in `evaluate`); it rolls up to every ancestor, and sub-tasks are held to the tightest cap above them.
-  Drive the loop with `while t.ok():` / `t.check()` (shell: `while arx task left $id; do ...; done`). Do not keep
-  a separate cost or clock tally next to the work. A task stopped by its budget ends as `budget`.
+- Time budgets: when the work has a time cap, put it on the task (`budget_s=`; shell `--budget-s`) and drive the
+  loop with `while t.ok():` / `t.check()` (shell: `while arx task left $id; do ...; done`). Sub-tasks and evals are
+  held to the tightest cap above them. Do not keep a separate clock next to the work. A task stopped by its budget
+  ends as `budget`.
 
 ## Evaluating
 - Run evals through `arx.evaluate(model, slice, run_one)`. It enforces the slice's exact IDs, counts errors as 0,

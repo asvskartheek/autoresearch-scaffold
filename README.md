@@ -83,16 +83,16 @@ with ar.task("train", "SFT v3", model="v3", config={"lr": 2e-4}) as t:  # W&B-st
         t.log(step=step, loss=loss)
     t.link("Checkpoint", "https://huggingface.co/you/v3")
 
-with ar.task("experiment", "prompt sweep", budget_usd=5, budget_s=1800) as t:  # arx keeps the books
+with ar.task("experiment", "prompt sweep", budget_s=1800) as t:  # 30 minutes, tracked by arx
     while t.ok():                                   # or t.check(): raises, card ends as "budget"
-        ar.evaluate(next_prompt(), "dev-arith", run_one)  # row costs roll up; the eval stops when $5 is gone
+        ar.evaluate(next_prompt(), "dev-arith", run_one)  # the eval's deadline shrinks to the time left
 ```
 
-Budgets nest: a sub-task never outspends its parent. In-flight calls finish, so spend can overshoot by up to
-`workers` examples.
+Time budgets nest: a sub-task never runs past its parent's budget. Checks are cooperative: arx stops an eval on
+time, but a plain task stops only when its code calls `ok()` or `check()`.
 
 Evals from another harness or a cloud job: `arx eval record --model v2 --slice random100 --rows rows.jsonl`.
-Shell-only work: `arx task start | log | note | link | progress | spend | left | finish`.
+Shell-only work: `arx task start | log | note | link | progress | left | finish`.
 
 # The dashboard
 

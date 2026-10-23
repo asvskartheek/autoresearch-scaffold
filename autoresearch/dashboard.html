@@ -264,7 +264,7 @@ function taskCard(t){
   ${last.length?`<div class="kv">${last.map(([k,v])=>`<div><span>${esc(k)}</span><b>${fmtv(v)}</b></div>`).join('')}</div>`:''}
   ${f!=null?`<div class="prog"><i style="width:${(f*100).toFixed(1)}%"></i></div>`:''}
   ${sub.length?`<div class="kids"><div class="sub" style="margin-bottom:4px">${live} running · ${sub.length} sub-tasks</div>${shown.map(kidRow).join('')}${sub.length>shown.length?`<a class="kid sub" href="#task/${encodeURIComponent(t.id)}">+${sub.length-shown.length} more</a>`:''}</div>`:''}
-  <div class="meta"><span>${pr.total?`${pr.done} / ${pr.total}`:''}${t.eta?` · ETA ${left(t.eta.eta_s)}`:''}</span><span>${t.spent_usd||t.budget?.usd?money(t.spent_usd||0)+(t.budget?.usd?' / '+money(t.budget.usd):'')+' · ':''}${dur(t.created)}${t.budget?.s?' / '+left(t.budget.s):''} · beat ${ago(t.heartbeat)}</span></div></div>`;
+  <div class="meta"><span>${pr.total?`${pr.done} / ${pr.total}`:''}${t.eta?` · ETA ${left(t.eta.eta_s)}`:''}</span><span>${dur(t.created)}${t.budget_s?' / '+left(t.budget_s):''} · beat ${ago(t.heartbeat)}</span></div></div>`;
 }
 
 // ---------- views

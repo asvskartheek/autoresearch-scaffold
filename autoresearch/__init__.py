@@ -6,9 +6,9 @@
         for step in range(n):
             t.log(step=step, loss=loss, lr=lr)
 
-    with ar.task("experiment", "sweep prompts", budget_usd=5, budget_s=1800) as t:
+    with ar.task("experiment", "sweep prompts", budget_s=1800) as t:
         while t.ok():                      # or t.check(): raises BudgetExceeded, card ends as "budget"
-            t.spend(call_model())          # money rolls up to every ancestor; sub-tasks inherit the tighter cap
+            try_next_prompt()              # sub-tasks and evals inherit the tighter time cap
 
     ar.evaluate("v9", "dev-please", run_one)   # run_one(id) -> {"score": 1.0, "cost": 0.002}
     print(ar.gate("v9"))
