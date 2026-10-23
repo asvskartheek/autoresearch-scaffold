@@ -123,6 +123,7 @@ const money=x=>x==null?'—':(x<0.01?'$'+x.toFixed(4):'$'+x.toFixed(3));
 const secs=x=>x==null?'—':(x<10?x.toFixed(2):x.toFixed(1))+'s';
 const ago=t=>{if(!t)return '—';const d=(S.state?.now||Date.now()/1000)-t;if(d<60)return Math.max(0,Math.round(d))+'s ago';if(d<3600)return Math.round(d/60)+'m ago';if(d<86400)return Math.round(d/3600)+'h ago';return Math.round(d/86400)+'d ago'};
 const dur=(a,b)=>{const d=(b||S.state?.now||Date.now()/1000)-a;return d<60?Math.round(d)+'s':d<3600?Math.round(d/60)+'m':(d/3600).toFixed(1)+'h'};
+const left=s=>s<60?Math.round(s)+'s':s<3600?Math.round(s/60)+'m':Math.floor(s/3600)+'h '+Math.round(s%3600/60)+'m';
 const clock=t=>new Date(t*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
 const num=(v,p=3)=>v===0?'0':Math.abs(v)>=1000?v.toFixed(0):Math.abs(v)>=1?v.toFixed(p):Math.abs(v)<1e-3?v.toExponential(1):v.toPrecision(p);
 const fmtv=v=>typeof v!=='number'?esc(v):num(v);
@@ -194,7 +195,7 @@ function taskCard(t){
   ${t.spark?spark(t.spark.y,t.status==='stalled'?'var(--red)':'var(--blue)'):''}
   ${last.length?`<div class="kv">${last.map(([k,v])=>`<div><span>${esc(k)}</span><b>${fmtv(v)}</b></div>`).join('')}</div>`:''}
   ${f!=null?`<div class="prog"><i style="width:${(f*100).toFixed(1)}%"></i></div>`:''}
-  <div class="meta"><span>${pr.total?`${pr.done} / ${pr.total}`:''}</span><span>${dur(t.created)} · beat ${ago(t.heartbeat)}</span></div></a>`;
+  <div class="meta"><span>${pr.total?`${pr.done} / ${pr.total}`:''}${t.eta?` · ETA ${left(t.eta.eta_s)}`:''}</span><span>${dur(t.created)} · beat ${ago(t.heartbeat)}</span></div></a>`;
 }
 
 // ---------- views
@@ -288,6 +289,7 @@ function vTask(id){
  const last=Object.entries(t.last||{}).filter(([k,v])=>typeof v==='number');
  const tiles=t.kind==='eval'?[['Score',pct(sm.score??t.last?.running_score),sm.n?`${Math.round((sm.score||0)*sm.n)} / ${sm.n}`:'running'],['Cost / example',money(sm.cost),sm.cost_total!=null?money(sm.cost_total)+' total':''],['Latency p50',secs(sm.latency_p50),'p95 '+secs(sm.latency_p95)],['Errors',sm.errors??'—',sm.missing?sm.missing+' missing':'']]
   :[...last.slice(0,3).map(([k,v])=>[k,fmtv(v),'latest']),['Elapsed',dur(t.created,t.ended),'beat '+ago(t.heartbeat)]];
+ if(t.eta)tiles.splice(tiles.length-1,1,['ETA',left(t.eta.eta_s),`${t.eta.per_min.toFixed(1)}/min · ~${clock(t.eta.finish_at)} · ${dur(t.created)} in`]);
  h+=`<div class="grid g4 section">${tiles.map(([k,v,s])=>`<div class="card tile"><div class="k">${esc(k)}</div><div class="v">${v}</div><div class="s">${esc(s)}</div></div>`).join('')}</div>`;
  if(!d||d.task.id!==id)return h+'<div class="empty">Loading…</div>';
  // vs champion

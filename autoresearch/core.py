@@ -350,7 +350,11 @@ class Task:
 
     def progress(self, done: int, total: int | None = None):
         with self._lock:
-            self.meta["progress"] = dict(done=done, total=total or self.meta["progress"].get("total"))
+            prev = self.meta.get("progress") or {}
+            hist = prev.get("hist", [])
+            if not hist or now() - hist[-1][0] >= 5:  # throttled samples for rate / ETA
+                hist = (hist + [[now(), done]])[-60:]
+            self.meta["progress"] = dict(done=done, total=total or prev.get("total"), hist=hist)
             self._flush()
 
     def heartbeat(self):

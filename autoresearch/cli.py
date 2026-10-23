@@ -63,29 +63,55 @@ def _port_open(port: int) -> bool:
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
-def _up(root: Path, port: int) -> str:
-    """Start the dashboard detached (idempotent); its port is kept in .research/server.json."""
+def _up(root: Path, port: int, restart: bool = False) -> str:
+    """Start the dashboard detached (idempotent); its port and pid are kept in .research/server.json."""
     info = root / ".research" / "server.json"
     if info.exists():
-        old = json.loads(info.read_text()).get("port")
-        if old and _port_open(old):
-            return f"http://127.0.0.1:{old}"
+        old = json.loads(info.read_text())
+        if old.get("port") and _port_open(old["port"]):
+            if not restart:
+                return f"http://127.0.0.1:{old['port']}"
+            if old.get("pid"):
+                try:
+                    os.kill(old["pid"], 15)
+                except OSError:
+                    pass
+            else:  # started by an older version that did not record its pid
+                subprocess.run(["pkill", "-f", f"autoresearch.cli serve --port {old['port']}"])
+            for _ in range(30):
+                if not _port_open(old["port"]):
+                    break
+                time.sleep(0.1)
+            port = old["port"]
     while _port_open(port):
         port += 1
     log = open(root / ".research" / "server.log", "a")
-    env = os.environ | {"PYTHONPATH": str(Path(__file__).resolve().parents[1]) + os.pathsep + os.environ.get("PYTHONPATH", "")}
-    subprocess.Popen([sys.executable, "-m", "autoresearch.cli", "serve", "--port", str(port)], cwd=root, env=env,
-                     stdout=log, stderr=log, start_new_session=True)
+    # `python -m` would put the project dir first on sys.path and pick up a vendored copy; run the CLI's own package.
+    pkg = str(Path(__file__).resolve().parents[1])
+    boot = f"import sys; sys.path.insert(0, {pkg!r}); from autoresearch.cli import main; main()"
+    proc = subprocess.Popen([sys.executable, "-c", boot, "serve", "--port", str(port)], cwd=root,
+                            stdout=log, stderr=log, start_new_session=True)
     for _ in range(30):
         if _port_open(port):
             break
         time.sleep(0.1)
-    info.write_text(json.dumps(dict(port=port, started=time.time())))
+    info.write_text(json.dumps(dict(port=port, pid=proc.pid, started=time.time())))
     return f"http://127.0.0.1:{port}"
 
 
 def cmd_up(a):
-    print(_up(Project().root, a.port))
+    print(_up(Project().root, a.port, a.restart))
+
+
+def cmd_sync(a):
+    """Refresh the project's vendored `autoresearch/` from the installed package, then restart the dashboard."""
+    root = Project().root
+    src, dst = Path(__file__).resolve().parent, root / "autoresearch"
+    if src == dst.resolve():
+        raise SystemExit("this is the vendored copy itself; run the installed `arx sync`")
+    shutil.rmtree(dst, ignore_errors=True)
+    shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__"))
+    print(f"vendored copy updated from {src}\n{_up(root, 8890, restart=True)}")
 
 
 def cmd_dataset(a):
@@ -206,7 +232,9 @@ def main(argv=None):
 
     s = sp.add_parser("init"); s.add_argument("path", nargs="?", default="."); s.add_argument("--name")
     s.add_argument("--port", type=int, default=8890); s.add_argument("--no-serve", action="store_true"); s.set_defaults(fn=cmd_init)
-    s = sp.add_parser("up", help="start the dashboard in the background if it is not running"); s.add_argument("--port", type=int, default=8890); s.set_defaults(fn=cmd_up)
+    s = sp.add_parser("up", help="start the dashboard in the background if it is not running"); s.add_argument("--port", type=int, default=8890)
+    s.add_argument("--restart", action="store_true", help="restart it, e.g. after upgrading the scaffold"); s.set_defaults(fn=cmd_up)
+    s = sp.add_parser("sync", help="refresh the vendored autoresearch/ copy and restart the dashboard"); s.set_defaults(fn=cmd_sync)
 
     s = sp.add_parser("dataset", help="register a full eval set and its random slices")
     s.add_argument("verb", choices=["add"]); s.add_argument("name"); s.add_argument("--ids-file"); s.add_argument("--size", type=int)

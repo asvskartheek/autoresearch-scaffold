@@ -17,6 +17,26 @@ def _downsample(points: list[dict], cap: int = 600) -> list[dict]:
     return [points[int(i * stride)] for i in range(cap)] + [points[-1]]
 
 
+def eta(p: Project, t: dict) -> dict | None:
+    """Rate over the last 15 minutes of progress (falls back to the whole run); None until there is a rate."""
+    pr = t.get("progress") or {}
+    done, total = pr.get("done") or 0, pr.get("total")
+    if not total or t.get("status") not in ("running", "stalled") or done >= total:
+        return None
+    pts = [tuple(x) for x in pr.get("hist", [])]
+    if len(pts) < 2 and t.get("kind") == "eval":
+        pts = [(m["t"], m["step"]) for m in p.metrics(t["id"]) if "t" in m and "step" in m]
+    if len(pts) < 2:
+        pts = [(t["created"], 0), (time.time(), done)]
+    recent = [x for x in pts if x[0] >= pts[-1][0] - 900]
+    a, b = (recent[0] if len(recent) >= 2 and recent[-1][1] > recent[0][1] else pts[0]), pts[-1]
+    rate = (b[1] - a[1]) / max(b[0] - a[0], 1e-6)
+    if rate <= 0:
+        return None
+    left = (total - done) / rate
+    return dict(per_min=rate * 60, eta_s=left, finish_at=time.time() + left)
+
+
 def state(p: Project) -> dict:
     slices = {k: {kk: vv for kk, vv in v.items() if kk != "ids"} | {"name": k} for k, v in p.slices().items()}
     models, tasks = p.models(), p.tasks()
@@ -36,6 +56,7 @@ def state(p: Project) -> dict:
     for t in tasks:
         series = p.metrics(t["id"])[-40:]
         keys = [k for k in (t.get("last") or {}) if isinstance(t["last"][k], (int, float))]
+        t["eta"] = eta(p, t)
         t["spark"] = {"key": keys[0], "y": [s.get(keys[0]) for s in series if isinstance(s.get(keys[0]), (int, float))]} if keys else None
     return dict(config=p.config, now=time.time(), champion=champ, datasets=p.datasets(), slices=slices,
                 hills=p.hills(), models=models, gates=gates, tasks=tasks, leaderboard=board,
@@ -58,6 +79,7 @@ def _tail(path: Path, n: int) -> list:
 
 def task_detail(p: Project, tid: str) -> dict:
     t = p.task(tid)
+    t["eta"] = eta(p, t)
     out = dict(task=t, metrics=_downsample(p.metrics(tid)), events=p.events(tid)[-300:])
     if t.get("kind") == "eval":
         rows = p.rows(tid)
