@@ -19,7 +19,7 @@ Agents doing research fail in the same handful of ways:
 | Fix one thing, break another | A politeness fix that silently costs arithmetic | **Hills that stay climbed.** Every fixed weakness becomes a permanent regression check. |
 | Paying for the full eval too early | Running 1,300 examples for every idea | **A gate ladder.** `dev → random50 → random100 → full`. The expensive rung is earned. |
 | Invisible work | A 40-minute job nobody knows is running, or that died | **Tasks.** Everything is a live Workbench card with progress, ETA, curves and a heartbeat. Stalled cards turn red. |
-| Runaway spend | A sweep that keeps calling a paid API | **Budgets.** Money and time caps that roll up the task tree. |
+| Runaway jobs | A sweep that keeps going long after it should have stopped | **Budgets.** Time caps that nest down the task tree. |
 
 The common thread: ARX makes the right way the *default* way. An agent following `arx gate <model>` cannot skip the
 baseline, cannot compare against a different slice and cannot promote without passing every rung.

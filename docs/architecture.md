@@ -41,7 +41,7 @@ research.json                 # config: ladder, thresholds, KPIs, primary_datase
 ├── server.json               # dashboard port, pid, start time
 ├── server.log
 └── tasks/<id>/
-    ├── task.json             # status, kind, model, slice, slice_hash, parent, progress, budget, spent_usd, summary
+    ├── task.json             # status, kind, model, slice, slice_hash, parent, progress, budget_s, summary
     ├── metrics.jsonl         # one line per log(): {t, step, loss, ...}
     ├── events.jsonl          # notes: {t, level, msg}
     ├── rows.jsonl            # evals only: {id, score, cost, latency_s, error}
@@ -96,14 +96,14 @@ pops and restores the previous value. `arx run` sets `ARX_PARENT` explicitly in 
 For tasks written before `parent` existed, the server's `infer_parents` nests a task under the newest non-eval task
 with the same host, pid and command that was running when it started.
 
-## Budgets inside
+## Time budgets inside
 
-`task.json` has `budget: {usd?, s?}` and `spent_usd`.
+`task.json` has a top-level `budget_s` (or `null`).
 
-- `spend(usd)` walks up the `parent` chain: each ancestor that is live in this process is updated in memory under its
-  lock and flushed; any other ancestor is read from disk, incremented and written back.
-- `left()` walks the same chain and takes, for each key, the minimum of `cap − used`, where used time is
-  `now − created`. So the tightest cap anywhere above wins.
+- `left()` walks up the `parent` chain (ancestors live in this process from memory, others from disk) and returns
+  the minimum of `budget_s − (now − created)` over every task that has one, or `None` if none do. So the tightest
+  cap anywhere above wins.
+- `ok()` is `left() is None or left() > 0`; `check()` raises `BudgetExceeded` when `ok()` is false.
 - In `__exit__`, a `BudgetExceeded` whose message starts with this task's ID is swallowed (status `budget`); one for
   an ancestor finishes this task as `budget` and keeps propagating.
 
@@ -156,7 +156,7 @@ file with no build step; it polls `api/state` every few seconds and fetches deta
 ## `cli.py`
 
 An argparse front over the same operations. Notable behaviour beyond a thin wrapper: `init` vendors the package and
-opens the setup task; `up` manages the detached server via `server.json`; `task left` exits 3 when spent; task
+opens the setup task; `up` manages the detached server via `server.json`; `task left` exits 3 when time is up; task
 subcommands warn when the dashboard is not running. See the [CLI reference](reference/cli.md).
 
 ## `execution.py`

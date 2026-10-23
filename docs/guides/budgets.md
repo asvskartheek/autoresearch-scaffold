@@ -1,70 +1,71 @@
 # Budgets
 
-A task can carry a money cap (`budget_usd`), a wall-clock cap (`budget_s`), or both. ARX keeps the books: spend rolls
-up the task tree, sub-tasks are held to the tightest cap above them, and a task stopped by its budget ends with
-status `budget`.
+A task can carry a wall-clock cap, `budget_s`. ARX keeps the clock: a sub-task is held to the tightest cap above it,
+and a task stopped by its budget ends with status `budget`.
 
-## Why ARX keeps the books
+## Why ARX keeps the clock
 
-Agents running sweeps are bad at stopping. A separate cost counter next to the loop drifts from what was actually
-spent and does not know about the evals a sub-task launched. Putting the cap on the task means one number, visible
-on the card, that every nested eval and sub-task charges against.
+Agents running sweeps are bad at stopping. A separate timer next to the loop does not know about the evals a
+sub-task launched or the time its parent has left. Putting the cap on the task means one number, visible on the
+card, that every nested eval and sub-task is held to.
 
 ## Python
 
 ```python
 import autoresearch as ar
 
-with ar.task("experiment", "prompt sweep", budget_usd=5, budget_s=1800) as t:
-    while t.ok():                                        # False once money or time is gone, here or above
-        ar.evaluate(next_prompt(), "dev-arith", run_one) # row costs roll up into the sweep
+with ar.task("experiment", "prompt sweep", budget_s=1800) as t:
+    while t.ok():                                        # False once time is up, here or in any ancestor
+        ar.evaluate(next_prompt(), "dev-arith", run_one) # each eval stops at the sweep's remaining time
 ```
 
 Or raise instead of looping:
 
 ```python
-with ar.task("experiment", "search", budget_usd=2) as t:
+with ar.task("experiment", "search", budget_s=600) as t:
     for cand in candidates:
         t.check()                 # raises BudgetExceeded; the card ends as "budget", not "failed"
-        t.spend(score(cand))      # report money you spent outside evaluate
+        try_one(cand)
 ```
 
 | Call | Does |
 |---|---|
-| `t.spend(usd)` | Charge money to this task and every ancestor. |
-| `t.log(..., cost=x)` | Same as `spend(x)`, plus a point on the `cost` series. |
-| `t.left()` | `{"usd": ..., "s": ...}`: the remaining amount, tightest over this task and its ancestors. A missing key means unlimited. |
-| `t.ok()` | `True` while every remaining value is `> 0`. |
-| `t.check()` | Raises `BudgetExceeded` once any is `<= 0`. |
+| `t.left()` | Seconds left, the tightest over this task and its ancestors. `None` if nothing in the chain has a budget. |
+| `t.ok()` | `True` while `left()` is `None` or `> 0`. |
+| `t.check()` | Raises `BudgetExceeded` once time is up. |
 
 ## Shell
 
 ```bash
-id=$(arx task start --title "sweep" --budget-usd 5 --budget-s 1800)
-while arx task left $id; do           # prints {"usd": .., "s": ..}; exits 3 once spent
-    ./try_one.sh && arx task spend $id 0.12
+id=$(arx task start --title "sweep" --budget-s 1800)
+while arx task left $id; do           # prints e.g. "912.4s" or "unlimited"; exits 3 once time is up
+    ./try_one.sh
 done
 arx task finish $id --status budget
 ```
 
 ## Inside `evaluate`
 
-`evaluate(..., budget_usd=, deadline_s=)` treats its deadline as a time budget and also inherits whatever its parent
-has left. It submits work **lazily**: at most `workers` examples are in flight, and before each submission it checks
-`t.left()`. Once money or time is gone it stops submitting; every example not finished becomes an error row
-(`error="budget"` or `"deadline"`, score 0), so the run is marked incomplete and never ranked.
+`evaluate(..., deadline_s=)` treats its deadline as the eval's time budget, and also honours whatever time its
+parent has left. It submits work **lazily**: at most `workers` examples are in flight, and before each submission it
+checks `t.left()`. Once time is up it stops submitting and stops waiting; every unfinished example becomes an error
+row (`error="deadline"`, score 0), so the run is marked incomplete and never ranked.
 
 ## What to know
 
-- **Cost is only known when the harness reports it**: row `cost`, `log(cost=)` or `spend()`. A harness that reports
-  nothing spends nothing, as far as ARX can tell.
 - **Time budgets are cooperative.** They are measured from the task's `created` timestamp and enforced only when you
   check (`ok()`, `check()`, `arx task left`, or inside `evaluate`). Nothing kills your process.
-- **Overshoot is bounded by concurrency.** Calls already in flight finish, so spend can overshoot by up to `workers`
-  examples.
-- **Nesting:** a sub-task never outspends its parent, because `left()` walks the whole ancestor chain.
+- **Nesting:** a sub-task never outlives its parent's budget, because `left()` walks the whole ancestor chain.
 - `BudgetExceeded` raised for a *parent's* budget is not swallowed by the child: the child finishes as `budget`,
   and the exception keeps unwinding to the task whose budget it was.
+
+## Money budgets: not yet
+
+There is no `budget_usd`. ARX can't see cost: it never calls your model, so it only learns what a call cost if the
+harness reports it, and most harnesses report nothing or report it late. A money cap that silently counts $0 would
+look like a guardrail without being one. Row `cost` is still recorded and shown on leaderboards, but it does not
+count against anything. The open design question is tracked in
+[issue #6 "Money budgets for tasks"](https://github.com/asvskartheek/autoresearch-scaffold/issues/6).
 
 !!! note
     Budgets were added in PR #5 (`task-budgets`). These docs describe that branch.

@@ -18,7 +18,7 @@ The module-level functions use one `Project`, found by walking up from the curre
 | `total` | Progress denominator. |
 | `links`, `config` | `{label: url}` and free-form settings shown on the task page. |
 | `parent` | Task ID to nest under. Default: innermost open task in this process, else `$ARX_PARENT`. |
-| `budget_usd`, `budget_s` | Money and wall-clock caps. See [Budgets](../guides/budgets.md). |
+| `budget_s` | Wall-clock cap in seconds. See [Budgets](../guides/budgets.md). |
 | `tid` | Re-open an existing task by ID instead of creating one. |
 
 Use as a context manager (finishes `done`, `failed` on exception, `budget` on `BudgetExceeded`) or call `finish()`.
@@ -27,16 +27,15 @@ Use as a context manager (finishes `done`, `failed` on exception, `budget` on `B
 
 | Method | Does |
 |---|---|
-| `log(step=None, **values)` | Append a point to each named series. `cost=` also calls `spend`. |
+| `log(step=None, **values)` | Append a point to each named series. |
 | `note(msg, level="info")` | Append to the log; the latest note is the card's headline. |
 | `link(label, url)` | Add a link (HF dataset, checkpoint, W&B run). |
 | `progress(done, total=None)` | Update the progress bar and ETA samples. |
 | `heartbeat()` | Refresh the heartbeat without other changes. |
 | `add_row(row)` | Append an eval row (`evaluate` does this for you). |
-| `spend(usd)` | Charge money to this task and every ancestor. |
-| `left()` | Remaining `{"usd", "s"}`, tightest over the ancestor chain; missing key = unlimited. |
-| `ok()` | Every remaining value `> 0`. |
-| `check()` | Raise `BudgetExceeded` if any is spent. |
+| `left()` | Seconds left, tightest over the ancestor chain; `None` = no budget anywhere. |
+| `ok()` | `left()` is `None` or `> 0`. |
+| `check()` | Raise `BudgetExceeded` once time is up. |
 | `finish(status="done", summary=None)` | End the task. For evals, computes `complete` and the summary. |
 
 `t.id`, `t.meta` (the `task.json` dict) and `t.dir` are available.
@@ -47,9 +46,8 @@ Use as a context manager (finishes `done`, `failed` on exception, `budget` on `B
 
 | Argument | Default | Meaning |
 |---|---|---|
-| `workers` | 8 | Concurrent calls (thread pool). Also bounds budget overshoot. |
-| `deadline_s` | 3600 | Time budget for the eval. Unfinished examples become `deadline` error rows. |
-| `budget_usd` | None | Money cap. Unfinished examples become `budget` error rows. |
+| `workers` | 8 | Concurrent calls (thread pool). |
+| `deadline_s` | 3600 | Time budget for the eval, capped by the parent's remaining time. Unfinished examples become `deadline` error rows. |
 | `repeats` | 1 | Run each ID this many times; scores are averaged per ID. |
 | `title`, `description`, `agent`, `config`, `parent` | | As for `task`. |
 

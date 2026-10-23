@@ -42,13 +42,12 @@ Every command runs against the project found by walking up from the current dire
 
 ```text
 arx task start --title T [--kind experiment] [--description] [--model] [--slice] [--agent] [--total N]
-               [--parent ID] [--budget-usd X] [--budget-s S]          # prints the new id
+               [--parent ID] [--budget-s S]          # prints the new id
 arx task log ID key=value ... [--step N]
 arx task note ID message ... [--level info|warn|error]
 arx task link ID LABEL URL
 arx task progress ID DONE [TOTAL]
-arx task spend ID USD
-arx task left ID                       # prints {"usd": .., "s": ..}; exit code 3 once any is spent
+arx task left ID                       # prints e.g. "0.9s" or "unlimited"; exit code 3 once time is up
 arx task finish ID [--status done|failed|budget] [--summary-file F]
 ```
 
