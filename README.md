@@ -103,7 +103,7 @@ Shell-only work: `arx task start | log | note | link | progress | finish`.
 | Workbench | A card for every running task: progress, ETA, sparkline, heartbeat. Stalled tasks turn red |
 | Task page | Every logged series as a chart, paired diff with the champion, per-example strip, log, links, setup |
 | Models | Lineage and rungs. A model page lists every gate check with its delta, CI and win/loss count |
-| Hills | Every weakness found so far, plus the model × hill regression matrix |
+| Hills | Every weakness as a card; each hill's page shows an example, how common it is and every attempt |
 | Slices | Frozen ID sets with hash, seed, metric and dataset link |
 | Archive | Finished, failed and partial tasks, each with the same full page |
 
@@ -117,6 +117,7 @@ Shell-only work: `arx task start | log | note | link | progress | finish`.
 | `arx dataset add` | Register a full eval set and its nested random slices |
 | `arx slice add` | Freeze a dev / control / synthetic slice. Slices never change once frozen |
 | `arx hill open` | Name a weakness with its target and control slices |
+| `arx hill explain` | Give a hill its symptom, example, metric and share for its page |
 | `arx model add` | Register a candidate (or `--champion` for the baseline) |
 | `arx run --manifest m.json --expected-sha256 <sha>` | Launch a reviewed, hash-pinned command as a task; scored runs check rows against the slice |
 | `arx gate <model>` | Where a candidate stands on the ladder, and the next run |

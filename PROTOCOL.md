@@ -43,6 +43,30 @@ project-specific numbers.
 6. **Promote.** `arx promote v8` re-checks every rung, makes V8 the champion and marks the hill *climbed*.
    A climbed hill's target slice becomes a permanent regression check for every future candidate.
 
+## Explaining a hill
+
+A hill's page must make the weakness obvious at a glance to someone who missed the chat. Right after opening it:
+
+```
+arx hill explain arith \
+  --symptom "The reasoning is right but a calculation is wrong." \
+  --example-input "A shirt costs $18 and is 25% off. What is the price?" \
+  --example-wrong "18 × 0.25 = 4.2, so 18 − 4.2 = 13.8" \
+  --example-right "18 × 0.25 = 4.5, so 18 − 4.5 = 13.5" \
+  --example-why "Right plan, wrong multiplication." \
+  --measure "A problem counts as solved when the final number equals the reference answer." \
+  --share 63/495 --share-of "of v1's wrong answers on full contain a false equation"
+```
+
+- `--symptom`: one plain sentence about the model's behaviour. No jargon, no slice names, no expectations.
+- `--example-*`: one short, typical case: the question, what the model answered, the correct answer, and why
+  it went wrong. Each call adds one; give 2–3 (or `--examples-file` with a JSON list). Write illustrative
+  paraphrases, never client text, trimmed to the part that shows the failure.
+- `--measure`: a full sentence saying when one target example counts as solved.
+- `--share` and `--share-of`: how many failures this hill explains, out of what (`63/495` with
+  "of v1's wrong answers on full contain a false equation"). Real counts from the error analysis only.
+- Pre-declared expectations stay in `--problem`; they are shown folded under the hill.
+
 ## Rules of evidence
 
 - Compare only on identical ID sets. Gates use paired deltas on the same IDs, never scores from different slices.

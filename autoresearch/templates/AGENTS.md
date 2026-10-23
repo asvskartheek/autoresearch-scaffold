@@ -32,6 +32,7 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
 - Before a candidate runs a rung, the champion must have a run on the same slice with the same harness.
   `arx gate <model>` names the next run; follow it, do not skip rungs.
 - Never edit a frozen slice. Make a new one with a new name.
+- Every hill gets an explainer (`arx hill explain`: symptom, example, measure, share). See PROTOCOL.md.
 - Pre-declare what a change should move (in the hill's `problem` or the model's `change`) before running it.
 
 ## Reporting

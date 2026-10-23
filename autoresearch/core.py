@@ -165,10 +165,19 @@ class Project:
         raise SystemExit(f"unknown slice {name}")
 
     # hills and models ------------------------------------------------------------------
-    def open_hill(self, name, title, target, control=None, problem=None, found_in=None):
+    def open_hill(self, name, title, target, control=None, problem=None, found_in=None, **explainer):
         target, control = self.slice(target)["name"], (self.slice(control)["name"] if control else None)
-        return self._upsert("hills", name, title=title, target=target, control=control, problem=problem,
-                            found_in=found_in or self.champion(), status="open")
+        self._upsert("hills", name, title=title, target=target, control=control, problem=problem,
+                     found_in=found_in or self.champion(), status="open")
+        return self.explain_hill(name, **explainer)
+
+    def explain_hill(self, name, symptom=None, measure=None, examples=None, share=None):
+        """The hill's page: `symptom` one plain line; `measure` when one target example scores 1; `examples` a list
+        of {input, wrong, right, why} (illustrative, never client text); `share` {count, of, of_what}: how many of
+        which failures this hill explains."""
+        if name not in self.hills():
+            raise SystemExit(f"unknown hill {name}")
+        return self._upsert("hills", name, symptom=symptom, measure=measure, examples=examples, share=share)
 
     def add_model(self, name, parent=None, hill=None, change=None, title=None, links=None, status="candidate"):
         rec = self._upsert("models", name, parent=parent if parent is not None else self.champion(), hill=hill,

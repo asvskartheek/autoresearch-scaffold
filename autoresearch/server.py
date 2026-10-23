@@ -4,6 +4,7 @@ from __future__ import annotations
 import json, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import unquote
 
 from .core import Project, paired, per_id
 
@@ -92,6 +93,23 @@ def _tail(path: Path, n: int) -> list:
     return out
 
 
+def hill_detail(p: Project, name: str) -> dict:
+    """Per-example scores on the hill's target and control slices: the slice's ids, and id -> score per model."""
+    h, slices = p.hills()[name], p.slices()
+    out = {}
+    for role in ("target", "control"):
+        sl = slices.get(h.get(role) or "")
+        if not sl:
+            continue
+        runs = {}
+        for m in {t["model"] for t in p.evals() if t.get("slice") == h[role]}:
+            t = p.latest_eval(m, h[role])
+            if t:
+                runs[m] = per_id(p.rows(t["id"]))
+        out[role] = dict(slice=h[role], ids=[str(i) for i in sl.get("ids", [])], runs=runs)
+    return out
+
+
 def task_detail(p: Project, tid: str) -> dict:
     tasks = p.tasks()
     infer_parents(tasks)
@@ -131,6 +149,8 @@ def serve(port: int = 8890, root=None):
                     return self._send(200, json.dumps(state(p), default=str).encode(), "application/json")
                 if path.startswith("/api/task/"):
                     return self._send(200, json.dumps(task_detail(p, path.rsplit("/", 1)[1]), default=str).encode(), "application/json")
+                if path.startswith("/api/hill/"):
+                    return self._send(200, json.dumps(hill_detail(p, unquote(path.rsplit("/", 1)[1])), default=str).encode(), "application/json")
                 if path.startswith("/api/gate/"):
                     return self._send(200, json.dumps(p.gate(path.rsplit("/", 1)[1]), default=str).encode(), "application/json")
             except (KeyError, SystemExit) as e:
