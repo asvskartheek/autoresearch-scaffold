@@ -243,11 +243,19 @@ class Project:
         if not m:
             raise SystemExit(f"unknown model {model_name}")
         champ = self.champion()
+        if m.get("status") in ("rejected", "historical", "planned"):  # recorded decisions, not ladder candidates
+            rung = dict(rung="decision", status="fail" if m["status"] == "rejected" else "locked",
+                        checks=[dict(slice="-", rule="recorded", threshold=0, state=m["status"], reason=m.get("reason"))])
+            return dict(model=model_name, champion=champ, rungs=[rung], promotable=False, next=[])
         sign = 1 if cfg.get("higher_is_better", True) else -1
         rungs, blocked, next_runs = [], False, []
         for rung in cfg.get("ladder", []):
             checks = []
             for chk in rung["checks"]:
+                if chk.get("manual"):  # a human signs this off; it never passes on its own
+                    checks.append(dict(slice=chk.get("slice", "manual"), rule="manual", threshold=0,
+                                       state="needs_review", reason=chk.get("reason")))
+                    continue
                 for sl in self._resolve(chk["slice"], m):
                     c = dict(slice=sl, rule=chk["rule"], threshold=chk.get("margin", 0) if chk["rule"] == "better" else -chk.get("tolerance", 0))
                     ce, be = self.latest_eval(model_name, sl), self.latest_eval(champ, sl) if champ else None

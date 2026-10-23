@@ -137,8 +137,8 @@ def cmd_hill(a):
 def cmd_model(a):
     p = Project()
     links = dict(kv.split("=", 1) for kv in a.link or [])
-    p.add_model(a.name, parent=a.parent, hill=a.hill, change=a.change, title=a.title, links=links or None,
-                status="champion" if a.champion else "candidate")
+    p.add_model(a.name, parent="" if a.no_parent else a.parent, hill=a.hill, change=a.change, title=a.title,
+                links=links or None, status="champion" if a.champion else a.status)
     print(f"model {a.name} added{' as champion' if a.champion else ''}")
 
 
@@ -185,6 +185,11 @@ def cmd_eval_record(a):
     print(f"{t.id}: complete={t.meta['complete']} score={t.meta['summary'].get('score')}")
 
 
+def cmd_eval_run(a):
+    from .execution import run_manifest
+    run_manifest(a)
+
+
 def cmd_task(a):
     p = Project()
     if a.action == "start":
@@ -202,7 +207,7 @@ def cmd_task(a):
     elif a.action == "progress":
         t.progress(int(a.values[0]), int(a.values[1]) if len(a.values) > 1 else None)
     elif a.action == "finish":
-        t.finish(a.status)
+        t.finish(a.status, summary=json.loads(Path(a.summary_file).read_text()) if a.summary_file else None)
     if a.action != "start" and not _port_open(json.loads((p.dir / "server.json").read_text()).get("port", 0)) if (p.dir / "server.json").exists() else True:
         print("warning: dashboard is not running; `arx up`", file=sys.stderr)
 
@@ -255,7 +260,9 @@ def main(argv=None):
 
     s = sp.add_parser("model", help="register a version (candidate, or --champion for the baseline)")
     s.add_argument("verb", choices=["add"]); s.add_argument("name"); s.add_argument("--parent"); s.add_argument("--hill")
+    s.add_argument("--no-parent", action="store_true", help="not derived from the champion (e.g. a backfilled run)")
     s.add_argument("--change"); s.add_argument("--title"); s.add_argument("--link", action="append", help="label=url")
+    s.add_argument("--status", choices=["candidate", "historical", "planned"], default="candidate")
     s.add_argument("--champion", action="store_true"); s.set_defaults(fn=cmd_model)
 
     s = sp.add_parser("reject"); s.add_argument("name"); s.add_argument("--reason", required=True); s.set_defaults(fn=cmd_reject)
@@ -268,6 +275,12 @@ def main(argv=None):
     s.add_argument("--rows", required=True); s.add_argument("--title"); s.add_argument("--description"); s.add_argument("--agent")
     s.set_defaults(fn=cmd_eval_record)
 
+    s = sp.add_parser("run", help="launch a hash-pinned command manifest as a task (see autoresearch/execution.py)")
+    s.add_argument("--manifest", required=True); s.add_argument("--expected-sha256", required=True)
+    s.add_argument("--model"); s.add_argument("--slice"); s.add_argument("--title"); s.add_argument("--description")
+    s.add_argument("--agent"); s.add_argument("--dry-run", action="store_true"); s.add_argument("--approve-paid", action="store_true")
+    s.set_defaults(fn=cmd_eval_run)
+
     s = sp.add_parser("task", help="workbench tasks from a shell")
     s.add_argument("action", choices=["start", "log", "note", "link", "progress", "finish"])
     s.add_argument("id", nargs="?"); s.add_argument("values", nargs="*")
@@ -275,6 +288,7 @@ def main(argv=None):
     s.add_argument("--model"); s.add_argument("--slice"); s.add_argument("--agent"); s.add_argument("--total", type=int)
     s.add_argument("--parent", help="task id this one sits under (default $ARX_PARENT)")
     s.add_argument("--step", type=int); s.add_argument("--level", default="info"); s.add_argument("--status", default="done")
+    s.add_argument("--summary-file", help="JSON merged into the task summary on finish")
     s.set_defaults(fn=cmd_task)
 
     s = sp.add_parser("status"); s.set_defaults(fn=cmd_status)

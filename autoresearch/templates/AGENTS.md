@@ -27,6 +27,8 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
 - Run evals through `arx.evaluate(model, slice, run_one)`. It enforces the slice's exact IDs, counts errors as 0,
   writes rows incrementally and keeps the card live. Rows stay aggregate-safe: id, score, cost, latency, error.
   Do not put client text, answers or traces in rows.
+- A harness outside Python: `arx run` on a hash-pinned manifest (see `autoresearch/execution.py`), `--dry-run` first.
+  Its stdout/stderr stay in the task dir as private logs.
 - Before a candidate runs a rung, the champion must have a run on the same slice with the same harness.
   `arx gate <model>` names the next run; follow it, do not skip rungs.
 - Never edit a frozen slice. Make a new one with a new name.
