@@ -37,6 +37,18 @@ def eta(p: Project, t: dict) -> dict | None:
     return dict(per_min=rate * 60, eta_s=left, finish_at=time.time() + left)
 
 
+def infer_parents(tasks: list[dict]) -> None:
+    """Tasks logged before `parent` existed: nest each under the newest non-eval task of the same process that was
+    running when it started (a loop script and the evals it launched share a pid)."""
+    for t in tasks:
+        if "parent" in t or not t.get("pid"):
+            continue
+        hosts = [o for o in tasks if o is not t and o.get("kind") != "eval" and o.get("pid") == t["pid"]
+                 and o.get("host") == t.get("host") and o.get("command") == t.get("command")
+                 and o["created"] < t["created"] <= (o.get("ended") or float("inf"))]
+        t["parent"] = max(hosts, key=lambda o: o["created"])["id"] if hosts else None
+
+
 def state(p: Project) -> dict:
     slices = {k: {kk: vv for kk, vv in v.items() if kk != "ids"} | {"name": k} for k, v in p.slices().items()}
     models, tasks = p.models(), p.tasks()
@@ -53,7 +65,10 @@ def state(p: Project) -> dict:
                 gates[name] = p.gate(name)
             except SystemExit as e:
                 gates[name] = dict(error=str(e))
+    infer_parents(tasks)
     for t in tasks:
+        ev = p.events(t["id"])
+        t["note"] = ev[-1] if ev else None
         series = p.metrics(t["id"])[-40:]
         keys = [k for k in (t.get("last") or {}) if isinstance(t["last"][k], (int, float))]
         t["eta"] = eta(p, t)
@@ -78,7 +93,9 @@ def _tail(path: Path, n: int) -> list:
 
 
 def task_detail(p: Project, tid: str) -> dict:
-    t = p.task(tid)
+    tasks = p.tasks()
+    infer_parents(tasks)
+    t = next((x for x in tasks if x["id"] == tid), None) or p.task(tid)
     t["eta"] = eta(p, t)
     out = dict(task=t, metrics=_downsample(p.metrics(tid)), events=p.events(tid)[-300:])
     if t.get("kind") == "eval":

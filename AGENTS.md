@@ -17,6 +17,9 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
 - Log as you go: `t.log(step=..., loss=...)` for curves, `t.note("...")` for decisions, `t.link("HF dataset", url)`
   for anything stored elsewhere. Write the task's description so the card makes sense to someone who missed the chat.
 - Subagents get their own task (pass `agent="<subagent name>"`). One candidate per subagent / worktree.
+- Sub-work nests under the task that started it: tasks opened while another runs in the same process, or in a
+  process launched from it (`$ARX_PARENT`), become its sub-tasks. From another process pass `parent=<id>` /
+  `arx task start --parent <id>`. Keep each card's latest note current; it is the line people read.
 - Long jobs: visible progress, bulk/concurrent calls, a wall-clock deadline. A stalled task (no heartbeat for
   10 minutes) shows red; fix or fail it, never leave it.
 

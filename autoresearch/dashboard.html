@@ -73,6 +73,18 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:now
 .wb:hover{border-color:var(--muted)}
 .wb .t{font-weight:600;font-size:15.5px}
 .wb .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.wb .desc{color:var(--muted);font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.note{font-size:13px;display:flex;gap:8px;align-items:baseline;min-width:0}
+.note .msg{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.note .when{color:var(--muted);font-size:12px;white-space:nowrap}
+.note.warn .msg{color:var(--amber)}.note.error .msg{color:var(--red)}
+.kids{border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column}
+.kid{display:flex;align-items:center;gap:9px;padding:5px 6px;margin:0 -6px;border-radius:8px;color:inherit;text-decoration:none;font-size:13px;min-width:0}
+.kid:hover{background:var(--soft)}
+.kid .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kid .vl{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.sd{width:8px;height:8px;border-radius:50%;flex:none;background:var(--muted)}
+.sd.running{background:var(--blue)}.sd.done,.sd.completed{background:var(--green)}.sd.failed,.sd.stalled{background:var(--red)}
 .wb .meta{display:flex;justify-content:space-between;color:var(--muted);font-size:12.5px;gap:10px}
 .prog{height:6px;background:var(--soft);border-radius:99px;overflow:hidden}
 .prog i{display:block;height:100%;background:var(--blue);border-radius:99px}
@@ -140,6 +152,11 @@ const ROUTES=[['overview','Overview','over'],['workbench','Workbench','wb'],['mo
 function route(){const h=location.hash.slice(1)||'overview';const [r,...rest]=h.split('/');return {r,arg:decodeURIComponent(rest.join('/'))}}
 const active=()=>S.state.tasks.filter(t=>t.status==='running'||t.status==='stalled');
 const archived=()=>S.state.tasks.filter(t=>t.status!=='running'&&t.status!=='stalled');
+const isLive=t=>t&&(t.status==='running'||t.status==='stalled');
+const byId=id=>S.state.tasks.find(t=>t.id===id);
+const kids=id=>S.state.tasks.filter(t=>t.parent===id).sort((a,b)=>(isLive(b)-isLive(a))||(b.created-a.created));
+// every descendant, depth-first, with its depth; a guard stops cycles from bad parent ids
+function tree(id,depth=0,seen=new Set([id])){return kids(id).filter(k=>!seen.has(k.id)&&seen.add(k.id)).flatMap(k=>[[k,depth],...tree(k.id,depth+1,seen)])}
 
 function renderNav(){
  const {r}=route();const st=S.state;
@@ -185,17 +202,28 @@ function ciBar(c){
 // ---------- shared bits
 const ladderPills=g=>!g||g.error?'':`<div class="ladder">${g.rungs.map(r=>`<span class="rung ${r.status}">${esc(r.rung)}</span>`).join('')}</div>`;
 function fullScore(m){const st=S.state,ds=st.config.primary_dataset;return st.leaderboard[ds+'/full']?.[m]}
+function kidRow([k,depth]){
+ const pr=k.progress||{},sc=k.summary?.score??k.last?.running_score;
+ const v=isLive(k)?[pr.total?`${pr.done}/${pr.total}`:'',sc!=null?pct(sc):'',k.eta?left(k.eta.eta_s):''].filter(Boolean).join(' · ')
+  :k.kind==='eval'&&sc!=null?`${pct(sc)} · n ${k.summary?.n??pr.done}`:k.status;
+ return `<a class="kid" href="#task/${encodeURIComponent(k.id)}" style="padding-left:${6+depth*16}px"><span class="sd ${k.status}"></span><span class="nm">${esc(k.title)}</span><span class="vl">${esc(v)}</span></a>`;
+}
+function noteLine(n){return n?`<div class="note ${n.level}"><span class="msg">${esc(n.msg)}</span><span class="when">${ago(n.t)}</span></div>`:''}
 function taskCard(t){
  const pr=t.progress||{},f=pr.total?Math.min(1,pr.done/pr.total):null;
  const last=Object.entries(t.last||{}).filter(([k,v])=>typeof v==='number').slice(0,3);
- return `<a class="card wb ${t.status}" href="#task/${encodeURIComponent(t.id)}">
+ const sub=tree(t.id),live=sub.filter(([k])=>isLive(k)).length,shown=sub.filter(([k])=>isLive(k)).concat(sub.filter(([k])=>!isLive(k))).slice(0,Math.max(6,live));
+ return `<div class="card wb ${t.status}" onclick="if(!event.target.closest('a'))location.hash='task/${encodeURIComponent(t.id)}'">
   <div class="row"><span class="chip ${t.status}">${t.status}</span><span class="chip">${esc(t.kind)}</span>${t.agent?`<span class="chip">${esc(t.agent)}</span>`:''}</div>
   <div class="t">${esc(t.title)}</div>
-  <div class="sub">${[t.model,short(t.slice)].filter(Boolean).map(esc).join(' · ')}</div>
+  ${t.model||t.slice?`<div class="sub">${[t.model,short(t.slice)].filter(Boolean).map(esc).join(' · ')}</div>`:''}
+  ${t.description?`<div class="desc">${esc(t.description)}</div>`:''}
+  ${noteLine(t.note)}
   ${t.spark?spark(t.spark.y,t.status==='stalled'?'var(--red)':'var(--blue)'):''}
   ${last.length?`<div class="kv">${last.map(([k,v])=>`<div><span>${esc(k)}</span><b>${fmtv(v)}</b></div>`).join('')}</div>`:''}
   ${f!=null?`<div class="prog"><i style="width:${(f*100).toFixed(1)}%"></i></div>`:''}
-  <div class="meta"><span>${pr.total?`${pr.done} / ${pr.total}`:''}${t.eta?` · ETA ${left(t.eta.eta_s)}`:''}</span><span>${dur(t.created)} · beat ${ago(t.heartbeat)}</span></div></a>`;
+  ${sub.length?`<div class="kids"><div class="sub" style="margin-bottom:4px">${live} running · ${sub.length} sub-tasks</div>${shown.map(kidRow).join('')}${sub.length>shown.length?`<a class="kid sub" href="#task/${encodeURIComponent(t.id)}">+${sub.length-shown.length} more</a>`:''}</div>`:''}
+  <div class="meta"><span>${pr.total?`${pr.done} / ${pr.total}`:''}${t.eta?` · ETA ${left(t.eta.eta_s)}`:''}</span><span>${dur(t.created)} · beat ${ago(t.heartbeat)}</span></div></div>`;
 }
 
 // ---------- views
@@ -226,7 +254,8 @@ function vOverview(){
  return h;
 }
 function vWorkbench(){
- const a=active();
+ // a running task whose parent is also running shows inside the parent's card, not as its own
+ const a=active().filter(t=>!isLive(byId(t.parent)));
  return topbar('Workbench')+(a.length?`<div class="cards">${a.map(taskCard).join('')}</div>`:'<div class="card empty">Nothing running</div>');
 }
 function vArchive(){
@@ -285,6 +314,8 @@ function vTask(id){
   ${t.description?`<p class="desc" style="margin-top:12px">${esc(t.description)}</p>`:''}
   ${Object.keys(t.links||{}).length?`<div class="links" style="margin-top:12px">${Object.entries(t.links).map(([k,v])=>`<a href="${esc(v)}" target="_blank" rel="noopener">${esc(k)} ↗</a>`).join('')}</div>`:''}</div>
   ${pr.total?ring(pr.done,pr.total):''}</div></div>`;
+ const up=byId(t.parent),sub=tree(t.id);
+ if(up||sub.length)h+=`<div class="card section"><h2>${sub.length?'Sub-tasks':'Part of'}<span class="r">${sub.length?sub.filter(([k])=>isLive(k)).length+' running · '+sub.length:''}</span></h2>${up?`<a class="kid" href="#task/${encodeURIComponent(up.id)}"><span class="sd ${up.status}"></span><span class="nm">↑ ${esc(up.title)}</span><span class="vl">${esc(up.status)}</span></a>`:''}<div class="kids" style="${up?'':'border:0;padding:0'}">${sub.map(kidRow).join('')}</div></div>`;
  // tiles
  const last=Object.entries(t.last||{}).filter(([k,v])=>typeof v==='number');
  const tiles=t.kind==='eval'?[['Score',pct(sm.score??t.last?.running_score),sm.n?`${Math.round((sm.score||0)*sm.n)} / ${sm.n}`:'running'],['Cost / example',money(sm.cost),sm.cost_total!=null?money(sm.cost_total)+' total':''],['Latency p50',secs(sm.latency_p50),'p95 '+secs(sm.latency_p95)],['Errors',sm.errors??'—',sm.missing?sm.missing+' missing':'']]
