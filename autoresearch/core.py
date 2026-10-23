@@ -303,12 +303,19 @@ class Project:
 
 # ---------------------------------------------------------------- live tasks
 
+_open: list["Task"] = []  # tasks running in this process, innermost last; new tasks nest under the top one
+
+
 class Task:
-    """A unit of visible work. Shows on the Workbench while running, in the Archive after."""
+    """A unit of visible work. Shows on the Workbench while running, in the Archive after.
+
+    `parent` nests this task under another card. Left out, it is the innermost task still running in this process,
+    else $ARX_PARENT (exported to child processes while a task runs), so a loop's evals sit under the loop.
+    """
 
     def __init__(self, project: Project, kind: str, title: str, description: str = None, model: str = None,
                  slice: str = None, agent: str = None, total: int = None, links: dict = None, config: dict = None,
-                 tid: str = None):
+                 tid: str = None, parent: str = None):
         self.p = project
         self.id = tid or f"{time.strftime('%m%d-%H%M%S')}-{kind}-{uuid.uuid4().hex[:4]}"
         self.dir = project.task_dir(self.id)
@@ -316,13 +323,19 @@ class Task:
         self._step = 0
         if not (self.dir / "task.json").exists():
             sl = project.slice(slice) if slice else None
-            self.meta = dict(id=self.id, kind=kind, title=title, description=description, model=model,
+            if parent is None:
+                parent = _open[-1].id if _open else os.environ.get("ARX_PARENT") or None
+            self.meta = dict(id=self.id, kind=kind, title=title, description=description, model=model, parent=parent,
                              slice=sl["name"] if sl else None, slice_hash=sl["hash"] if sl else None,
                              agent=agent, status="running", created=now(), updated=now(), heartbeat=now(),
                              progress=dict(done=0, total=total or (sl["n"] if sl else None)), links=links or {},
                              config=config or {}, summary={}, host=os.uname().nodename, pid=os.getpid(),
                              command=" ".join(sys.argv))
             self._flush()
+            if kind != "eval":  # evals are leaves; anything else can hold sub-tasks
+                self._env = os.environ.get("ARX_PARENT")
+                _open.append(self)
+                os.environ["ARX_PARENT"] = self.id
         else:
             self.meta = _read(self.dir / "task.json")
 
@@ -377,6 +390,13 @@ class Task:
                 self.meta["summary"] = self.meta.get("summary", {}) | summary
             self.meta["status"], self.meta["ended"] = status, now()
             self._flush()
+        if self in _open:
+            _open.remove(self)
+            env = _open[-1].id if _open else self._env
+            if env:
+                os.environ["ARX_PARENT"] = env
+            else:
+                os.environ.pop("ARX_PARENT", None)
 
     def __enter__(self):
         return self
@@ -389,7 +409,8 @@ class Task:
 
 
 def evaluate(project: Project, model: str, slice: str, run_one, workers: int = 8, deadline_s: float = 3600,
-             title: str = None, description: str = None, agent: str = None, repeats: int = 1, config: dict = None) -> Task:
+             title: str = None, description: str = None, agent: str = None, repeats: int = 1, config: dict = None,
+             parent: str = None) -> Task:
     """Run `run_one(example_id) -> {"score": float, "cost": .., "latency_s": .., ...}` on every id of a slice.
 
     Exceptions and deadline overruns become error rows (score 0). The card shows progress and running score live.
@@ -397,7 +418,7 @@ def evaluate(project: Project, model: str, slice: str, run_one, workers: int = 8
     sl = project.slice(slice)
     ids = [i for i in sl["ids"] for _ in range(repeats)]
     t = Task(project, "eval", title or f"{model} on {sl['name']}", description, model=model, slice=sl["name"],
-             agent=agent, total=len(ids), config=(config or {}) | {"workers": workers, "deadline_s": deadline_s, "repeats": repeats})
+             agent=agent, total=len(ids), parent=parent, config=(config or {}) | {"workers": workers, "deadline_s": deadline_s, "repeats": repeats})
     start, done, total_score = now(), 0, 0.0
     pool = ThreadPoolExecutor(workers)
     futs = {}

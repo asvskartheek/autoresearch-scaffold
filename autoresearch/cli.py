@@ -188,7 +188,8 @@ def cmd_eval_record(a):
 def cmd_task(a):
     p = Project()
     if a.action == "start":
-        t = Task(p, a.kind, a.title, a.description, model=a.model, slice=a.slice, agent=a.agent, total=a.total)
+        t = Task(p, a.kind, a.title, a.description, model=a.model, slice=a.slice, agent=a.agent, total=a.total,
+                 parent=a.parent)
         print(t.id)
         return
     t = Task(p, "", "", tid=a.id)
@@ -272,6 +273,7 @@ def main(argv=None):
     s.add_argument("id", nargs="?"); s.add_argument("values", nargs="*")
     s.add_argument("--kind", default="experiment"); s.add_argument("--title"); s.add_argument("--description")
     s.add_argument("--model"); s.add_argument("--slice"); s.add_argument("--agent"); s.add_argument("--total", type=int)
+    s.add_argument("--parent", help="task id this one sits under (default $ARX_PARENT)")
     s.add_argument("--step", type=int); s.add_argument("--level", default="info"); s.add_argument("--status", default="done")
     s.set_defaults(fn=cmd_task)
 
