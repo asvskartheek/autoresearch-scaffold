@@ -82,10 +82,17 @@ with ar.task("train", "SFT v3", model="v3", config={"lr": 2e-4}) as t:  # W&B-st
     for step, loss in training_loop():
         t.log(step=step, loss=loss)
     t.link("Checkpoint", "https://huggingface.co/you/v3")
+
+with ar.task("experiment", "prompt sweep", budget_usd=5, budget_s=1800) as t:  # arx keeps the books
+    while t.ok():                                   # or t.check(): raises, card ends as "budget"
+        ar.evaluate(next_prompt(), "dev-arith", run_one)  # row costs roll up; the eval stops when $5 is gone
 ```
 
+Budgets nest: a sub-task never outspends its parent. In-flight calls finish, so spend can overshoot by up to
+`workers` examples.
+
 Evals from another harness or a cloud job: `arx eval record --model v2 --slice random100 --rows rows.jsonl`.
-Shell-only work: `arx task start | log | note | link | progress | finish`.
+Shell-only work: `arx task start | log | note | link | progress | spend | left | finish`.
 
 # The dashboard
 

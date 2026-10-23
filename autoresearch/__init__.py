@@ -6,10 +6,14 @@
         for step in range(n):
             t.log(step=step, loss=loss, lr=lr)
 
+    with ar.task("experiment", "sweep prompts", budget_usd=5, budget_s=1800) as t:
+        while t.ok():                      # or t.check(): raises BudgetExceeded, card ends as "budget"
+            t.spend(call_model())          # money rolls up to every ancestor; sub-tasks inherit the tighter cap
+
     ar.evaluate("v9", "dev-please", run_one)   # run_one(id) -> {"score": 1.0, "cost": 0.002}
     print(ar.gate("v9"))
 """
-from .core import Project, Task, evaluate as _evaluate, summarize, paired
+from .core import BudgetExceeded, Project, Task, evaluate as _evaluate, summarize, paired
 
 _project = None
 
@@ -34,4 +38,4 @@ def gate(model: str) -> dict:
     return project().gate(model)
 
 
-__all__ = ["Project", "Task", "project", "task", "evaluate", "gate", "summarize", "paired"]
+__all__ = ["BudgetExceeded", "Project", "Task", "project", "task", "evaluate", "gate", "summarize", "paired"]
