@@ -12,6 +12,9 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
 ## Every piece of work is visible
 - Open the task *before* starting the work, not after. No step is too small: installs, downloads, data prep,
   error analysis, slice building, evals, training.
+- A task is a single job with a clear end. The project's goal, a hill or a candidate is not a task: those are
+  tracked in `research.json`, hills and models. Never open one task to cover the whole effort and hang other
+  work under it.
 - Anything that runs longer than a minute is a task: `arx.task(...)` in Python or `arx task start` from a shell.
   It shows as a Workbench card while it runs and moves to the Archive when it ends. Never run unlogged work.
 - Log as you go: `t.log(step=..., loss=...)` for curves, `t.note("...")` for decisions, `t.link("HF dataset", url)`
