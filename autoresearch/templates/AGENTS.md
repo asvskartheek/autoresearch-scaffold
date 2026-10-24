@@ -5,9 +5,20 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
 
 ## Step 0: the dashboard, before anything else
 - `arx up` (also run by `arx init`) starts the dashboard in the background. Check it is up before doing other work,
-  and give the user the URL. If it goes down, `arx up` again.
+  and give the user the URL. If it goes down, `arx up` again. `arx ps` lists every running dashboard and its project;
+  `arx down` stops this one. The session hooks in `.claude/settings.json` run `arx up` on start and `arx down` on
+  end, and a dashboard nobody has opened for `dashboard_idle_minutes` (default 30) with nothing running stops itself.
+  Never hand out a port without checking the tab title shows this project's name.
 - Setup is work too: `arx init` opens a running "Project setup" task. Note every step on it (environment, installs,
   model download, dataset prep) and finish it when the first eval can run.
+
+## Resuming
+- Start with `arx status`: champion, best runs per dataset, every hill's attempts and the live tasks. Do not redo what it lists.
+- A stalled task that is yours to continue: `arx task resume <id>`, not a new card. One nobody will finish: `arx sweep` closes it as abandoned.
+- Earlier or imported work is history: record it as a `historical_run` task with `model` and a `summary` ({n, score, dataset,
+  cohort_hash, catalog_record, ...}; see docs/guides/history.md) so the Overview, hill, model and champion pages show it.
+  Runs are comparable only within one dataset + `cohort_hash`. Do not `arx promote --force` old models to fake champion history.
+- After upgrading arx, run `arx sync`; the vendored `autoresearch/` copy shadows the installed one for project scripts.
 
 ## Every piece of work is visible
 - Open the task *before* starting the work, not after. No step is too small: installs, downloads, data prep,
@@ -36,6 +47,10 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
   `arx gate <model>` names the next run; follow it, do not skip rungs.
 - Never edit a frozen slice. Make a new one with a new name.
 - Every hill gets an explainer (`arx hill explain`: symptom, example, measure, share). See PROTOCOL.md.
+- Every model and every hill gets a poster spec: <= 16 lines of JSON (headline, 2-4 idea steps with icons, the
+  before/after result, verdict, why), set with `arx poster model|hill ID FILE.json` or `--poster FILE.json` on
+  `arx model add` / `arx hill open`. Every number comes from the ledger; omit `result` when nothing was measured.
+  The dashboard draws it. Without one it derives a plainer poster. See docs/guides/posters.md.
 - Pre-declare what a change should move (in the hill's `problem` or the model's `change`) before running it.
 
 ## Reporting

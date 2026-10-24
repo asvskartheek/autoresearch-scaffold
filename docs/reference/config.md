@@ -28,6 +28,7 @@ The project's config lives at its root. `arx init` writes the defaults:
 | `higher_is_better` | Flips the sign of paired deltas when `false` (e.g. error rate). |
 | `kpis` | Columns that travel together on leaderboards. |
 | `stall_minutes` | A running task with no heartbeat this long shows as stalled. |
+| `dashboard_idle_minutes` | The dashboard stops itself after this long with no requests and no running task. Default 30; `0` never. Not in the template, add it to change it. |
 | `max_paid_usd` | Upper bound on `budget_usd` for paid `arx run` manifests. |
 | `ladder` | The rungs, in order. |
 

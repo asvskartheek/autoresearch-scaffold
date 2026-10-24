@@ -13,7 +13,7 @@ project-specific numbers.
 | **Hill** | A specific weakness found in the champion ("V7 flips answers when the prompt says *please*"). |
 | **Target slice** | The slice that measures one hill. Small (20–60), targeted, often synthetic. Its score can be a custom metric (e.g. agreement with/without *please*). |
 | **Control slice** | A small random slice evaluated with every target slice, to see the overall effect. |
-| **Champion** | The model with the best full-dataset score. Every candidate is compared with it. |
+| **Champion** | The model with the best full-dataset score. Every candidate is compared with it. A champion exists only after it passed every gate, the full dataset included, and beat the one it replaced (`arx promote`). An earlier best on one eval set is a lead, never a champion. |
 | **Candidate** | A new version (V8) that claims to climb one hill. |
 | **Gate** | A rung of the ladder. A candidate runs a rung only after passing the one below. |
 

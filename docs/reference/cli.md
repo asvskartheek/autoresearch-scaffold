@@ -8,10 +8,15 @@ Every command runs against the project found by walking up from the current dire
 | Command | Does |
 |---|---|
 | `arx init [dir] [--name N] [--port 8890] [--no-serve]` | Scaffold a project, vendor `autoresearch/`, start the dashboard, open a "Project setup" task |
-| `arx up [--port 8890] [--restart]` | Start the dashboard detached if it is not running, and print its URL |
-| `arx sync` | Refresh the vendored `autoresearch/` from the installed package and restart the dashboard |
+| `arx up [--port 8890] [--restart]` | Start this project's dashboard detached if it is not running, and print its URL. `--port` is the first port tried |
+| `arx down [--all]` | Stop this project's dashboard, or every project's |
+| `arx ps` | List running dashboards: URL, pid, project folder |
+| `arx sync` | Replace the vendored `autoresearch/` with the installed package and restart the dashboard |
 | `arx serve [--port]` | Run the server in the foreground (what `up` launches) |
-| `arx status` | Running tasks, each candidate's rungs, hills |
+| `arx status` | Champion, counts, best run per dataset, each hill's attempts, live tasks, each candidate's rungs |
+| `arx sweep [--hours 2]` | Close tasks stalled for longer than `--hours` as `abandoned` |
+
+See [The dashboard lifecycle](../guides/dashboard.md) and [Resuming work](../guides/resume.md).
 
 ## Data
 
@@ -26,6 +31,7 @@ Every command runs against the project found by walking up from the current dire
 |---|---|
 | `arx hill open NAME --title T --target S [--control S] [--problem P] [--found-in M]` | Open a hill (accepts the explain flags too) |
 | `arx hill explain NAME [--symptom] [--measure] [--example-input --example-wrong --example-right --example-why] [--examples-file F] [--share C/N --share-of W]` | Add the hill's explainer; each `--example-*` set appends one example |
+| `arx poster model\|hill ID FILE` | Set the poster (json spec, svg, html, png, jpg, webp; max 2 MB, spec 16 KB); `model add` and `hill open/explain` take `--poster FILE` |
 | `arx model add NAME [--champion] [--parent P \| --no-parent] [--hill H] [--change C] [--title] [--link label=url ...] [--status candidate\|historical\|planned]` | Register a model; parent defaults to the champion |
 | `arx gate MODEL [--json]` | Ladder status and next runs |
 | `arx promote MODEL [--force]` | Make champion (re-checks every rung), retire the old one, mark the hill climbed |
@@ -48,6 +54,7 @@ arx task note ID message ... [--level info|warn|error]
 arx task link ID LABEL URL
 arx task progress ID DONE [TOTAL]
 arx task left ID                       # prints e.g. "0.9s" or "unlimited"; exit code 3 once time is up
+arx task resume ID                     # note "resumed" and refresh the heartbeat of a stalled task
 arx task finish ID [--status done|failed|budget] [--summary-file F]
 ```
 

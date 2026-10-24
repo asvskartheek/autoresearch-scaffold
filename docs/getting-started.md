@@ -31,7 +31,7 @@ cd my-research
 2. **Vendors** the `autoresearch/` package into the project, so `import autoresearch` works from the project's own
    Python environment without installing anything into it. Run `arx sync` after upgrading ARX to refresh the copy.
 3. Adds `scratch/` and `.research/tasks/*/rows.jsonl` to `.gitignore`.
-4. Starts the dashboard (`arx up`) and opens a running **Project setup** task.
+4. Writes the session hooks (`.claude/settings.json`), starts the dashboard (`arx up`) and opens a running **Project setup** task.
 
 Why a setup task? Setup is work too: installs, model downloads and data prep take time and fail in interesting ways.
 Note each step on it (`arx task note <id> "downloaded weights"`) and finish it when the first eval can run.
@@ -43,9 +43,10 @@ arx up            # prints http://127.0.0.1:8890 (or the next free port)
 arx up --restart  # after upgrading
 ```
 
-`arx up` is idempotent. It reads `.research/server.json`; if the recorded port answers, it prints the URL and
-exits. Otherwise it starts `arx serve` as a detached process (its own session, logging to `.research/server.log`)
-and records the new port and pid. The server only binds to `127.0.0.1`.
+`arx up` is idempotent: if this project's dashboard is running it prints the URL and exits; otherwise it starts
+`arx serve` detached (logging to `.research/server.log`) and records the port and pid. The server only binds to
+`127.0.0.1`, serves one project, and stops itself when idle. `arx ps` lists dashboards, `arx down` stops one. See
+[The dashboard lifecycle](guides/dashboard.md).
 
 | View | Shows |
 |---|---|

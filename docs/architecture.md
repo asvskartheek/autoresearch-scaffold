@@ -38,7 +38,7 @@ research.json                 # config: ladder, thresholds, KPIs, primary_datase
 ├── hills.json                # name -> {title, target, control, problem, status, symptom, examples, share, ...}
 ├── models.json               # name -> {parent, hill, change, status: champion|candidate|retired|rejected|...}
 ├── decisions.jsonl           # append-only: champion seeded, promote (with the gate snapshot), reject
-├── server.json               # dashboard port, pid, start time
+├── server.json               # this project's dashboard: root, port, pid, start time
 ├── server.log
 └── tasks/<id>/
     ├── task.json             # status, kind, model, slice, slice_hash, parent, progress, budget_s, summary
@@ -145,10 +145,12 @@ Key consequences:
 | Route | Returns |
 |---|---|
 | `/` | `dashboard.html` |
-| `/api/state` | config, slices (without ID lists), hills, models, every candidate's gate, tasks with latest note, sparkline and ETA, leaderboard, last 50 decisions |
+| `/api/state` | config, slices (without ID lists), hills, models, every candidate's gate, tasks with latest note, sparkline and ETA, leaderboard, last 50 decisions, `champions` (official), `runs` (every task with a score and `n`) and `tracks` (runs grouped by dataset + slice hash, each with its frontier) |
 | `/api/task/<id>` | the task, metrics (downsampled to ~600 points), last 300 events; for evals, rows and the paired diff vs the champion |
 | `/api/hill/<name>` | per-example scores of every model on the hill's target and control |
 | `/api/gate/<model>` | `gate()` |
+| `/api/champion/<model>` | an official champion's page data: record, gate, paired deltas vs the champion it replaced; 404 otherwise |
+| `/api/ping` | `{root, name, pid}`; how `arx up` tells this project's dashboard from another's |
 
 Everything is computed per request from the files, with `Cache-Control: no-store`. The dashboard is a single HTML
 file with no build step; it polls `api/state` every few seconds and fetches detail routes for task and hill pages.
@@ -156,7 +158,7 @@ file with no build step; it polls `api/state` every few seconds and fetches deta
 ## `cli.py`
 
 An argparse front over the same operations. Notable behaviour beyond a thin wrapper: `init` vendors the package and
-opens the setup task; `up` manages the detached server via `server.json`; `task left` exits 3 when time is up; task
+opens the setup task; `up`, `down` and `ps` manage detached servers through `.research/server.json` and `~/.arx/servers.json`; `task left` exits 3 when time is up; task
 subcommands warn when the dashboard is not running. See the [CLI reference](reference/cli.md).
 
 ## `execution.py`
