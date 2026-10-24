@@ -5,7 +5,7 @@ truth. Gate results are never stored; they are derived from finished eval tasks 
 """
 from __future__ import annotations
 
-import hashlib, json, math, os, random, statistics, sys, threading, time, uuid
+import hashlib, json, math, os, random, re, statistics, sys, threading, time, uuid
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 
@@ -117,6 +117,22 @@ class Project:
     def champion(self) -> str | None:
         return next((k for k, m in self.models().items() if m.get("status") == "champion"), None)
 
+    def champions(self) -> list[dict]:
+        """Every champion in order, oldest first: the seeded baseline, then each promotion with what it replaced."""
+        out = []
+        for d in _jsonl(self.dir / "decisions.jsonl"):
+            seeded = d.get("kind") == "champion"
+            if (d.get("kind") == "promote" or (seeded and d.get("model"))) and not (out and out[-1]["model"] == d["model"]) \
+                    and not (seeded and any(c["model"] == d["model"] for c in out)):  # re-running a setup script re-seeds
+                out.append(dict(model=d["model"], t=d["t"], replaced=d.get("replaced"), seeded=d["kind"] == "champion",
+                                gate=d.get("gate")))
+        models = self.models()
+        known = {c["model"] for c in out}
+        for k, m in models.items():  # a ledger edited by hand, or promoted before decisions were logged
+            if m.get("status") in ("champion", "retired") and k not in known:
+                out.append(dict(model=k, t=m.get("promoted") or m.get("created", 0), replaced=m.get("parent"), seeded=False, gate=None))
+        return sorted(out, key=lambda c: c["t"])
+
     def _upsert(self, coll: str, key: str, **fields) -> dict:
         data = self._coll(coll)
         rec = {**data.get(key, {"created": now()}), **{k: v for k, v in fields.items() if v is not None}}
@@ -165,10 +181,12 @@ class Project:
         raise SystemExit(f"unknown slice {name}")
 
     # hills and models ------------------------------------------------------------------
-    def open_hill(self, name, title, target, control=None, problem=None, found_in=None, **explainer):
+    def open_hill(self, name, title, target, control=None, problem=None, found_in=None, poster=None, **explainer):
         target, control = self.slice(target)["name"], (self.slice(control)["name"] if control else None)
         self._upsert("hills", name, title=title, target=target, control=control, problem=problem,
                      found_in=found_in or self.champion(), status="open")
+        if poster:
+            self.set_poster("hill", name, poster)
         return self.explain_hill(name, **explainer)
 
     def explain_hill(self, name, symptom=None, measure=None, examples=None, share=None):
@@ -179,9 +197,150 @@ class Project:
             raise SystemExit(f"unknown hill {name}")
         return self._upsert("hills", name, symptom=symptom, measure=measure, examples=examples, share=share)
 
-    def add_model(self, name, parent=None, hill=None, change=None, title=None, links=None, status="candidate"):
+    # posters -------------------------------------------------------------------------
+    POSTER_TYPES = {"json": "application/json", "svg": "image/svg+xml", "html": "text/html; charset=utf-8", "png": "image/png",
+                    "jpg": "image/jpeg", "webp": "image/webp"}
+    POSTER_MAX = 2 * 1024 * 1024
+    SPEC_MAX = 16 * 1024
+    SPEC_ICONS = ("drawing crop zoom ruler compare tag link graph filter vote brain check cross search code legend "
+                  "layers route count shield clock coin book wand step").split()
+    SPEC_VERDICTS = ("rejected", "passed", "champion", "candidate", "historical", "open", "climbed")
+
+    @classmethod
+    def validate_poster_spec(cls, data: bytes) -> dict:
+        """Parse and check a poster spec (v1). Raises SystemExit naming the first problem."""
+        if len(data) > cls.SPEC_MAX:
+            raise SystemExit(f"poster spec is {len(data) // 1024} KB; the cap is {cls.SPEC_MAX // 1024} KB")
+        try:
+            spec = json.loads(data.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError) as e:
+            raise SystemExit(f"poster spec is not valid UTF-8 JSON: {e}")
+
+        def bad(msg):
+            raise SystemExit(f"poster spec: {msg}")
+
+        def text(v, name, n, req=True):
+            if v is None and not req:
+                return
+            if not isinstance(v, str) or (req and not v.strip()):
+                bad(f"{name} must be a non-empty string")
+            if len(v) > n:
+                bad(f"{name} is {len(v)} chars; the cap is {n}")
+
+        def num(v, name):
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or abs(v) == float("inf"):
+                bad(f"{name} must be a number")
+
+        if not isinstance(spec, dict):
+            bad("must be a JSON object")
+        if spec.get("v") != 1 or isinstance(spec.get("v"), bool):
+            bad("v must be 1")
+        text(spec.get("headline"), "headline", 70)
+        idea = spec.get("idea")
+        if not isinstance(idea, list) or not 2 <= len(idea) <= 4:
+            bad("idea must be a list of 2 to 4 steps")
+        for i, st in enumerate(idea):
+            if not isinstance(st, dict):
+                bad(f"idea[{i}] must be an object")
+            text(st.get("text"), f"idea[{i}].text", 28)
+            if st.get("icon") not in cls.SPEC_ICONS:
+                bad(f"idea[{i}].icon must be one of: {' '.join(cls.SPEC_ICONS)}")
+        if "result" in spec:
+            r = spec["result"]
+            if not isinstance(r, dict):
+                bad("result must be an object")
+            text(r.get("label"), "result.label", 40)
+            for side in ("before", "after"):
+                x = r.get(side)
+                if not isinstance(x, dict):
+                    bad(f"result.{side} must be an object")
+                text(x.get("name"), f"result.{side}.name", 24)
+                num(x.get("value"), f"result.{side}.value")
+                num(x.get("of"), f"result.{side}.of")
+                if x["of"] <= 0 or x["value"] < 0 or x["value"] > x["of"]:
+                    bad(f"result.{side} needs 0 <= value <= of and of > 0")
+        also = spec.get("also", [])
+        if not isinstance(also, list) or len(also) > 3:
+            bad("also must be a list of at most 3 chips")
+        for i, c in enumerate(also):
+            if not isinstance(c, dict):
+                bad(f"also[{i}] must be an object")
+            text(c.get("text"), f"also[{i}].text", 32)
+            if c.get("tone", "neutral") not in ("good", "bad", "neutral"):
+                bad(f"also[{i}].tone must be good, bad or neutral")
+        if spec.get("verdict") not in cls.SPEC_VERDICTS:
+            bad(f"verdict must be one of: {' '.join(cls.SPEC_VERDICTS)}")
+        text(spec.get("why"), "why", 90, req=False)
+        tags = spec.get("tags", [])
+        if not isinstance(tags, list) or len(tags) > 2:
+            bad("tags must be a list of at most 2 strings")
+        for i, t in enumerate(tags):
+            text(t, f"tags[{i}]", 40)
+        return spec
+
+    def poster_spec(self, kind: str, ident: str) -> dict | None:
+        f = self.dir / "posters" / f"{self._poster_stem(kind, ident)}.json"
+        try:
+            return json.loads(f.read_text("utf-8")) if f.is_file() else None
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _poster_stem(kind: str, ident: str) -> str:
+        if kind not in ("model", "hill"):
+            raise SystemExit(f"poster kind must be model or hill, not {kind!r}")
+        return f"{kind}-" + re.sub(r"[^A-Za-z0-9._-]", "_", str(ident)).lstrip(".")
+
+    def poster_path(self, kind: str, ident: str) -> Path | None:
+        """The stored poster file for a model or hill, or None. The id is never used as a path, only as a name."""
+        stem = self._poster_stem(kind, ident)
+        for ext in self.POSTER_TYPES:
+            f = self.dir / "posters" / f"{stem}.{ext}"
+            if f.is_file():
+                return f
+        return None
+
+    def set_poster(self, kind: str, ident: str, file) -> Path:
+        """Copy FILE (json spec, svg, html, png, jpg or webp; at most 2 MB, a spec 16 KB) to .research/posters/<kind>-<id>.<ext>."""
+        if ident not in (self.models() if kind == "model" else self.hills() if kind == "hill" else {}):
+            raise SystemExit(f"unknown {kind} {ident}")
+        src = Path(file)
+        ext = src.suffix.lower().lstrip(".")
+        ext = "jpg" if ext == "jpeg" else ext
+        if ext not in self.POSTER_TYPES:
+            raise SystemExit(f"poster must be {', '.join(self.POSTER_TYPES)}; got .{ext or '?'}")
+        if not src.is_file():
+            raise SystemExit(f"no such poster file {src}")
+        if src.stat().st_size > self.POSTER_MAX:
+            raise SystemExit(f"poster is {src.stat().st_size // 1024} KB; the cap is {self.POSTER_MAX // 1024} KB")
+        data = src.read_bytes()
+        magic = {"png": data[:8] == b"\x89PNG\r\n\x1a\n", "jpg": data[:3] == b"\xff\xd8\xff",
+                 "webp": data[:4] == b"RIFF" and data[8:12] == b"WEBP"}
+        if ext in magic and not magic[ext]:
+            raise SystemExit(f"{src.name} is not a real .{ext} file")
+        if ext == "json":
+            self.validate_poster_spec(data)
+        if ext in ("svg", "html"):
+            try:
+                data.decode("utf-8")
+            except UnicodeDecodeError:
+                raise SystemExit(f"{src.name} must be UTF-8 text")
+        d = self.dir / "posters"
+        d.mkdir(exist_ok=True)
+        stem = self._poster_stem(kind, ident)
+        for e in self.POSTER_TYPES:
+            (d / f"{stem}.{e}").unlink(missing_ok=True)
+        out = d / f"{stem}.{ext}"
+        out.write_bytes(data)
+        return out
+
+    def add_model(self, name, parent=None, hill=None, change=None, title=None, links=None, status="candidate", poster=None):
+        if poster:
+            Path(poster).stat()  # fail before the model is written
         rec = self._upsert("models", name, parent=parent if parent is not None else self.champion(), hill=hill,
                            change=change, title=title, links=links, status=status)
+        if poster:
+            self.set_poster("model", name, poster)
         if status == "champion":
             self.log_decision("champion", model=name, note="seeded as baseline")
         return rec
