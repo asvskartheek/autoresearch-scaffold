@@ -1,0 +1,5 @@
+{"v": 1, "headline": "Plan the hops first, then fetch one document per hop",
+ "idea": [{"icon": "brain", "text": "Plan the hops"}, {"icon": "search", "text": "Fetch a document"},
+          {"icon": "route", "text": "Follow the next hop"}, {"icon": "check", "text": "Answer after 3 hops"}],
+ "also": [{"text": "Up to 3 hops", "tone": "neutral"}],
+ "verdict": "passed", "why": "Fixes v6 stopping after the first document", "tags": ["Multi-hop"]}

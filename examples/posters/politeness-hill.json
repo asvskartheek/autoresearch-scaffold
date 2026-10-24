@@ -1,0 +1,5 @@
+{"v": 1, "headline": "Saying 'please' changes the model's answer",
+ "idea": [{"icon": "search", "text": "Ask the same question"}, {"icon": "compare", "text": "Add 'please'"},
+          {"icon": "cross", "text": "The answer flips"}],
+ "also": [{"text": "31 of 140 failures", "tone": "neutral"}, {"text": "23% of pairs disagree", "tone": "bad"}],
+ "verdict": "open", "why": "A fix removes a whole class of silent failures", "tags": []}

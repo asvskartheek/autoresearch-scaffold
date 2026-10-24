@@ -83,14 +83,17 @@ for s in ("qa/full", "qa/random100", "qa/random50", "qa/dev-control", "qa/dev-lo
     run_eval("v5", s, 1.5 if s.endswith("full") else .3)
 # v6 climbs long-context
 p.open_hill("long-context", "Long context", "qa/dev-longctx", "qa/dev-control", "v5 loses facts beyond 12k tokens. Expect +15 pts on dev-longctx, flat elsewhere.", "v5")
-p.add_model("v6", parent="v5", hill="long-context", change="Chunked retrieval with re-ranking before answering")
+POSTERS = HERE.parents[1] / "posters"
+p.add_model("v6", parent="v5", hill="long-context", change="Chunked retrieval with re-ranking before answering",
+            poster=POSTERS / "chunked-retrieval.svg")
 for s in ("qa/dev-longctx", "qa/dev-control", "qa/random50", "qa/random100", "qa/full"):
     run_eval("v6", s, 1.5 if s.endswith("full") else .3)
 p.promote("v6")
 # v7 climbs multi-hop
 run_eval("v6", "qa/dev-multihop")
 p.open_hill("multi-hop", "Multi-hop", "qa/dev-multihop", "qa/dev-control", "v6 stops after the first document. Expect +10 pts on dev-multihop.", "v6")
-p.add_model("v7", parent="v6", hill="multi-hop", change="Plan-then-retrieve loop, up to 3 hops")
+p.add_model("v7", parent="v6", hill="multi-hop", change="Plan-then-retrieve loop, up to 3 hops",
+            poster=POSTERS / "plan-then-retrieve.json")
 for s in ("qa/dev-multihop", "qa/dev-control", "qa/dev-longctx", "qa/random50", "qa/random100", "qa/full"):
     run_eval("v7", s, 1.5 if s.endswith("full") else .3)
 p.promote("v7")
@@ -103,16 +106,19 @@ t.link("Probe set", "https://huggingface.co/datasets/your-org/qa-please-probes")
 t.finish(); backdate(t, 2)
 run_eval("v7", "qa/dev-please")
 p.open_hill("please-robust", "Politeness robustness", "qa/dev-please", "qa/dev-control",
-            "Adding 'please' changes v7's answer. Expect +20 pts on dev-please; no other slice should move.", "v7")
+            "Adding 'please' changes v7's answer. Expect +20 pts on dev-please; no other slice should move.", "v7",
+            poster=POSTERS / "politeness-hill.json")
 
 # v8b: fixes politeness but breaks long-context → stops at dev
-p.add_model("v8b", parent="v7", hill="please-robust", change="Strip politeness tokens in the system prompt")
+p.add_model("v8b", parent="v7", hill="please-robust", change="Strip politeness tokens in the system prompt",
+            poster=POSTERS / "strip-politeness.json")
 for s in ("qa/dev-please", "qa/dev-control", "qa/dev-longctx", "qa/dev-multihop"):
     run_eval("v8b", s)
 p.set_model_status("v8b", "rejected", "Regressed long-context by 15 pts: prompt rewrite drops the retrieved-chunk header.")
 
 # v8: politeness augmentation; passed dev and random50. random100 runs live in live.py.
 p.add_model("v8", parent="v7", hill="please-robust", change="SFT on 4k politeness-augmented pairs",
+            poster=POSTERS / "politeness-widget.html",
             links={"Model": "https://huggingface.co/your-org/qa-agent-v8", "Train data": "https://huggingface.co/datasets/your-org/please-aug-4k"})
 tr = Task(p, "train", "SFT v8 · politeness pairs", "LoRA r=16 on v7, 4k augmented pairs, 2 epochs.", model="v8", agent="trainer-v8",
           config=dict(lr=2e-4, lora_r=16, epochs=2, batch=32))

@@ -1,0 +1,32 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Politeness augmentation</title>
+<style>
+:root{--bg:#fff;--ink:#202a32;--muted:#7d858c;--soft:#eef0ee;--a:#d16c61;--b:#299b7d}
+@media (prefers-color-scheme:dark){:root{--bg:#1d252b;--ink:#e6eaed;--muted:#8d979e;--soft:#2c363d}}
+*{box-sizing:border-box}
+body{margin:0;height:100vh;background:var(--bg);color:var(--ink);font:13px/1.4 system-ui,sans-serif;display:flex;flex-direction:column;justify-content:center;gap:10px;padding:4vmin}
+h1{font-size:max(14px,3.4vmin);margin:0}
+.row{display:grid;grid-template-columns:5.5em 1fr 3em;gap:8px;align-items:center}
+.bar{height:1.3em;background:var(--soft);border-radius:6px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:6px;transition:width .25s}
+.q{background:var(--soft);border-radius:8px;padding:6px 10px;font-size:max(11px,2.6vmin)}
+input{width:100%;accent-color:var(--b)}
+small{color:var(--muted)}
+</style>
+<h1>Same question, with and without "please"</h1>
+<div class="q" id="q"></div>
+<label><small>Politeness pairs in training: <b id="n"></b></small><input id="s" type="range" min="0" max="4000" step="250" value="4000"></label>
+<div class="row"><span>v7</span><div class="bar"><i id="a" style="background:var(--a)"></i></div><b id="av"></b></div>
+<div class="row"><span>v8</span><div class="bar"><i id="b" style="background:var(--b)"></i></div><b id="bv"></b></div>
+<small>Answers that agree and are correct, n 40 paired prompts (illustration)</small>
+<script>
+const s=document.getElementById('s'),$=i=>document.getElementById(i);
+function draw(){
+  const n=+s.value,v7=52,v8=Math.round(52+30*(1-Math.exp(-n/1500)));
+  $('n').textContent=n;$('a').style.width=v7+'%';$('b').style.width=v8+'%';$('av').textContent=v7+'%';$('bv').textContent=v8+'%';
+  $('q').textContent=(n>1000?'Could you please list the valves on sheet 3?':'List the valves on sheet 3.')+'  =  '+(n>1000?'same answer':'answer may change');
+}
+s.oninput=draw;draw();
+</script>

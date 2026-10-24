@@ -1,0 +1,5 @@
+{"v": 1, "headline": "Delete 'please' from the prompt so it cannot change the answer",
+ "idea": [{"icon": "tag", "text": "Spot politeness tokens"}, {"icon": "filter", "text": "Strip them"},
+          {"icon": "brain", "text": "Answer the plain question"}],
+ "also": [{"text": "Long-context down 15 pts", "tone": "bad"}],
+ "verdict": "rejected", "why": "Fixed politeness but the rewrite dropped the retrieved-chunk header", "tags": ["Politeness"]}
