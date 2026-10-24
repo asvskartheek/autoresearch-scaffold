@@ -39,6 +39,8 @@ baseline, cannot compare against a different slice and cannot promote without pa
 
 - [Getting started](getting-started.md): install, `arx init`, the dashboard, one research step end to end.
 - How-to guides: [tasks](guides/tasks.md), [slices](guides/slices.md), [hills](guides/hills.md),
-  [evals](guides/evals.md), [gates](guides/gates.md), [`arx run`](guides/run.md), [budgets](guides/budgets.md).
+  [evals](guides/evals.md), [gates](guides/gates.md), [`arx run`](guides/run.md), [budgets](guides/budgets.md),
+  [dashboard lifecycle](guides/dashboard.md), [resuming](guides/resume.md), [champions](guides/champions.md),
+  [recording history](guides/history.md), [migrating a mature project](guides/migrating.md).
 - [Architecture](architecture.md): how the pieces fit, and how nesting, budgets and gates work inside.
 - Reference: [Python API](reference/python.md), [CLI](reference/cli.md), [`research.json`](reference/config.md).

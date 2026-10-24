@@ -28,10 +28,16 @@ nav:
       - Tasks and the Workbench: guides/tasks.md
       - Slices and datasets: guides/slices.md
       - Hills: guides/hills.md
+      - Posters: guides/posters.md
       - Evals: guides/evals.md
       - The gate ladder: guides/gates.md
       - arx run manifests: guides/run.md
       - Budgets: guides/budgets.md
+      - The dashboard lifecycle: guides/dashboard.md
+      - Resuming work: guides/resume.md
+      - Champions: guides/champions.md
+      - Recording history: guides/history.md
+      - Migrating a mature project: guides/migrating.md
   - Architecture: architecture.md
   - Reference:
       - Python API: reference/python.md

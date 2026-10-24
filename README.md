@@ -96,7 +96,7 @@ Shell-only work: `arx task start | log | note | link | progress | left | finish`
 
 # The dashboard
 
-`arx up` serves it on `127.0.0.1` (it starts automatically with `arx init`). It refreshes every few seconds.
+`arx up` serves it on `127.0.0.1` (it starts automatically with `arx init`; `arx ps` lists them, `arx down` stops one, and an idle one stops itself). It refreshes every few seconds.
 
 | Workbench | Gate |
 |---|---|
