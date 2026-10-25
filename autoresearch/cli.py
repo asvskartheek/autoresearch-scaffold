@@ -184,52 +184,19 @@ def cmd_gate(a):
 
 def cmd_promote(a):
     p = Project()
-    p.promote(a.model, a.force)
+    p.promote(a.model, a.force, baseline=False)
     print(f"{a.model} is champion")
     if a.no_baseline:
         return print("skipped baselining; run `arx baseline` to cover every hill")
     print("baselining the new champion on every hill (reuses runs it already has; `arx promote -h` explains)")
-    _baseline(p, a.model)
-
-
-def _baseline(p, model, dry=False):
-    """Establish the new champion's baseline on every hill: reuse the runs it already has, run the rest with
-    `baseline_cmd` from research.json (placeholders {model} {slice}); without one, list what to run."""
-    plan, cmd, slices = p.baseline_plan(model), p.config.get("baseline_cmd"), p.slices()
-    print(f"baseline for {model}: {len(plan['have'])} of {len(plan['roles'])} slices already run, {len(plan['need'])} to run")
-    what = lambda sl: ", ".join(plan["roles"][sl])
-    for sl, h in plan["have"].items():
-        print(f"  reused   {sl:<28} {_fmt(h['score'], False)}  n={h['n']}  {what(sl)}  ({h['task']})")
-    for sl in plan["need"]:
-        print(f"  {'run' if cmd and not dry else 'missing':<8} {sl:<28} n={slices[sl]['n']}  {what(sl)}")
-    if not plan["need"] or dry:
-        return plan
-    if not cmd:
-        print('to run these automatically, set "baseline_cmd" in research.json, e.g. '
-              '"python eval.py --model {model} --slice {slice}"; or run each with arx.evaluate / arx run')
-        return plan
-    with Task(p, "baseline", f"Baseline {model}", f"Run champion {model} on every hill and dataset slice it has no "
-              f"complete run on ({len(plan['need'])}); {len(plan['have'])} existing runs reused.", model=model,
-              total=len(plan["need"]), config=dict(baseline_cmd=cmd)) as t:
-        for i, sl in enumerate(plan["need"]):
-            t.check()
-            t.note(f"{sl} ({what(sl)}): running")
-            r = subprocess.run(cmd.format(model=model, slice=sl), shell=True, cwd=p.root)
-            if r.returncode:
-                t.note(f"{sl}: baseline_cmd exited {r.returncode}", "error")
-            t.progress(i + 1)
-        after = p.baseline_plan(model)
-        t.note(f"still missing: {', '.join(after['need'])}" if after["need"] else f"every slice has a {model} baseline",
-               "warn" if after["need"] else "info")
-        t.meta["summary"] = dict(reused=len(plan["have"]), ran=len(plan["need"]) - len(after["need"]), missing=len(after["need"]))
-    print(f"still missing: {', '.join(after['need'])} (baseline_cmd must record a complete eval for {{model}} on {{slice}})"
-          if after["need"] else f"done: {model} has a baseline on all {len(after['roles'])} slices")
-    return after
+    plan = p.baseline(a.model, jobs=a.jobs, budget_s=a.budget_s)
+    if "ran" in plan and plan["need"]:
+        sys.exit(3)  # promoted, but baseline_cmd left slices without a run
 
 
 def cmd_baseline(a):
     p = Project()
-    plan = _baseline(p, a.model or p.champion() or sys.exit("no champion"), a.dry_run)
+    plan = p.baseline(a.model or p.champion() or sys.exit("no champion"), a.dry_run, a.rerun, a.replace, a.jobs, a.budget_s)
     if plan["need"]:
         sys.exit(3)  # scripts can tell "baseline complete" (0) from "slices still missing" (3)
 
@@ -302,16 +269,23 @@ def cmd_serve(a):
     serve(a.port)
 
 
-PROMOTE_NOTES = """what happens after the champion changes:
-  The new champion is baselined on every hill so each one has a current number to beat (same as `arx baseline`):
-    slices   every hill's target and control slice, plus the dataset's full and random slices
-    reused   a slice the model already ran as a candidate keeps that run: nothing is re-run (printed as "reused")
-    run      slices with no complete run at the slice's current hash run `baseline_cmd` from research.json,
-             e.g. "python eval.py --model {model} --slice {slice}", under one "Baseline <model>" task
-    unset    without baseline_cmd the missing slices are only listed: run them with arx.evaluate / arx run
-  Skip with --no-baseline; repeat any time with `arx baseline` (only missing slices run). The ledger records a
-  `baseline` decision (slices reused, slices still needed) in .research/decisions.jsonl.
+BASELINE_NOTES = """how it works:
+  slices   every hill's target and control slice, plus the datasets' full and random slices
+  reused   a complete run at the slice's current hash is kept (printed with its age): a promoted model already
+           ran most of these on the ladder. After a harness/judge change use --replace: earlier runs stop
+           counting once the fresh one is complete (they stay in the Archive).
+  run      every other slice runs `baseline_cmd` from research.json, from the project root, with {model} and
+           {slice} filled in shell-quoted, e.g. "python eval.py --model {model} --slice {slice}". It must record
+           a complete eval (arx.evaluate or arx eval record). Runs nest under one "Baseline <model>" task.
+  unset    without baseline_cmd the slices are only listed: run them with arx.evaluate / arx run
+exit status: 0 when every slice has a baseline, 3 when some are still missing.
 """
+
+PROMOTE_NOTES = """after the champion changes:
+  The new champion is baselined on every hill so each one has a current number to beat (same as
+  `arx baseline`; --jobs and --budget-s pass through). Skip with --no-baseline; repeat any time.
+""" + BASELINE_NOTES.replace("exit status: 0 when every slice has a baseline, 3 when some are still missing.",
+                             "exit status: 0 once promoted; 3 if baseline_cmd ran and slices are still missing.")
 
 WORKFLOW = """workflow:
   setup      arx init -> arx dataset add -> arx slice add (dev/control) -> arx model add NAME --champion
@@ -369,18 +343,21 @@ def main(argv=None):
     s = sp.add_parser("reject", help="keep a failed candidate in the ledger as rejected, with the reason"); s.add_argument("name", help="model name"); s.add_argument("--reason", required=True, help="why it failed, with the numbers"); s.set_defaults(fn=cmd_reject)
     s = sp.add_parser("gate", help="where a candidate is on the ladder, and what to run next")
     s.add_argument("model"); s.add_argument("--json", action="store_true"); s.set_defaults(fn=cmd_gate)
-    s = sp.add_parser("promote", help="make a candidate champion once every rung passes, then baseline it on all hills (see `arx baseline`)"); s.add_argument("model"); s.add_argument("--force", action="store_true", help="promote even if a rung has not passed (recorded in the ledger)")
+    s = sp.add_parser("promote", help="make a candidate champion once every rung passes, then baseline it on all hills (see `arx baseline`)"); s.add_argument("model", help="the candidate to promote"); s.add_argument("--force", action="store_true", help="promote even if a rung has not passed (recorded in the ledger)")
     s.add_argument("--no-baseline", action="store_true", help="skip the automatic baselining; run `arx baseline` later")
+    s.add_argument("--jobs", type=int, default=1, help="baseline slices to run at once (default 1)")
+    s.add_argument("--budget-s", type=float, help="wall-clock cap on the baselining; unfinished slices stay missing")
     s.epilog = PROMOTE_NOTES; s.formatter_class = argparse.RawDescriptionHelpFormatter
     s.set_defaults(fn=cmd_promote)
 
     s = sp.add_parser("baseline", help="baseline the champion on all hills: reuse its runs, run the rest via `baseline_cmd` (auto after promote)")
     s.add_argument("model", nargs="?", help="default: the current champion")
-    s.epilog = ("covers every hill target/control plus the full/random slices. Runs it already has are reused; each other\n"
-                "slice runs `baseline_cmd` from research.json ({model} and {slice} filled in, run from the project root).\n"
-                "Without baseline_cmd the missing slices are only listed. Safe to repeat.\n"
-                "exit status: 0 when every slice has a baseline, 3 when some are still missing.")
-    s.formatter_class = argparse.RawDescriptionHelpFormatter; s.add_argument("--dry-run", action="store_true", help="print the plan, run nothing"); s.set_defaults(fn=cmd_baseline)
+    s.add_argument("--dry-run", action="store_true", help="print the plan, run nothing")
+    s.add_argument("--rerun", action="store_true", help="run every slice again; new runs pool with earlier ones (tighter estimate)")
+    s.add_argument("--replace", action="store_true", help="run every slice again; each fresh complete run supersedes the earlier ones (after a harness/judge change)")
+    s.add_argument("--jobs", type=int, default=1, help="slices to run at once (default 1)")
+    s.add_argument("--budget-s", type=float, help="wall-clock cap; slices not finished in time stay missing")
+    s.epilog = BASELINE_NOTES; s.formatter_class = argparse.RawDescriptionHelpFormatter; s.set_defaults(fn=cmd_baseline)
 
     s = sp.add_parser("eval", help="record rows produced by another harness")
     s.add_argument("verb", choices=["record"]); s.add_argument("--model", required=True); s.add_argument("--slice", required=True)

@@ -71,7 +71,7 @@ arx baseline            # the champion; add a model name or --dry-run
 
 It covers each hill's target and control slice plus the dataset's full and random slices. A slice the model already
 ran (it was a candidate, so most of the ladder is done) is reused as is; only slices with no complete run at the
-current hash are run, by `baseline_cmd` in `research.json` (`{model}` and `{slice}` are filled in). The runs sit under
+current hash are run, by `baseline_cmd` in `research.json` (`{model}` and `{slice}` are filled in, shell-quoted). The runs sit under
 one "Baseline <model>" task. With no `baseline_cmd` it prints the slices to run instead. Re-run it after adding a hill.
 
 ```text
@@ -79,17 +79,28 @@ $ arx promote v2
 v2 is champion
 baselining the new champion on every hill (reuses runs it already has; `arx promote -h` explains)
 baseline for v2: 4 of 6 slices already run, 2 to run
-  reused   qa/dev-arith                 0.700  n=40  hill arith target  (1026-101500-eval-3f2a)
-  reused   qa/random50                  0.620  n=50  random  (1026-102210-eval-9c1d)
+  reused    qa/dev-arith                 0.700  n=40  hill arith target  (1026-101500-eval-3f2a, 2h ago)
+  reused    qa/random50                  0.620  n=50  random  (1026-102210-eval-9c1d, 2h ago)
   ...
-  run      qa/dev-units                 n=30  hill units target
-  run      qa/dev-units-control         n=30  hill units control
-done: v2 has a baseline on all 6 slices
+  run       qa/dev-units                 n=30  hill units target
+  run       qa/dev-units-control         n=30  hill units control
+done: v2 has a baseline on all 6 slices (2 run now)
 ```
 
 `baseline_cmd` must record a complete eval of `{model}` on `{slice}` (call `arx.evaluate`, or `arx eval record`);
-anything else is reported as still missing. `arx baseline` exits 3 while a slice is missing, so scripts can check it.
-Skip the step with `arx promote --no-baseline`. The dashboard lists missing baselines on the Overview and shows the
+anything else is reported as still missing.
+
+| Flag | On | Effect |
+|---|---|---|
+| `--dry-run` | baseline | Print the plan (`reused` / `would run` / `missing`); run nothing |
+| `--jobs N` | both | Run N slices at once |
+| `--budget-s S` | both | Wall-clock cap; slices not finished in time stay missing |
+| `--rerun` | baseline | Run every slice again; new runs pool with earlier ones for a tighter estimate |
+| `--replace` | baseline | Run every slice again; each fresh complete run supersedes the earlier ones. Use after a harness, judge or tool change: old numbers do not transfer. Superseded runs stay in the Archive |
+| `--no-baseline` | promote | Skip the step |
+
+Exit status: `arx baseline` exits 3 while any slice is missing. `arx promote` exits 0 once promoted, or 3 if
+`baseline_cmd` ran and left slices missing (the promotion stands). The dashboard lists missing baselines on the Overview and shows the
 champion's score on every slice under Slices. `arx status` prints the coverage too.
 
 Rejected candidates stay in the ledger with their reason. Negative results are results.

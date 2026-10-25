@@ -29,7 +29,7 @@ The project's config lives at its root. `arx init` writes the defaults:
 | `kpis` | Columns that travel together on leaderboards. |
 | `stall_minutes` | A running task with no heartbeat this long shows as stalled. |
 | `max_paid_usd` | Upper bound on `budget_usd` for paid `arx run` manifests. |
-| `baseline_cmd` | Shell command that runs one eval for `arx baseline` / `arx promote`, with `{model}` and `{slice}` filled in, run from the project root, e.g. `python eval.py --model {model} --slice {slice}`. It should call `arx.evaluate`. Unset: missing baselines are only listed. |
+| `baseline_cmd` | Shell command that runs one eval for `arx baseline` / `arx promote`, with `{model}` and `{slice}` filled in, run from the project root (values shell-quoted, `--jobs` may run several at once), e.g. `python eval.py --model {model} --slice {slice}`. It should call `arx.evaluate`. Unset: missing baselines are only listed. |
 | `ladder` | The rungs, in order. |
 
 ## Checks

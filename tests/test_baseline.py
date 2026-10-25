@@ -47,11 +47,11 @@ class Baseline(unittest.TestCase):
     def test_promote_without_cmd_lists_missing(self):
         r = self.arx("promote", "v2", "--force")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("missing  qa/full", r.stdout)
+        self.assertRegex(r.stdout, r"missing +qa/full")
         self.assertIn("baseline_cmd", r.stdout)
         self.assertEqual(self.arx("baseline").returncode, 3)
         last = [json.loads(l) for l in (self.root / ".research/decisions.jsonl").read_text().splitlines()][-1]
-        self.assertEqual((last["kind"], last["reused"]), ("baseline", 1))
+        self.assertEqual((last["kind"], last["reused"], last["ran"]), ("baseline", 1, 0))
 
     def test_promote_runs_missing_with_cmd(self):
         cfg = json.loads((self.root / "research.json").read_text())
@@ -73,10 +73,79 @@ class Baseline(unittest.TestCase):
         self.assertEqual(r.returncode, 3)
         self.assertIn("still missing", r.stdout)
 
+    def test_python_promote_baselines(self):
+        self.set_cmd(f"PYTHONPATH={REPO} {sys.executable} run.py {{model}} {{slice}}")
+        res = self.p.promote("v2", force=True, say=lambda *_: None)
+        self.assertEqual((res["need"], res["ran"]), ([], 4))
+        self.assertIsNone(Project(self.root).promote("v2", force=True, baseline=False))
+
+    def test_timeout_kills_the_whole_command(self):
+        self.set_cmd("sleep 29.4417; touch late")  # a compound command: the shell does not exec into sleep
+        self.arx("baseline", "v2", "--budget-s", "1")
+        out = subprocess.run(["pgrep", "-f", "sleep 29.4417"], capture_output=True, text=True).stdout
+        self.assertEqual(out.strip(), "")
+
+    def test_braces_in_cmd_are_left_alone(self):
+        self.set_cmd(f"{sys.executable} run.py {{model}} {{slice}} && echo '{{not a placeholder}}'")
+        r = self.arx("baseline", "v2")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("{not a placeholder}", r.stdout)
+
     def test_no_baseline_flag(self):
         r = self.arx("promote", "v2", "--force", "--no-baseline")
         self.assertIn("skipped baselining", r.stdout)
         self.assertFalse(any(t["kind"] == "baseline" for t in self.p.tasks()))
+
+    def set_cmd(self, cmd):
+        cfg = json.loads((self.root / "research.json").read_text())
+        (self.root / "research.json").write_text(json.dumps(cfg | {"baseline_cmd": cmd}))
+
+    def test_dry_run_with_cmd_says_would_run(self):
+        self.set_cmd(f"{sys.executable} run.py {{model}} {{slice}}")
+        r = self.arx("baseline", "v2", "--dry-run")
+        self.assertRegex(r.stdout, r"would run +qa/full")
+        self.assertFalse(any(t["kind"] == "baseline" for t in self.p.tasks()))
+
+    def test_slice_names_are_shell_quoted(self):
+        self.p.add_slice("qa/odd name;touch pwned", [6, 7], hill="h2")
+        self.p.open_hill("h2", "H2", "qa/odd name;touch pwned")
+        self.set_cmd(f"{sys.executable} run.py {{model}} {{slice}}")
+        r = self.arx("baseline", "v2")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertFalse((self.root / "pwned").exists())
+        self.assertIn("qa/odd name;touch pwned", self.p.baseline_plan("v2")["have"])
+
+    def test_jobs_run_in_parallel(self):
+        self.set_cmd(f"{sys.executable} run.py {{model}} {{slice}}")
+        r = self.arx("baseline", "v2", "--jobs", "4")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.p.baseline_plan("v2")["need"], [])
+
+    def test_budget_stops_and_leaves_missing(self):
+        self.set_cmd("sleep 5")
+        r = self.arx("baseline", "v2", "--budget-s", "1")
+        self.assertEqual(r.returncode, 3)
+        base = next(t for t in self.p.tasks() if t["kind"] == "baseline")
+        self.assertEqual(base["status"], "budget")
+        self.assertLess(base["ended"] - base["created"], 10)  # stopped long before the 5 s commands finished
+
+    def test_rerun_pools_replace_supersedes(self):
+        self.set_cmd(f"{sys.executable} run.py {{model}} {{slice}}")
+        self.arx("baseline", "v2")
+        self.arx("baseline", "v2", "--rerun")
+        self.assertEqual(self.p.baseline_plan("v2")["have"]["qa/t1"]["runs"], 2)
+        r = self.arx("baseline", "v2", "--replace")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("(5 run now)", r.stdout)
+        self.assertEqual(self.p.baseline_plan("v2")["have"]["qa/t1"]["runs"], 1)
+        old = [t for t in self.p.tasks() if t.get("slice") == "qa/t1" and t.get("superseded_by")]
+        self.assertEqual(len(old), 2)  # kept in the archive, not counted
+
+    def test_promote_exits_3_when_cmd_leaves_gaps(self):
+        self.set_cmd("exit 1")
+        r = self.arx("promote", "v2", "--force")
+        self.assertEqual(r.returncode, 3)
+        self.assertEqual(self.p.champion(), "v2")  # the promotion itself stands
 
 
 if __name__ == "__main__":
