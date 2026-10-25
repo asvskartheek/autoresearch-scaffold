@@ -165,6 +165,8 @@ kbd{font:11px ui-monospace,Menlo,monospace;border:1px solid var(--input);border-
 <script>
 (() => {
 const $ = s => document.querySelector(s);
+const BASE = (location.pathname.match(/^\/p\/[^/]+/) || [""])[0];  // /p/<key>: a project other than the server's own
+document.querySelectorAll('a[href^="/#"]').forEach(a => a.setAttribute("href", BASE + a.getAttribute("href")));
 const h = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const store = { get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
@@ -205,22 +207,23 @@ paintMe();
 // ---------- the dashboard's nav, as a rail ----------
 const NAV = [["overview", "Overview", '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>'],
   ["workbench", "Workbench", '<path d="M4 7h16M4 12h10M4 17h6"/><circle cx="18" cy="16" r="3"/>'],
+  ["goals", "Goals", '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>'],
   ["models", "Models", '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M8.3 7l7.5 4M8.3 17l7.5-4"/>'],
   ["hills", "Hills", '<path d="M3 19l6-10 4 6 3-4 5 8z"/>'],
   ["papers", "Papers", '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>'],
   ["slices", "Slices", '<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>'],
   ["archive", "Archive", '<rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v10h14V9M10 13h4"/>']];
 function rail(waiting) {
-  $("#rail").innerHTML = `<a class="brand" href="/#overview" title="Observatory" style="background:none"><i><svg class="i" viewBox="0 0 24 24"><path d="M4 17l5-6 4 4 7-8"/></svg></i></a>` +
-    NAV.map(([k, l, p]) => `<a href="/#${k}" title="${l}" class="${k === "papers" ? "on" : ""}"><svg class="i" viewBox="0 0 24 24">${p}</svg>${k === "papers" && waiting ? `<span class="count hot">${waiting}</span>` : ""}</a>`).join("");
+  $("#rail").innerHTML = `<a class="brand" href="${BASE}/#overview" title="Observatory" style="background:none"><i><svg class="i" viewBox="0 0 24 24"><path d="M4 17l5-6 4 4 7-8"/></svg></i></a>` +
+    NAV.map(([k, l, p]) => `<a href="${BASE}/#${k}" title="${l}" class="${k === "papers" ? "on" : ""}"><svg class="i" viewBox="0 0 24 24">${p}</svg>${k === "papers" && waiting ? `<span class="count hot">${waiting}</span>` : ""}</a>`).join("");
 }
 rail(0);
-fetch("/api/papers").then(r => r.json()).then(ps => rail(Object.values(ps).reduce((a, p) => a + p.waiting, 0))).catch(() => {});
+fetch(BASE + "/api/papers").then(r => r.json()).then(ps => rail(Object.values(ps).reduce((a, p) => a + p.waiting, 0))).catch(() => {});
 
 // ---------- routing ----------
-const parts = location.pathname.replace(/\/+$/, "").split("/").filter(Boolean).map(decodeURIComponent);
+const parts = location.pathname.slice(BASE.length).replace(/\/+$/, "").split("/").filter(Boolean).map(decodeURIComponent);
 const NAME = parts[1];
-if (!NAME) { location.replace("/#papers"); return; }
+if (!NAME) { location.replace(BASE + "/#papers"); return; }
 
 // ---------- layout ----------
 $("#root").innerHTML = `<div class="canvas"><div class="sheet"><div class="page" id="page"></div></div>
@@ -242,7 +245,7 @@ function paperDoc() { try { return frame && frame.contentDocument; } catch { ret
 function loadPaper(v) {
   return new Promise(res => {
     const f = h("iframe"); f.title = "Paper"; f.setAttribute("scrolling", "no"); f.className = frame ? "next" : "";
-    f.src = `/papers/${encodeURIComponent(NAME)}/raw?v=${v}`;
+    f.src = `${BASE}/papers/${encodeURIComponent(NAME)}/raw?v=${v}`;
     f.onload = () => { prepare(f); res(f); };
     page.appendChild(f);
   });
@@ -355,9 +358,10 @@ function avatar(m) { return m.agent ? `<span class="av agent">${I.spark}</span>`
 function linkKind(url) {
   let u; try { u = new URL(url, location.href); } catch { return null; }
   if (!/^https?:$/.test(u.protocol)) return null;
-  const same = u.origin === location.origin, here = same && (u.pathname.replace(/\/raw$/, "").replace(/\/+$/, "") === `/papers/${encodeURIComponent(NAME)}` || u.pathname === location.pathname);
+  if (u.origin === location.origin && BASE && !u.pathname.startsWith("/p/") && u.pathname !== "/ui.css") u.pathname = BASE + u.pathname;  // links stored as /papers/...
+  const same = u.origin === location.origin, here = same && (u.pathname.replace(/\/raw$/, "").replace(/\/+$/, "") === `${BASE}/papers/${encodeURIComponent(NAME)}` || u.pathname === location.pathname);
   if (url.startsWith("#") || (here && u.hash)) return { kind: "here", target: decodeURIComponent((url.startsWith("#") ? url : u.hash).slice(1)), u };
-  if (same && u.pathname.startsWith(`/papers/${encodeURIComponent(NAME)}/files/`)) return { kind: "file", u };
+  if (same && u.pathname.startsWith(`${BASE}/papers/${encodeURIComponent(NAME)}/files/`)) return { kind: "file", u };
   if (same) return { kind: "arx", u };
   return { kind: "ext", u };
 }
@@ -624,7 +628,7 @@ $("#ovX").onclick = closePreview; $("#ov").onclick = e => e.target === $("#ov") 
 // ---------- server ----------
 async function api(kind, body) {
   try {
-    const r = await fetch(`/api/paper/${encodeURIComponent(NAME)}/${kind}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, author: me }) });
+    const r = await fetch(`${BASE}/api/paper/${encodeURIComponent(NAME)}/${kind}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, author: me }) });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
     return await r.json();
   } catch (err) { toast("Could not save: " + err.message); return null; }
@@ -639,7 +643,7 @@ const blockTexts = d => Object.fromEntries([...d.querySelectorAll("[data-block]"
 // A new version of the paper: load it hidden, then swap, keeping the reader's place, open threads and drafts.
 // Compare the source, not the live DOM: widgets that shuffle or fill text on load would show as "changed".
 const srcCache = {};
-const srcTexts = v => srcCache[v] || (srcCache[v] = fetch(`/papers/${encodeURIComponent(NAME)}/raw?v=${v}`).then(r => r.text())
+const srcTexts = v => srcCache[v] || (srcCache[v] = fetch(`${BASE}/papers/${encodeURIComponent(NAME)}/raw?v=${v}`).then(r => r.text())
   .then(t => blockTexts(new DOMParser().parseFromString(t, "text/html"))));
 async function swapPaper(v, prev) {
   const old = frame, od = paperDoc(), before = srcCache[prev] ? await srcCache[prev] : blockTexts(od);  // cached when prev loaded: raw always serves the newest
@@ -663,12 +667,13 @@ let busy = false, fails = 0;
 async function refresh() {
   if (busy) return; busy = true;
   try {
-    const r = await fetch(`/api/paper/${encodeURIComponent(NAME)}`, { cache: "no-store" });
+    const r = await fetch(`${BASE}/api/paper/${encodeURIComponent(NAME)}`, { cache: "no-store" });
     if (!r.ok) throw new Error(r.status);
     const d = await r.json(); fails = 0; $("#live").className = "live"; $("#live").title = "Live";
     meta = d.meta || {};
     $("#title").textContent = document.title = meta.title || NAME;
-    $("#hillCrumb").innerHTML = meta.hill ? `<a class="crumb" href="/#hill/${encodeURIComponent(meta.hill)}">${esc(meta.hill)}</a><span class="sep">/</span>` : "";
+    $("#hillCrumb").innerHTML = meta.goal ? `<a class="crumb" href="${BASE}/#goal/${encodeURIComponent(meta.goal)}">${esc(meta.goal)}</a><span class="sep">/</span>`
+      : meta.hill ? `<a class="crumb" href="${BASE}/#hill/${encodeURIComponent(meta.hill)}">${esc(meta.hill)}</a><span class="sep">/</span><span class="crumb">internal</span><span class="sep">/</span>` : "";
     if (version === null) { version = d.version; srcTexts(version).catch(() => {}); frame = await loadPaper(version); }
     else if (d.version !== version) { const prev = version; version = d.version; await swapPaper(version, prev); }
     threads = d.threads;

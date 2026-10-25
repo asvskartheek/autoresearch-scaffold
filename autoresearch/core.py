@@ -113,6 +113,7 @@ class Project:
     def slices(self) -> dict: return self._coll("slices")
     def hills(self) -> dict: return self._coll("hills")
     def models(self) -> dict: return self._coll("models")
+    def goals(self) -> dict: return self._coll("goals")
 
     def champion(self) -> str | None:
         return next((k for k, m in self.models().items() if m.get("status") == "champion"), None)
@@ -167,19 +168,92 @@ class Project:
         raise SystemExit(f"unknown slice {name}")
 
     # hills and models ------------------------------------------------------------------
-    def open_hill(self, name, title, target, control=None, problem=None, found_in=None, **explainer):
+    def open_hill(self, name, title, target, control=None, problem=None, found_in=None, goal=None, **explainer):
         target, control = self.slice(target)["name"], (self.slice(control)["name"] if control else None)
+        if goal and goal not in self.goals():
+            raise SystemExit(f"unknown goal {goal}; `arx goal open {goal} ...` first")
         self._upsert("hills", name, title=title, target=target, control=control, problem=problem,
-                     found_in=found_in or self.champion(), status="open")
+                     found_in=found_in or self.champion(), status="open", goal=goal)
         return self.explain_hill(name, **explainer)
 
-    def explain_hill(self, name, symptom=None, measure=None, examples=None, share=None):
+    def explain_hill(self, name, symptom=None, measure=None, examples=None, share=None, goal=None):
         """The hill's page: `symptom` one plain line; `measure` when one target example scores 1; `examples` a list
         of {input, wrong, right, why} (illustrative, never client text); `share` {count, of, of_what}: how many of
         which failures this hill explains."""
         if name not in self.hills():
             raise SystemExit(f"unknown hill {name}")
-        return self._upsert("hills", name, symptom=symptom, measure=measure, examples=examples, share=share)
+        if goal and goal not in self.goals():
+            raise SystemExit(f"unknown goal {goal}")
+        return self._upsert("hills", name, symptom=symptom, measure=measure, examples=examples, share=share, goal=goal)
+
+    # goals: the outward-facing claim a set of hills serves ---------------------------------
+    KPI_LOWER = ("cost", "latency_p50", "latency_p95", "latency_mean")
+
+    def open_goal(self, name, title, slice, target: float, kpi="score", baseline=None, problem=None,
+                  higher_is_better=None):
+        """A goal is a target KPI on one slice (usually a full slice), e.g. score >= 0.96 on gsm8k-test/full.
+        `baseline` is the starting champion: the final result is reported as a paired delta against it."""
+        sl = self.slice(slice)
+        if higher_is_better is None:
+            higher_is_better = kpi not in self.KPI_LOWER and self.config.get("higher_is_better", True)
+        base = baseline or self.champion()
+        if name in self.goals() and self.goals()[name].get("status") != "open":
+            raise SystemExit(f"goal {name} is {self.goals()[name]['status']}; open a new goal with a new name")
+        rec = self._upsert("goals", name, title=title, slice=sl["name"], slice_hash=sl["hash"], n=sl["n"], kpi=kpi,
+                           target=float(target), higher_is_better=bool(higher_is_better), baseline=base,
+                           problem=problem, status="open")
+        self.log_decision("goal_open", goal=name, target=target, slice=sl["name"], baseline=base)
+        return rec
+
+    def _kpi(self, model, sl, kpi) -> tuple[float | None, dict | None]:
+        ev = self.latest_eval(model, sl) if model else None
+        if not ev:
+            return None, None
+        if kpi == "score":  # pooled over every complete run, like the gates
+            sc = self.pooled_scores(model, sl)
+            return (sum(sc.values()) / len(sc) if sc else None), ev
+        return (ev.get("summary") or {}).get(kpi), ev
+
+    def goal_status(self, name) -> dict:
+        """Where a goal stands: the champion's KPI on the goal slice, the gap to target, the paired delta vs the
+        starting champion, and the hills that serve it. Pure function of the ledger, like the gates."""
+        g = self.goals().get(name)
+        if not g:
+            raise SystemExit(f"unknown goal {name}")
+        sl, kpi, sign = g["slice"], g.get("kpi", "score"), 1 if g.get("higher_is_better", True) else -1
+        cur = (self.slices().get(sl) or {}).get("hash")
+        model = (g.get("evidence") or {}).get("model") if g.get("status") == "achieved" else self.champion()
+        value, ev = self._kpi(model, sl, kpi)
+        vs = None
+        if kpi == "score" and model and g.get("baseline") and g["baseline"] != model and self.latest_eval(g["baseline"], sl):
+            vs = paired(self.pooled_scores(model, sl), self.pooled_scores(g["baseline"], sl), sign)
+        hills = {k: h.get("status") for k, h in self.hills().items() if h.get("goal") == name}
+        return dict(g, name=name, model=model, value=value, task=ev["id"] if ev else None,
+                    runs=len(self.slice_evals(model, sl)) if model else 0,
+                    met=value is not None and sign * (value - g["target"]) >= 0,
+                    gap=None if value is None else sign * (g["target"] - value), vs_baseline=vs, hills=hills,
+                    slice_changed=bool(cur and g.get("slice_hash") and cur != g["slice_hash"]))
+
+    def achieve_goal(self, name, force=False, note=None) -> dict:
+        st = self.goal_status(name)
+        if st["status"] != "open":
+            raise SystemExit(f"goal {name} is {st['status']}")
+        if st["slice_changed"]:
+            raise SystemExit(f"slice {st['slice']} changed since the goal opened; open a new goal")
+        if not st["met"] and not force:
+            have = "no complete run" if st["value"] is None else f"{st['value']:.4f}"
+            raise SystemExit(f"champion {st['model']} has {have} on {st['slice']}; target {st['target']}")
+        evidence = dict(model=st["model"], task=st["task"], value=st["value"], runs=st["runs"], slice=st["slice"],
+                        n=st["n"], vs_baseline=st["vs_baseline"], forced=bool(force and not st["met"]), note=note)
+        self._upsert("goals", name, status="achieved", achieved=now(), evidence=evidence)
+        self.log_decision("goal_achieved", goal=name, **{k: v for k, v in evidence.items() if k != "vs_baseline"})
+        return evidence
+
+    def abandon_goal(self, name, reason):
+        if name not in self.goals():
+            raise SystemExit(f"unknown goal {name}")
+        self._upsert("goals", name, status="abandoned", abandoned=now(), reason=reason)
+        self.log_decision("goal_abandoned", goal=name, reason=reason)
 
     def add_model(self, name, parent=None, hill=None, change=None, title=None, links=None, status="candidate"):
         rec = self._upsert("models", name, parent=parent if parent is not None else self.champion(), hill=hill,

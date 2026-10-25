@@ -48,14 +48,14 @@ def version(p: Project, name: str) -> float:
     return (pdir(p, name) / "paper.html").stat().st_mtime
 
 
-def add(p: Project, name: str, src: Path, title: str = None, hill: str = None) -> Path:
+def add(p: Project, name: str, src: Path, title: str = None, hill: str = None, goal: str = None) -> Path:
     """Publish or republish a paper. Open pages swap the new version in place."""
     d = pdir(p, name)
     d.mkdir(parents=True, exist_ok=True)
     tmp = d / ".paper.html.tmp"
     shutil.copyfile(src, tmp)
     tmp.replace(d / "paper.html")  # atomic: a page polling mid-write never reads half a paper
-    meta = _read(d / "meta.json", {}) | {k: v for k, v in dict(title=title, hill=hill).items() if v}
+    meta = _read(d / "meta.json", {}) | {k: v for k, v in dict(title=title, hill=hill, goal=goal).items() if v}
     meta.setdefault("created", now())
     meta["updated"] = now()
     _write(d / "meta.json", meta)
@@ -217,9 +217,65 @@ def check(html: str, slices=()) -> list[tuple[str, str]]:
         out.append(("warn", f"rounded pill: {m.group(0)!r}; no pill bubbles"))
     if 'data-theme="dark"' not in html:  # the reader sets data-theme on the paper; it follows the page's toggle
         out.append(("error", 'no dark mode: style :root[data-theme="dark"] (the reader sets it)'))
-    for left in ("gsm8k-percent-base", "Removing the inherited adapter"):  # `arx paper new` leftovers
+    for left in ("gsm8k-percent-base", "Removing the inherited adapter", "arx-mem:gsm8k-96", "a 4B model from 87.6%"):  # `arx paper new` leftovers
         if left in html:
             out.append(("warn", f"still has the example's {left!r}: rewrite it (a shared storage key mixes Remember progress)"))
     if "Instrument Sans" not in html:
         out.append(("warn", "does not use the shared theme fonts (Instrument Sans, Bricolage Grotesque, JetBrains Mono)"))
+    return out
+
+
+def _kpi_text(kpi: str, v: float) -> list[str]:
+    """How a KPI value may be written: 0.928 -> 92.8%, 92.8 % ; a target 0.96 -> 96%."""
+    if kpi != "score":
+        return [f"{v:g}", f"{v:.3g}", f"{v:.2f}"]
+    return list(dict.fromkeys([f"{100 * v:g}%", f"{100 * v:.1f}%", f"{100 * v:.0f}%", f"{100 * v:.1f} %"]))
+
+
+def check_goal(html: str, st: dict, hill_papers=()) -> list[tuple[str, str]]:
+    """The goal paper is the public one. On top of `check`: a `result` section that states the goal KPI, slice
+    and n, the champion's value and the paired delta vs the starting champion; links to every internal hill paper
+    of the goal (relative `../<hill>`, marked class="internal"); and a draft / negative-result label that matches
+    the goal's status. `st` is `Project.goal_status(goal)`."""
+    out = []
+    body = re.sub(r"<script\b.*?</script>|<style\b.*?</style>", "", html, flags=re.S | re.I)
+    m = re.search(r'<section\b[^>]*data-block="result"[^>]*>(.*?)</section>', body, re.S | re.I)
+    if not m:
+        out.append(("error", 'no final-result section (<section data-block="result">)'))
+    else:
+        text = " ".join(re.sub(r"<[^>]+>", " ", m.group(1)).split())
+        if st["slice"] not in text:
+            out.append(("error", f"result section does not name the goal slice {st['slice']}"))
+        if not re.search(rf"\bn\s*=\s*{st['n']}\b", text):
+            out.append(("error", f"result section does not give n = {st['n']}"))
+        if not any(t in text for t in _kpi_text(st["kpi"], st["target"])):
+            out.append(("error", f"result section does not state the target ({_kpi_text(st['kpi'], st['target'])[0]})"))
+        if st.get("value") is not None and not any(t in text for t in _kpi_text(st["kpi"], st["value"])):
+            out.append(("error", f"result section does not state the ledger value {_kpi_text(st['kpi'], st['value'])[1]} "
+                                 f"({st['model']}); numbers come from the ledger"))
+        vs = st.get("vs_baseline")
+        if vs and vs.get("delta") is not None:
+            if st.get("baseline") and st["baseline"] not in text:
+                out.append(("error", f"result section does not name the starting champion {st['baseline']}"))
+            if f"{100 * vs['delta']:+.1f}" not in text:
+                out.append(("error", f"result section does not give the paired delta {100 * vs['delta']:+.1f} pts vs the start"))
+            if not re.search(r"90% CI|interval", text):
+                out.append(("error", "result section gives no 90% interval for the paired delta"))
+    for h in st.get("hills") or {}:
+        if h not in hill_papers:
+            continue
+        a = re.search(rf'<a\b[^>]*href="(?:\.\./|/papers/){re.escape(h)}"[^>]*>', body, re.I)
+        if not a:
+            out.append(("error", f"no link to the internal hill paper {h!r} (href=\"../{h}\")"))
+        elif not re.search(r'class="[^"]*\binternal\b', a.group(0)):
+            out.append(("error", f"the link to hill paper {h!r} is not marked class=\"internal\""))
+    status = st.get("status")
+    if status == "open" and not re.search(r"\bdraft\b", body, re.I):
+        out.append(("error", "the goal is open: label the paper a draft"))
+    if status == "abandoned" and not re.search(r"\babandoned\b", body, re.I):
+        out.append(("error", "the goal was abandoned: say so (\"abandoned\") and report the negative result"))
+    if status == "achieved" and re.search(r'data-block="draft"', body):
+        out.append(("warn", "the goal is achieved: remove the draft label"))
+    if st.get("slice_changed"):
+        out.append(("error", f"slice {st['slice']} changed since the goal opened; its numbers do not hold"))
     return out

@@ -2,6 +2,7 @@
 import contextlib, http.client, io, json, os, socket, subprocess, sys, tempfile, threading, time, unittest, urllib.error, urllib.request
 from pathlib import Path
 
+os.environ["ARX_HOME"] = tempfile.mkdtemp()  # the server registers projects; never touch the real ~/.arx
 from autoresearch import papers
 from autoresearch.core import Project
 from autoresearch.server import serve

@@ -6,7 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-from . import papers
+from . import papers, projects
 from .core import Project, paired, per_id
 
 HTML = Path(__file__).with_name("dashboard.html")
@@ -85,7 +85,38 @@ def state(p: Project) -> dict:
         t["spark"] = {"key": keys[0], "y": [s.get(keys[0]) for s in series if isinstance(s.get(keys[0]), (int, float))]} if keys else None
     return dict(config=p.config, now=time.time(), champion=champ, datasets=p.datasets(), slices=slices,
                 hills=p.hills(), models=models, papers=papers.papers(p), gates=gates, tasks=tasks, leaderboard=board,
+                goals=goals(p),
                 decisions=_tail(p.dir / "decisions.jsonl", 50))
+
+
+def goals(p: Project) -> dict:
+    out = {}
+    for name in p.goals():
+        try:
+            out[name] = p.goal_status(name)
+        except SystemExit as e:
+            out[name] = dict(p.goals()[name], name=name, error=str(e))
+    return out
+
+
+def project_list(default: Project) -> list[dict]:
+    """Every registered project with its goals, for the sidebar and the projects view. The served one comes first."""
+    reg = projects.registry()
+    dk = projects.key_for(default.root)
+    keys = ([dk] if dk in reg else []) + [k for k in reg if k != dk]
+    out = []
+    for k in keys:
+        try:
+            q = Project(reg[k]["root"])
+            ps = papers.papers(q)
+            out.append(dict(key=k, name=q.config.get("name") or k, root=str(q.root), default=k == dk,
+                            champion=q.champion(), goals=goals(q), hills=len(q.hills()),
+                            open_hills=sum(1 for h in q.hills().values() if h.get("status") == "open"),
+                            waiting=sum(m["waiting"] for m in ps.values()),
+                            running=sum(1 for t in q.tasks() if t.get("status") in ("running", "stalled"))))
+        except Exception as e:  # a broken project never takes the list down
+            out.append(dict(key=k, name=k, root=reg[k]["root"], error=f"{type(e).__name__}: {e}"))
+    return out
 
 
 def _tail(path: Path, n: int) -> list:
@@ -165,7 +196,23 @@ def human_event(p: Project, name: str, kind: str, d: dict) -> dict | None:
 
 
 def serve(port: int = 8890, root=None):
-    p = Project(root)
+    home = Project(root)
+    try:
+        projects.register(home.root)
+    except OSError:
+        pass  # a read-only home: the served project still works at /
+    cache: dict[str, Project] = {}
+
+    def pick(path: str) -> tuple[Project, str]:
+        """`/p/<key>/rest` serves a registered project; anything else serves the one this server started in."""
+        parts = path.split("/", 3)
+        if len(parts) >= 3 and parts[1] == "p" and parts[2]:
+            key = unquote(parts[2])
+            r = projects.root(key)  # KeyError for anything not in the registry: never an arbitrary path
+            if key not in cache or cache[key].root != r:
+                cache[key] = Project(r)
+            return cache[key], "/" + (parts[3] if len(parts) > 3 else "")
+        return home, path
 
     class H(BaseHTTPRequestHandler):
         def log_message(self, *a):
@@ -188,11 +235,18 @@ def serve(port: int = 8890, root=None):
             path = self.path.split("?")[0]
             if not self._local():
                 return self._send(403, b'{"error":"not local"}', "application/json")
+            if path.startswith("/p/") and path.count("/") == 2:  # /p/<key> -> /p/<key>/ so relative fetches resolve
+                self.send_response(302); self.send_header("Location", path + "/"); self.end_headers(); return
             try:
+                full = path
+                p, path = pick(path)
+                base = full[:len(full) - len(path)]  # "/p/<key>" or ""
+                if path == "/api/projects":
+                    return self._send(200, json.dumps(project_list(home), default=str).encode(), "application/json")
                 if path == "/ui.css":
                     return self._send(200, UI.read_bytes(), "text/css; charset=utf-8")
                 if path.rstrip("/") == "/papers":  # the list of papers is a dashboard view
-                    self.send_response(302); self.send_header("Location", "/#papers"); self.end_headers(); return
+                    self.send_response(302); self.send_header("Location", base + "/#papers"); self.end_headers(); return
                 if path in ("/", "/index.html"):
                     return self._send(200, HTML.read_bytes(), "text/html; charset=utf-8")
                 if path == "/api/state":
@@ -222,10 +276,11 @@ def serve(port: int = 8890, root=None):
             self._send(404, b"not found", "text/plain")
 
         def do_POST(self):
-            parts = [unquote(x) for x in self.path.split("?")[0].strip("/").split("/")]
             if not self._local():
                 return self._send(403, b'{"error":"cross-origin"}', "application/json")
             try:
+                p, path = pick(self.path.split("?")[0])
+                parts = [unquote(x) for x in path.strip("/").split("/")]
                 if parts[:2] == ["api", "paper"] and len(parts) == 4 and parts[3] in HUMAN_KINDS:
                     d = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
                     ev = human_event(p, parts[2], parts[3], d)

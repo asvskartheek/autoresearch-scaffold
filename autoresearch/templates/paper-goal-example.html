@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GSM8K at 96%</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{--bg:#f6f8fb;--card:#fff;--ink:#14213d;--muted:#5b6678;--border:#d9e0ea;--soft:#eaf0f8;
+  --green:#1b7f45;--red:#c0392b;--amber:#b7791f;--blue:#0b7a75;--purple:#e4572e;--gold:#f2b134;--nav:#14213d;
+  --shadow:0 1px 2px rgba(20,33,61,.06),0 6px 18px rgba(20,33,61,.06);
+  --font:"Instrument Sans",ui-sans-serif,-apple-system,system-ui,sans-serif;--display:"Bricolage Grotesque","Instrument Sans",system-ui,sans-serif;--mono:"JetBrains Mono",ui-monospace,Menlo,monospace}
+:root[data-theme="dark"]{--bg:#22272e;--card:#2d333b;--ink:#cdd9e5;--muted:#909dab;--border:#444c56;--soft:#373e47;--nav:#1c2128;
+  --green:#6bc46d;--red:#f47067;--amber:#daaa3f;--blue:#6cb6ae;--purple:#f69d50;--gold:#e0b34e;--shadow:0 1px 2px rgba(0,0,0,.2)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.65 var(--font);-webkit-font-smoothing:antialiased}
+main{max-width:816px;margin:24px auto;padding:56px 64px 80px;background:var(--card);border:1px solid var(--border);border-radius:6px}
+html.arx-embedded main{margin:0;border:0;max-width:none;background:transparent}
+html.arx-embedded .theme{display:none}
+@media (max-width:700px){main{padding:24px 16px 64px;margin:0;border:0}}
+h1{font:800 clamp(1.9rem,4.6vw,2.6rem)/1.08 var(--display);margin:0 0 16px;text-wrap:balance}
+h2{font:800 clamp(1.45rem,3.4vw,1.9rem)/1.15 var(--display);margin:56px 0 8px;border-top:1px solid var(--border);padding-top:32px;text-wrap:balance}
+h2 small{display:block;font:600 12.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--purple);margin-bottom:6px}
+h3{font:600 1.1rem var(--display);margin:26px 0 8px}
+p{margin:10px 0}
+.muted{color:var(--muted)}
+.mono{font-family:var(--mono);font-size:.84em}
+button{font:inherit;cursor:pointer;color:inherit}
+.theme{position:absolute;right:24px;top:24px;border:1px solid var(--border);background:var(--card);border-radius:8px;width:34px;height:34px}
+main{position:relative}
+/* blocks */
+.poster{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin:18px 0 22px;box-shadow:var(--shadow)}
+.poster svg{width:100%;height:auto;display:block}
+.lab{border:1px solid var(--border);border-left:5px solid var(--blue);border-radius:14px;padding:16px 18px;margin:18px 0;background:var(--card);box-shadow:var(--shadow)}
+.lab .hd{display:flex;align-items:center;gap:8px;font:600 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--blue);margin-bottom:10px}
+.tabs{display:inline-flex;background:var(--soft);border-radius:8px;padding:3px;gap:2px;flex-wrap:wrap;margin-bottom:12px}
+.tabs button{border:0;background:none;padding:5px 11px;border-radius:6px;font-size:13px;font-weight:500;color:var(--muted)}
+.tabs button[aria-pressed="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media (max-width:640px){.grid2,.grid3{grid-template-columns:minmax(0,1fr)} h1{font-size:25px}}
+.stat{border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:var(--card)}
+.stat b{display:block;font:800 28px/1.1 var(--display);font-variant-numeric:tabular-nums}
+.stat span{font-size:12.5px;color:var(--muted)}
+.g{color:var(--green)}.r{color:var(--red)}.a{color:var(--amber)}.b{color:var(--blue)}
+.slider{display:grid;grid-template-columns:120px minmax(0,1fr) 64px;gap:10px;align-items:center;font-size:13.5px;margin:6px 0}
+.slider input{width:100%;accent-color:var(--blue)}
+.theme{color:var(--ink)}
+.slider output{text-align:right;font:600 14px var(--mono)}
+.verdict{font-weight:650;margin-top:8px}
+.dots{display:flex;flex-wrap:wrap;gap:3px;margin:8px 0}
+.dots i{width:11px;height:11px;border-radius:2px;display:block}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin:12px 0}
+td,th{padding:7px 8px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
+th{color:var(--muted);font:600 11.5px var(--mono);text-transform:uppercase;letter-spacing:.06em;cursor:default;white-space:nowrap}
+th[data-k]{cursor:pointer} th[data-k]:hover{color:var(--ink)}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tr.hi td{background:color-mix(in srgb,var(--green) 9%,transparent)}
+.pill{font-weight:650;color:var(--muted)} .pill.g{color:var(--green)} .pill.r{color:var(--red)}
+tr.rej td{background:color-mix(in srgb,var(--red) 5%,transparent)} tr.lead td{background:color-mix(in srgb,var(--blue) 6%,transparent)}
+.ex{border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin:8px 0;background:var(--card)}
+.ex .q{font-weight:550}
+.ex .ans{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.ex .ans button{border:1px dashed var(--border);background:var(--soft);border-radius:8px;padding:8px 10px;text-align:left;font-size:13.5px}
+.ex .ans button.w.open{border:1px solid var(--red);background:color-mix(in srgb,var(--red) 9%,var(--card))}
+.ex .ans button.k.open{border:1px solid var(--green);background:color-mix(in srgb,var(--green) 9%,var(--card))}
+.ex .ans button span{display:none}.ex .ans button.open span{display:block;font-family:ui-monospace,Menlo,monospace;font-size:13px;margin-top:2px}
+.ex .ans button.open em{display:none}
+.quiz{border:0;border-radius:12px;padding:14px 16px;margin:18px 0;background:color-mix(in srgb,var(--gold) 12%,var(--card))}
+.quiz .q{font-weight:600;margin-bottom:8px}
+:root[data-theme="dark"] .quiz{background:color-mix(in srgb,var(--gold) 6%,var(--card))}
+.quiz .q:before{content:"Quiz";display:inline-block;font:600 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--amber);margin-right:10px}
+.quiz .opts{display:grid;gap:6px}
+.quiz .opts button{text-align:left;border:1px solid var(--border);background:var(--card);border-radius:8px;padding:8px 12px;font-size:14px}
+.quiz .opts button:hover{border-color:var(--muted)}
+.quiz .opts button.right{border-color:var(--green);background:color-mix(in srgb,var(--green) 12%,var(--card))}
+.quiz .opts button.wrong{border-color:var(--red);background:color-mix(in srgb,var(--red) 10%,var(--card))}
+.quiz .why{font-size:13.5px;margin-top:8px;color:var(--muted)}
+.score{font:600 13px var(--mono);color:var(--amber)}
+.rungs{display:flex;gap:6px;flex-wrap:wrap}
+.rung{flex:1 1 120px;min-width:0;border:1px solid var(--border);background:var(--card);border-radius:8px;padding:8px 10px;text-align:left}
+.rung[aria-pressed="true"]{border-color:var(--green);background:color-mix(in srgb,var(--green) 9%,var(--card))}
+.rung b{display:block;font-size:13px} .rung span{font-size:12px;color:var(--muted)}
+/* remember: tools for long-term memory, each on its own tinted ground */
+.mem{border-radius:12px;padding:18px;margin:16px 0}
+.mem h3{margin:0 0 4px;font-size:15px}
+.mem .sub{font-size:13px;color:var(--muted);margin:0 0 12px}
+.mem.story{background:color-mix(in srgb,var(--blue) 6%,var(--card))}
+.mem.deck{background:var(--soft)}
+.mem.nums{background:color-mix(in srgb,var(--green) 7%,var(--card))}
+.mem.order{background:color-mix(in srgb,var(--gold) 12%,var(--card))}
+.mem.explain{background:color-mix(in srgb,var(--purple) 7%,var(--card))}
+.strip{display:flex;gap:2px;margin:8px 0 12px}.strip i{flex:1;height:8px;border-radius:2px;background:var(--border)}
+.strip i.b1{background:color-mix(in srgb,var(--blue) 35%,var(--border))}.strip i.b2{background:color-mix(in srgb,var(--blue) 65%,var(--border))}.strip i.b3,.strip i.b4,.strip i.b5{background:var(--blue)}
+.strip i.cur{outline:2px solid var(--ink);outline-offset:1px}
+.fc{background:var(--card);border-radius:10px;padding:22px;min-height:170px;display:flex;flex-direction:column;gap:12px}
+.fc .pr{font-size:18px;font-weight:650;line-height:1.35}
+.fc .an{display:none;border-top:1px solid var(--border);padding-top:12px}
+.fc.open .an{display:block}
+.fc .an p{margin:0 0 8px}
+.mbar{display:grid;grid-template-columns:130px minmax(0,1fr) 54px;gap:8px;align-items:center;font-size:12.5px;margin:3px 0}
+.mbar span{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mbar b{text-align:right;font-variant-numeric:tabular-nums}
+.mbar div{height:12px;background:var(--border);border-radius:3px;overflow:hidden}.mbar div i{display:block;height:100%}
+.acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.acts button{border:0;border-radius:8px;padding:8px 14px;font-weight:600;font-size:13.5px;background:var(--card)}
+.acts .rv{background:var(--ink);color:var(--card)}
+.acts .f0{background:color-mix(in srgb,var(--red) 16%,var(--card));color:var(--red)}
+.acts .f1{background:color-mix(in srgb,var(--amber) 18%,var(--card));color:var(--amber)}
+.acts .f2{background:color-mix(in srgb,var(--green) 16%,var(--card));color:var(--green)}
+.acts .meta{margin-left:auto;font-size:12.5px;color:var(--muted)}
+.cloze{font-size:15.5px;line-height:2.1}
+.cloze input{width:74px;border:0;border-bottom:2px solid var(--muted);background:var(--card);color:var(--ink);font:inherit;font-weight:650;text-align:center;padding:0 4px;border-radius:4px 4px 0 0}
+.cloze input.ok{border-color:var(--green);background:color-mix(in srgb,var(--green) 16%,var(--card))}
+.cloze input.no{border-color:var(--red)}
+.slots{display:grid;gap:6px;margin-bottom:12px}
+.slot{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:center;min-height:40px;background:var(--card);border-radius:8px;padding:6px 10px;font-size:14px}
+.slot b{color:var(--muted);font-variant-numeric:tabular-nums}
+.slot.ok{background:color-mix(in srgb,var(--green) 14%,var(--card))}
+.pool{display:flex;flex-wrap:wrap;gap:6px}
+.pool button{border:0;border-radius:8px;background:var(--card);padding:8px 12px;font-size:13.5px;text-align:left}
+.pool button.bad{animation:shake .35s;background:color-mix(in srgb,var(--red) 18%,var(--card))}
+@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.explain textarea{width:100%;min-height:96px;border:0;border-radius:8px;background:var(--card);color:var(--ink);font:inherit;padding:10px 12px;resize:vertical}
+.keys{display:grid;gap:4px;margin-top:10px;font-size:14px}
+.keys div{padding:6px 10px;border-radius:6px;background:var(--card);color:var(--muted)}
+.keys div.hit{background:color-mix(in srgb,var(--green) 16%,var(--card));color:var(--ink)}
+.tip{position:fixed;pointer-events:none;background:var(--nav);color:#fff;font-size:12.5px;padding:7px 9px;border-radius:7px;max-width:280px;opacity:0;transition:opacity .1s;z-index:5}
+svg text{fill:var(--ink);font-family:inherit}
+svg .m{fill:var(--muted)}
+.draft{border:1px solid var(--amber);border-left:5px solid var(--amber);border-radius:10px;padding:10px 14px;margin:0 0 18px;font-size:14.5px;background:color-mix(in srgb,var(--gold) 10%,var(--card))}
+.draft b{color:var(--amber)}
+.kpi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0}
+@media (max-width:640px){.kpi{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+a.internal{color:var(--blue);font-weight:600}
+.int{font:600 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-left:6px}
+.hillrow{display:grid;grid-template-columns:150px minmax(0,1fr) 120px;gap:10px;align-items:center;font-size:14px;padding:8px 0;border-bottom:1px solid var(--border)}
+.hillrow:last-child{border-bottom:0}
+</style>
+</head>
+<body>
+<main>
+<button class="theme" id="theme" aria-label="Toggle theme">◐</button>
+
+<div class="draft" data-block="draft"><b>Draft.</b> The goal is open. The champion is 43 answers short of 96% on gsm8k-test/full (n = 1319). This page states the result so far; it becomes the final paper when the goal is achieved.</div>
+<h1 data-block="title">GSM8K at 96%: a 4B model from 87.6% to 92.8% with no training, 43 answers to go</h1>
+
+<section data-block="abstract">
+<div class="poster" data-block="hero">
+  <svg viewBox="0 0 800 150" role="img" aria-label="Full benchmark: 1155 to 1224 of 1319; goal 1267">
+    <text x="0" y="18" class="m" font-size="13">gsm8k-test/full · n = 1319 · correct answers</text>
+    <g id="heroBars"></g>
+  </svg>
+</div>
+<p data-block="abs-1">The goal: 96% exact-match accuracy on the GSM8K test set, all 1319 questions, with Qwen3-4B. We started from an RL-tuned champion at 87.6% (1155 of 1319, n = 1319).</p>
+<p data-block="abs-2">One change passed every gate so far. We turned off the inherited RL adapter and allowed 1024 output tokens. The new champion scores 92.8% (1224 of 1319). The paired gain is +5.2 points, 90% CI [+3.8, +6.7], n = 1319.</p>
+<div class="lab" data-block="abs-lab">
+  <div class="hd">Read the claim</div>
+  <div class="tabs" id="claimTabs"><button aria-pressed="true" data-k="start">Start</button><button data-k="now">Now</button><button data-k="goal">Goal</button></div>
+  <div class="grid3" id="claimOut"></div>
+</div>
+<div class="quiz" data-quiz>
+  <div class="q">Which number is the claim of this paper?</div>
+  <div class="opts"><button data-ok="0">164 / 185 on the percent dev slice</button><button data-ok="1">92.8% on full (n = 1319), +5.2 pts paired vs the starting champion</button><button data-ok="0">97 / 100 on the control slice</button></div>
+  <div class="why" data-why="A goal paper claims one KPI on one slice: the full test set. Dev and control slices are internal evidence for the gates."></div>
+</div>
+</section>
+
+<h2 data-block="h-result"><small>01</small>Final result</h2>
+<section data-block="result">
+<div class="kpi poster" data-block="kpi">
+  <div class="stat"><b>96%</b><span>target · gsm8k-test/full</span></div>
+  <div class="stat"><b class="g">92.8%</b><span>champion · 1224 / 1319</span></div>
+  <div class="stat"><b class="g">+5.2 pts</b><span>paired Δ, 90% CI [+3.8, +6.7]</span></div>
+  <div class="stat"><b class="a">43</b><span>answers to the target</span></div>
+</div>
+<p data-block="res-1"><b>KPI.</b> Exact-match accuracy on gsm8k-test/full, n = 1319, higher is better. Target 96% (1267 right).</p>
+<p data-block="res-2"><b>Result.</b> Champion <span class="mono">percent-base-1024-v1</span>: 92.8% (1224 of 1319). Starting champion <span class="mono">qwen3-4b-rl-fresh-v1</span>: 87.6% (1155 of 1319).</p>
+<p data-block="res-3"><b>Paired delta vs the starting champion.</b> +5.2 points, 90% CI [+3.8, +6.7], on the same 1319 ids with the same harness. 106 answers fixed, 37 broken, net +69.</p>
+<div class="lab" data-block="res-lab">
+  <div class="hd">Every question, start vs now (n = 1319)</div>
+  <div class="tabs" id="dotTabs"><button aria-pressed="true" data-k="all">All</button><button data-k="changed">Only changed</button></div>
+  <div class="dots" id="dots"></div>
+  <div class="legend"><span><i style="background:var(--border)"></i>both right</span><span><i style="background:var(--green)"></i>fixed</span><span><i style="background:var(--red)"></i>broken</span><span><i style="background:var(--muted)"></i>both wrong</span></div>
+</div>
+<div class="quiz" data-quiz>
+  <div class="q">106 fixed, 37 broken. Why report both instead of +69?</div>
+  <div class="opts"><button data-ok="1">The interval comes from the churn: many flips both ways widen it</button><button data-ok="0">They are the same thing</button><button data-ok="0">Broken answers are noise and can be dropped</button></div>
+  <div class="why" data-why="The paired bootstrap resamples the per-question differences. 143 changed questions decide the interval; the 1176 ties do not move it."></div>
+</div>
+</section>
+
+<h2 data-block="h-climb"><small>02</small>How we got here</h2>
+<section data-block="climb">
+<p data-block="climb-1">We split the errors into hills. A hill is one named weakness with its own dev slice. Hills are internal debugging notes; each links its own write-up. The shares below are of 168 archived errors (n = 168).</p>
+<div class="poster" data-block="hills-poster">
+  <svg id="hillSvg" viewBox="0 0 800 130" role="img" aria-label="Error share by hill"></svg>
+</div>
+<div data-block="hill-list">
+  <div class="hillrow"><a class="internal" href="../percent-base" target="_top">percent-base</a><span>Percentages applied to the wrong quantity. Climbed: adapter off, 1024 tokens.<span class="int">internal</span></span><span class="mono">climbed</span></div>
+  <div class="hillrow"><span class="mono">time-rate</span><span>Time, rates and repeated schedules. Needs a fresh baseline.</span><span class="mono">open</span></div>
+  <div class="hillrow"><span class="mono">group-count</span><span>Groups and per-item quantities. Needs a fresh baseline.</span><span class="mono">open</span></div>
+</div>
+<div class="lab" data-block="climb-lab">
+  <div class="hd">Pick a hill</div>
+  <div class="tabs" id="hillTabs"><button aria-pressed="true" data-k="percent-base">percent-base</button><button data-k="time-rate">time-rate</button><button data-k="group-count">group-count</button></div>
+  <p data-block="hillText" id="hillText" style="font-size:14px;margin:0"></p>
+</div>
+<div class="quiz" data-quiz>
+  <div class="q">The percent-base hill paper shows 164 / 185 on its dev slice. Is that part of this paper's claim?</div>
+  <div class="opts"><button data-ok="0">Yes, it is the result</button><button data-ok="1">No. It is internal evidence; the claim is the full slice</button></div>
+  <div class="why" data-why="Dev slices are chosen to show one weakness. Only the full slice, paired against the starting champion, supports the goal."></div>
+</div>
+</section>
+
+<h2 data-block="h-method"><small>03</small>Why you can trust the number</h2>
+<section data-block="method">
+<p data-block="meth-1">Every candidate climbs the same gate ladder: dev target, dev control, random50, random100, full. Each rung is a paired comparison on identical ids. Errors and timeouts score 0. Partial runs never count.</p>
+<div class="poster" data-block="ladder">
+  <svg id="ladderSvg" viewBox="0 0 800 90" role="img" aria-label="Gate ladder"></svg>
+</div>
+<div class="lab" data-block="ci-lab">
+  <div class="hd">Paired interval</div>
+  <div class="slider"><label for="fw">Fixed</label><input id="fw" type="range" min="0" max="200" value="106"><output id="fwv"></output></div>
+  <div class="slider"><label for="fb">Broken</label><input id="fb" type="range" min="0" max="200" value="37"><output id="fbv"></output></div>
+  <svg id="ciSvg" viewBox="0 0 800 70"></svg>
+  <div class="verdict" id="ciV"></div>
+</div>
+<div class="quiz" data-quiz>
+  <div class="q">Nine candidates were rejected on the way. Where are they?</div>
+  <div class="opts"><button data-ok="1">In the ledger as rejected, with reasons, and in the internal hill paper</button><button data-ok="0">Deleted, since they failed</button></div>
+  <div class="why" data-why="Negative results are results. The percent-base hill paper lists every candidate and why it stopped."></div>
+</div>
+</section>
+
+<h2 data-block="h-now"><small>04</small>What runs next</h2>
+<section data-block="now">
+<div class="poster"><svg id="gapSvg" viewBox="0 0 800 100"></svg></div>
+<p data-block="now-1">43 answers separate 1224 from 1267 on full (n = 1319). The two open hills cover 118 of 168 archived errors. Each needs a fresh champion baseline before its first candidate runs.</p>
+<div class="lab" data-block="whatif">
+  <div class="hd">Closing the gap</div>
+  <div class="slider"><label for="g1">time-rate</label><input id="g1" type="range" min="0" max="41" value="0"><output id="g1v"></output></div>
+  <div class="slider"><label for="g2">group-count</label><input id="g2" type="range" min="0" max="25" value="0"><output id="g2v"></output></div>
+  <div class="verdict" id="gapV"></div>
+</div>
+<div class="quiz" data-quiz>
+  <div class="q">Both hills each pass full with +20 net. Is the goal achieved?</div>
+  <div class="opts"><button data-ok="0">Yes: 1224 + 40 is close enough</button><button data-ok="1">No: 1264 of 1319 is 95.8%, still 3 short, and gains are measured one promotion at a time</button></div>
+  <div class="why" data-why="arx goal achieve checks the champion's pooled score on the goal slice. 1264 / 1319 = 95.8% is below 96%."></div>
+</div>
+</section>
+
+<h2 data-block="h-test"><small>Test</small>Check yourself</h2>
+<section data-block="test">
+<p data-block="score" class="score" id="score"></p>
+<svg viewBox="0 0 800 10" aria-hidden="true"><rect width="800" height="4" rx="2" fill="var(--border)"/></svg>
+<div class="quiz" data-quiz>
+  <div class="q">A new candidate scores 96.1% on random100 (n = 100). Is the goal achieved?</div>
+  <div class="opts"><button data-ok="0">Yes</button><button data-ok="1">No: the goal names gsm8k-test/full, n = 1319</button></div>
+  <div class="why" data-why="The goal slice is fixed when the goal opens. A random subset is a gate rung, not the claim."></div>
+</div>
+<div class="quiz" data-quiz>
+  <div class="q">The judge changes. What happens to the 92.8%?</div>
+  <div class="opts"><button data-ok="1">Re-run the champion; old numbers do not transfer</button><button data-ok="0">Keep it; the model did not change</button></div>
+  <div class="why" data-why="Rules of evidence: re-run the champion when harness, judge, data or tools change."></div>
+</div>
+</section>
+
+<h2 data-block="h-remember"><small>Remember</small>Keep this for the long term</h2>
+<section data-block="remember">
+<div class="mem deck" data-block="mem-deck">
+  <h3>Recall</h3>
+  <p data-block="deckSub" class="sub" id="deckSub"></p>
+  <div class="strip" id="deckStrip"></div>
+  <div class="fc" id="fc"><div class="pr" id="fcQ"></div><div class="an" id="fcA"></div></div>
+  <div class="acts" id="fcActs" style="margin-top:10px"></div>
+</div>
+<div class="mem nums" data-block="mem-nums">
+  <h3>Rebuild the numbers</h3>
+  <div class="cloze" id="cloze"></div>
+  <svg id="clozeSvg" viewBox="0 0 800 30" style="margin-top:8px"></svg>
+</div>
+<div class="mem explain" data-block="mem-explain">
+  <h3>Explain it to a colleague in three sentences</h3>
+  <textarea id="explainIn" placeholder="Goal, result, how we know"></textarea>
+  <div class="acts" style="margin-top:8px"><button class="rv" id="explainGo">Compare</button></div>
+  <div class="keys" id="keys"></div>
+</div>
+</section>
+</main>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s), NS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs = {}, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent && parent.appendChild(e); return e; };
+const txt = (parent, x, y, s, attrs = {}) => { const t = el("text", { x, y, ...attrs }, parent); t.textContent = s; return t; };
+const tabs = (box, on) => box.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
+  [...box.children].forEach(x => x.setAttribute("aria-pressed", x === b)); on(b.dataset.k); });
+try { const t = localStorage.getItem("arx-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+$("#theme").addEventListener("click", () => { const r = document.documentElement; r.dataset.theme = r.dataset.theme === "dark" ? "light" : "dark"; });
+
+// ledger: goal gsm8k-96 · gsm8k-test/full · n 1319 · start qwen3-4b-rl-fresh-v1 · champion percent-base-1024-v1
+const N = 1319, START = 1155, NOW = 1224, GOAL = 1267, FIX = 106, BRK = 37;
+
+const hero = $("#heroBars"), X = v => v / N * 800;
+[["Start", START, "var(--muted)", 30], ["Champion", NOW, "var(--green)", 78]].forEach(([l, v, c, y]) => {
+  el("rect", { x: 0, y, width: 800, height: 38, rx: 6, fill: "var(--border)" }, hero);
+  const r = el("rect", { x: 0, y, width: 0, height: 38, rx: 6, fill: c }, hero);
+  requestAnimationFrame(() => { r.style.transition = "width 1s ease"; r.setAttribute("width", X(v)); });
+  txt(hero, 12, y + 25, `${l} · ${v}`, { style: "fill:#fff", "font-weight": 700, "font-size": 15 });
+});
+el("line", { x1: X(GOAL), x2: X(GOAL), y1: 24, y2: 124, stroke: "var(--ink)", "stroke-dasharray": "4 4" }, hero);
+txt(hero, X(GOAL) - 4, 142, "target 1267 (96%)", { "text-anchor": "end", "font-size": 13 });
+
+const CLAIM = { start: [["87.6%", "qwen3-4b-rl-fresh-v1"], ["1155", "of 1319 right"], ["RL adapter", "512 tokens"]],
+  now: [["92.8%", "percent-base-1024-v1"], ["1224", "of 1319 right"], ["+5.2 pts", "90% CI [+3.8, +6.7]"]],
+  goal: [["96%", "target"], ["1267", "of 1319 right"], ["43", "answers to go"]] };
+const claim = k => $("#claimOut").innerHTML = CLAIM[k].map(([b, s]) => `<div class="stat"><b>${b}</b><span>${s}</span></div>`).join("");
+tabs($("#claimTabs"), claim); claim("start");
+
+const dots = k => {
+  const both = N - FIX - BRK - (N - START - FIX), bw = N - START - FIX;
+  const cells = [...Array(FIX).fill("var(--green)"), ...Array(BRK).fill("var(--red)"), ...(k === "all" ? [...Array(bw).fill("var(--muted)"), ...Array(START - BRK).fill("var(--border)")] : [])];
+  $("#dots").innerHTML = cells.map(c => `<i style="background:${c};width:${k === "all" ? 6 : 11}px;height:${k === "all" ? 6 : 11}px"></i>`).join("");
+};
+tabs($("#dotTabs"), dots); dots("all");
+
+const HILLS = [["time-rate", 73, "open", "Largest pile. Fresh baseline first, then candidates."], ["group-count", 45, "open", "Second pile. Fresh baseline first."], ["percent-base", 36, "climbed", "Climbed by percent-base-1024-v1: +5.2 pts on full. Read the internal notes for the nine candidates."], ["other", 14, "", "Uncategorised."]];
+const hs = $("#hillSvg");
+HILLS.forEach(([k, n, st], i) => { const y = 4 + i * 30;
+  txt(hs, 0, y + 17, k, { "font-size": 13 });
+  el("rect", { x: 140, y, width: n / 73 * 560, height: 22, rx: 4, fill: st === "climbed" ? "var(--green)" : st ? "var(--blue)" : "var(--border)" }, hs);
+  txt(hs, 148 + n / 73 * 560, y + 17, `${n}`, { "font-size": 13, "font-weight": 700 }); });
+const hill = k => { const h = HILLS.find(x => x[0] === k); $("#hillText").innerHTML = `<b>${k}</b> · ${h[1]} of 168 archived errors · ${h[2]}. ${h[3]}`; };
+tabs($("#hillTabs"), hill); hill("percent-base");
+
+const ls = $("#ladderSvg"), R = ["dev target", "dev control", "random50", "random100", "full"];
+R.forEach((r, i) => { el("rect", { x: i * 162, y: 20, width: 150, height: 40, rx: 6, fill: "var(--green)", opacity: .2 + i * .18 }, ls);
+  txt(ls, i * 162 + 75, 45, r, { "text-anchor": "middle", "font-size": 13, "font-weight": 650 }); });
+txt(ls, 0, 82, "percent-base-1024-v1 passed all five rungs", { class: "m", "font-size": 12 });
+
+const fw = $("#fw"), fb = $("#fb");
+function ci() {
+  const w = +fw.value, l = +fb.value, m = (w - l) / N, v = (w + l) / N - m * m, se = Math.sqrt(Math.max(v, 0) / N), lo = m - 1.645 * se, hi = m + 1.645 * se;
+  $("#fwv").textContent = w; $("#fbv").textContent = l;
+  const s = $("#ciSvg"); s.innerHTML = ""; const P = d => 400 + d * 4000;
+  el("line", { x1: 400, x2: 400, y1: 10, y2: 60, stroke: "var(--ink)", "stroke-dasharray": "3 3" }, s);
+  const c = lo > 0 ? "var(--green)" : "var(--red)";
+  el("line", { x1: Math.max(P(lo), 0), x2: Math.min(P(hi), 800), y1: 35, y2: 35, stroke: c, "stroke-width": 6, "stroke-linecap": "round" }, s);
+  el("circle", { cx: Math.max(0, Math.min(800, P(m))), cy: 35, r: 8, fill: c }, s);
+  $("#ciV").innerHTML = `Δ ${(m * 100).toFixed(1)} pts, 90% CI [${(lo * 100).toFixed(1)}, ${(hi * 100).toFixed(1)}] on n = ${N}`;
+}
+[fw, fb].forEach(i => i.addEventListener("input", ci)); ci();
+
+const gs = $("#gapSvg"), GX = v => (v - 1100) / 219 * 800;
+el("rect", { x: 0, y: 20, width: 800, height: 34, rx: 6, fill: "var(--border)" }, gs);
+el("rect", { x: 0, y: 20, width: GX(NOW), height: 34, rx: 6, fill: "var(--green)" }, gs);
+el("rect", { x: GX(NOW), y: 20, width: GX(GOAL) - GX(NOW), height: 34, fill: "var(--amber)", opacity: .4 }, gs);
+txt(gs, 0, 12, "axis starts at 1100 of 1319", { class: "m", "font-size": 12 });
+txt(gs, (GX(NOW) + GX(GOAL)) / 2, 78, "43 to go", { "text-anchor": "middle", "font-size": 13, "font-weight": 700, style: "fill:var(--amber)" });
+function gap() { const a = +$("#g1").value, b = +$("#g2").value, t = NOW + a + b;
+  $("#g1v").textContent = "+" + a; $("#g2v").textContent = "+" + b;
+  $("#gapV").innerHTML = t >= GOAL ? `<span class="g">${t} / ${N} (${(t / N * 100).toFixed(1)}%): target reached</span> if every gain holds.` : `${t} / ${N} (${(t / N * 100).toFixed(1)}%): ${GOAL - t} short.`; }
+["#g1", "#g2"].forEach(s => $(s).addEventListener("input", gap)); gap();
+
+let right = 0, tried = 0; const total = document.querySelectorAll("[data-quiz]").length;
+const sc = () => $("#score").textContent = `Quiz ${right} / ${total}` + (tried < total ? ` · ${total - tried} left` : "");
+document.querySelectorAll("[data-quiz]").forEach(q => { let done = false;
+  q.querySelectorAll(".opts button").forEach(b => b.addEventListener("click", () => {
+    q.querySelectorAll(".opts button").forEach(x => x.classList.remove("right", "wrong"));
+    const ok = b.dataset.ok === "1"; b.classList.add(ok ? "right" : "wrong");
+    if (!done) { done = true; tried++; if (ok) right++; sc(); }
+    const why = q.querySelector(".why"); why.textContent = (ok ? "Correct. " : "Not quite. ") + why.dataset.why; })); });
+sc();
+
+const KEY = "arx-mem:gsm8k-96", mem = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } })();
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(mem)); } catch {} };
+const DAY = 864e5, BOX = [0, 3, 7, 21, 60, 150], now = () => Date.now();
+const DECK = [["What is the goal?", "96% on gsm8k-test/full, all 1319 questions (1267 right)."],
+  ["Where are we?", "92.8%: 1224 of 1319, champion percent-base-1024-v1."],
+  ["What is the paired gain, and against what?", "+5.2 pts, 90% CI [+3.8, +6.7], vs the starting champion qwen3-4b-rl-fresh-v1 (87.6%)."],
+  ["What changed?", "Inherited RL adapter off, 1024 output tokens. No training."],
+  ["What runs next?", "Fresh baselines on the time-rate and group-count hills, then candidates."]];
+mem.cards = mem.cards || {}; let cur = null;
+function deck() {
+  const d = DECK.map((_, i) => i).filter(i => !mem.cards[i] || mem.cards[i].due <= now()); cur = d.length ? d[0] : null;
+  $("#deckSub").textContent = d.length ? `${d.length} of ${DECK.length} due now` : "All done";
+  $("#deckStrip").innerHTML = DECK.map((_, i) => `<i class="b${mem.cards[i] ? mem.cards[i].box : 0}${i === cur ? " cur" : ""}"></i>`).join("");
+  $("#fc").classList.remove("open");
+  if (cur === null) { $("#fcQ").textContent = "Nothing due."; $("#fcA").innerHTML = ""; $("#fcActs").innerHTML = `<button id="again">Review all now</button>`; $("#again").onclick = () => { mem.cards = {}; save(); deck(); }; return; }
+  $("#fcQ").textContent = DECK[cur][0]; $("#fcA").innerHTML = `<p>${DECK[cur][1]}</p>`;
+  $("#fcActs").innerHTML = `<button class="rv" id="reveal">Show answer</button>`;
+  $("#reveal").onclick = () => { $("#fc").classList.add("open"); const b = mem.cards[cur] ? mem.cards[cur].box : 0;
+    $("#fcActs").innerHTML = `<button class="f0" data-r="0">Forgot</button><button class="f2" data-r="2">Got it · ${BOX[Math.min(b + 1, 5)]} d</button>`;
+    $("#fcActs").querySelectorAll("button").forEach(x => x.onclick = () => { const r = +x.dataset.r, nb = r ? Math.min(b + 1, 5) : 0;
+      mem.cards[cur] = { box: nb, due: r ? now() + BOX[nb] * DAY : now() + 60e3 }; save(); deck(); }); };
+}
+deck();
+
+const NUMS = { start: 1155, now: 1224, total: 1319, goal: 1267 };
+$("#cloze").innerHTML = `On full, <input data-k="start"> became <input data-k="now"> of <input data-k="total">. The target is <input data-k="goal">.`;
+function cloze() { let n = 0; $("#cloze").querySelectorAll("input").forEach(i => { const ok = +i.value === NUMS[i.dataset.k]; i.className = i.value ? (ok ? "ok" : "no") : ""; n += ok; });
+  const s = $("#clozeSvg"); s.innerHTML = ""; txt(s, 0, 20, `${n} of 4 from memory`, { "font-size": 12, "font-weight": 700, style: `fill:${n === 4 ? "var(--green)" : "var(--muted)"}` }); }
+$("#cloze").addEventListener("input", cloze); cloze();
+
+const IDEAS = [["The goal: 96% on gsm8k-test/full", /96|goal|target/i], ["Now: 92.8% (1224 of 1319)", /92\.8|1224/], ["Paired +5.2 pts vs the start", /5\.2|pair/i], ["The change: adapter off, longer answers", /adapter|token|longer/i], ["Next: two open hills", /time|group|hill/i]];
+$("#explainIn").value = mem.explain || "";
+$("#explainIn").addEventListener("input", e => { mem.explain = e.target.value; save(); });
+$("#explainGo").onclick = () => { const t = $("#explainIn").value; $("#keys").innerHTML = IDEAS.map(([l, re]) => `<div class="${re.test(t) ? "hit" : ""}">${re.test(t) ? "✓" : "·"} ${l}</div>`).join(""); };
+})();
+</script>
+</body>
+</html>

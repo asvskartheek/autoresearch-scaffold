@@ -4,7 +4,8 @@ Read `PROTOCOL.md` before changing a model, an eval or a slice. `research.json` 
 gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) reads only that.
 
 ## Step 0: the dashboard, before anything else
-- `arx up` (also run by `arx init`) starts the dashboard in the background. Check it is up before doing other work,
+- `arx up` (also run by `arx init`) starts the dashboard in the background and registers the project in
+  `~/.arx/projects.json`; one dashboard lists every registered project (`/p/<key>/`, `arx projects`). Check it is up before doing other work,
   and give the user the URL. If it goes down, `arx up` again.
 - Setup is work too: `arx init` opens a running "Project setup" task. Note every step on it (environment, installs,
   model download, dataset prep) and finish it when the first eval can run.
@@ -45,10 +46,18 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
 - "Better" means the gate passed. A noisy delta on a dev slice is a lead, not a result.
 - Failed candidates stay in the ledger as rejected, with the reason. Negative results are results.
 
+## Goals
+- Work serves a goal: a target KPI on one slice (`arx goal open <goal> --slice <full slice> --target 0.96`). Open
+  hills with `--goal <goal>`. `arx goal status` before reporting progress; `arx goal achieve` only when it passes.
+- A goal is not a task. Its evidence comes from the ledger, never from a number typed by hand.
+
 ## Papers
-- One living paper per hill (`/papers/<hill>`), written on promote, on hill close (negative results too) and kept
-  current while the hill is open. Checklist in PROTOCOL.md; start from `arx paper new <hill>`.
-- `arx paper check --file paper.html` before every publish; fix every error.
+- One public paper per goal (`/papers/<goal>`, `arx paper new --goal <goal>`): a labelled draft while the goal is
+  open, the final result when it is achieved, the negative result if it is abandoned.
+- One living paper per hill (`/papers/<hill>`), internal debugging notes: written on promote, on hill close
+  (negative results too) and kept current while the hill is open. Start from `arx paper new <hill>`.
+- Checklist in PROTOCOL.md. `arx paper check --file paper.html` (goal papers: add `--goal <goal>`) before every
+  publish; fix every error.
 - `arx paper add|edit <name> --file paper.html` publishes; open pages swap the new version in place.
 - `arx paper poll` blocks until someone waits on you, in any paper, and prints one JSON line per thread.
   Answer with `arx paper reply <name> <thread> "text" [--link "label=#block"] [--file page.html]`;

@@ -10,12 +10,32 @@ project-specific numbers.
 | **Dataset** | A full eval set (e.g. `qa`, 1,000 examples). Its ID list is frozen once. |
 | **Slice** | A frozen list of example IDs from one dataset, with a hash. Every score names its slice. |
 | **Random slice** | `random50`, `random100`: seeded draws. Nested: `random50` is the first 50 of `random100`. |
+| **Goal** | The outward claim: a target KPI on one slice, usually a full slice ("96% on gsm8k-test/full, n = 1319"). Hills serve it. It gets the public paper. |
 | **Hill** | A specific weakness found in the champion ("V7 flips answers when the prompt says *please*"). |
 | **Target slice** | The slice that measures one hill. Small (20–60), targeted, often synthetic. Its score can be a custom metric (e.g. agreement with/without *please*), binary or continuous: set `--scale continuous` (and `--unit`) on a slice whose score is a number such as minus seconds; the default is 0/1. |
 | **Control slice** | A small random slice evaluated with every target slice, to see the overall effect. |
 | **Champion** | The model with the best full-dataset score. Every candidate is compared with it. |
 | **Candidate** | A new version (V8) that claims to climb one hill. |
 | **Gate** | A rung of the ladder. A candidate runs a rung only after passing the one below. |
+
+## Goals
+
+A project fights for one or more goals. A goal is fixed when it opens: the KPI, the slice (and its hash), the target
+and the starting champion (`baseline`). It is open, achieved or abandoned.
+
+```
+arx goal open gsm8k-96 --title "GSM8K at 96%" --slice gsm8k-test/full --target 0.96
+arx hill open time-rate ... --goal gsm8k-96      # or: arx hill explain <hill> --goal gsm8k-96
+arx goal status [gsm8k-96]                         # champion's value, gap, paired delta vs the baseline, hills
+arx goal achieve gsm8k-96                          # refused until the champion meets the target on the goal slice
+arx goal abandon gsm8k-96 --reason "..."
+```
+
+- The value is the champion's score pooled over every complete run on the goal slice, like the gates. Cost and
+  latency KPIs are lower-is-better (`--kpi latency_p50`).
+- `achieve` freezes the evidence: model, eval run, value, n, and the paired delta vs the baseline. Later promotions
+  do not change it. A met target on a dev or random slice never achieves a goal.
+- Hills are internal debugging. They find and fix the weaknesses that stand between the champion and the goal.
 
 ## One research step
 
@@ -69,21 +89,31 @@ arx hill explain arith \
 
 ## Papers
 
-One living paper per hill, named after the hill (`/papers/<hill>`, `arx paper add <hill> --hill <hill>`). Never start
-a second paper for the same hill: republish it with `arx paper edit <hill> --file paper.html`.
+Two kinds, one reader (`/papers/<name>`):
 
-When to write it:
-- When a candidate is promoted on the hill, and when the hill closes (solved, or abandoned with every candidate
-  rejected: a negative result is written up the same way, with the reasons from the ledger).
-- While the hill is open, after each gate result that changes the story. Say plainly that the work is in progress
-  and what runs next (`arx gate <model>`).
+- **Goal paper** (public). One per goal, named after the goal: `arx paper add <goal> --goal <goal>`. It is the
+  outward-facing write-up: the goal, the final result and why it holds. Keep it as a labelled draft while the goal
+  is open; finish it when the goal is achieved; when a goal is abandoned, say so and report the negative result.
+- **Hill paper** (internal). One living paper per hill, named after the hill: `arx paper add <hill> --hill <hill>`.
+  Debugging notes for us: every candidate, every rejection. Write it on promote and on hill close (negative results
+  too), and keep it current while the hill is open. The dashboard and the goal paper label it internal.
 
-Start from `arx paper new <hill>`: it writes `paper-<hill>.html`, a worked example (gsm8k, real numbers) that
-carries the shared theme and every widget; replace its content with this hill's. Check the page with
-`arx paper check --file paper.html` before every publish. The check enforces the rules below that a machine can see.
+Never start a second paper for the same goal or hill: republish with `arx paper edit <name> --file paper.html`.
+
+Start from `arx paper new --goal <goal>` or `arx paper new <hill>`: each writes a worked example (gsm8k, real
+numbers) that carries the shared theme and every widget; replace its content. `new --goal` also prints the ledger
+numbers the final result needs. Check every page before every publish: `arx paper check --file paper.html`, and
+for a goal paper `arx paper check --goal <goal> --file paper.html`. The checks enforce what a machine can see.
+
+Goal paper, on top of the checklist below:
+- [ ] A `result` section (`<section data-block="result">`) with the goal KPI, its slice and `n = <n>`, the target,
+      the champion's value from the ledger, and the paired delta vs the starting champion with its 90% interval.
+- [ ] A link to every internal hill paper of the goal: `<a class="internal" href="../<hill>" target="_top">`.
+- [ ] "Draft" on the page while the goal is open; "abandoned" if it was. No dev-slice number is the claim.
 
 Checklist:
-- [ ] Sections `abstract`, `problem`, `method`, `tried`, `win` (or `result`), `now`, `test`, `remember`.
+- [ ] Hill paper sections: `abstract`, `problem`, `method`, `tried`, `win` (or `result`), `now`, `test`, `remember`.
+      Goal paper sections: `abstract`, `result`, `climb`, `method`, `now`, `test`, `remember`.
 - [ ] `data-block="<id>"` on every `<section>`, `<p>` and `<figure>`, unique. Comments anchor to blocks, replies link to them.
 - [ ] Every section has a visual (inline SVG chart, poster, diagram) and something to do (slider, tabs, a reveal, a quiz).
 - [ ] A pop quiz (`class="quiz"`) in most sections and a closing test: at least 3. Each answer explains why.
