@@ -19,6 +19,7 @@ from pathlib import Path
 
 from .core import Project, _jsonl, _read, _write, now
 
+MENTION = re.compile(r"(?<![\w@])@agent\b", re.I)
 KINDS = ("comment", "reply", "seen", "resolve", "reopen", "edit", "delete")
 
 
@@ -140,7 +141,9 @@ def threads(log: list[dict]) -> list[dict]:
         if root_gone:  # replies outlive a deleted first comment; the thread keeps its anchor
             th["root_deleted"] = True
         last = th["messages"][-1] if th["messages"] else None
-        th["waiting"] = bool(last and not last["agent"] and not th["resolved"])
+        # "@agent" in a person's message summons the agent with the whole thread, even on a resolved thread
+        th["mention"] = bool(last and not last["agent"] and MENTION.search(last["body"]))
+        th["waiting"] = bool(last and not last["agent"] and (not th["resolved"] or th["mention"]))
         th["thinking"] = bool(th["waiting"] and last["id"] in th["seen"])
         th["last"] = last["id"] if last else None
         th.pop("seen")
@@ -206,7 +209,7 @@ def check(html: str, slices=()) -> list[tuple[str, str]]:
         out.append(("error", f"{quizzes} quizzes (class=\"quiz\"); give a pop quiz per section and a closing test"))
     if not re.search(r'data-block="remember"', body):
         out.append(("error", "no Remember section (<section data-block=\"remember\">) for long-term recall"))
-    if slices and not any(s in body for s in slices):
+    if slices and not any(s in body or s.rsplit("/", 1)[-1] in body for s in slices):  # gsm8k-test/full or full
         out.append(("error", "names no slice from the ledger; every number names its slice and n"))
     for m in SERIF.finditer(html):
         out.append(("error", f"serif font: {m.group(0)[:60]!r}; use the shared theme (Instrument Sans)"))
@@ -214,6 +217,9 @@ def check(html: str, slices=()) -> list[tuple[str, str]]:
         out.append(("warn", f"rounded pill: {m.group(0)!r}; no pill bubbles"))
     if 'data-theme="dark"' not in html:  # the reader sets data-theme on the paper; it follows the page's toggle
         out.append(("error", 'no dark mode: style :root[data-theme="dark"] (the reader sets it)'))
+    for left in ("gsm8k-percent-base", "Removing the inherited adapter"):  # `arx paper new` leftovers
+        if left in html:
+            out.append(("warn", f"still has the example's {left!r}: rewrite it (a shared storage key mixes Remember progress)"))
     if "Instrument Sans" not in html:
         out.append(("warn", "does not use the shared theme fonts (Instrument Sans, Bricolage Grotesque, JetBrains Mono)"))
     return out

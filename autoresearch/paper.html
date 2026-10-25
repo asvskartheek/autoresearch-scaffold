@@ -637,14 +637,18 @@ function toast(text, action) {
 const blockTexts = d => Object.fromEntries([...d.querySelectorAll("[data-block]")].map(e => [e.dataset.block, e.textContent.replace(/\s+/g, " ").trim()]));
 
 // A new version of the paper: load it hidden, then swap, keeping the reader's place, open threads and drafts.
-async function swapPaper(v) {
-  const old = frame, od = paperDoc(), before = blockTexts(od);
+// Compare the source, not the live DOM: widgets that shuffle or fill text on load would show as "changed".
+const srcCache = {};
+const srcTexts = v => srcCache[v] || (srcCache[v] = fetch(`/papers/${encodeURIComponent(NAME)}/raw?v=${v}`).then(r => r.text())
+  .then(t => blockTexts(new DOMParser().parseFromString(t, "text/html"))));
+async function swapPaper(v, prev) {
+  const old = frame, od = paperDoc(), before = srcCache[prev] ? await srcCache[prev] : blockTexts(od);  // cached when prev loaded: raw always serves the newest
   const keep = [...od.querySelectorAll("[data-block]")].map(e => [e.dataset.block, e.getBoundingClientRect().top + frame.getBoundingClientRect().top])
     .find(([, y]) => y > 56) || null;
   const f = await loadPaper(v);
   await new Promise(r => setTimeout(r, 60));
   fit(f);
-  const nd = f.contentDocument, after = blockTexts(nd);
+  const nd = f.contentDocument, after = await srcTexts(v).catch(() => blockTexts(nd));
   const changed = Object.keys(after).filter(k => before[k] !== after[k]);
   f.className = ""; old.remove(); frame = f;
   if (keep) { const el = [...nd.querySelectorAll("[data-block]")].find(x => x.dataset.block === keep[0]);
@@ -665,8 +669,8 @@ async function refresh() {
     meta = d.meta || {};
     $("#title").textContent = document.title = meta.title || NAME;
     $("#hillCrumb").innerHTML = meta.hill ? `<a class="crumb" href="/#hill/${encodeURIComponent(meta.hill)}">${esc(meta.hill)}</a><span class="sep">/</span>` : "";
-    if (version === null) { version = d.version; frame = await loadPaper(version); }
-    else if (d.version !== version) { version = d.version; await swapPaper(version); }
+    if (version === null) { version = d.version; srcTexts(version).catch(() => {}); frame = await loadPaper(version); }
+    else if (d.version !== version) { const prev = version; version = d.version; await swapPaper(version, prev); }
     threads = d.threads;
     if (active && !threads.find(t => t.id === active)) active = null;
     reanchor(); renderAll();

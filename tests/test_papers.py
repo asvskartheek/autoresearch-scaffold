@@ -62,6 +62,20 @@ class Threads(unittest.TestCase):
         with self.assertRaises(KeyError):
             papers.pdir(p, "../etc")
 
+    def test_at_agent_summons_with_whole_thread(self):
+        p, _ = project()
+        c = papers.post(p, "demo", "comment", body="Ann and Bo talk", anchor=ANCHOR, author="Ann")
+        papers.post(p, "demo", "reply", parent=c["id"], body="noted", agent=True)
+        papers.post(p, "demo", "resolve", parent=c["id"], author="Ann")
+        papers.post(p, "demo", "reply", parent=c["id"], body="email me at bo@agentcorp.com", author="Bo")
+        self.assertEqual(papers.pending(papers.thread(p, "demo")), [])  # resolved, no mention
+        papers.post(p, "demo", "reply", parent=c["id"], body="@agent can you check this again?", author="Bo")
+        [th] = papers.poll(p, "demo", timeout=0)
+        self.assertTrue(th["mention"]); self.assertTrue(th["resolved"])
+        self.assertEqual([m["body"][:4] for m in th["messages"]], ["Ann ", "note", "emai", "@age"])
+        papers.post(p, "demo", "reply", parent=c["id"], body="done", agent=True)
+        self.assertEqual(papers.pending(papers.thread(p, "demo")), [])
+
     def test_concurrent_appends_never_interleave(self):
         p, _ = project()
         big = "x" * 20000  # past one stdio buffer: a buffered write could split the line

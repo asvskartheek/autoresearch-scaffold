@@ -263,8 +263,10 @@ def cmd_paper(a):
     elif a.verb == "poll":  # blocks until a person is waiting on the agent; one JSON line per thread
         for th in papers.poll(p, a.name, timeout=a.timeout):
             print(json.dumps(dict(paper=th["paper"], thread=th["id"], quote=(th.get("anchor") or {}).get("quote"),
-                                  block=(th.get("anchor") or {}).get("block"),
-                                  messages=[dict(author=m["author"], agent=m["agent"], body=m["body"]) for m in th["messages"]])))
+                                  block=(th.get("anchor") or {}).get("block"), mention=th["mention"],
+                                  resolved=th["resolved"],  # the whole thread, so the agent answers in context
+                                  messages=[dict(author=m["author"], agent=m["agent"], body=m["body"], link=m.get("link"))
+                                            for m in th["messages"]])))
     elif a.verb == "attach":
         if not a.file:
             sys.exit("usage: arx paper attach <name> --file page.html")

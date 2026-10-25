@@ -99,7 +99,9 @@ Checklist:
 
 Review loop:
 - People select text and comment. `arx paper poll` blocks until someone waits on you, in any paper, and prints one
-  JSON line per thread (`paper`, `thread`, `quote`, `block`, `messages`). The page shows "thinking…" from then on.
+  JSON line per thread with the whole thread (`paper`, `thread`, `quote`, `block`, `messages`, `mention`). Any
+  person's message in an open thread waits on you; `@agent` summons you even on a resolved thread. The page shows
+  "thinking…" from then on.
 - Answer every thread: `arx paper reply <paper> <thread> "text"`. If the answer changes the paper, republish it first
   and link to the changed block (`--link "§4=#win-1"`). If the answer is its own page (a chart, a poster), reply with
   `--file page.html`: it opens next to the thread. External sources: `--link "label=https://…"`.
