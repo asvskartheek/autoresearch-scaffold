@@ -4,33 +4,35 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Percent-Base Hill</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
-:root{--bg:#fafafa;--card:#fff;--ink:#09090b;--muted:#71717a;--border:#e4e4e7;--soft:#f4f4f5;
-  --green:#16a34a;--red:#dc2626;--amber:#d97706;--blue:#2563eb;--purple:#7c3aed;--nav:#18181b}
-:root[data-theme="dark"]{--bg:#09090b;--card:#18181b;--ink:#fafafa;--muted:#a1a1aa;--border:#27272a;--soft:#27272a;--nav:#27272a;
-  --green:#4ade80;--red:#f87171;--amber:#fbbf24;--blue:#60a5fa;--purple:#a78bfa}
+:root{--bg:#f6f8fb;--card:#fff;--ink:#14213d;--muted:#5b6678;--border:#d9e0ea;--soft:#eaf0f8;
+  --green:#1b7f45;--red:#c0392b;--amber:#b7791f;--blue:#0b7a75;--purple:#e4572e;--gold:#f2b134;--nav:#14213d;
+  --shadow:0 1px 2px rgba(20,33,61,.06),0 6px 18px rgba(20,33,61,.06);
+  --font:"Instrument Sans",ui-sans-serif,-apple-system,system-ui,sans-serif;--display:"Bricolage Grotesque","Instrument Sans",system-ui,sans-serif;--mono:"JetBrains Mono",ui-monospace,Menlo,monospace}
+:root[data-theme="dark"]{--bg:#131c2e;--card:#1a2539;--ink:#e6ecf5;--muted:#a8b4c8;--border:#2e3c58;--soft:#223049;--nav:#0d1424;
+  --green:#74d99c;--red:#ff8f85;--amber:#f2c66b;--blue:#5fd4c8;--purple:#ff9a76;--gold:#f6c85f;--shadow:0 1px 2px rgba(0,0,0,.25),0 6px 18px rgba(0,0,0,.18)}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:15.5px/1.65 "Inter",ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.65 var(--font);-webkit-font-smoothing:antialiased}
 main{max-width:816px;margin:24px auto;padding:56px 64px 80px;background:var(--card);border:1px solid var(--border);border-radius:6px}
 html.arx-embedded main{margin:0;border:0;max-width:none;background:transparent}
 html.arx-embedded .theme{display:none}
 @media (max-width:700px){main{padding:24px 16px 64px;margin:0;border:0}}
-h1{font-size:30px;line-height:1.15;margin:0 0 14px;letter-spacing:-.02em;font-weight:700}
-h2{font-size:21px;margin:52px 0 6px;letter-spacing:-.01em;font-weight:650;border-top:1px solid var(--border);padding-top:28px}
-h2 small{display:block;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:4px}
-h3{font-size:15px;margin:26px 0 8px;font-weight:650}
+h1{font:800 clamp(1.9rem,4.6vw,2.6rem)/1.08 var(--display);margin:0 0 16px;text-wrap:balance}
+h2{font:800 clamp(1.45rem,3.4vw,1.9rem)/1.15 var(--display);margin:56px 0 8px;border-top:1px solid var(--border);padding-top:32px;text-wrap:balance}
+h2 small{display:block;font:600 12.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--purple);margin-bottom:6px}
+h3{font:600 1.1rem var(--display);margin:26px 0 8px}
 p{margin:10px 0}
 .muted{color:var(--muted)}
-.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.86em}
+.mono{font-family:var(--mono);font-size:.84em}
 button{font:inherit;cursor:pointer;color:inherit}
 .theme{position:absolute;right:24px;top:24px;border:1px solid var(--border);background:var(--card);border-radius:8px;width:34px;height:34px}
 main{position:relative}
 /* blocks */
-.poster{background:var(--soft);border:1px solid var(--border);border-radius:12px;padding:18px;margin:16px 0}
+.poster{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin:18px 0 22px;box-shadow:var(--shadow)}
 .poster svg{width:100%;height:auto;display:block}
-.lab{border:1px solid var(--border);border-radius:12px;padding:16px;margin:16px 0;background:var(--card)}
-.lab .hd{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:650;letter-spacing:.05em;text-transform:uppercase;color:var(--blue);margin-bottom:10px}
-.lab .hd:before{content:"";width:8px;height:8px;border-radius:2px;background:var(--blue)}
+.lab{border:1px solid var(--border);border-left:5px solid var(--blue);border-radius:14px;padding:16px 18px;margin:18px 0;background:var(--card);box-shadow:var(--shadow)}
+.lab .hd{display:flex;align-items:center;gap:8px;font:600 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--blue);margin-bottom:10px}
 .tabs{display:inline-flex;background:var(--soft);border-radius:8px;padding:3px;gap:2px;flex-wrap:wrap;margin-bottom:12px}
 .tabs button{border:0;background:none;padding:5px 11px;border-radius:6px;font-size:13px;font-weight:500;color:var(--muted)}
 .tabs button[aria-pressed="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
@@ -38,12 +40,13 @@ main{position:relative}
 .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 @media (max-width:640px){.grid2,.grid3{grid-template-columns:minmax(0,1fr)} h1{font-size:25px}}
 .stat{border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:var(--card)}
-.stat b{display:block;font-size:26px;letter-spacing:-.02em;line-height:1.1;font-variant-numeric:tabular-nums}
+.stat b{display:block;font:800 28px/1.1 var(--display);font-variant-numeric:tabular-nums}
 .stat span{font-size:12.5px;color:var(--muted)}
 .g{color:var(--green)}.r{color:var(--red)}.a{color:var(--amber)}.b{color:var(--blue)}
 .slider{display:grid;grid-template-columns:120px minmax(0,1fr) 64px;gap:10px;align-items:center;font-size:13.5px;margin:6px 0}
 .slider input{width:100%;accent-color:var(--blue)}
-.slider output{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.theme{color:var(--ink)}
+.slider output{text-align:right;font:600 14px var(--mono)}
 .verdict{font-weight:650;margin-top:8px}
 .dots{display:flex;flex-wrap:wrap;gap:3px;margin:8px 0}
 .dots i{width:11px;height:11px;border-radius:2px;display:block}
@@ -51,13 +54,12 @@ main{position:relative}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
 table{width:100%;border-collapse:collapse;font-size:13.5px;margin:12px 0}
 td,th{padding:7px 8px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
-th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;cursor:default;white-space:nowrap}
+th{color:var(--muted);font:600 11.5px var(--mono);text-transform:uppercase;letter-spacing:.06em;cursor:default;white-space:nowrap}
 th[data-k]{cursor:pointer} th[data-k]:hover{color:var(--ink)}
 td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 tr.hi td{background:color-mix(in srgb,var(--green) 9%,transparent)}
-.pill{display:inline-block;font-size:11.5px;font-weight:600;padding:1px 8px;border-radius:999px;background:var(--soft);color:var(--muted)}
-.pill.g{background:color-mix(in srgb,var(--green) 15%,transparent);color:var(--green)}
-.pill.r{background:color-mix(in srgb,var(--red) 13%,transparent);color:var(--red)}
+.pill{font-weight:650;color:var(--muted)} .pill.g{color:var(--green)} .pill.r{color:var(--red)}
+tr.rej td{background:color-mix(in srgb,var(--red) 5%,transparent)} tr.lead td{background:color-mix(in srgb,var(--blue) 6%,transparent)}
 .ex{border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin:8px 0;background:var(--card)}
 .ex .q{font-weight:550}
 .ex .ans{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
@@ -66,27 +68,63 @@ tr.hi td{background:color-mix(in srgb,var(--green) 9%,transparent)}
 .ex .ans button.k.open{border:1px solid var(--green);background:color-mix(in srgb,var(--green) 9%,var(--card))}
 .ex .ans button span{display:none}.ex .ans button.open span{display:block;font-family:ui-monospace,Menlo,monospace;font-size:13px;margin-top:2px}
 .ex .ans button.open em{display:none}
-.quiz{border:1px solid color-mix(in srgb,var(--purple) 40%,var(--border));border-radius:12px;padding:14px 16px;margin:18px 0;background:color-mix(in srgb,var(--purple) 4%,var(--card))}
+.quiz{border:0;border-radius:12px;padding:14px 16px;margin:18px 0;background:color-mix(in srgb,var(--gold) 12%,var(--card))}
 .quiz .q{font-weight:600;margin-bottom:8px}
-.quiz .q:before{content:"Quiz";display:inline-block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--purple);margin-right:8px}
+.quiz .q:before{content:"Quiz";display:inline-block;font:600 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--amber);margin-right:10px}
 .quiz .opts{display:grid;gap:6px}
 .quiz .opts button{text-align:left;border:1px solid var(--border);background:var(--card);border-radius:8px;padding:8px 12px;font-size:14px}
 .quiz .opts button:hover{border-color:var(--muted)}
 .quiz .opts button.right{border-color:var(--green);background:color-mix(in srgb,var(--green) 12%,var(--card))}
 .quiz .opts button.wrong{border-color:var(--red);background:color-mix(in srgb,var(--red) 10%,var(--card))}
 .quiz .why{font-size:13.5px;margin-top:8px;color:var(--muted)}
-.score{position:sticky;bottom:12px;margin-left:auto;width:max-content;font-size:12.5px;font-weight:600;background:var(--nav);color:#fff;border-radius:999px;padding:5px 12px;z-index:3}
+.score{font:600 13px var(--mono);color:var(--amber)}
 .rungs{display:flex;gap:6px;flex-wrap:wrap}
 .rung{flex:1 1 120px;min-width:0;border:1px solid var(--border);background:var(--card);border-radius:8px;padding:8px 10px;text-align:left}
 .rung[aria-pressed="true"]{border-color:var(--green);background:color-mix(in srgb,var(--green) 9%,var(--card))}
 .rung b{display:block;font-size:13px} .rung span{font-size:12px;color:var(--muted)}
-.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
-.card{perspective:900px;height:130px;border:0;background:none;padding:0}
-.card .in{position:relative;width:100%;height:100%;transition:transform .45s;transform-style:preserve-3d}
-.card.flip .in{transform:rotateY(180deg)}
-.card .f,.card .bk{position:absolute;inset:0;backface-visibility:hidden;border-radius:10px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;padding:12px;text-align:center}
-.card .f{background:var(--card);font-weight:650}
-.card .bk{background:var(--soft);transform:rotateY(180deg);font-size:13px}
+/* remember: tools for long-term memory, each on its own tinted ground */
+.mem{border-radius:12px;padding:18px;margin:16px 0}
+.mem h3{margin:0 0 4px;font-size:15px}
+.mem .sub{font-size:13px;color:var(--muted);margin:0 0 12px}
+.mem.story{background:color-mix(in srgb,var(--blue) 6%,var(--card))}
+.mem.deck{background:var(--soft)}
+.mem.nums{background:color-mix(in srgb,var(--green) 7%,var(--card))}
+.mem.order{background:color-mix(in srgb,var(--gold) 12%,var(--card))}
+.mem.explain{background:color-mix(in srgb,var(--purple) 7%,var(--card))}
+.strip{display:flex;gap:2px;margin:8px 0 12px}.strip i{flex:1;height:8px;border-radius:2px;background:var(--border)}
+.strip i.b1{background:color-mix(in srgb,var(--blue) 35%,var(--border))}.strip i.b2{background:color-mix(in srgb,var(--blue) 65%,var(--border))}.strip i.b3,.strip i.b4,.strip i.b5{background:var(--blue)}
+.strip i.cur{outline:2px solid var(--ink);outline-offset:1px}
+.fc{background:var(--card);border-radius:10px;padding:22px;min-height:170px;display:flex;flex-direction:column;gap:12px}
+.fc .pr{font-size:18px;font-weight:650;line-height:1.35}
+.fc .an{display:none;border-top:1px solid var(--border);padding-top:12px}
+.fc.open .an{display:block}
+.fc .an p{margin:0 0 8px}
+.mbar{display:grid;grid-template-columns:130px minmax(0,1fr) 54px;gap:8px;align-items:center;font-size:12.5px;margin:3px 0}
+.mbar span{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mbar b{text-align:right;font-variant-numeric:tabular-nums}
+.mbar div{height:12px;background:var(--border);border-radius:3px;overflow:hidden}.mbar div i{display:block;height:100%}
+.acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.acts button{border:0;border-radius:8px;padding:8px 14px;font-weight:600;font-size:13.5px;background:var(--card)}
+.acts .rv{background:var(--ink);color:var(--card)}
+.acts .f0{background:color-mix(in srgb,var(--red) 16%,var(--card));color:var(--red)}
+.acts .f1{background:color-mix(in srgb,var(--amber) 18%,var(--card));color:var(--amber)}
+.acts .f2{background:color-mix(in srgb,var(--green) 16%,var(--card));color:var(--green)}
+.acts .meta{margin-left:auto;font-size:12.5px;color:var(--muted)}
+.cloze{font-size:15.5px;line-height:2.1}
+.cloze input{width:74px;border:0;border-bottom:2px solid var(--muted);background:var(--card);color:var(--ink);font:inherit;font-weight:650;text-align:center;padding:0 4px;border-radius:4px 4px 0 0}
+.cloze input.ok{border-color:var(--green);background:color-mix(in srgb,var(--green) 16%,var(--card))}
+.cloze input.no{border-color:var(--red)}
+.slots{display:grid;gap:6px;margin-bottom:12px}
+.slot{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:center;min-height:40px;background:var(--card);border-radius:8px;padding:6px 10px;font-size:14px}
+.slot b{color:var(--muted);font-variant-numeric:tabular-nums}
+.slot.ok{background:color-mix(in srgb,var(--green) 14%,var(--card))}
+.pool{display:flex;flex-wrap:wrap;gap:6px}
+.pool button{border:0;border-radius:8px;background:var(--card);padding:8px 12px;font-size:13.5px;text-align:left}
+.pool button.bad{animation:shake .35s;background:color-mix(in srgb,var(--red) 18%,var(--card))}
+@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.explain textarea{width:100%;min-height:96px;border:0;border-radius:8px;background:var(--card);color:var(--ink);font:inherit;padding:10px 12px;resize:vertical}
+.keys{display:grid;gap:4px;margin-top:10px;font-size:14px}
+.keys div{padding:6px 10px;border-radius:6px;background:var(--card);color:var(--muted)}
+.keys div.hit{background:color-mix(in srgb,var(--green) 16%,var(--card));color:var(--ink)}
 .tip{position:fixed;pointer-events:none;background:var(--nav);color:#fff;font-size:12.5px;padding:7px 9px;border-radius:7px;max-width:280px;opacity:0;transition:opacity .1s;z-index:5}
 svg text{fill:var(--ink);font-family:inherit}
 svg .m{fill:var(--muted)}
@@ -127,7 +165,7 @@ svg .m{fill:var(--muted)}
 </div>
 </section>
 
-<h2 data-block="h-problem"><small>Section 1</small>The weakness</h2>
+<h2 data-block="h-problem"><small>01</small>The weakness</h2>
 <section data-block="problem">
 <div class="poster">
   <svg viewBox="0 0 800 200" role="img" aria-label="Two readings of a 150% increase">
@@ -173,7 +211,7 @@ svg .m{fill:var(--muted)}
 </div>
 </section>
 
-<h2 data-block="h-method"><small>Section 2</small>How a candidate wins</h2>
+<h2 data-block="h-method"><small>02</small>How a candidate wins</h2>
 <section data-block="method">
 <p data-block="meth-1">Every candidate climbs the same ladder. Each rung compares it to the champion on the same questions, with the same harness. Each question is a win, a loss or a tie.</p>
 <div class="poster" data-block="ladder">
@@ -205,7 +243,7 @@ svg .m{fill:var(--muted)}
 </div>
 </section>
 
-<h2 data-block="h-tried"><small>Section 3</small>What we tried</h2>
+<h2 data-block="h-tried"><small>03</small>What we tried</h2>
 <section data-block="tried">
 <p data-block="tried-1">Nine candidates on the target slice (n = 185), against the fresh champion at 150 / 185.</p>
 <div class="lab" data-block="tried-lab">
@@ -225,7 +263,7 @@ svg .m{fill:var(--muted)}
 </div>
 </section>
 
-<h2 data-block="h-win"><small>Section 4</small>The winning change</h2>
+<h2 data-block="h-win"><small>04</small>The winning change</h2>
 <section data-block="win">
 <div class="poster">
   <svg viewBox="0 0 800 170" role="img" aria-label="Truncation at 512 tokens">
@@ -255,7 +293,7 @@ svg .m{fill:var(--muted)}
 </div>
 </section>
 
-<h2 data-block="h-now"><small>Section 5</small>Where we are now</h2>
+<h2 data-block="h-now"><small>05</small>Where we are now</h2>
 <section data-block="now">
 <div class="poster"><svg id="gap" viewBox="0 0 800 120"></svg></div>
 <p data-block="now-1">The goal is 96% on the full benchmark: 1267 of 1319. The champion has 1224. The gap is 43 answers.</p>
@@ -283,6 +321,7 @@ svg .m{fill:var(--muted)}
 
 <h2 data-block="h-test"><small>Test</small>Make the call</h2>
 <section data-block="test">
+<p class="score" id="score"></p>
 <div class="quiz" data-quiz>
   <div class="q">2048 tokens scores +0.8 points on full, 90% CI [−0.2, +1.8]. Promote?</div>
   <div class="opts"><button data-ok="0">Yes, the point estimate is up</button><button data-ok="1">No. Record it as rejected with the reason; it is a lead</button><button data-ok="0">Re-run until the interval clears zero</button></div>
@@ -300,9 +339,41 @@ svg .m{fill:var(--muted)}
 </div>
 </section>
 
-<h2 data-block="h-cards"><small>Remember</small>Flip cards</h2>
-<div class="cards" id="cards"></div>
-<div class="score" id="score"></div>
+<h2 data-block="h-remember"><small>Remember</small>Keep this for the long term</h2>
+<section data-block="remember">
+<div class="mem story" data-block="mem-story">
+  <h3>The whole hill in one picture</h3>
+  <svg id="storySvg" viewBox="0 0 800 300" role="img" aria-label="The hill as one story"></svg>
+</div>
+
+<div class="mem deck" data-block="mem-deck">
+  <h3>Recall</h3>
+  <p class="sub" id="deckSub"></p>
+  <div class="strip" id="deckStrip"></div>
+  <div class="fc" id="fc"><div class="pr" id="fcQ"></div><div class="an" id="fcA"></div></div>
+  <div class="acts" id="fcActs" style="margin-top:10px"></div>
+</div>
+
+<div class="mem nums" data-block="mem-nums">
+  <h3>Rebuild the numbers</h3>
+  <div class="cloze" id="cloze"></div>
+  <svg id="clozeSvg" viewBox="0 0 800 120" style="margin-top:8px"></svg>
+</div>
+
+<div class="mem order" data-block="mem-order">
+  <h3>Put the story in order</h3>
+  <div class="slots" id="slots"></div>
+  <div class="pool" id="pool"></div>
+  <div class="acts" style="margin-top:10px"><button id="orderReset">Shuffle again</button></div>
+</div>
+
+<div class="mem explain" data-block="mem-explain">
+  <h3>Explain it to a colleague in three sentences</h3>
+  <textarea id="explainIn" placeholder="What was wrong, what fixed it, how do we know"></textarea>
+  <div class="acts" style="margin-top:8px"><button class="rv" id="explainGo">Compare</button></div>
+  <div class="keys" id="keys"></div>
+</div>
+</section>
 </main>
 <div class="tip" id="tip"></div>
 
@@ -459,7 +530,7 @@ tabs($("#triedTabs"), k => { tk = k; tried(); }); tried();
 let sortK = null, sortDir = 1;
 function rows() {
   const r = [...C]; if (sortK) r.sort((a, b) => (a[sortK] > b[sortK] ? 1 : a[sortK] < b[sortK] ? -1 : 0) * sortDir);
-  $("#triedRows").innerHTML = r.map(c => `<tr class="${c.win ? "hi" : ""}"><td class="mono">${c.n}</td><td>${c.kind}</td><td class="n">${c.t}</td><td class="n">${c.c}</td><td class="n">${c.lat}</td><td>${c.base ? '<span class="pill">baseline</span>' : c.win ? '<span class="pill g">champion</span>' : c.r.startsWith("Lead") ? '<span class="pill">lead</span>' : '<span class="pill r">rejected</span>'} ${c.r}</td></tr>`).join("");
+  $("#triedRows").innerHTML = r.map(c => `<tr class="${c.win ? "hi" : c.base ? "" : c.r.startsWith("Lead") ? "lead" : "rej"}"><td class="mono">${c.n}</td><td>${c.kind}</td><td class="n">${c.t}</td><td class="n">${c.c}</td><td class="n">${c.lat}</td><td>${c.base ? '<span class="pill">baseline</span>' : c.win ? '<span class="pill g">champion</span>' : c.r.startsWith("Lead") ? '<span class="pill">lead</span>' : '<span class="pill r">rejected</span>'} ${c.r}</td></tr>`).join("");
 }
 document.querySelectorAll("[data-block=tried-table] th[data-k]").forEach(th => th.addEventListener("click", () => { sortDir = sortK === th.dataset.k ? -sortDir : 1; sortK = th.dataset.k; rows(); }));
 rows();
@@ -525,16 +596,131 @@ document.querySelectorAll("[data-quiz]").forEach(q => {
 });
 sc();
 
-// flip cards
-[["Hill", "A named weakness with a frozen target slice and a control slice."], ["Paired delta", "Wins minus losses over n, on the same questions."],
- ["Gate ladder", "dev → random50 → random100 → full. Every rung, in order."], ["Lead vs result", "A dev gain is a lead. A passed full rung is a result."],
- ["The win", "Adapter off + 1024 tokens: 1155 → 1224 of 1319, no training."], ["Two halves", "Adapter off +7, longer cap +7 on target."],
- ["Truncation", "17 of 20 cut answers were wrong. Check cap hits first."], ["Next gap", "43 answers to 96%. Time and rates is the biggest pile."]
-].forEach(([a, b]) => {
-  const c = document.createElement("button"); c.className = "card"; c.type = "button";
-  c.innerHTML = `<div class="in"><div class="f">${a}</div><div class="bk">${b}</div></div>`;
-  c.addEventListener("click", () => c.classList.toggle("flip")); $("#cards").appendChild(c);
+// ---------- remember ----------
+const KEY = "arx-mem:gsm8k-percent-base", mem = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } })();
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(mem)); } catch {} };
+const DAY = 864e5, now = () => Date.now();
+
+// the story: one annotated picture of the whole hill
+(() => {
+  const s = $("#storySvg"), steps = [
+    ["Weakness", "36 / 168 errors", "percent applied to the wrong base", "var(--red)"],
+    ["Baseline", "150 / 185", "old RL adapter, 512 tokens", "var(--muted)"],
+    ["7 tries", "≤ 153", "SFT · RL · prompt · vote: all kept the adapter", "var(--amber)"],
+    ["Adapter off", "157", "+7 · 20 answers cut at 512", "var(--blue)"],
+    ["+ 1024 tokens", "164", "+7 more · all rungs pass", "var(--green)"],
+    ["Full", "1155 → 1224", "of 1319 · +5.2 pts · 43 to 96%", "var(--green)"]];
+  // a climb: each step sits higher as the model gets better; the dashed line is the 96% goal
+  const P = steps.map((_, i) => [68 + i * 133, 200 - [0, 8, 14, 64, 104, 150][i]]);
+  el("path", { d: `M8 206 L${P.map(p => p.join(" ")).join(" L")} L792 ${P[5][1] - 8}`, fill: "none", stroke: "var(--border)", "stroke-width": 6, "stroke-linejoin": "round", "stroke-linecap": "round" }, s);
+  el("path", { d: `M${P[2].join(" ")} L${P.slice(3).map(p => p.join(" ")).join(" L")}`, fill: "none", stroke: "var(--green)", "stroke-width": 6, "stroke-linejoin": "round", "stroke-linecap": "round", opacity: .55 }, s);
+  el("line", { x1: 0, x2: 800, y1: 20, y2: 20, stroke: "var(--ink)", "stroke-dasharray": "4 5", opacity: .5 }, s);
+  txt(s, 800, 14, "goal 1267 / 1319", { "text-anchor": "end", "font-size": 11, class: "m" });
+  steps.forEach(([t, n, d, c], i) => {
+    const [x, y] = P[i];
+    el("line", { x1: x, x2: x, y1: y + 10, y2: 222, stroke: "var(--border)", "stroke-dasharray": "2 3" }, s);
+    el("circle", { cx: x, cy: y, r: 9, fill: c, stroke: "var(--card)", "stroke-width": 3 }, s);
+    txt(s, x, y - 16, n, { "text-anchor": "middle", "font-size": 16, "font-weight": 750, style: `fill:${c}` });
+    txt(s, x, 240, t, { "text-anchor": "middle", "font-size": 12, "font-weight": 650 });
+    const lines = d.split(" ").reduce((ls, w) => ((ls.at(-1) + " " + w).trim().length > 22 ? ls.push(w) : ls[ls.length - 1] = (ls.at(-1) + " " + w).trim(), ls), [""]);
+    lines.forEach((l, j) => txt(s, x, 256 + j * 13, l, { "text-anchor": "middle", "font-size": 11.5, class: "m" }));
+  });
+})();
+
+// recall deck: spaced repetition, saved in this browser
+const BOX = [0, 3, 7, 21, 60, 150]; // days until the next review, by box
+const DECK = [
+  ["What change won this hill?", "Turn off the old RL adapter and allow 1024 output tokens. No training.", [["before", 1155, 1319, "var(--muted)"], ["after", 1224, 1319, "var(--green)"]]],
+  ["How much did each switch add on target (n = 185)?", "Adapter off: +7 (150 → 157). 1024 tokens: +7 more (→ 164).", [["baseline", 150, 185, "var(--muted)"], ["adapter off", 157, 185, "var(--blue)"], ["+ 1024 tokens", 164, 185, "var(--green)"]]],
+  ["Why was adapter-off at 512 tokens not promoted?", "Its 90% interval crossed zero. 20 answers hit the 512 cap and 17 of them were wrong. That pointed to the longer cap.", [["cut and wrong", 17, 20, "var(--red)"], ["cut but right", 3, 20, "var(--amber)"]]],
+  ["What do 106 and 37 mean on full?", "106 answers fixed, 37 broken. Net +69: 1155 → 1224.", [["fixed", 106, 143, "var(--green)"], ["broken", 37, 143, "var(--red)"]]],
+  ["Which approaches failed, and what did they share?", "SFT, RL (GRPO), a prompt prefix, 5-way voting. All kept the old adapter. Best was 153 / 185.", [["best with adapter", 153, 185, "var(--amber)"], ["worst (prompt)", 133, 185, "var(--red)"]]],
+  ["What did the win cost?", "Latency. Median seconds per question went from about 6 to 47.", [["baseline", 6, 100, "var(--muted)"], ["champion", 47.3, 100, "var(--amber)"], ["2048 tokens", 98.6, 100, "var(--red)"]]],
+  ["What is the gate ladder?", "dev target (better) → dev control (≥ −2) → random50 (≥ −2) → random100 (≥ −1) → full (better). Paired, in order.", null],
+  ["Lead or result: 169 / 185 on target for raw-sft?", "A lead. Only a passed full rung, paired against the champion, is a result.", null],
+  ["How far from the goal, and where next?", "43 answers to 1267 / 1319 (96%). Time and rates is the largest error pile: 73 of 168.", [["now", 1224, 1319, "var(--green)"], ["goal", 1267, 1319, "var(--ink)"]]]];
+mem.cards = mem.cards || {};
+let cur = null;
+const due = () => DECK.map((_, i) => i).filter(i => !mem.cards[i] || mem.cards[i].due <= now());
+function deck() {
+  const d = due(), seen = Object.keys(mem.cards).length;
+  const next = Math.min(...DECK.map((_, i) => mem.cards[i] ? mem.cards[i].due : Infinity));
+  $("#deckSub").textContent = (mem.last ? `Last review ${Math.round((now() - mem.last) / DAY)} days ago · ` : "") +
+    (d.length ? `${d.length} of ${DECK.length} due now` : `All done · next card due ${new Date(next).toLocaleDateString([], { month: "short", day: "numeric" })}`);
+  cur = d.length ? d[0] : null;
+  $("#deckStrip").innerHTML = DECK.map((_, i) => `<i class="b${mem.cards[i] ? mem.cards[i].box : 0}${i === cur ? " cur" : ""}"></i>`).join("");
+  const fc = $("#fc"); fc.classList.remove("open");
+  if (cur === null) { $("#fcQ").textContent = "Nothing due. Come back on the date above."; $("#fcA").innerHTML = ""; $("#fcActs").innerHTML = `<button id="again">Review all now</button>`; $("#again").onclick = () => { DECK.forEach((_, i) => mem.cards[i] && (mem.cards[i].due = 0)); save(); deck(); }; return; }
+  const [q, a, bars] = DECK[cur];
+  $("#fcQ").textContent = q;
+  $("#fcA").innerHTML = `<p>${a}</p>` + (bars ? bars.map(([l, v, m, c]) => `<div class="mbar"><span>${l}</span><div><i style="width:${v / m * 100}%;background:${c}"></i></div><b>${v}</b></div>`).join("") : "");
+  $("#fcActs").innerHTML = `<button class="rv" id="reveal">Show answer</button><span class="meta">Space · 1 2 3</span>`;
+  $("#reveal").onclick = reveal;
+}
+function reveal() {
+  $("#fc").classList.add("open");
+  const b = mem.cards[cur] ? mem.cards[cur].box : 0, lbl = k => BOX[k] ? `${BOX[k]} d` : "now";
+  $("#fcActs").innerHTML = `<button class="f0" data-r="0">Forgot · ${lbl(0)}</button><button class="f1" data-r="1">Hard · ${lbl(Math.max(b, 1))}</button><button class="f2" data-r="2">Got it · ${lbl(Math.min(b + 1, 5))}</button>`;
+  $("#fcActs").querySelectorAll("button").forEach(x => x.onclick = () => rate(+x.dataset.r));
+}
+function rate(r) {
+  const b = mem.cards[cur] ? mem.cards[cur].box : 0, nb = r === 0 ? 0 : r === 1 ? Math.max(b, 1) : Math.min(b + 1, 5);
+  mem.cards[cur] = { box: nb, due: r === 0 ? now() + 60e3 : now() + BOX[nb] * DAY }; mem.last = now(); save(); deck();
+}
+document.addEventListener("keydown", e => {
+  if (cur === null || /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  const r = $("#fc").getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) return;
+  if (e.key === " " && !$("#fc").classList.contains("open")) { e.preventDefault(); reveal(); }
+  else if ($("#fc").classList.contains("open") && "123".includes(e.key)) rate(+e.key - 1);
 });
+deck();
+
+// rebuild the numbers: type each one; the chart draws what you got right
+const NUMS = { before: 1155, after: 1224, total: 1319, goal: 1267, t0: 150, t1: 157, t2: 164, fix: 106, brk: 37 };
+$("#cloze").innerHTML = `On full, the score went from <input data-k="before"> to <input data-k="after"> of <input data-k="total">; the goal is <input data-k="goal">.
+  On target, the baseline <input data-k="t0"> became <input data-k="t1"> with the adapter off, and <input data-k="t2"> with 1024 tokens.
+  On full, <input data-k="fix"> answers were fixed and <input data-k="brk"> broken.`;
+mem.nums = mem.nums || {};
+function cloze() {
+  const got = {};
+  $("#cloze").querySelectorAll("input").forEach(i => { const ok = +i.value === NUMS[i.dataset.k]; i.className = i.value ? (ok ? "ok" : "no") : ""; if (ok) got[i.dataset.k] = 1; });
+  const s = $("#clozeSvg"); s.innerHTML = ""; const X = v => (v - 1100) / 219 * 560 + 200, T = v => v / 185 * 560 + 200;
+  [["full · before", got.before && got.total ? 1155 : null, X, "var(--muted)"], ["full · after", got.after && got.total ? 1224 : null, X, "var(--green)"],
+   ["target · adapter off", got.t0 && got.t1 ? 157 : null, T, "var(--blue)"], ["target · 1024", got.t2 ? 164 : null, T, "var(--green)"]].forEach(([l, v, sc, c], i) => {
+    const y = 4 + i * 28; txt(s, 0, y + 15, l, { "font-size": 12, class: "m" });
+    el("rect", { x: 200, y, width: 560, height: 20, rx: 4, fill: "var(--card)" }, s);
+    if (v) { const r = el("rect", { x: 200, y, width: 0, height: 20, rx: 4, fill: c }, s); requestAnimationFrame(() => { r.style.transition = "width .6s"; r.setAttribute("width", sc(v) - 200); }); txt(s, sc(v) + 6, y + 15, v, { "font-size": 12, "font-weight": 700 }); }
+    else txt(s, 210, y + 15, "?", { "font-size": 12, class: "m" });
+  });
+  if (got.goal && got.total) { el("line", { x1: X(1267), x2: X(1267), y1: 0, y2: 58, stroke: "var(--ink)", "stroke-dasharray": "3 3" }, s); }
+  const n = Object.keys(got).length; txt(s, 0, 118, `${n} of ${Object.keys(NUMS).length} from memory`, { "font-size": 12, "font-weight": 700, style: `fill:${n === 9 ? "var(--green)" : "var(--muted)"}` });
+}
+$("#cloze").addEventListener("input", cloze); cloze();
+
+// put the story in order
+const EVENTS = ["Archived errors show a percent category: 36 of 168", "Fresh baseline: 150 / 185 on target", "SFT, RL, prompt and voting all fail (≤ 153)",
+  "Adapter off at 512 tokens: 157, but 20 answers cut", "Adapter off at 1024 tokens: 164, passes every rung", "Full benchmark: 1155 → 1224; new champion"];
+let placed = [];
+function order(shuffle) {
+  if (shuffle) placed = [];
+  $("#slots").innerHTML = EVENTS.map((e, i) => `<div class="slot ${placed[i] != null ? "ok" : ""}"><b>${i + 1}</b><span>${placed[i] != null ? EVENTS[placed[i]] : ""}</span></div>`).join("");
+  const left = EVENTS.map((_, i) => i).filter(i => !placed.includes(i)).sort(() => Math.random() - .5);
+  $("#pool").innerHTML = left.map(i => `<button data-i="${i}">${EVENTS[i]}</button>`).join("");
+  $("#pool").querySelectorAll("button").forEach(b => b.onclick = () => {
+    if (+b.dataset.i === placed.length) { placed.push(+b.dataset.i); order(); }
+    else { b.classList.remove("bad"); void b.offsetWidth; b.classList.add("bad"); }
+  });
+}
+$("#orderReset").onclick = () => order(true); order(true);
+
+// explain it: your words, checked against the key ideas
+const IDEAS = [["The weakness: percent applied to the wrong quantity", /percent|%|base|quantity/i], ["The fix: turn off the old adapter", /adapter|lora/i],
+  ["…and allow longer answers (1024 tokens)", /1024|token|longer|cap|truncat/i], ["No training was needed", /no train|without train|not train|no fine/i],
+  ["The result: 1155 → 1224 of 1319 (+5.2 pts)", /1224|5\.2|92\.8|69/], ["How we know: paired gate, interval above zero", /pair|gate|interval|ci\b|rung/i]];
+$("#explainIn").value = mem.explain || "";
+$("#explainIn").addEventListener("input", e => { mem.explain = e.target.value; save(); });
+function explain() { const t = $("#explainIn").value; $("#keys").innerHTML = IDEAS.map(([l, re]) => `<div class="${re.test(t) ? "hit" : ""}">${re.test(t) ? "✓" : "·"} ${l}</div>`).join(""); }
+$("#explainGo").onclick = explain;
 })();
 </script>
 </body>
