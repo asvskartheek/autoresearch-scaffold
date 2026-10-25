@@ -38,6 +38,8 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
   Its stdout/stderr stay in the task dir as private logs.
 - Before a candidate runs a rung, the champion must have a run on the same slice with the same harness.
   `arx gate <model>` names the next run; follow it, do not skip rungs.
+- Not every hill is pass/fail. If the target's score is a number (latency, length, cost), freeze the slice with
+  `--scale continuous --unit <u> --metric "<what score means>"` and score rows higher-is-better. Default is 0/1.
 - Never edit a frozen slice. Make a new one with a new name.
 - Every hill gets an explainer (`arx hill explain`: symptom, example, measure, share). See PROTOCOL.md.
 - Pre-declare what a change should move (in the hill's `problem` or the model's `change`) before running it.
@@ -59,3 +61,4 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
 - Before opening a PR, run a local testing session on the change: start the dashboard (`arx up`), exercise the new
   behaviour end to end in a scratch project, and note in the PR what you ran and what you saw.
 - Write the PR description with the `show-me` skill.
+  If it is missing (`ls ~/.claude/skills/show-me`), install it first: `npx skills add humanlayer/skills --skill show-me -g -y`.

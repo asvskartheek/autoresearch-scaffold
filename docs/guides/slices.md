@@ -38,6 +38,18 @@ arx slice add dev-please  --ids-file probes.json     --kind synthetic --metric "
 
 `--metric` says what `score` means on this slice when it is not plain accuracy.
 
+A score is 0 or 1 per example unless you say otherwise. A hill about speed, cost or length is not binary: freeze its
+slice with `--scale continuous` (and `--unit s`), and score each row with the number itself, signed so that higher is
+better (minus seconds, not seconds).
+
+```bash
+arx slice add slow-target --ids-file slow.json --kind dev --scale continuous --unit s \
+    --metric "minus the seconds the agent took; a faster run scores higher"
+```
+
+The dashboard then shows the mean score, the signed delta in that unit, and better/worse counts per example, in place of
+"solved" counts. A slice with no `--scale` is read off its scores: all 0/1 means binary.
+
 ## Never edit a frozen slice
 
 Adding a slice under an existing name with different IDs fails:

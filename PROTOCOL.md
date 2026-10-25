@@ -11,7 +11,7 @@ project-specific numbers.
 | **Slice** | A frozen list of example IDs from one dataset, with a hash. Every score names its slice. |
 | **Random slice** | `random50`, `random100`: seeded draws. Nested: `random50` is the first 50 of `random100`. |
 | **Hill** | A specific weakness found in the champion ("V7 flips answers when the prompt says *please*"). |
-| **Target slice** | The slice that measures one hill. Small (20–60), targeted, often synthetic. Its score can be a custom metric (e.g. agreement with/without *please*). |
+| **Target slice** | The slice that measures one hill. Small (20–60), targeted, often synthetic. Its score can be a custom metric (e.g. agreement with/without *please*), binary or continuous: set `--scale continuous` (and `--unit`) on a slice whose score is a number such as minus seconds; the default is 0/1. |
 | **Control slice** | A small random slice evaluated with every target slice, to see the overall effect. |
 | **Champion** | The model with the best full-dataset score. Every candidate is compared with it. |
 | **Candidate** | A new version (V8) that claims to climb one hill. |

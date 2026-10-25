@@ -18,7 +18,7 @@ Every command runs against the project found by walking up from the current dire
 | Command | Does |
 |---|---|
 | `arx dataset add NAME (--ids-file F \| --size N) [--url] [--title] [--description] [--random 50 100] [--seed 42] [--no-random]` | Register a dataset; freeze `full` and nested random slices |
-| `arx slice add NAME (--ids-file F \| --size N) [--kind dev\|control\|synthetic\|random\|full] [--description] [--url] [--hill] [--metric]` | Freeze a slice. Fails if NAME exists with different IDs |
+| `arx slice add NAME (--ids-file F \| --size N) [--kind dev\|control\|synthetic\|random\|full] [--description] [--url] [--hill] [--metric] [--scale binary\|continuous] [--unit]` | Freeze a slice. Fails if NAME exists with different IDs |
 
 ## Hills and models
 

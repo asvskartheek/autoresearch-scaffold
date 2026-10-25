@@ -137,7 +137,8 @@ class Project:
             _write(self.root / "research.json", cfg)
 
     def add_slice(self, name: str, ids: list, kind: str = "dev", description: str = None, url: str = None,
-                  seed: int = None, hill: str = None, metric: str = None):
+                  seed: int = None, hill: str = None, metric: str = None,
+                  scale: str = None, unit: str = None):
         if "/" not in name:
             name = f"{self.config['primary_dataset']}/{name}"
         ids = [str(i) for i in ids]
@@ -145,7 +146,8 @@ class Project:
         if old and old["hash"] != ids_hash(ids):
             raise SystemExit(f"slice {name} is frozen with different ids; create a new slice name")
         return self._upsert("slices", name, dataset=name.split("/")[0], kind=kind, ids=ids, n=len(ids),
-                            hash=ids_hash(ids), description=description, url=url, seed=seed, hill=hill, metric=metric)
+                            hash=ids_hash(ids), description=description, url=url, seed=seed, hill=hill, metric=metric,
+                            scale=scale, unit=unit)
 
     def random_slices(self, dataset: str, sizes=(50, 100), seed: int = 42):
         """Nested random slices: random50 is the first 50 of random100."""
