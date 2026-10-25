@@ -13,13 +13,13 @@
   /* dashboard names, mapped onto the tokens */
   --bg:var(--background);--card:var(--page);--ink:var(--foreground);--soft:#eaf0f8;
   color-scheme:light}
-/* dark: soft navy, not black; text a step below white so it reads well in daylight too */
+/* dark: "dimmed", as in GitHub's dimmed theme: grey-blue, not black; soft text; calm accents */
 :root[data-theme="dark"]{
-  --background:#131c2e;--page:#1a2539;--foreground:#e6ecf5;--muted:#223049;--muted-fg:#a8b4c8;--border:#2e3c58;--input:#3a4a69;
-  --ring:#5fd4c8;--primary:#5fd4c8;--primary-fg:#0b2422;--accent:#223049;--sidebar:#161f33;
-  --blue:#5fd4c8;--green:#74d99c;--amber:#f2c66b;--purple:#ff9a76;--red:#ff8f85;--gold:#f6c85f;
-  --hl:rgba(246,200,95,.22);--hl-on:rgba(246,200,95,.45);--draft:rgba(95,212,200,.25);--agent:#ff9a76;--agent-soft:#3a2622;
-  --soft:#223049;--shadow:0 1px 2px rgba(0,0,0,.25),0 6px 18px rgba(0,0,0,.18);--pop:0 12px 32px -8px rgba(0,0,0,.55);color-scheme:dark}
+  --background:#22272e;--page:#2d333b;--foreground:#cdd9e5;--muted:#373e47;--muted-fg:#909dab;--border:#444c56;--input:#545d68;
+  --ring:#6cb6ae;--primary:#6cb6ae;--primary-fg:#1c2128;--accent:#373e47;--sidebar:#1c2128;
+  --blue:#6cb6ae;--green:#6bc46d;--amber:#daaa3f;--purple:#f69d50;--red:#f47067;--gold:#e0b34e;
+  --hl:rgba(218,170,63,.2);--hl-on:rgba(218,170,63,.4);--draft:rgba(108,182,174,.22);--agent:#f69d50;--agent-soft:#3d3128;
+  --soft:#373e47;--shadow:0 1px 2px rgba(0,0,0,.2);--pop:0 12px 32px -8px rgba(0,0,0,.5);color-scheme:dark}
 *{box-sizing:border-box}
 html,body{margin:0}
 body{background:var(--background);color:var(--foreground);font:14.5px/1.55 var(--font);-webkit-font-smoothing:antialiased}
