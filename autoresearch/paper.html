@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paper</title>
+<style>
+:root{--bg:#f5f5f1;--card:#fff;--ink:#202a32;--muted:#7d858c;--border:#e5e8e7;--soft:#f0f1ee;--green:#299b7d;--amber:#c58a37;--blue:#3d73dd;--purple:#9075cd;--nav:#202d36;--navink:#c9d1d6}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#151b20;--card:#1d252b;--ink:#e6eaed;--muted:#8d979e;--border:#2c363d;--soft:#242d34;--nav:#10161a}}
+:root[data-theme="dark"]{--bg:#151b20;--card:#1d252b;--ink:#e6eaed;--muted:#8d979e;--border:#2c363d;--soft:#242d34;--nav:#10161a}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;display:flex;flex-direction:column}
+button,textarea{font:inherit;color:inherit}
+.bar{display:flex;align-items:center;gap:12px;padding:0 14px;height:46px;background:var(--nav);color:var(--navink);flex:none}
+.bar a{color:var(--navink);text-decoration:none;opacity:.8}
+.bar .t{font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+.bar .v{font-size:12px;opacity:.7;white-space:nowrap}
+.bar button{background:rgba(255,255,255,.1);border:0;border-radius:8px;padding:5px 10px;color:#fff;cursor:pointer;white-space:nowrap}
+.bar button .n{background:var(--amber);border-radius:999px;padding:0 6px;margin-left:4px;font-size:12px}
+.wrap{flex:1;display:flex;min-height:0;position:relative}
+.stage{flex:1;position:relative;min-width:0}
+.stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:var(--bg)}
+.stage iframe.next{visibility:hidden}
+aside{width:380px;flex:none;border-left:1px solid var(--border);background:var(--card);display:flex;flex-direction:column;min-height:0}
+aside.hide{display:none}
+@media (max-width:760px){aside{position:absolute;right:0;top:0;bottom:0;width:min(380px,100%);box-shadow:-8px 0 24px rgba(0,0,0,.15)}}
+.list{flex:1;overflow:auto;padding:12px}
+.empty{color:var(--muted);text-align:center;margin-top:40px}
+.c{border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:var(--bg)}
+.c.focus{border-color:var(--purple)}
+.q{border-left:3px solid var(--amber);padding-left:8px;color:var(--muted);font-size:13px;margin-bottom:6px;cursor:pointer;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.who{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.body{white-space:pre-wrap;word-wrap:break-word}
+.reply{margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)}
+.reply .who{color:var(--purple)}
+.status{font-size:12px;color:var(--muted);margin-top:6px}
+.status.reading::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--purple);margin-right:6px;animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.25}}
+.linkcard{display:flex;align-items:center;gap:8px;margin-top:6px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--blue);text-decoration:none;font-weight:600}
+.compose{border-top:1px solid var(--border);padding:10px 12px;flex:none}
+.compose .quote{display:none;border-left:3px solid var(--amber);padding:2px 8px;color:var(--muted);font-size:13px;margin-bottom:6px;position:relative}
+.compose .quote.on{display:block}
+.compose .quote button{position:absolute;right:0;top:0;border:0;background:none;cursor:pointer;color:var(--muted)}
+.compose textarea{width:100%;min-height:64px;resize:vertical;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg)}
+.compose .row{display:flex;justify-content:space-between;align-items:center;margin-top:6px;color:var(--muted);font-size:12px}
+.compose .send{background:var(--green);color:#fff;border:0;border-radius:8px;padding:6px 14px;cursor:pointer}
+.fab{position:absolute;z-index:3;display:none;background:var(--nav);color:#fff;border:0;border-radius:8px;padding:6px 10px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+.toast{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:var(--nav);color:#fff;padding:6px 14px;border-radius:999px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:4}
+.toast.on{opacity:1}
+</style>
+</head>
+<body>
+<div class="bar">
+  <a href="/">← Dashboard</a>
+  <div class="t" id="title">Paper</div>
+  <span class="v" id="ver"></span>
+  <button id="toggle" type="button">Discussion<span class="n" id="count" hidden></span></button>
+</div>
+<div class="wrap">
+  <div class="stage" id="stage">
+    <iframe id="frame" title="paper"></iframe>
+    <button class="fab" id="fab" type="button">💬 Comment</button>
+    <div class="toast" id="toast"></div>
+  </div>
+  <aside id="side">
+    <div class="list" id="list"></div>
+    <div class="compose">
+      <div class="quote" id="quote"><span id="quoteText"></span><button id="unquote" type="button" aria-label="Remove quote">×</button></div>
+      <textarea id="box" placeholder="Ask about the paper, or select text in it to comment on that part"></textarea>
+      <div class="row"><span>⌘↵ to send</span><button class="send" id="send" type="button">Send</button></div>
+    </div>
+  </aside>
+</div>
+<script>
+(() => {
+const name = decodeURIComponent(location.pathname.split("/").filter(Boolean)[1]);
+const $ = id => document.getElementById(id);
+const stage = $("stage"), fab = $("fab"), box = $("box"), list = $("list");
+let frame = $("frame"), version = null, thread = [], anchor = null, sel = null, rendered = "";
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const md = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>")
+  .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+|\/[^)\s]*)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+const ago = t => { const s = Date.now() / 1000 - t; return s < 60 ? "just now" : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`; };
+const toast = msg => { const t = $("toast"); t.textContent = msg; t.classList.add("on"); setTimeout(() => t.classList.remove("on"), 2200); };
+
+// ---- the paper frame: swap in a hidden iframe on change, keep the reader's place
+function topBlock(doc) {
+  for (const b of doc.querySelectorAll("[data-block]")) { const r = b.getBoundingClientRect(); if (r.bottom > 0) return [b.dataset.block, r.top]; }
+  return null;
+}
+function load(v) {
+  const old = frame, place = old.contentDocument && old.contentDocument.body ? topBlock(old.contentDocument) : null;
+  const scrollY = old.contentWindow ? old.contentWindow.scrollY : 0;
+  const next = document.createElement("iframe"); next.className = "next"; next.title = "paper";
+  next.addEventListener("load", () => {
+    const d = next.contentDocument, b = place && d.querySelector(`[data-block="${CSS.escape(place[0])}"]`);
+    if (b) next.contentWindow.scrollTo(0, b.getBoundingClientRect().top + next.contentWindow.scrollY - place[1]);
+    else next.contentWindow.scrollTo(0, scrollY);
+    next.classList.remove("next"); if (old !== next) old.remove(); frame = next; wire(); paint();
+    if (version !== null && v !== version) toast("Paper updated");
+    version = v;
+  }, { once: true });
+  next.src = `/papers/${encodeURIComponent(name)}/raw?v=${v}`;
+  stage.insertBefore(next, fab);
+}
+
+// ---- selection → comment, without touching the paper's own handlers
+function wire() {
+  const d = frame.contentDocument, w = frame.contentWindow;
+  if (!d.getElementById("arx-hl")) {
+    const st = d.createElement("style"); st.id = "arx-hl";
+    st.textContent = "::highlight(arx-open){background:rgba(197,138,55,.28)}::highlight(arx-done){background:rgba(144,117,205,.16)}::highlight(arx-focus){background:rgba(144,117,205,.45)}";
+    d.head.appendChild(st);
+  }
+  d.addEventListener("selectionchange", () => {
+    const s = w.getSelection(), text = s && s.toString().trim();
+    if (!text || s.rangeCount === 0) { sel = null; fab.style.display = "none"; return; }
+    const r = s.getRangeAt(0), host = (r.commonAncestorContainer.nodeType === 1 ? r.commonAncestorContainer : r.commonAncestorContainer.parentElement).closest("[data-block]");
+    if (!host) { sel = null; fab.style.display = "none"; return; }
+    sel = { block: host.dataset.block, text: text.slice(0, 500) };
+    const rect = r.getBoundingClientRect();
+    fab.style.left = Math.max(8, Math.min(rect.left + rect.width / 2 - 50, stage.clientWidth - 120)) + "px";
+    fab.style.top = Math.max(8, rect.top - 40) + "px"; fab.style.display = "block";
+  });
+  w.addEventListener("scroll", () => { fab.style.display = "none"; }, { passive: true });
+}
+fab.addEventListener("mousedown", e => e.preventDefault());  // keep the selection alive in the frame
+fab.addEventListener("click", () => {
+  if (!sel) return;
+  anchor = sel; $("quoteText").textContent = "“" + anchor.text + "”"; $("quote").classList.add("on");
+  $("side").classList.remove("hide"); fab.style.display = "none"; box.focus();
+});
+$("unquote").addEventListener("click", () => { anchor = null; $("quote").classList.remove("on"); });
+
+function rangeFor(a) {
+  const d = frame.contentDocument; if (!d || !a) return null;
+  const host = d.querySelector(`[data-block="${CSS.escape(a.block)}"]`); if (!host) return null;
+  const walker = d.createTreeWalker(host, NodeFilter.SHOW_TEXT); let nodes = [], all = "", n;
+  while ((n = walker.nextNode())) { nodes.push([n, all.length]); all += n.data; }
+  const norm = s => s.replace(/\s+/g, " "), needle = norm(a.text).slice(0, 120);
+  // map whitespace-collapsed offsets back onto the raw text
+  let raw = [], flat = "";
+  for (let i = 0; i < all.length; i++) { if (/\s/.test(all[i]) && /\s$/.test(flat)) continue; raw.push(i); flat += /\s/.test(all[i]) ? " " : all[i]; }
+  const at = flat.indexOf(needle); if (at < 0) return host;
+  const s = raw[at], e = raw[at + needle.length - 1] + 1, r = d.createRange();
+  const find = off => { for (let i = nodes.length - 1; i >= 0; i--) if (nodes[i][1] <= off) return [nodes[i][0], off - nodes[i][1]]; };
+  const [sn, so] = find(s), [en, eo] = find(e - 1); r.setStart(sn, so); r.setEnd(en, eo + 1); return r;
+}
+function paint(focusId) {
+  const w = frame.contentWindow; if (!w || !w.CSS || !w.CSS.highlights) return;
+  const answered = new Set(thread.filter(e => e.kind === "reply" || e.kind === "resolve").map(e => e.parent));
+  const sets = { "arx-open": [], "arx-done": [], "arx-focus": [] };
+  for (const c of thread) if (c.kind === "comment" && c.anchor) {
+    const r = rangeFor(c.anchor); if (!r || !(r instanceof w.Range)) continue;
+    sets[c.id === focusId ? "arx-focus" : answered.has(c.id) ? "arx-done" : "arx-open"].push(r);
+  }
+  for (const k in sets) w.CSS.highlights.set(k, new w.Highlight(...sets[k]));
+}
+function toBlock(id) {
+  const b = frame.contentDocument && frame.contentDocument.querySelector(`[data-block="${CSS.escape(id)}"]`);
+  if (!b) return;
+  b.scrollIntoView({ behavior: "smooth", block: "center" });
+  b.animate([{ background: "rgba(144,117,205,.3)" }, { background: "transparent" }], { duration: 1800 });
+}
+function jump(c) {
+  const r = rangeFor(c.anchor); if (!r) return;
+  const el = r instanceof frame.contentWindow.Range ? r.startContainer.parentElement : r;
+  el.scrollIntoView({ behavior: "smooth", block: "center" }); paint(c.id); setTimeout(() => paint(), 1600);
+}
+
+// ---- thread
+function render() {
+  const key = JSON.stringify(thread); if (key === rendered) return; rendered = key;
+  const comments = thread.filter(e => e.kind === "comment"), by = {};
+  for (const e of thread) if (e.parent) (by[e.parent] = by[e.parent] || []).push(e);
+  const open = comments.filter(c => !(by[c.id] || []).some(e => e.kind === "reply" || e.kind === "resolve")).length;
+  $("count").hidden = !open; $("count").textContent = open;
+  if (!comments.length) { list.innerHTML = '<div class="empty">No comments yet.</div>'; return; }
+  const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
+  list.innerHTML = "";
+  for (const c of comments) {
+    const kids = by[c.id] || [], replies = kids.filter(e => e.kind === "reply"), seen = kids.some(e => e.kind === "seen"), resolved = kids.some(e => e.kind === "resolve");
+    const div = document.createElement("div"); div.className = "c";
+    let h = c.anchor ? `<div class="q">“${esc(c.anchor.text)}”</div>` : "";
+    h += `<div class="who">${esc(c.author || "you")} · ${ago(c.t)}</div><div class="body">${esc(c.body)}</div>`;
+    for (const r of replies) {
+      h += `<div class="reply"><div class="who">agent · ${ago(r.t)}</div>${r.body ? `<div class="body">${md(r.body)}</div>` : ""}`;
+      if (r.link) h += `<a class="linkcard" href="${esc(r.link.url)}" target="_blank" rel="noopener">↗ ${esc(r.link.label || r.link.url)}</a>`;
+      h += "</div>";
+    }
+    if (!replies.length) h += resolved ? '<div class="status">resolved</div>' : seen ? '<div class="status reading">agent is reading</div>' : '<div class="status">sent · waiting for the agent</div>';
+    div.innerHTML = h;
+    const q = div.querySelector(".q"); if (q) q.addEventListener("click", () => jump(c));
+    div.querySelectorAll("a").forEach(a => {  // links into this paper scroll the frame instead of opening a tab
+      const u = new URL(a.href, location.href);
+      if (u.origin === location.origin && u.pathname === location.pathname && u.hash) {
+        a.removeAttribute("target"); a.addEventListener("click", e => { e.preventDefault(); toBlock(u.hash.slice(1)); });
+      }
+    });
+    list.appendChild(div);
+  }
+  if (atBottom) list.scrollTop = list.scrollHeight;
+}
+async function send() {
+  const body = box.value.trim(); if (!body) return;
+  $("send").disabled = true;
+  try {
+    const r = await fetch(`/api/paper/${encodeURIComponent(name)}/comment`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body, anchor }) });
+    if (!r.ok) throw new Error(await r.text());
+    thread.push(await r.json()); box.value = ""; anchor = null; $("quote").classList.remove("on");
+    render(); paint(); list.scrollTop = list.scrollHeight;
+  } catch (e) { toast("Could not send: " + e.message); }
+  $("send").disabled = false;
+}
+$("send").addEventListener("click", send);
+box.addEventListener("keydown", e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send(); });
+$("toggle").addEventListener("click", () => $("side").classList.toggle("hide"));
+
+async function tick() {
+  try {
+    const d = await (await fetch(`/api/paper/${encodeURIComponent(name)}`)).json();
+    if (d.meta && d.meta.title) { $("title").textContent = d.meta.title; document.title = d.meta.title; }
+    $("ver").textContent = "updated " + ago(d.version);
+    const changed = JSON.stringify(d.thread) !== JSON.stringify(thread);
+    thread = d.thread; render(); if (changed) paint();
+    if (d.version !== version && !frame.classList.contains("loading")) { frame.classList.add("loading"); load(d.version); }
+  } catch (e) { $("ver").textContent = "offline"; }
+}
+tick(); setInterval(tick, 1500);
+})();
+</script>
+</body>
+</html>

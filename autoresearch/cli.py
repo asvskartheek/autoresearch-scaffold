@@ -247,6 +247,28 @@ def cmd_status(a):
         print(f"  hill {name} [{h['status']}] {h['title']}")
 
 
+def cmd_paper(a):
+    from . import papers
+    p = Project()
+    if a.verb == "add":
+        f = papers.add(p, a.name, Path(a.file), title=a.title, hill=a.hill)
+        port = (json.loads((p.dir / "server.json").read_text()).get("port") if (p.dir / "server.json").exists() else None) or 8890
+        print(f"{f}\nhttp://127.0.0.1:{port}/papers/{a.name}")
+    elif a.verb == "ls":
+        for name, m in papers.papers(p).items():
+            print(f"{name}  {m.get('title') or ''}  comments={m['comments']} open={m['open']}")
+    elif a.verb == "poll":  # blocks; prints the waiting comments as JSON lines and exits
+        for c in papers.poll(p, a.name, timeout=a.timeout):
+            print(json.dumps(c))
+    elif a.verb in ("reply", "resolve"):
+        if not a.comment:
+            sys.exit("needs a comment id (from `arx paper poll`)")
+        link = dict(zip(("label", "url"), a.link.split("=", 1))) if a.link else None
+        if link and "url" not in link:
+            link = dict(label=a.link, url=a.link)
+        papers.post(p, a.name, a.verb, parent=a.comment, body=" ".join(a.text) or None, link=link)
+
+
 def cmd_serve(a):
     from .server import serve
     serve(a.port)
@@ -318,6 +340,14 @@ def main(argv=None):
     s.add_argument("--step", type=int); s.add_argument("--level", default="info"); s.add_argument("--status", default="done")
     s.add_argument("--summary-file", help="JSON merged into the task summary on finish")
     s.set_defaults(fn=cmd_task)
+
+    s = sp.add_parser("paper", help="papers: write-ups served at /papers/<name>, with a comment thread the agent answers")
+    s.add_argument("verb", choices=["add", "ls", "poll", "reply", "resolve"]); s.add_argument("name", nargs="?")
+    s.add_argument("comment", nargs="?", help="comment id, for reply / resolve"); s.add_argument("text", nargs="*")
+    s.add_argument("--file", dest="file", help="add: the paper's HTML"); s.add_argument("--title"); s.add_argument("--hill")
+    s.add_argument("--link", help="reply: label=url, when the answer is its own page")
+    s.add_argument("--timeout", type=float, help="poll: give up after this many seconds")
+    s.set_defaults(fn=cmd_paper)
 
     s = sp.add_parser("status"); s.set_defaults(fn=cmd_status)
     s = sp.add_parser("serve"); s.add_argument("--port", type=int, default=8890); s.set_defaults(fn=cmd_serve)

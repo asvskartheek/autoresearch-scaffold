@@ -6,9 +6,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote
 
+from . import papers
 from .core import Project, paired, per_id
 
 HTML = Path(__file__).with_name("dashboard.html")
+PAPER = Path(__file__).with_name("paper.html")
 
 
 def _downsample(points: list[dict], cap: int = 600) -> list[dict]:
@@ -159,7 +161,36 @@ def serve(port: int = 8890, root=None):
                     return self._send(200, json.dumps(hill_detail(p, unquote(path.rsplit("/", 1)[1])), default=str).encode(), "application/json")
                 if path.startswith("/api/gate/"):
                     return self._send(200, json.dumps(p.gate(path.rsplit("/", 1)[1]), default=str).encode(), "application/json")
-            except (KeyError, SystemExit) as e:
+                if path == "/api/papers":
+                    return self._send(200, json.dumps(papers.papers(p), default=str).encode(), "application/json")
+                parts = [unquote(x) for x in path.strip("/").split("/")]
+                if parts[0] == "papers" and len(parts) == 2:  # the shell: paper in an iframe, comments around it
+                    return self._send(200, PAPER.read_bytes(), "text/html; charset=utf-8")
+                if parts[0] == "papers" and len(parts) == 3 and parts[2] == "raw":
+                    return self._send(200, (papers.pdir(p, parts[1]) / "paper.html").read_bytes(), "text/html; charset=utf-8")
+                if parts[:2] == ["api", "paper"] and len(parts) == 3:
+                    f = papers.pdir(p, parts[2]) / "paper.html"
+                    body = dict(version=f.stat().st_mtime, meta=papers._read(f.with_name("meta.json"), {}), thread=papers.thread(p, parts[2]))
+                    return self._send(200, json.dumps(body, default=str).encode(), "application/json")
+            except (KeyError, SystemExit, FileNotFoundError) as e:
+                return self._send(404, json.dumps(dict(error=str(e))).encode(), "application/json")
+            self._send(404, b"not found", "text/plain")
+
+        def do_POST(self):
+            parts = [unquote(x) for x in self.path.split("?")[0].strip("/").split("/")]
+            origin = self.headers.get("Origin")
+            if origin and origin.split("//")[-1].split(":")[0] not in ("127.0.0.1", "localhost"):
+                return self._send(403, b'{"error":"cross-origin"}', "application/json")
+            try:
+                if parts[:2] == ["api", "paper"] and len(parts) == 4 and parts[3] == "comment":
+                    d = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                    body = str(d.get("body") or "").strip()[:4000]
+                    if not body:
+                        return self._send(400, b'{"error":"empty"}', "application/json")
+                    anchor = d.get("anchor") if isinstance(d.get("anchor"), dict) else None
+                    ev = papers.post(p, parts[2], "comment", body=body, anchor=anchor, author=str(d.get("author") or "you")[:40])
+                    return self._send(200, json.dumps(ev).encode(), "application/json")
+            except (KeyError, ValueError) as e:
                 return self._send(404, json.dumps(dict(error=str(e))).encode(), "application/json")
             self._send(404, b"not found", "text/plain")
 

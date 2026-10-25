@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Percent-Base Hill</title>
+<style>
+:root{--bg:#f5f5f1;--card:#fff;--ink:#202a32;--muted:#7d858c;--border:#e5e8e7;--soft:#f0f1ee;
+  --green:#299b7d;--red:#d16c61;--amber:#c58a37;--blue:#3d73dd;--purple:#9075cd;--nav:#202d36;--navink:#c9d1d6}
+:root[data-theme="dark"]{--bg:#151b20;--card:#1d252b;--ink:#e6eaed;--muted:#8d979e;--border:#2c363d;--soft:#242d34;--nav:#10161a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif}
+main{max-width:860px;margin:0 auto;padding:32px 16px 96px}
+header.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.kicker{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h1{font-size:34px;line-height:1.15;margin:6px 0 10px;letter-spacing:-.01em}
+h2{font-size:24px;margin:56px 0 8px;letter-spacing:-.01em}
+h3{font-size:17px;margin:28px 0 6px}
+p{margin:10px 0}
+.muted{color:var(--muted)}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em}
+button{font:inherit;cursor:pointer}
+.theme{border:1px solid var(--border);background:var(--card);color:var(--ink);border-radius:999px;width:38px;height:38px;flex:none}
+.poster{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin:16px 0}
+.poster svg{width:100%;height:auto;display:block}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+@media (max-width:640px){.grid2{grid-template-columns:minmax(0,1fr)} h1{font-size:28px}}
+.stat{font-size:40px;font-weight:700;letter-spacing:-.02em;line-height:1}
+.pill{display:inline-block;font-size:12px;padding:2px 9px;border-radius:999px;background:var(--soft);color:var(--muted)}
+.pill.g{background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)}
+.pill.r{background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red)}
+.ex{border-left:3px solid var(--border);padding:4px 0 4px 14px;margin:12px 0}
+.ex .w{color:var(--red)} .ex .ok{color:var(--green)}
+.rungs{display:flex;gap:8px;flex-wrap:wrap}
+.rung{flex:1 1 140px;min-width:0;border:1px solid var(--border);background:var(--soft);color:var(--ink);border-radius:10px;padding:10px 12px;text-align:left}
+.rung[aria-pressed="true"]{border-color:var(--green);background:color-mix(in srgb,var(--green) 10%,var(--card))}
+.rung b{display:block;font-size:14px} .rung span{font-size:12px;color:var(--muted)}
+.detail{margin-top:14px;font-size:14px}
+.quiz{background:var(--card);border:1px dashed var(--purple);border-radius:12px;padding:16px;margin:22px 0}
+.quiz .q{font-weight:600;margin-bottom:8px}
+.quiz .opts{display:grid;gap:6px}
+.quiz .opts button{text-align:left;border:1px solid var(--border);background:var(--soft);color:var(--ink);border-radius:8px;padding:8px 12px}
+.quiz .opts button.right{border-color:var(--green);background:color-mix(in srgb,var(--green) 14%,var(--card))}
+.quiz .opts button.wrong{border-color:var(--red);background:color-mix(in srgb,var(--red) 12%,var(--card))}
+.quiz .why{font-size:14px;margin-top:8px;color:var(--muted);min-height:1em}
+.slider{display:grid;grid-template-columns:110px minmax(0,1fr) 48px;gap:10px;align-items:center;font-size:14px;margin:8px 0}
+.slider input{width:100%}
+.verdict{font-weight:700;font-size:18px;margin-top:10px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{padding:7px 8px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.card{perspective:900px;height:150px;border:0;background:none;padding:0;color:var(--ink)}
+.card .in{position:relative;width:100%;height:100%;transition:transform .5s;transform-style:preserve-3d}
+.card.flip .in{transform:rotateY(180deg)}
+.card .f,.card .b{position:absolute;inset:0;backface-visibility:hidden;border-radius:12px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;padding:14px;text-align:center}
+.card .f{background:var(--card);font-weight:600}
+.card .b{background:var(--soft);transform:rotateY(180deg);font-size:14px}
+.tip{position:fixed;pointer-events:none;background:var(--nav);color:#fff;font-size:13px;padding:8px 10px;border-radius:8px;max-width:300px;opacity:0;transition:opacity .1s;z-index:5}
+svg text{fill:var(--ink);font-family:inherit}
+svg .m{fill:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+<header class="top">
+  <div class="kicker">gsm8k-ft · hill: percent-base · status: climbed</div>
+  <button class="theme" id="theme" aria-label="Toggle theme">◐</button>
+</header>
+
+<h1 data-block="title">Removing the inherited adapter and allowing longer answers gave +5.2 points on GSM8K</h1>
+<p class="muted" data-block="byline">Research paper generated from the <span class="mono">.research/</span> ledger · champion <span class="mono">percent-base-1024-v1</span> · 9 candidates tried</p>
+
+<section data-block="abstract">
+<div class="poster">
+  <svg viewBox="0 0 800 210" role="img" aria-label="Score on the full benchmark: 1155 to 1224 of 1319; goal 1267">
+    <text x="0" y="22" class="m" font-size="13">gsm8k-test/full · n = 1319 · correct answers</text>
+    <g id="heroBars"></g>
+  </svg>
+  <div class="grid2" style="margin-top:6px">
+    <div><div class="stat" style="color:var(--green)">+5.2 pts</div><div class="muted" style="font-size:14px">paired delta, 90% CI [+3.8, +6.7] · 106 fixed, 37 broken</div></div>
+    <div><div class="stat">43</div><div class="muted" style="font-size:14px">more correct answers needed to reach the 96% goal (1267 / 1319)</div></div>
+  </div>
+</div>
+<p data-block="abs-1">We tried to fix one weakness: the model applied percentages to the wrong quantity. We tested nine candidates against a fixed gate ladder. Seven failed. Training changes (SFT, RL) did not help.</p>
+<p data-block="abs-2">The change that helped was simple. We turned off the old RL adapter and gave the base model 1024 output tokens instead of 512. This passed every rung. On the full benchmark it scores 92.8% against 87.6%.</p>
+</section>
+
+<h2 data-block="h-problem">1. The weakness</h2>
+<section data-block="problem">
+<div class="poster">
+  <svg viewBox="0 0 800 220" role="img" aria-label="Percent increase misread">
+    <text x="0" y="20" class="m" font-size="13">"Value increases by 150%" — two readings</text>
+    <rect x="0" y="40" width="160" height="34" rx="6" fill="var(--blue)" opacity=".85"/><text x="10" y="62" fill="#fff" style="fill:#fff" font-size="14">80k original</text>
+    <rect x="0" y="90" width="160" height="34" rx="6" fill="var(--blue)" opacity=".85"/><text x="10" y="112" style="fill:#fff" font-size="14">80k</text>
+    <rect x="160" y="90" width="240" height="34" rx="6" fill="var(--green)" opacity=".85"/><text x="170" y="112" style="fill:#fff" font-size="14">+150% = +120k</text>
+    <text x="420" y="112" font-size="15" font-weight="700" style="fill:var(--green)">= 200k ✓ (×2.5)</text>
+    <rect x="0" y="150" width="240" height="34" rx="6" fill="var(--red)" opacity=".8"/><text x="10" y="172" style="fill:#fff" font-size="14">150% of 80k = 120k</text>
+    <text x="260" y="172" font-size="15" font-weight="700" style="fill:var(--red)">= 120k ✗ (×1.5)</text>
+    <text x="560" y="62" class="m" font-size="13">The increase is added</text>
+    <text x="560" y="80" class="m" font-size="13">to the original value.</text>
+    <text x="560" y="172" class="m" font-size="13">The model drops it.</text>
+  </svg>
+</div>
+<p data-block="prob-1">The model sometimes applies a percentage to the wrong quantity. It also confuses an increase with the final value.</p>
+<div class="ex" data-block="ex-1"><div>$40 groceries, 25% fee, $3 delivery, $4 tip. Total?</div><div class="w">✗ Solves backwards from a $40 final bill.</div><div class="ok">✓ 40 × 1.25 + 3 + 4 = 57</div></div>
+<p data-block="prob-2"><b>Share.</b> 36 of 168 archived errors fall in this category. This is a discovery proxy. Not every one is a proven instance of the cause.</p>
+<p data-block="prob-3"><b>Measure.</b> One point when the predicted final number equals the reference. The parser is frozen and audited.</p>
+<p data-block="prob-4"><b>Pre-declared aim.</b> +10 points on the target slice (n = 185). Control regression at most 2 points.</p>
+</section>
+
+<div class="quiz" data-quiz>
+  <div class="q">Pop quiz: "36 of 168" means…</div>
+  <div class="opts">
+    <button data-ok="0">36 of 168 test questions are wrong</button>
+    <button data-ok="1">36 of the 168 archived errors are in the percentage category</button>
+    <button data-ok="0">The model gets 36 percentage questions wrong out of 168 percentage questions</button>
+  </div>
+  <div class="why" data-why="The denominator is errors, not questions. The share tells you how much of the error pile this hill can explain."></div>
+</div>
+
+<h2 data-block="h-method">2. How a candidate wins</h2>
+<section data-block="method">
+<p data-block="meth-1">Every candidate climbs the same ladder. Each rung compares it to the champion on the same slice, with the same harness. The comparison is paired: each question is a win, a loss or a tie.</p>
+<div class="poster">
+  <div class="rungs" id="rungs"></div>
+  <svg id="rungSvg" viewBox="0 0 800 120" style="margin-top:12px"></svg>
+  <div class="detail" id="rungDetail"></div>
+</div>
+<h3 data-block="h-try">Try it: does this pass?</h3>
+<p data-block="try-1">Move the sliders. The tool computes the paired delta and an approximate 90% interval. A "better" rung needs the lower bound above zero.</p>
+<div class="poster" id="tryit">
+  <div class="slider"><label for="tw">Wins</label><input id="tw" type="range" min="0" max="40" value="18"><span id="twv"></span></div>
+  <div class="slider"><label for="tl">Losses</label><input id="tl" type="range" min="0" max="40" value="4"><span id="tlv"></span></div>
+  <div class="slider"><label for="tn">Slice n</label><input id="tn" type="range" min="50" max="1319" value="185"><span id="tnv"></span></div>
+  <svg id="trySvg" viewBox="0 0 800 70"></svg>
+  <div class="verdict" id="tryV"></div>
+</div>
+</section>
+
+<div class="quiz" data-quiz>
+  <div class="q">Pop quiz: 3 wins, 1 loss on n = 185. Does it pass "better"?</div>
+  <div class="opts">
+    <button data-ok="0">Yes — it won more than it lost</button>
+    <button data-ok="1">No — the lower bound of the interval is below zero</button>
+  </div>
+  <div class="why" data-why="This is percent-rlvr-v2: +1.1 points, 90% CI [−0.5, +2.7]. Four discordant questions are too few. Try it in the sliders above."></div>
+</div>
+
+<h2 data-block="h-tried">3. What we tried</h2>
+<section data-block="tried">
+<p data-block="tried-1">Each dot is one candidate on the target slice (n = 185), paired against the champion of the time. Hover a dot to read why it was rejected.</p>
+<div class="poster"><svg id="forest" viewBox="0 0 800 320"></svg></div>
+<table data-block="tried-table">
+<thead><tr><th>Candidate</th><th>Change</th><th>Result</th></tr></thead>
+<tbody id="triedRows"></tbody>
+</table>
+<p data-block="tried-2"><b>The lesson.</b> Training on percentage data did not move the target. The prompt prefix made it clearly worse. The two best leads were both decoding changes: removing the adapter (+3.8, not significant) and voting (+1.6, not significant, 4.9× tokens). Removing the adapter left 20 answers cut at the 512-token cap. 17 of these were wrong. That led to the 1024-token candidate.</p>
+</section>
+
+<div class="quiz" data-quiz>
+  <div class="q">Pop quiz: why was "raw base, 512 tokens" not promoted, even with 157 vs 150?</div>
+  <div class="opts">
+    <button data-ok="0">It broke the control slice</button>
+    <button data-ok="1">Its paired 90% interval crossed zero under the pre-declared rule</button>
+    <button data-ok="0">It was too slow</button>
+  </div>
+  <div class="why" data-why="A point gain is a lead, not a result. The follow-up fixed the truncation and then passed."></div>
+</div>
+
+<h2 data-block="h-win">4. The winning change</h2>
+<section data-block="win">
+<div class="poster">
+  <svg viewBox="0 0 800 200" role="img" aria-label="Two changes">
+    <rect x="0" y="20" width="360" height="160" rx="12" fill="var(--soft)"/>
+    <text x="20" y="50" font-weight="700" font-size="16">Before · qwen3-4b-rl-fresh-v1</text>
+    <text x="20" y="84" font-size="14">Qwen3-4B + old RL LoRA adapter</text>
+    <text x="20" y="110" font-size="14">512 output tokens, greedy</text>
+    <text x="20" y="150" class="m" font-size="13">full: 1155 / 1319 (87.6%)</text>
+    <text x="380" y="108" font-size="28" class="m">→</text>
+    <rect x="430" y="20" width="370" height="160" rx="12" fill="color-mix(in srgb,var(--green) 12%,var(--card))" stroke="var(--green)"/>
+    <text x="450" y="50" font-weight="700" font-size="16">After · percent-base-1024-v1</text>
+    <text x="450" y="84" font-size="14">Qwen3-4B, adapter disabled</text>
+    <text x="450" y="110" font-size="14">1024 output tokens, greedy</text>
+    <text x="450" y="150" font-size="13" style="fill:var(--green)">full: 1224 / 1319 (92.8%)</text>
+  </svg>
+</div>
+<p data-block="win-1">No training. Same prompt. Same scorer. Same slices. The base model pinned at revision <span class="mono">cdbee75</span>, with the LoRA turned off and a longer answer budget.</p>
+<p data-block="win-2">It passed all four rungs. The control slice also went up: 97% against 93% (n = 100).</p>
+<p data-block="win-3"><b>Do not over-read the control gain.</b> It is 5 wins and 1 loss, 90% CI [0, +8]. That passes "not worse". It does not show "better". The 512-token ablation has the same control result, so the gain comes from removing the adapter, not from the longer cap.</p>
+</section>
+
+<h2 data-block="h-now">5. Where we are now</h2>
+<section data-block="now">
+<div class="poster"><svg id="gap" viewBox="0 0 800 130"></svg></div>
+<p data-block="now-1">The goal is 96% on the full benchmark: 1267 of 1319. The champion has 1224. The gap is 43 answers.</p>
+<p data-block="now-2"><b>In flight.</b> <span class="mono">percent-base-2048-v1</span> tests 2048 tokens: at 1024, 34 full-benchmark answers hit the cap and 29 were wrong. <span class="mono">raw-sft-lr5e6-v1</span> trains a fresh LoRA on the raw base.</p>
+<p data-block="now-3"><b>Next hills.</b> Time and rates (73 of 168 archived errors) and group counting are open. Both need fresh baselines on the new champion.</p>
+<p data-block="now-4"><b>Caveats.</b> Hill categories are proxies, not causal labels. Some rung intervals are noisy (random50, random100). The 96% goal also needs an independent audit before we call it done.</p>
+</section>
+
+<h2 data-block="h-test">Test your understanding</h2>
+<section data-block="test">
+<p data-block="test-1">These are decisions you will make on this project. Pick what you would do.</p>
+<div class="quiz" data-quiz>
+  <div class="q">2048 tokens scores +0.8 points on full, 90% CI [−0.2, +1.8]. Promote?</div>
+  <div class="opts">
+    <button data-ok="0">Yes, the point estimate is up</button>
+    <button data-ok="1">No. Record it as rejected with the reason; it is a lead</button>
+    <button data-ok="0">Re-run until the interval clears zero</button>
+  </div>
+  <div class="why" data-why="Full uses rule 'better': the lower bound must be above zero. Re-running until it passes is p-hacking."></div>
+</div>
+<div class="quiz" data-quiz>
+  <div class="q">A new SFT candidate gains +12 on target but control drops 3 points. What happens?</div>
+  <div class="opts">
+    <button data-ok="1">It fails the dev rung: control allows at most −2</button>
+    <button data-ok="0">It passes because the target gain is larger</button>
+  </div>
+  <div class="why" data-why="Rungs are checked separately. A big target gain does not buy back a control regression."></div>
+</div>
+<div class="quiz" data-quiz>
+  <div class="q">You want to test the time-rate hill. What must run first?</div>
+  <div class="opts">
+    <button data-ok="0">The candidate on dev-time-rate-v1</button>
+    <button data-ok="1">The current champion on the same slice with the same harness</button>
+  </div>
+  <div class="why" data-why="The baseline for time-rate is archived. The champion changed, so a fresh champion run is required before any candidate."></div>
+</div>
+</section>
+
+<h2 data-block="h-cards">Remember</h2>
+<div class="cards" id="cards"></div>
+</main>
+<div class="tip" id="tip"></div>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s), NS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs = {}, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent && parent.appendChild(e); return e; };
+const txt = (parent, x, y, s, attrs = {}) => { const t = el("text", { x, y, ...attrs }, parent); t.textContent = s; return t; };
+const tip = $("#tip");
+const showTip = (e, html) => { tip.innerHTML = html; tip.style.opacity = 1; tip.style.left = Math.min(e.clientX + 12, innerWidth - 310) + "px"; tip.style.top = e.clientY + 12 + "px"; };
+const hideTip = () => tip.style.opacity = 0;
+
+$("#theme").addEventListener("click", () => {
+  const r = document.documentElement; r.dataset.theme = r.dataset.theme === "dark" ? "light" : "dark";
+});
+
+// hero
+const hero = $("#heroBars"), N = 1319, W = 800, sx = v => v / N * W;
+[["Before", 1155, "var(--muted)", 50], ["Champion", 1224, "var(--green)", 110]].forEach(([l, v, c, y]) => {
+  el("rect", { x: 0, y, width: W, height: 40, rx: 6, fill: "var(--soft)" }, hero);
+  const r = el("rect", { x: 0, y, width: 0, height: 40, rx: 6, fill: c }, hero);
+  requestAnimationFrame(() => { r.style.transition = "width 1s ease"; r.setAttribute("width", sx(v)); });
+  txt(hero, 12, y + 26, `${l} · ${v}`, { style: "fill:#fff", "font-weight": 700, "font-size": 15 });
+});
+el("line", { x1: sx(1267), x2: sx(1267), y1: 40, y2: 165, stroke: "var(--ink)", "stroke-dasharray": "4 4" }, hero);
+txt(hero, sx(1267) - 4, 190, "goal 1267 (96%)", { "text-anchor": "end", "font-size": 13 });
+
+// ladder
+const rungs = [
+  { name: "dev · target", rule: "better", n: 185, cand: .886, base: .811, d: 7.6, lo: 3.8, hi: 11.4, w: 18, l: 4 },
+  { name: "dev · control", rule: "not worse (−2)", n: 100, cand: .97, base: .93, d: 4, lo: 0, hi: 8, w: 5, l: 1 },
+  { name: "random50", rule: "not worse (−2)", n: 50, cand: .92, base: .92, d: 0, lo: -8, hi: 8, w: 3, l: 3 },
+  { name: "random100", rule: "not worse (−1)", n: 100, cand: .94, base: .90, d: 4, lo: -2, hi: 10, w: 8, l: 4 },
+  { name: "full", rule: "better", n: 1319, cand: .928, base: .876, d: 5.2, lo: 3.8, hi: 6.7, w: 106, l: 37 },
+];
+const rbox = $("#rungs"), rsvg = $("#rungSvg");
+function pickRung(i) {
+  [...rbox.children].forEach((b, j) => b.setAttribute("aria-pressed", j === i));
+  const r = rungs[i]; rsvg.innerHTML = "";
+  const tot = r.w + r.l, cell = Math.min(14, 780 / Math.max(tot, 1) - 2);
+  txt(rsvg, 0, 16, `Questions that changed outcome (${tot} of ${r.n}); the rest tie`, { class: "m", "font-size": 13 });
+  for (let k = 0; k < tot; k++) {
+    const col = k < r.w ? "var(--green)" : "var(--red)", perRow = Math.floor(780 / (cell + 2));
+    el("rect", { x: (k % perRow) * (cell + 2), y: 28 + Math.floor(k / perRow) * (cell + 2), width: cell, height: cell, rx: 2, fill: col }, rsvg);
+  }
+  $("#rungDetail").innerHTML = `<b>${r.name}</b> · rule: ${r.rule} · n = ${r.n}<br>champion ${(r.base * 100).toFixed(1)}% → candidate ${(r.cand * 100).toFixed(1)}% · paired Δ ${r.d >= 0 ? "+" : ""}${r.d} pts, 90% CI [${r.lo}, ${r.hi}] · <span class="pill g">pass</span> · ${r.w} wins, ${r.l} losses`;
+}
+rungs.forEach((r, i) => {
+  const b = document.createElement("button"); b.className = "rung"; b.type = "button";
+  b.innerHTML = `<b>${r.name}</b><span>${r.rule} · Δ ${r.d >= 0 ? "+" : ""}${r.d}</span>`;
+  b.addEventListener("click", () => pickRung(i)); rbox.appendChild(b);
+});
+pickRung(0);
+
+// try it
+const tw = $("#tw"), tl = $("#tl"), tn = $("#tn"), tsvg = $("#trySvg");
+function tryit() {
+  const w = +tw.value, l = +tl.value, n = Math.max(+tn.value, w + l);
+  $("#twv").textContent = w; $("#tlv").textContent = l; $("#tnv").textContent = n;
+  const m = (w - l) / n, v = (w + l) / n - m * m, se = Math.sqrt(Math.max(v, 0) / n), lo = m - 1.645 * se, hi = m + 1.645 * se;
+  tsvg.innerHTML = ""; const X = d => 400 + d * 2000;
+  el("line", { x1: 0, x2: 800, y1: 35, y2: 35, stroke: "var(--border)" }, tsvg);
+  el("line", { x1: 400, x2: 400, y1: 10, y2: 60, stroke: "var(--ink)", "stroke-dasharray": "3 3" }, tsvg);
+  txt(tsvg, 404, 66, "0", { class: "m", "font-size": 12 });
+  const ok = lo > 0, c = ok ? "var(--green)" : "var(--red)";
+  el("line", { x1: Math.max(X(lo), 0), x2: Math.min(X(hi), 800), y1: 35, y2: 35, stroke: c, "stroke-width": 6, "stroke-linecap": "round" }, tsvg);
+  el("circle", { cx: X(m), cy: 35, r: 8, fill: c }, tsvg);
+  $("#tryV").innerHTML = `Δ ${(m * 100).toFixed(1)} pts, 90% CI [${(lo * 100).toFixed(1)}, ${(hi * 100).toFixed(1)}] — <span style="color:${c}">${ok ? "passes “better”" : "does not pass “better”"}</span>`;
+}
+[tw, tl, tn].forEach(i => i.addEventListener("input", tryit)); tryit();
+
+// forest
+const cands = [
+  { n: "percent-sft-v1", c: "SFT on 1013 % examples, 1 epoch", d: -2.16, lo: -5.95, hi: 1.62, r: "Target went down; 7 wins, 11 losses" },
+  { n: "percent-structured-v1", c: "Base/equation/check prompt prefix on % questions", d: -9.19, lo: -14.05, hi: -4.32, r: "Clearly worse; 7 wins, 24 losses" },
+  { n: "percent-rlvr-v1", c: "GRPO, 48 steps, correctness reward", d: .54, lo: -1.08, hi: 2.16, r: "Target inconclusive; full −0.15 pts" },
+  { n: "percent-rlvr-v2", c: "GRPO, 192 steps, curriculum", d: 1.08, lo: -.54, hi: 2.7, r: "Lower 90% bound below zero" },
+  { n: "percent-vote5-v1", c: "5-answer voting on % questions", d: 1.62, lo: -.54, hi: 3.78, r: "CI crosses zero; 4.9× tokens" },
+  { n: "percent-base-ablation-v1", c: "Adapter off, 512 tokens", d: 3.78, lo: -.54, hi: 8.11, r: "CI crosses zero; 16 wins, 9 losses; 20 answers truncated" },
+  { n: "percent-base-1024-v1", c: "Adapter off, 1024 tokens", d: 7.57, lo: 3.78, hi: 11.35, r: "Passed all rungs → champion", win: true },
+];
+const f = $("#forest"), FX = d => 220 + (d + 15) * 21;
+el("line", { x1: FX(0), x2: FX(0), y1: 10, y2: 290, stroke: "var(--ink)", "stroke-dasharray": "3 3" }, f);
+[-15, -10, -5, 0, 5, 10].forEach(t => txt(f, FX(t), 312, (t > 0 ? "+" : "") + t, { class: "m", "font-size": 12, "text-anchor": "middle" }));
+cands.forEach((c, i) => {
+  const y = 30 + i * 38;
+  txt(f, 0, y + 5, c.n, { "font-size": 13, class: c.win ? "" : "m", "font-weight": c.win ? 700 : 400 });
+  const g = el("g", { style: "cursor:default" }, f);
+  el("rect", { x: 0, y: y - 16, width: 800, height: 32, fill: "transparent" }, g);
+  if (c.d == null) txt(g, FX(0) + 8, y + 5, "failed gate (no CI recorded)", { class: "m", "font-size": 12, "font-style": "italic" });
+  else {
+    const col = c.win ? "var(--green)" : "var(--amber)";
+    el("line", { x1: FX(c.lo), x2: FX(c.hi), y1: y, y2: y, stroke: col, "stroke-width": 4, "stroke-linecap": "round", "stroke-dasharray": c.approx ? "6 4" : "" }, g);
+    el("circle", { cx: FX(c.d), cy: y, r: 7, fill: col }, g);
+  }
+  g.addEventListener("mousemove", e => showTip(e, `<b>${c.n}</b><br>${c.c}<br>${c.d == null ? "" : `Δ ${c.d > 0 ? "+" : ""}${c.d} pts [${c.lo}, ${c.hi}]<br>`}${c.r}`));
+  g.addEventListener("mouseleave", hideTip);
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td class="mono">${c.n}</td><td>${c.c}</td><td>${c.win ? '<span class="pill g">champion</span>' : '<span class="pill r">rejected</span>'} ${c.r}</td>`;
+  $("#triedRows").appendChild(tr);
+});
+txt(f, FX(0) + 4, 296, "paired Δ on target, points", { class: "m", "font-size": 12 });
+
+// gap
+const gp = $("#gap"), GX = v => (v - 1100) / 219 * 800;
+el("rect", { x: 0, y: 40, width: 800, height: 34, rx: 6, fill: "var(--soft)" }, gp);
+el("rect", { x: 0, y: 40, width: GX(1155), height: 34, rx: 6, fill: "var(--muted)", opacity: .5 }, gp);
+el("rect", { x: 0, y: 40, width: GX(1224), height: 34, rx: 6, fill: "var(--green)", opacity: .85 }, gp);
+el("rect", { x: GX(1224), y: 40, width: GX(1267) - GX(1224), height: 34, fill: "var(--amber)", opacity: .35 }, gp);
+txt(gp, 0, 26, "axis starts at 1100 of 1319", { class: "m", "font-size": 12 });
+txt(gp, GX(1224) - 6, 63, "1224", { "text-anchor": "end", style: "fill:#fff", "font-weight": 700, "font-size": 14 });
+txt(gp, (GX(1224) + GX(1267)) / 2, 100, "43 to go", { "text-anchor": "middle", "font-size": 13, "font-weight": 700, style: "fill:var(--amber)" });
+txt(gp, GX(1267), 120, "goal 1267", { "text-anchor": "middle", class: "m", "font-size": 12 });
+
+// quizzes
+document.querySelectorAll("[data-quiz]").forEach(q => {
+  q.querySelectorAll(".opts button").forEach(b => b.addEventListener("click", () => {
+    q.querySelectorAll(".opts button").forEach(x => x.classList.remove("right", "wrong"));
+    b.classList.add(b.dataset.ok === "1" ? "right" : "wrong");
+    const why = q.querySelector(".why"); why.textContent = (b.dataset.ok === "1" ? "Correct. " : "Not quite. ") + why.dataset.why;
+  }));
+});
+
+// flip cards
+[["Hill", "A named weakness with a frozen target slice and a control slice."],
+ ["Paired delta", "Score change on the same questions: wins minus losses over n."],
+ ["Gate ladder", "dev → random50 → random100 → full. Every rung must pass, in order."],
+ ["Lead vs result", "A positive point estimate is a lead. A passed gate is a result."],
+ ["The win", "Adapter off + 1024 tokens: 1155 → 1224 of 1319, no training."],
+ ["Truncation", "Answers cut at the token cap are mostly wrong. Check cap hits first."],
+ ["Negative result", "7 of 9 candidates failed. They stay in the ledger with reasons."],
+ ["Next gap", "43 answers to 96%. Next: 2048 tokens, raw-base SFT, time-rate hill."]
+].forEach(([a, b]) => {
+  const c = document.createElement("button"); c.className = "card"; c.type = "button";
+  c.innerHTML = `<div class="in"><div class="f">${a}</div><div class="b">${b}</div></div>`;
+  c.addEventListener("click", () => c.classList.toggle("flip")); $("#cards").appendChild(c);
+});
+})();
+</script>
+</body>
+</html>
