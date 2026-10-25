@@ -61,6 +61,37 @@ arx promote v2    # re-checks every rung, makes v2 champion, retires v1, marks t
 arx reject v8b --reason "dev-control −7 pts: calculator calls broke unit conversions"
 ```
 
+## New champion, new baselines
+
+`arx promote` ends by running `arx baseline` for the new champion, so every hill has a current number to beat:
+
+```bash
+arx baseline            # the champion; add a model name or --dry-run
+```
+
+It covers each hill's target and control slice plus the dataset's full and random slices. A slice the model already
+ran (it was a candidate, so most of the ladder is done) is reused as is; only slices with no complete run at the
+current hash are run, by `baseline_cmd` in `research.json` (`{model}` and `{slice}` are filled in). The runs sit under
+one "Baseline <model>" task. With no `baseline_cmd` it prints the slices to run instead. Re-run it after adding a hill.
+
+```text
+$ arx promote v2
+v2 is champion
+baselining the new champion on every hill (reuses runs it already has; `arx promote -h` explains)
+baseline for v2: 4 of 6 slices already run, 2 to run
+  reused   qa/dev-arith                 0.700  n=40  hill arith target  (1026-101500-eval-3f2a)
+  reused   qa/random50                  0.620  n=50  random  (1026-102210-eval-9c1d)
+  ...
+  run      qa/dev-units                 n=30  hill units target
+  run      qa/dev-units-control         n=30  hill units control
+done: v2 has a baseline on all 6 slices
+```
+
+`baseline_cmd` must record a complete eval of `{model}` on `{slice}` (call `arx.evaluate`, or `arx eval record`);
+anything else is reported as still missing. `arx baseline` exits 3 while a slice is missing, so scripts can check it.
+Skip the step with `arx promote --no-baseline`. The dashboard lists missing baselines on the Overview and shows the
+champion's score on every slice under Slices. `arx status` prints the coverage too.
+
 Rejected candidates stay in the ledger with their reason. Negative results are results.
 
 ## Check states

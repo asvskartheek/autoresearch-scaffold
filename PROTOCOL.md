@@ -42,6 +42,9 @@ project-specific numbers.
    A failed rung stops the candidate. Record why (`arx task note`) and either fix it as a new candidate or reject.
 6. **Promote.** `arx promote v8` re-checks every rung, makes V8 the champion and marks the hill *climbed*.
    A climbed hill's target slice becomes a permanent regression check for every future candidate.
+7. **Re-baseline.** Promotion runs `arx baseline` for the new champion: slices it already ran as a candidate are
+   reused, and it runs every other hill target/control and dataset slice with `baseline_cmd` from `research.json`
+   (e.g. `"python eval.py --model {model} --slice {slice}"`). Without one, it lists what to run. Re-run any time.
 
 ## Explaining a hill
 

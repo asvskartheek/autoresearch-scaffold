@@ -179,13 +179,59 @@ def cmd_gate(a):
         for n in g["next"]:
             print(f"  {n['model']} on {n['slice']}")
     if g["promotable"]:
-        print(f"every rung passed: `arx promote {a.model}`")
+        print(f"every rung passed: `arx promote {a.model}` (then baselines it on every hill; see `arx promote -h`)")
 
 
 def cmd_promote(a):
     p = Project()
     p.promote(a.model, a.force)
     print(f"{a.model} is champion")
+    if a.no_baseline:
+        return print("skipped baselining; run `arx baseline` to cover every hill")
+    print("baselining the new champion on every hill (reuses runs it already has; `arx promote -h` explains)")
+    _baseline(p, a.model)
+
+
+def _baseline(p, model, dry=False):
+    """Establish the new champion's baseline on every hill: reuse the runs it already has, run the rest with
+    `baseline_cmd` from research.json (placeholders {model} {slice}); without one, list what to run."""
+    plan, cmd, slices = p.baseline_plan(model), p.config.get("baseline_cmd"), p.slices()
+    print(f"baseline for {model}: {len(plan['have'])} of {len(plan['roles'])} slices already run, {len(plan['need'])} to run")
+    what = lambda sl: ", ".join(plan["roles"][sl])
+    for sl, h in plan["have"].items():
+        print(f"  reused   {sl:<28} {_fmt(h['score'], False)}  n={h['n']}  {what(sl)}  ({h['task']})")
+    for sl in plan["need"]:
+        print(f"  {'run' if cmd and not dry else 'missing':<8} {sl:<28} n={slices[sl]['n']}  {what(sl)}")
+    if not plan["need"] or dry:
+        return plan
+    if not cmd:
+        print('to run these automatically, set "baseline_cmd" in research.json, e.g. '
+              '"python eval.py --model {model} --slice {slice}"; or run each with arx.evaluate / arx run')
+        return plan
+    with Task(p, "baseline", f"Baseline {model}", f"Run champion {model} on every hill and dataset slice it has no "
+              f"complete run on ({len(plan['need'])}); {len(plan['have'])} existing runs reused.", model=model,
+              total=len(plan["need"]), config=dict(baseline_cmd=cmd)) as t:
+        for i, sl in enumerate(plan["need"]):
+            t.check()
+            t.note(f"{sl} ({what(sl)}): running")
+            r = subprocess.run(cmd.format(model=model, slice=sl), shell=True, cwd=p.root)
+            if r.returncode:
+                t.note(f"{sl}: baseline_cmd exited {r.returncode}", "error")
+            t.progress(i + 1)
+        after = p.baseline_plan(model)
+        t.note(f"still missing: {', '.join(after['need'])}" if after["need"] else f"every slice has a {model} baseline",
+               "warn" if after["need"] else "info")
+        t.meta["summary"] = dict(reused=len(plan["have"]), ran=len(plan["need"]) - len(after["need"]), missing=len(after["need"]))
+    print(f"still missing: {', '.join(after['need'])} (baseline_cmd must record a complete eval for {{model}} on {{slice}})"
+          if after["need"] else f"done: {model} has a baseline on all {len(after['roles'])} slices")
+    return after
+
+
+def cmd_baseline(a):
+    p = Project()
+    plan = _baseline(p, a.model or p.champion() or sys.exit("no champion"), a.dry_run)
+    if plan["need"]:
+        sys.exit(3)  # scripts can tell "baseline complete" (0) from "slices still missing" (3)
 
 
 def cmd_eval_record(a):
@@ -234,7 +280,11 @@ def cmd_task(a):
 
 def cmd_status(a):
     p = Project()
-    print(f"{p.config.get('name')} · champion {p.champion()}")
+    champ = p.champion()
+    print(f"{p.config.get('name')} · champion {champ}")
+    if champ:
+        b = p.baseline_plan(champ)
+        print(f"  baseline {len(b['have'])}/{len(b['roles'])} slices" + (f"; missing {', '.join(b['need'])} (`arx baseline`)" if b["need"] else ""))
     for t in p.tasks():
         if t["status"] in ("running", "stalled"):
             pr = t.get("progress") or {}
@@ -252,12 +302,36 @@ def cmd_serve(a):
     serve(a.port)
 
 
-def main(argv=None):
-    ap = argparse.ArgumentParser(prog="arx")
-    sp = ap.add_subparsers(dest="cmd", required=True)
+PROMOTE_NOTES = """what happens after the champion changes:
+  The new champion is baselined on every hill so each one has a current number to beat (same as `arx baseline`):
+    slices   every hill's target and control slice, plus the dataset's full and random slices
+    reused   a slice the model already ran as a candidate keeps that run: nothing is re-run (printed as "reused")
+    run      slices with no complete run at the slice's current hash run `baseline_cmd` from research.json,
+             e.g. "python eval.py --model {model} --slice {slice}", under one "Baseline <model>" task
+    unset    without baseline_cmd the missing slices are only listed: run them with arx.evaluate / arx run
+  Skip with --no-baseline; repeat any time with `arx baseline` (only missing slices run). The ledger records a
+  `baseline` decision (slices reused, slices still needed) in .research/decisions.jsonl.
+"""
 
-    s = sp.add_parser("init"); s.add_argument("path", nargs="?", default="."); s.add_argument("--name")
-    s.add_argument("--port", type=int, default=8890); s.add_argument("--no-serve", action="store_true"); s.set_defaults(fn=cmd_init)
+WORKFLOW = """workflow:
+  setup      arx init -> arx dataset add -> arx slice add (dev/control) -> arx model add NAME --champion
+  per hill   arx hill open + arx hill explain -> arx model add CAND --hill H -> arx gate CAND (follow "next runs",
+             run them with arx.evaluate / arx run, repeat) -> arx promote CAND  (or arx reject CAND --reason ...)
+  after      arx promote re-baselines the new champion on every hill (arx baseline; set baseline_cmd in research.json)
+  any time   arx status, arx up (dashboard), arx task start/note/finish (log any work longer than a minute)
+"""
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="arx", formatter_class=argparse.RawDescriptionHelpFormatter,
+                                 description="Auto-research ledger, gate ladder and live dashboard. `arx <command> -h` for details.",
+                                 epilog=WORKFLOW)
+    sp = ap.add_subparsers(dest="cmd", required=True, metavar="command")
+    _add = sp.add_parser
+    sp.add_parser = lambda name, help=None, **kw: _add(name, help=help, description=help, **kw)  # `arx X -h` shows it too
+
+    s = sp.add_parser("init", help="create research.json and .research/ in a folder, open the setup task, start the dashboard"); s.add_argument("path", nargs="?", default=".", help="project folder (default .)"); s.add_argument("--name", help="project name shown in the dashboard")
+    s.add_argument("--port", type=int, default=8890, help="dashboard port"); s.add_argument("--no-serve", action="store_true", help="do not start the dashboard"); s.set_defaults(fn=cmd_init)
     s = sp.add_parser("up", help="start the dashboard in the background if it is not running"); s.add_argument("--port", type=int, default=8890)
     s.add_argument("--restart", action="store_true", help="restart it, e.g. after upgrading the scaffold"); s.set_defaults(fn=cmd_up)
     s = sp.add_parser("sync", help="refresh the vendored autoresearch/ copy and restart the dashboard"); s.set_defaults(fn=cmd_sync)
@@ -292,10 +366,21 @@ def main(argv=None):
     s.add_argument("--status", choices=["candidate", "historical", "planned"], default="candidate")
     s.add_argument("--champion", action="store_true"); s.set_defaults(fn=cmd_model)
 
-    s = sp.add_parser("reject"); s.add_argument("name"); s.add_argument("--reason", required=True); s.set_defaults(fn=cmd_reject)
+    s = sp.add_parser("reject", help="keep a failed candidate in the ledger as rejected, with the reason"); s.add_argument("name", help="model name"); s.add_argument("--reason", required=True, help="why it failed, with the numbers"); s.set_defaults(fn=cmd_reject)
     s = sp.add_parser("gate", help="where a candidate is on the ladder, and what to run next")
     s.add_argument("model"); s.add_argument("--json", action="store_true"); s.set_defaults(fn=cmd_gate)
-    s = sp.add_parser("promote"); s.add_argument("model"); s.add_argument("--force", action="store_true"); s.set_defaults(fn=cmd_promote)
+    s = sp.add_parser("promote", help="make a candidate champion once every rung passes, then baseline it on all hills (see `arx baseline`)"); s.add_argument("model"); s.add_argument("--force", action="store_true", help="promote even if a rung has not passed (recorded in the ledger)")
+    s.add_argument("--no-baseline", action="store_true", help="skip the automatic baselining; run `arx baseline` later")
+    s.epilog = PROMOTE_NOTES; s.formatter_class = argparse.RawDescriptionHelpFormatter
+    s.set_defaults(fn=cmd_promote)
+
+    s = sp.add_parser("baseline", help="baseline the champion on all hills: reuse its runs, run the rest via `baseline_cmd` (auto after promote)")
+    s.add_argument("model", nargs="?", help="default: the current champion")
+    s.epilog = ("covers every hill target/control plus the full/random slices. Runs it already has are reused; each other\n"
+                "slice runs `baseline_cmd` from research.json ({model} and {slice} filled in, run from the project root).\n"
+                "Without baseline_cmd the missing slices are only listed. Safe to repeat.\n"
+                "exit status: 0 when every slice has a baseline, 3 when some are still missing.")
+    s.formatter_class = argparse.RawDescriptionHelpFormatter; s.add_argument("--dry-run", action="store_true", help="print the plan, run nothing"); s.set_defaults(fn=cmd_baseline)
 
     s = sp.add_parser("eval", help="record rows produced by another harness")
     s.add_argument("verb", choices=["record"]); s.add_argument("--model", required=True); s.add_argument("--slice", required=True)
@@ -319,8 +404,8 @@ def main(argv=None):
     s.add_argument("--summary-file", help="JSON merged into the task summary on finish")
     s.set_defaults(fn=cmd_task)
 
-    s = sp.add_parser("status"); s.set_defaults(fn=cmd_status)
-    s = sp.add_parser("serve"); s.add_argument("--port", type=int, default=8890); s.set_defaults(fn=cmd_serve)
+    s = sp.add_parser("status", help="champion, running tasks, each candidate's ladder position, open hills"); s.set_defaults(fn=cmd_status)
+    s = sp.add_parser("serve", help="run the dashboard in the foreground (`arx up` runs it in the background)"); s.add_argument("--port", type=int, default=8890, help="dashboard port"); s.set_defaults(fn=cmd_serve)
 
     a = ap.parse_args(argv)
     if a.cmd == "task" and a.action == "start" and not a.title:

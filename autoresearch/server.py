@@ -82,6 +82,7 @@ def state(p: Project) -> dict:
         t["spark"] = {"key": keys[0], "y": [s.get(keys[0]) for s in series if isinstance(s.get(keys[0]), (int, float))]} if keys else None
     return dict(config=p.config, now=time.time(), champion=champ, datasets=p.datasets(), slices=slices,
                 hills=p.hills(), models=models, gates=gates, tasks=tasks, leaderboard=board,
+                baseline=p.baseline_plan(champ) if champ else None,
                 decisions=_tail(p.dir / "decisions.jsonl", 50))
 
 

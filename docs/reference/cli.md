@@ -28,7 +28,8 @@ Every command runs against the project found by walking up from the current dire
 | `arx hill explain NAME [--symptom] [--measure] [--example-input --example-wrong --example-right --example-why] [--examples-file F] [--share C/N --share-of W]` | Add the hill's explainer; each `--example-*` set appends one example |
 | `arx model add NAME [--champion] [--parent P \| --no-parent] [--hill H] [--change C] [--title] [--link label=url ...] [--status candidate\|historical\|planned]` | Register a model; parent defaults to the champion |
 | `arx gate MODEL [--json]` | Ladder status and next runs |
-| `arx promote MODEL [--force]` | Make champion (re-checks every rung), retire the old one, mark the hill climbed |
+| `arx promote MODEL [--force] [--no-baseline]` | Make champion (re-checks every rung), retire the old one, mark the hill climbed, then run `arx baseline` (skip with `--no-baseline`) |
+| `arx baseline [MODEL] [--dry-run]` | Baseline the champion (default) on every hill target/control and the full/random slices: reuses runs it already has, runs the rest with `baseline_cmd`, or lists them if none is set. Safe to repeat; `--dry-run` only prints the plan. Exits 3 while any slice is still missing |
 | `arx reject MODEL --reason R` | Mark rejected, with the reason |
 
 ## Evals

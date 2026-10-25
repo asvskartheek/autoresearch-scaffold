@@ -316,6 +316,32 @@ class Project:
         return dict(model=model_name, champion=champ, rungs=rungs, promotable=promotable,
                     next=[dict(model=a, slice=b) for a, b in dict.fromkeys(next_runs)] if not any(r["status"] == "fail" for r in rungs) else [])
 
+    def baseline_slices(self) -> dict[str, list[str]]:
+        """Every slice a champion is measured on, with what it measures: each hill's target and control, plus the
+        datasets' full and random slices. These are the numbers any future candidate is compared against."""
+        slices, roles = self.slices(), {}
+        for k, h in self.hills().items():
+            for role in ("target", "control"):
+                if h.get(role) in slices:
+                    roles.setdefault(h[role], []).append(f"hill {k} {role}")
+        for k, v in slices.items():
+            if v.get("kind") in ("full", "random"):
+                roles.setdefault(k, []).append(v["kind"])
+        return roles
+
+    def baseline_plan(self, model: str) -> dict:
+        """Where `model` stands on every baseline slice. A complete run at the slice's current hash is reused as it
+        is (a promoted model already ran most of them on the ladder); only slices without one need a run."""
+        have, need, roles = {}, [], self.baseline_slices()
+        for sl in roles:
+            e = self.latest_eval(model, sl)
+            if e:
+                s = e.get("summary") or {}
+                have[sl] = dict(task=e["id"], score=s.get("score"), n=s.get("n"), runs=len(self.slice_evals(model, sl)))
+            else:
+                need.append(sl)
+        return dict(model=model, have=have, need=need, roles=roles)
+
     def promote(self, model_name: str, force: bool = False) -> None:
         g = self.gate(model_name)
         if not g["promotable"] and not force:
@@ -328,6 +354,8 @@ class Project:
         if hill and hill in self.hills():
             self._upsert("hills", hill, status="climbed", climbed_by=model_name)
         self.log_decision("promote", model=model_name, replaced=old, gate=g)
+        plan = self.baseline_plan(model_name)
+        self.log_decision("baseline", model=model_name, reused=len(plan["have"]), need=plan["need"])
 
 
 # ---------------------------------------------------------------- live tasks
