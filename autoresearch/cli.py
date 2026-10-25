@@ -250,23 +250,37 @@ def cmd_status(a):
 def cmd_paper(a):
     from . import papers
     p = Project()
-    if a.verb == "add":
+    port = (json.loads((p.dir / "server.json").read_text()).get("port") if (p.dir / "server.json").exists() else None) or 8890
+    if a.verb in ("add", "edit"):  # edit = republish; open pages swap the new version in without reloading
+        if not a.name or not a.file:
+            sys.exit(f"usage: arx paper {a.verb} <name> --file paper.html")
         f = papers.add(p, a.name, Path(a.file), title=a.title, hill=a.hill)
-        port = (json.loads((p.dir / "server.json").read_text()).get("port") if (p.dir / "server.json").exists() else None) or 8890
         print(f"{f}\nhttp://127.0.0.1:{port}/papers/{a.name}")
     elif a.verb == "ls":
         for name, m in papers.papers(p).items():
-            print(f"{name}  {m.get('title') or ''}  comments={m['comments']} open={m['open']}")
-    elif a.verb == "poll":  # blocks; prints the waiting comments as JSON lines and exits
-        for c in papers.poll(p, a.name, timeout=a.timeout):
-            print(json.dumps(c))
+            print(f"{name}  {m.get('title') or ''}  threads={m['comments']} open={m['open']} waiting={m['waiting']}"
+                  f"  http://127.0.0.1:{port}/papers/{name}")
+    elif a.verb == "poll":  # blocks until a person is waiting on the agent; one JSON line per thread
+        for th in papers.poll(p, a.name, timeout=a.timeout):
+            print(json.dumps(dict(paper=th["paper"], thread=th["id"], quote=(th.get("anchor") or {}).get("quote"),
+                                  block=(th.get("anchor") or {}).get("block"),
+                                  messages=[dict(author=m["author"], agent=m["agent"], body=m["body"]) for m in th["messages"]])))
+    elif a.verb == "attach":
+        if not a.file:
+            sys.exit("usage: arx paper attach <name> --file page.html")
+        print(f"http://127.0.0.1:{port}" + papers.attach(p, a.name, Path(a.file)))
     elif a.verb in ("reply", "resolve"):
-        if not a.comment:
-            sys.exit("needs a comment id (from `arx paper poll`)")
-        link = dict(zip(("label", "url"), a.link.split("=", 1))) if a.link else None
-        if link and "url" not in link:
-            link = dict(label=a.link, url=a.link)
-        papers.post(p, a.name, a.verb, parent=a.comment, body=" ".join(a.text) or None, link=link)
+        if not a.name or not a.comment:
+            sys.exit(f"usage: arx paper {a.verb} <name> <thread id> [text] [--link label=url | --file page.html]")
+        link = None
+        if a.file:  # the answer is its own page: copy it next to the paper and link to it
+            url = papers.attach(p, a.name, Path(a.file))
+            link = dict(label=a.link or Path(a.file).stem.replace("-", " "), url=url)
+        elif a.link:
+            label, _, url = a.link.rpartition("=") if "=" in a.link else ("", "", a.link)
+            link = dict(label=label or url, url=url)
+        papers.post(p, a.name, a.verb, parent=a.comment, body=" ".join(a.text) or None, link=link, agent=True,
+                    author=a.author)
 
 
 def cmd_serve(a):
@@ -341,11 +355,13 @@ def main(argv=None):
     s.add_argument("--summary-file", help="JSON merged into the task summary on finish")
     s.set_defaults(fn=cmd_task)
 
-    s = sp.add_parser("paper", help="papers: write-ups served at /papers/<name>, with a comment thread the agent answers")
-    s.add_argument("verb", choices=["add", "ls", "poll", "reply", "resolve"]); s.add_argument("name", nargs="?")
-    s.add_argument("comment", nargs="?", help="comment id, for reply / resolve"); s.add_argument("text", nargs="*")
-    s.add_argument("--file", dest="file", help="add: the paper's HTML"); s.add_argument("--title"); s.add_argument("--hill")
-    s.add_argument("--link", help="reply: label=url, when the answer is its own page")
+    s = sp.add_parser("paper", help="papers: write-ups served at /papers/<name>; people comment, the agent replies")
+    s.add_argument("verb", choices=["add", "edit", "ls", "poll", "reply", "resolve", "attach"]); s.add_argument("name", nargs="?")
+    s.add_argument("comment", nargs="?", help="thread id, for reply / resolve"); s.add_argument("text", nargs="*")
+    s.add_argument("--file", dest="file", help="add/edit: the paper's HTML; reply/attach: a page to link (widget, poster)")
+    s.add_argument("--title"); s.add_argument("--hill")
+    s.add_argument("--link", help="reply: label=url (url may be #block, /papers/<name>#block, an arx page or https://)")
+    s.add_argument("--author", default="agent", help="reply: the name shown on the agent's message")
     s.add_argument("--timeout", type=float, help="poll: give up after this many seconds")
     s.set_defaults(fn=cmd_paper)
 

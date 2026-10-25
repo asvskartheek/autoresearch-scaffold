@@ -10,18 +10,24 @@
 :root[data-theme="dark"]{--bg:#151b20;--card:#1d252b;--ink:#e6eaed;--muted:#8d979e;--border:#2c363d;--soft:#242d34;--nav:#10161a}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif}
-main{max-width:860px;margin:0 auto;padding:32px 16px 96px}
+main{max-width:816px;margin:24px auto;padding:56px 72px 80px;background:var(--card);border:1px solid var(--border);border-radius:4px}
+html.arx-embedded main{margin:0;border:0;max-width:none;background:transparent}
+html.arx-embedded .theme{display:none}
+@media (max-width:700px){main{padding:28px 18px 64px;margin:0;border:0}}
+section p,.ex,td{font-family:Charter,"Iowan Old Style","Source Serif Pro",Georgia,serif;font-size:16.5px;line-height:1.65}
+h1,h2,h3{font-weight:650}
+h2{border-top:1px solid var(--border);padding-top:28px}
 header.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
 .kicker{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 h1{font-size:34px;line-height:1.15;margin:6px 0 10px;letter-spacing:-.01em}
-h2{font-size:24px;margin:56px 0 8px;letter-spacing:-.01em}
+h2{font-size:22px;margin:48px 0 8px;letter-spacing:-.01em}
 h3{font-size:17px;margin:28px 0 6px}
 p{margin:10px 0}
 .muted{color:var(--muted)}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em}
 button{font:inherit;cursor:pointer}
 .theme{border:1px solid var(--border);background:var(--card);color:var(--ink);border-radius:999px;width:38px;height:38px;flex:none}
-.poster{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin:16px 0}
+.poster{background:var(--soft);border:1px solid var(--border);border-radius:12px;padding:20px;margin:18px 0}
 .poster svg{width:100%;height:auto;display:block}
 .grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
 @media (max-width:640px){.grid2{grid-template-columns:minmax(0,1fr)} h1{font-size:28px}}
@@ -243,6 +249,7 @@ const tip = $("#tip");
 const showTip = (e, html) => { tip.innerHTML = html; tip.style.opacity = 1; tip.style.left = Math.min(e.clientX + 12, innerWidth - 310) + "px"; tip.style.top = e.clientY + 12 + "px"; };
 const hideTip = () => tip.style.opacity = 0;
 
+try { const t = localStorage.getItem("arx-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
 $("#theme").addEventListener("click", () => {
   const r = document.documentElement; r.dataset.theme = r.dataset.theme === "dark" ? "light" : "dark";
 });

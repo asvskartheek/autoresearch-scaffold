@@ -1,7 +1,7 @@
 """Loopback-only dashboard server. Serves dashboard.html and aggregate JSON computed from `.research/`."""
 from __future__ import annotations
 
-import json, time
+import json, mimetypes, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote
@@ -134,6 +134,32 @@ def task_detail(p: Project, tid: str) -> dict:
     return out
 
 
+HUMAN_KINDS = ("comment", "reply", "resolve", "reopen", "edit", "delete")
+
+
+def human_event(p: Project, name: str, kind: str, d: dict) -> dict | None:
+    """One event from the reader. People never post as the agent; ids they point at must exist in that paper."""
+    author = str(d.get("author") or "").strip()[:40] or "Reviewer"
+    body = str(d.get("body") or "").strip()[:4000]
+    log = {e["id"]: e for e in papers.thread(p, name)}
+    ids = set(log)
+    if kind == "comment":
+        a = d.get("anchor") if isinstance(d.get("anchor"), dict) else None
+        anchor = {k: str(a[k])[:600] for k in ("block", "quote", "prefix", "suffix") if a and a.get(k)} or None
+        return papers.post(p, name, "comment", body=body, anchor=anchor, author=author) if body and anchor else None
+    ref = str(d.get("parent" if kind in ("reply", "resolve", "reopen") else "target") or "")
+    if ref not in ids or (kind in ("reply", "edit") and not body):
+        return None
+    if kind == "reply":
+        return papers.post(p, name, "reply", parent=ref, body=body, author=author)
+    if kind in ("resolve", "reopen"):
+        return papers.post(p, name, kind, parent=ref, author=author)
+    t = log[ref]  # edit / delete: only your own message, never the agent's
+    if t["kind"] not in ("comment", "reply") or t.get("agent") or (t.get("author") or "") != author:
+        return None
+    return papers.post(p, name, kind, target=ref, body=body or None, author=author)
+
+
 def serve(port: int = 8890, root=None):
     p = Project(root)
 
@@ -164,13 +190,16 @@ def serve(port: int = 8890, root=None):
                 if path == "/api/papers":
                     return self._send(200, json.dumps(papers.papers(p), default=str).encode(), "application/json")
                 parts = [unquote(x) for x in path.strip("/").split("/")]
-                if parts[0] == "papers" and len(parts) == 2:  # the shell: paper in an iframe, comments around it
+                if parts[0] == "papers" and len(parts) <= 2:  # the reader (or the list of papers, with no name)
                     return self._send(200, PAPER.read_bytes(), "text/html; charset=utf-8")
                 if parts[0] == "papers" and len(parts) == 3 and parts[2] == "raw":
                     return self._send(200, (papers.pdir(p, parts[1]) / "paper.html").read_bytes(), "text/html; charset=utf-8")
+                if parts[0] == "papers" and len(parts) == 4 and parts[2] == "files":
+                    f = papers.file(p, parts[1], parts[3])
+                    return self._send(200, f.read_bytes(), mimetypes.guess_type(f.name)[0] or "application/octet-stream")
                 if parts[:2] == ["api", "paper"] and len(parts) == 3:
-                    f = papers.pdir(p, parts[2]) / "paper.html"
-                    body = dict(version=f.stat().st_mtime, meta=papers._read(f.with_name("meta.json"), {}), thread=papers.thread(p, parts[2]))
+                    body = dict(version=papers.version(p, parts[2]), meta=papers._read(papers.pdir(p, parts[2]) / "meta.json", {}),
+                                threads=papers.threads(papers.thread(p, parts[2])))
                     return self._send(200, json.dumps(body, default=str).encode(), "application/json")
             except (KeyError, SystemExit, FileNotFoundError) as e:
                 return self._send(404, json.dumps(dict(error=str(e))).encode(), "application/json")
@@ -182,13 +211,11 @@ def serve(port: int = 8890, root=None):
             if origin and origin.split("//")[-1].split(":")[0] not in ("127.0.0.1", "localhost"):
                 return self._send(403, b'{"error":"cross-origin"}', "application/json")
             try:
-                if parts[:2] == ["api", "paper"] and len(parts) == 4 and parts[3] == "comment":
+                if parts[:2] == ["api", "paper"] and len(parts) == 4 and parts[3] in HUMAN_KINDS:
                     d = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
-                    body = str(d.get("body") or "").strip()[:4000]
-                    if not body:
-                        return self._send(400, b'{"error":"empty"}', "application/json")
-                    anchor = d.get("anchor") if isinstance(d.get("anchor"), dict) else None
-                    ev = papers.post(p, parts[2], "comment", body=body, anchor=anchor, author=str(d.get("author") or "you")[:40])
+                    ev = human_event(p, parts[2], parts[3], d)
+                    if ev is None:
+                        return self._send(400, b'{"error":"bad request"}', "application/json")
                     return self._send(200, json.dumps(ev).encode(), "application/json")
             except (KeyError, ValueError) as e:
                 return self._send(404, json.dumps(dict(error=str(e))).encode(), "application/json")

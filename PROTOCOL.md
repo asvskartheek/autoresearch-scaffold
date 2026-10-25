@@ -67,6 +67,18 @@ arx hill explain arith \
   "of v1's wrong answers on full contain a false equation"). Real counts from the error analysis only.
 - Pre-declared expectations stay in `--problem`; they are shown folded under the hill.
 
+## Papers
+
+One living paper per hill, at `/papers/<hill>`. Write it when the hill closes and when a candidate is promoted on it;
+republish the same name (`arx paper edit`) as the work moves, never start a second paper for the same hill.
+
+- Content follows the course rules: ASD-STE100 prose, a visual poster opening each section, interactive charts,
+  pop quizzes and a closing test, flip cards, light/dark. Every number names its slice and n, as in a report.
+- Put `data-block="<id>"` on every paragraph, figure and section. Comments anchor to blocks, and replies link to them.
+- People select text and comment. Each thread waiting on you shows "thinking…" once you poll. Answer every thread.
+  If the answer changes the paper, republish it and reply with a link to the changed block (`--link "§4=#win-1"`).
+  If the answer is its own page (a chart, a poster), reply with `--file page.html`: it opens next to the thread.
+
 ## Rules of evidence
 
 - Compare only on identical ID sets. Gates use paired deltas on the same IDs, never scores from different slices.
