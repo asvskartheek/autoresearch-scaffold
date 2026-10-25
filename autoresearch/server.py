@@ -11,6 +11,7 @@ from .core import Project, paired, per_id
 
 HTML = Path(__file__).with_name("dashboard.html")
 PAPER = Path(__file__).with_name("paper.html")
+UI = Path(__file__).with_name("ui.css")
 
 
 def _downsample(points: list[dict], cap: int = 600) -> list[dict]:
@@ -83,7 +84,7 @@ def state(p: Project) -> dict:
         t["eta"] = eta(p, t)
         t["spark"] = {"key": keys[0], "y": [s.get(keys[0]) for s in series if isinstance(s.get(keys[0]), (int, float))]} if keys else None
     return dict(config=p.config, now=time.time(), champion=champ, datasets=p.datasets(), slices=slices,
-                hills=p.hills(), models=models, gates=gates, tasks=tasks, leaderboard=board,
+                hills=p.hills(), models=models, papers=papers.papers(p), gates=gates, tasks=tasks, leaderboard=board,
                 decisions=_tail(p.dir / "decisions.jsonl", 50))
 
 
@@ -177,6 +178,10 @@ def serve(port: int = 8890, root=None):
         def do_GET(self):
             path = self.path.split("?")[0]
             try:
+                if path == "/ui.css":
+                    return self._send(200, UI.read_bytes(), "text/css; charset=utf-8")
+                if path.rstrip("/") == "/papers":  # the list of papers is a dashboard view
+                    self.send_response(302); self.send_header("Location", "/#papers"); self.end_headers(); return
                 if path in ("/", "/index.html"):
                     return self._send(200, HTML.read_bytes(), "text/html; charset=utf-8")
                 if path == "/api/state":
@@ -190,7 +195,7 @@ def serve(port: int = 8890, root=None):
                 if path == "/api/papers":
                     return self._send(200, json.dumps(papers.papers(p), default=str).encode(), "application/json")
                 parts = [unquote(x) for x in path.strip("/").split("/")]
-                if parts[0] == "papers" and len(parts) <= 2:  # the reader (or the list of papers, with no name)
+                if parts[0] == "papers" and len(parts) == 2:  # the reader
                     return self._send(200, PAPER.read_bytes(), "text/html; charset=utf-8")
                 if parts[0] == "papers" and len(parts) == 3 and parts[2] == "raw":
                     return self._send(200, (papers.pdir(p, parts[1]) / "paper.html").read_bytes(), "text/html; charset=utf-8")

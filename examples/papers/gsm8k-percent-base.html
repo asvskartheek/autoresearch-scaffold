@@ -5,19 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Percent-Base Hill</title>
 <style>
-:root{--bg:#f5f5f1;--card:#fff;--ink:#202a32;--muted:#7d858c;--border:#e5e8e7;--soft:#f0f1ee;
-  --green:#299b7d;--red:#d16c61;--amber:#c58a37;--blue:#3d73dd;--purple:#9075cd;--nav:#202d36;--navink:#c9d1d6}
-:root[data-theme="dark"]{--bg:#151b20;--card:#1d252b;--ink:#e6eaed;--muted:#8d979e;--border:#2c363d;--soft:#242d34;--nav:#10161a}
+:root{--bg:#fafafa;--card:#fff;--ink:#09090b;--muted:#71717a;--border:#e4e4e7;--soft:#f4f4f5;
+  --green:#16a34a;--red:#dc2626;--amber:#d97706;--blue:#2563eb;--purple:#7c3aed;--nav:#18181b;--navink:#d4d4d8}
+:root[data-theme="dark"]{--bg:#09090b;--card:#18181b;--ink:#fafafa;--muted:#a1a1aa;--border:#27272a;--soft:#27272a;--nav:#27272a;
+  --green:#4ade80;--red:#f87171;--amber:#fbbf24;--blue:#60a5fa;--purple:#a78bfa}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Inter",ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
 main{max-width:816px;margin:24px auto;padding:56px 72px 80px;background:var(--card);border:1px solid var(--border);border-radius:4px}
 html.arx-embedded main{margin:0;border:0;max-width:none;background:transparent}
 html.arx-embedded .theme{display:none}
 @media (max-width:700px){main{padding:28px 18px 64px;margin:0;border:0}}
-section p,.ex,td{font-family:Charter,"Iowan Old Style","Source Serif Pro",Georgia,serif;font-size:16.5px;line-height:1.65}
+section p,.ex,td{font-size:15.5px;line-height:1.7}
 h1,h2,h3{font-weight:650}
 h2{border-top:1px solid var(--border);padding-top:28px}
-header.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+header.top{display:flex;justify-content:flex-end}
+html.arx-embedded header.top{display:none}
 .kicker{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 h1{font-size:34px;line-height:1.15;margin:6px 0 10px;letter-spacing:-.01em}
 h2{font-size:22px;margin:48px 0 8px;letter-spacing:-.01em}
@@ -69,13 +71,9 @@ svg .m{fill:var(--muted)}
 </head>
 <body>
 <main>
-<header class="top">
-  <div class="kicker">gsm8k-ft · hill: percent-base · status: climbed</div>
-  <button class="theme" id="theme" aria-label="Toggle theme">◐</button>
-</header>
+<header class="top"><button class="theme" id="theme" aria-label="Toggle theme">◐</button></header>
 
 <h1 data-block="title">Removing the inherited adapter and allowing longer answers gave +5.2 points on GSM8K</h1>
-<p class="muted" data-block="byline">Research paper generated from the <span class="mono">.research/</span> ledger · champion <span class="mono">percent-base-1024-v1</span> · 9 candidates tried</p>
 
 <section data-block="abstract">
 <div class="poster">

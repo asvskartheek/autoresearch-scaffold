@@ -1,0 +1,48 @@
+/* One design system for every arx page: shadcn/ui (zinc) tokens and component shapes, in plain CSS.
+   Served at /ui.css. The dashboard, the paper reader and embedded papers all read these tokens.
+   Theme: <html data-theme="light|dark">, stored in localStorage "arx-theme". */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+:root{
+  --font:"Inter",ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --background:#fafafa;--page:#fff;--foreground:#09090b;--muted:#f4f4f5;--muted-fg:#71717a;--border:#e4e4e7;--input:#e4e4e7;
+  --ring:#a1a1aa;--primary:#18181b;--primary-fg:#fafafa;--accent:#f4f4f5;--sidebar:#fafafa;
+  --blue:#2563eb;--green:#16a34a;--amber:#d97706;--purple:#7c3aed;--red:#dc2626;
+  --hl:rgba(250,204,21,.28);--hl-on:rgba(250,204,21,.62);--draft:rgba(59,130,246,.22);--agent:#7c3aed;--agent-soft:#f5f3ff;--ok:#16a34a;
+  --radius:10px;--shadow:0 1px 2px rgba(0,0,0,.05);--pop:0 10px 30px -10px rgba(0,0,0,.22),0 2px 6px rgba(0,0,0,.06);
+  /* dashboard names, mapped onto the tokens */
+  --bg:var(--background);--card:var(--page);--ink:var(--foreground);--soft:#f4f4f5;
+  color-scheme:light}
+:root[data-theme="dark"]{
+  --background:#09090b;--page:#18181b;--foreground:#fafafa;--muted:#27272a;--muted-fg:#a1a1aa;--border:#27272a;--input:#3f3f46;
+  --ring:#71717a;--primary:#fafafa;--primary-fg:#18181b;--accent:#27272a;--sidebar:#0f0f11;
+  --blue:#60a5fa;--green:#4ade80;--amber:#fbbf24;--purple:#a78bfa;--red:#f87171;
+  --hl:rgba(250,204,21,.2);--hl-on:rgba(250,204,21,.45);--draft:rgba(59,130,246,.3);--agent:#a78bfa;--agent-soft:#221b33;
+  --soft:#27272a;--shadow:0 1px 2px rgba(0,0,0,.4);--pop:0 12px 32px -8px rgba(0,0,0,.7);color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--background);color:var(--foreground);font:14px/1.5 var(--font);-webkit-font-smoothing:antialiased}
+button,input,textarea,select{font-family:inherit}
+code,pre,kbd,.mono{font-family:var(--mono)}
+
+/* app shell: the sidebar every page shares */
+.side{background:var(--sidebar);border-right:1px solid var(--border);padding:16px 12px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:2px}
+.side .brand{display:flex;gap:10px;align-items:center;font-weight:600;font-size:15px;padding:6px 8px 18px;color:var(--foreground)}
+.side .brand i{width:28px;height:28px;border-radius:8px;background:var(--primary);color:var(--primary-fg);display:grid;place-items:center;font-style:normal}
+.side a{display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:8px;font-size:14px;font-weight:500;color:var(--muted-fg);text-decoration:none}
+.side a:hover{background:var(--accent);color:var(--foreground)}
+.side a.on{background:var(--accent);color:var(--foreground)}
+.side a .count{margin-left:auto;font-size:11.5px;font-weight:600;background:var(--page);border:1px solid var(--border);color:var(--foreground);padding:0 7px;border-radius:999px;line-height:18px}
+.side a .count.hot{background:var(--agent);border-color:var(--agent);color:#fff}
+.side .foot{margin-top:auto;display:flex;align-items:center;gap:8px;padding:8px;font-size:13px;color:var(--muted-fg)}
+.side .foot b{color:var(--foreground);font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* buttons, badges, inputs */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 12px;border-radius:8px;border:1px solid transparent;
+  background:transparent;color:inherit;font-size:13px;font-weight:500;white-space:nowrap;cursor:pointer;text-decoration:none;transition:background .15s,color .15s,border-color .15s}
+.btn:focus-visible,.ta:focus-visible,.in:focus-visible{outline:none;box-shadow:0 0 0 2px var(--page),0 0 0 4px var(--ring)}
+.btn.primary{background:var(--primary);color:var(--primary-fg)} .btn.primary:hover{opacity:.9} .btn.primary:disabled{opacity:.4;cursor:default}
+.btn.outline{border-color:var(--input);background:var(--page)} .btn.outline:hover{background:var(--accent)}
+.btn.ghost:hover{background:var(--accent)}
+.btn.icon{width:32px;padding:0} .btn.sm{height:28px;padding:0 10px;font-size:12.5px} .btn.icon.sm{width:28px;padding:0}
+svg.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
