@@ -1,16 +1,64 @@
 {
   "name": "Untitled research",
   "higher_is_better": true,
-  "kpis": ["score", "cost", "latency_p50", "latency_p95"],
+  "kpis": [
+    "score",
+    "cost",
+    "latency_p50",
+    "latency_p95"
+  ],
   "stall_minutes": 10,
   "ladder": [
-    {"rung": "dev", "checks": [
-      {"slice": "@hill.target", "rule": "better", "margin": 0.0},
-      {"slice": "@hill.control", "rule": "not_worse", "tolerance": 0.05},
-      {"slice": "@hills.climbed", "rule": "not_worse", "tolerance": 0.03}
-    ]},
-    {"rung": "random50", "checks": [{"slice": "random50", "rule": "not_worse", "tolerance": 0.02}]},
-    {"rung": "random100", "checks": [{"slice": "random100", "rule": "not_worse", "tolerance": 0.01}]},
-    {"rung": "full", "checks": [{"slice": "full", "rule": "better", "margin": 0.0}]}
-  ]
+    {
+      "rung": "dev",
+      "checks": [
+        {
+          "slice": "@hill.target",
+          "rule": "better",
+          "margin": 0.0
+        },
+        {
+          "slice": "@hill.control",
+          "rule": "not_worse",
+          "tolerance": 0.05
+        },
+        {
+          "slice": "@hills.climbed",
+          "rule": "not_worse",
+          "tolerance": 0.03
+        }
+      ]
+    },
+    {
+      "rung": "random50",
+      "checks": [
+        {
+          "slice": "random50",
+          "rule": "not_worse",
+          "tolerance": 0.02
+        }
+      ]
+    },
+    {
+      "rung": "random100",
+      "checks": [
+        {
+          "slice": "random100",
+          "rule": "not_worse",
+          "tolerance": 0.01
+        }
+      ]
+    },
+    {
+      "rung": "full",
+      "checks": [
+        {
+          "slice": "full",
+          "rule": "better",
+          "margin": 0.0
+        }
+      ]
+    }
+  ],
+  "dashboard_idle_minutes": 30
 }

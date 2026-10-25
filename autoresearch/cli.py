@@ -1,7 +1,7 @@
 """`ar` command line: the same ledger operations agents use from Python, for shells and subagents."""
 from __future__ import annotations
 
-import argparse, json, os, shutil, socket, subprocess, sys, time
+import argparse, json, os, shutil, socket, subprocess, sys, time, urllib.request
 from pathlib import Path
 
 from .core import Project, Task, _jsonl
@@ -37,6 +37,10 @@ def cmd_init(a):
     pkg = Path(__file__).resolve().parent
     if not (root / "autoresearch").exists():  # vendored so `import autoresearch` works in the project's own Python
         shutil.copytree(pkg, root / "autoresearch", ignore=shutil.ignore_patterns("__pycache__"))
+    hooks = root / ".claude" / "settings.json"  # the dashboard follows the agent session: up on start, down on end
+    if not hooks.exists():
+        hooks.parent.mkdir(exist_ok=True)
+        hooks.write_text((TEMPLATE / "claude-settings.json").read_text())
     cfg = json.loads((root / "research.json").read_text())
     cfg["name"] = a.name or cfg["name"]
     (root / "research.json").write_text(json.dumps(cfg, indent=2))
@@ -63,44 +67,70 @@ def _port_open(port: int) -> bool:
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
+def _serves(port: int, root: Path) -> bool:
+    """True when the dashboard on `port` is this project's, not another project's that happens to hold the port."""
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/ping", timeout=1) as r:
+            return Path(json.load(r)["root"]) == root
+    except (OSError, ValueError, KeyError):
+        return False
+
+
+def _stop(rec: dict) -> None:
+    try:
+        os.kill(rec["pid"], 15)
+    except OSError:
+        pass
+    for _ in range(30):
+        if not _port_open(rec["port"]):
+            return
+        time.sleep(0.1)
+
+
 def _up(root: Path, port: int, restart: bool = False) -> str:
-    """Start the dashboard detached (idempotent); its port and pid are kept in .research/server.json."""
-    info = root / ".research" / "server.json"
-    if info.exists():
-        old = json.loads(info.read_text())
-        if old.get("port") and _port_open(old["port"]):
-            if not restart:
-                return f"http://127.0.0.1:{old['port']}"
-            if old.get("pid"):
-                try:
-                    os.kill(old["pid"], 15)
-                except OSError:
-                    pass
-            else:  # started by an older version that did not record its pid
-                subprocess.run(["pkill", "-f", f"autoresearch.cli serve --port {old['port']}"])
-            for _ in range(30):
-                if not _port_open(old["port"]):
-                    break
-                time.sleep(0.1)
-            port = old["port"]
+    """Start this project's dashboard detached (idempotent). It records itself in .research/server.json and in
+    ~/.arx/servers.json, and shuts itself down when nobody is looking and nothing is running."""
+    from .server import servers
+    mine = next((r for r in servers() if Path(r["root"]) == root and _serves(r["port"], root)), None)
+    if mine and not restart:
+        return f"http://127.0.0.1:{mine['port']}"
+    if mine:
+        _stop(mine)
+        port = mine["port"]
     while _port_open(port):
         port += 1
+    (root / ".research").mkdir(exist_ok=True)
     log = open(root / ".research" / "server.log", "a")
     # `python -m` would put the project dir first on sys.path and pick up a vendored copy; run the CLI's own package.
     pkg = str(Path(__file__).resolve().parents[1])
     boot = f"import sys; sys.path.insert(0, {pkg!r}); from autoresearch.cli import main; main()"
-    proc = subprocess.Popen([sys.executable, "-c", boot, "serve", "--port", str(port)], cwd=root,
-                            stdout=log, stderr=log, start_new_session=True)
-    for _ in range(30):
-        if _port_open(port):
+    subprocess.Popen([sys.executable, "-c", boot, "serve", "--port", str(port)], cwd=root,
+                     stdout=log, stderr=log, start_new_session=True)
+    for _ in range(50):
+        if _serves(port, root):
             break
         time.sleep(0.1)
-    info.write_text(json.dumps(dict(port=port, pid=proc.pid, started=time.time())))
     return f"http://127.0.0.1:{port}"
 
 
 def cmd_up(a):
     print(_up(Project().root, a.port, a.restart))
+
+
+def cmd_down(a):
+    """Stop this project's dashboard (or every one with --all)."""
+    from .server import servers
+    root = None if a.all else Project().root
+    stopped = [r for r in servers() if root is None or Path(r["root"]) == root]
+    for r in stopped:
+        _stop(r)
+    print("\n".join(f"stopped {r['root']} :{r['port']}" for r in stopped) or "no dashboard running")
+
+
+def cmd_ps(a):
+    from .server import servers
+    for r in servers():
+        print(f"http://127.0.0.1:{r['port']}  pid {r['pid']}  {r['root']}")
 
 
 def cmd_sync(a):
@@ -142,10 +172,12 @@ def cmd_hill(a):
     explainer = dict(symptom=a.symptom, measure=a.measure, examples=examples, share=share)
     if a.verb == "explain":
         p.explain_hill(a.name, **explainer)
+        if a.poster:
+            p.set_poster("hill", a.name, a.poster)
         return print(f"hill {a.name} explained")
     if not (a.title and a.target):
         raise SystemExit("arx hill open needs --title and --target")
-    h = p.open_hill(a.name, a.title, a.target, a.control, a.problem, a.found_in, **explainer)
+    h = p.open_hill(a.name, a.title, a.target, a.control, a.problem, a.found_in, poster=a.poster, **explainer)
     print(f"hill {a.name} open: target {h['target']}, control {h.get('control')}")
 
 
@@ -153,8 +185,13 @@ def cmd_model(a):
     p = Project()
     links = dict(kv.split("=", 1) for kv in a.link or [])
     p.add_model(a.name, parent="" if a.no_parent else a.parent, hill=a.hill, change=a.change, title=a.title,
-                links=links or None, status="champion" if a.champion else a.status)
+                links=links or None, status="champion" if a.champion else a.status, poster=a.poster)
     print(f"model {a.name} added{' as champion' if a.champion else ''}")
+
+
+def cmd_poster(a):
+    f = Project().set_poster(a.kind, a.id, a.file)
+    print(f"poster for {a.kind} {a.id}: {f.name}")
 
 
 def cmd_reject(a):
@@ -226,15 +263,43 @@ def cmd_task(a):
         print("unlimited" if left is None else f"{left:.1f}s")
         if not t.ok():
             sys.exit(3)
+    elif a.action == "resume":  # an agent picking up a stalled task: it is the same job, not a new card
+        t.note("resumed")
     elif a.action == "finish":
         t.finish(a.status, summary=json.loads(Path(a.summary_file).read_text()) if a.summary_file else None)
-    if a.action != "start" and not _port_open(json.loads((p.dir / "server.json").read_text()).get("port", 0)) if (p.dir / "server.json").exists() else True:
+    info = p.dir / "server.json"
+    if not (info.exists() and _port_open(json.loads(info.read_text()).get("port", 0))):
         print("warning: dashboard is not running; `arx up`", file=sys.stderr)
 
 
-def cmd_status(a):
+def cmd_sweep(a):
+    """Close tasks that have been stalled for `--hours` as `abandoned`, so the Workbench shows only live work."""
     p = Project()
-    print(f"{p.config.get('name')} · champion {p.champion()}")
+    n = 0
+    for t in p.tasks():
+        if t["status"] == "stalled" and time.time() - t.get("heartbeat", 0) > 3600 * a.hours:
+            Task(p, "", "", tid=t["id"]).finish("abandoned")
+            n += 1
+    print(f"{n} abandoned")
+
+
+def cmd_status(a):
+    from .server import _runs, _tracks
+    p = Project()
+    runs = _runs(p.tasks())
+    print(f"{p.config.get('name')} · champion {p.champion()} · {len(p.models())} models · {len(runs)} scored runs · {len(p.hills())} hills")
+    higher = p.config.get("higher_is_better", True)
+    by = {r["id"]: r for r in runs}
+    seen = set()
+    for tr in _tracks(runs, p.slices(), higher):  # one line per dataset, on its most contested slice
+        if tr["dataset"] in seen or not tr["frontier"]:
+            continue
+        seen.add(tr["dataset"])
+        r = by[tr["frontier"][-1]["id"]]
+        print(f"  best on {tr['label']} (n={tr['n']}, {tr['runs']} runs): {r['variant']} {100 * r['score']:.1f}%")
+    for name, h in p.hills().items():
+        ms = [k for k, m in p.models().items() if m.get("hill") == name]
+        print(f"  hill {name} [{h['status']}] {len(ms)} attempts: " + ", ".join(f"{k}({p.models()[k].get('status')})" for k in ms[:6]))
     for t in p.tasks():
         if t["status"] in ("running", "stalled"):
             pr = t.get("progress") or {}
@@ -243,8 +308,6 @@ def cmd_status(a):
         if m.get("status") == "candidate":
             g = p.gate(name)
             print(f"  candidate {name}: " + " → ".join(f"{r['rung']}:{r['status']}" for r in g["rungs"]))
-    for name, h in p.hills().items():
-        print(f"  hill {name} [{h['status']}] {h['title']}")
 
 
 def cmd_serve(a):
@@ -260,6 +323,8 @@ def main(argv=None):
     s.add_argument("--port", type=int, default=8890); s.add_argument("--no-serve", action="store_true"); s.set_defaults(fn=cmd_init)
     s = sp.add_parser("up", help="start the dashboard in the background if it is not running"); s.add_argument("--port", type=int, default=8890)
     s.add_argument("--restart", action="store_true", help="restart it, e.g. after upgrading the scaffold"); s.set_defaults(fn=cmd_up)
+    s = sp.add_parser("down", help="stop this project's dashboard"); s.add_argument("--all", action="store_true", help="every project's"); s.set_defaults(fn=cmd_down)
+    s = sp.add_parser("ps", help="list running dashboards and the project each serves"); s.set_defaults(fn=cmd_ps)
     s = sp.add_parser("sync", help="refresh the vendored autoresearch/ copy and restart the dashboard"); s.set_defaults(fn=cmd_sync)
 
     s = sp.add_parser("dataset", help="register a full eval set and its random slices")
@@ -283,6 +348,7 @@ def main(argv=None):
     s.add_argument("--example-input"); s.add_argument("--example-wrong"); s.add_argument("--example-right")
     s.add_argument("--example-why", help="one clause: why the model gets it wrong"); s.add_argument("--examples-file", help="JSON list of {input, wrong, right, why}")
     s.add_argument("--share", help="failures this hill explains, COUNT/OF, e.g. 63/495"); s.add_argument("--share-of", help="what OF counts, e.g. \"v1's wrong answers on full\"")
+    s.add_argument("--poster", help="JSON spec (see docs/guides/posters.md), svg, html, png, jpg or webp card (max 2 MB) that explains the hill")
     s.set_defaults(fn=cmd_hill)
 
     s = sp.add_parser("model", help="register a version (candidate, or --champion for the baseline)")
@@ -290,7 +356,11 @@ def main(argv=None):
     s.add_argument("--no-parent", action="store_true", help="not derived from the champion (e.g. a backfilled run)")
     s.add_argument("--change"); s.add_argument("--title"); s.add_argument("--link", action="append", help="label=url")
     s.add_argument("--status", choices=["candidate", "historical", "planned"], default="candidate")
+    s.add_argument("--poster", help="JSON spec (see docs/guides/posters.md), svg, html, png, jpg or webp card (max 2 MB) that explains the idea")
     s.add_argument("--champion", action="store_true"); s.set_defaults(fn=cmd_model)
+
+    s = sp.add_parser("poster", help="set the poster of a model or hill")
+    s.add_argument("kind", choices=["model", "hill"]); s.add_argument("id"); s.add_argument("file"); s.set_defaults(fn=cmd_poster)
 
     s = sp.add_parser("reject"); s.add_argument("name"); s.add_argument("--reason", required=True); s.set_defaults(fn=cmd_reject)
     s = sp.add_parser("gate", help="where a candidate is on the ladder, and what to run next")
@@ -309,7 +379,7 @@ def main(argv=None):
     s.set_defaults(fn=cmd_eval_run)
 
     s = sp.add_parser("task", help="workbench tasks from a shell")
-    s.add_argument("action", choices=["start", "log", "note", "link", "progress", "left", "finish"])
+    s.add_argument("action", choices=["start", "log", "note", "link", "progress", "left", "finish", "resume"])
     s.add_argument("id", nargs="?"); s.add_argument("values", nargs="*")
     s.add_argument("--kind", default="experiment"); s.add_argument("--title"); s.add_argument("--description")
     s.add_argument("--model"); s.add_argument("--slice"); s.add_argument("--agent"); s.add_argument("--total", type=int)
@@ -319,6 +389,7 @@ def main(argv=None):
     s.add_argument("--summary-file", help="JSON merged into the task summary on finish")
     s.set_defaults(fn=cmd_task)
 
+    s = sp.add_parser("sweep", help="mark long-stalled tasks abandoned"); s.add_argument("--hours", type=float, default=2); s.set_defaults(fn=cmd_sweep)
     s = sp.add_parser("status"); s.set_defaults(fn=cmd_status)
     s = sp.add_parser("serve"); s.add_argument("--port", type=int, default=8890); s.set_defaults(fn=cmd_serve)
 
