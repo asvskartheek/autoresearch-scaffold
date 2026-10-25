@@ -76,6 +76,11 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
 - Cut taglines, helper text and secondary labels. If a screen needs them to make sense, fix the layout.
 
 ## Pull requests
+- Every feature is verified on the real projects before review. Run parallel sub-agents, one per local arx project
+  (`arx projects`), each porting its project to the new version (`arx sync`, plus any ledger migration) in its own
+  task. Then serve them all from one dashboard (`arx up`) and give the user the link.
+- The PR stays a draft (`gh pr create --draft`) until the user has checked the ported projects by hand and said so.
+  Only then mark it ready (`gh pr ready`).
 - Before opening a PR, run a local testing session on the change: start the dashboard (`arx up`), exercise the new
   behaviour end to end in a scratch project, and note in the PR what you ran and what you saw.
 - Write the PR description with the `show-me` skill.
