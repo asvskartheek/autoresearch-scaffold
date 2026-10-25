@@ -229,10 +229,19 @@ class Project:
         """Finished, complete eval tasks only; partial runs never count."""
         return [t for t in self.tasks() if t.get("kind") == "eval" and t.get("status") == "done" and t.get("complete")]
 
-    def latest_eval(self, model: str, slice_name: str) -> dict | None:
+    def slice_evals(self, model: str, slice_name: str) -> list[dict]:
+        """Every complete run of the model on the slice's current version, oldest first."""
         h = self.slices().get(slice_name, {}).get("hash")
         c = [t for t in self.evals() if t.get("model") == model and t.get("slice") == slice_name and t.get("slice_hash") == h]
-        return max(c, key=lambda t: t.get("ended", 0)) if c else None
+        return sorted(c, key=lambda t: t.get("ended", 0))
+
+    def latest_eval(self, model: str, slice_name: str) -> dict | None:
+        c = self.slice_evals(model, slice_name)
+        return c[-1] if c else None
+
+    def pooled_scores(self, model: str, slice_name: str) -> dict[str, float]:
+        """Per-id score averaged over every complete run: repeat runs tighten the estimate, none are dropped."""
+        return per_id([r for t in self.slice_evals(model, slice_name) for r in self.rows(t["id"])])
 
     # gates -----------------------------------------------------------------------------
     def _resolve(self, ref: str, model: dict) -> list[str]:
@@ -281,10 +290,11 @@ class Project:
                         c["state"] = "need_run"
                         next_runs.append((model_name, sl))
                     else:
-                        p = paired(per_id(self.rows(ce["id"])), per_id(self.rows(be["id"])), sign)
+                        p = paired(self.pooled_scores(model_name, sl), self.pooled_scores(champ, sl), sign)
                         ok = p["delta"] is not None and (p["delta"] > c["threshold"] if chk["rule"] == "better" else p["delta"] >= c["threshold"])
                         c |= dict(state="pass" if ok else "fail", noisy=p["lo"] is not None and p["lo"] < 0 < p["hi"],
-                                  cand_task=ce["id"], base_task=be["id"], **p)
+                                  cand_task=ce["id"], base_task=be["id"],
+                                  cand_runs=len(self.slice_evals(model_name, sl)), base_runs=len(self.slice_evals(champ, sl)), **p)
                     checks.append(c)
             states = {c["state"] for c in checks}
             if blocked:

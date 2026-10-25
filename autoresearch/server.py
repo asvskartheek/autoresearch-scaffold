@@ -109,9 +109,8 @@ def hill_detail(p: Project, name: str) -> dict:
             continue
         runs = {}
         for m in {t["model"] for t in p.evals() if t.get("slice") == h[role]}:
-            t = p.latest_eval(m, h[role])
-            if t:
-                runs[m] = per_id(p.rows(t["id"]))
+            if p.slice_evals(m, h[role]):
+                runs[m] = p.pooled_scores(m, h[role])
         out[role] = dict(slice=h[role], ids=[str(i) for i in sl.get("ids", [])], runs=runs)
     return out
 
@@ -128,7 +127,8 @@ def task_detail(p: Project, tid: str) -> dict:
         champ = p.champion()
         base = p.latest_eval(champ, t["slice"]) if champ and champ != t.get("model") else None
         if base:
-            out["vs_champion"] = dict(model=champ, task=base["id"], **paired(per_id(rows), per_id(p.rows(base["id"])), 1 if p.config.get("higher_is_better", True) else -1))
+            out["vs_champion"] = dict(model=champ, task=base["id"], runs=len(p.slice_evals(champ, t["slice"])),
+                                      **paired(per_id(rows), p.pooled_scores(champ, t["slice"]), 1 if p.config.get("higher_is_better", True) else -1))
     return out
 
 
