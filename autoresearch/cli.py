@@ -124,7 +124,8 @@ def cmd_dataset(a):
 
 def cmd_slice(a):
     p = Project()
-    s = p.add_slice(a.name, _ids(a), kind=a.kind, description=a.description, url=a.url, hill=a.hill, metric=a.metric)
+    s = p.add_slice(a.name, _ids(a), kind=a.kind, description=a.description, url=a.url, hill=a.hill, metric=a.metric,
+                    scale=a.scale, unit=a.unit)
     print(f"{a.name}: n={s['n']} hash={s['hash']}")
 
 
@@ -270,7 +271,9 @@ def main(argv=None):
     s = sp.add_parser("slice", help="freeze a development / synthetic / control slice")
     s.add_argument("verb", choices=["add"]); s.add_argument("name"); s.add_argument("--ids-file"); s.add_argument("--size", type=int)
     s.add_argument("--kind", default="dev", choices=["dev", "control", "synthetic", "random", "full"]); s.add_argument("--description")
-    s.add_argument("--url"); s.add_argument("--hill"); s.add_argument("--metric", help="what `score` means on this slice"); s.set_defaults(fn=cmd_slice)
+    s.add_argument("--url"); s.add_argument("--hill"); s.add_argument("--metric", help="what `score` means on this slice")
+    s.add_argument("--scale", choices=["binary", "continuous"], help="binary: each example scores 0 or 1 (the default); continuous: any number")
+    s.add_argument("--unit", help="unit of a continuous score, e.g. s"); s.set_defaults(fn=cmd_slice)
 
     s = sp.add_parser("hill", help="open a hill (a named weakness) with its target and control slices")
     s.add_argument("verb", choices=["open", "explain"]); s.add_argument("name"); s.add_argument("--title")

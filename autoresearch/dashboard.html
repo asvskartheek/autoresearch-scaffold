@@ -341,41 +341,47 @@ function vHills(){
  const hs=Object.entries(st.hills).sort((a,b)=>(order[a[1].status]??2)-(order[b[1].status]??2)||b[1].created-a[1].created);
  if(!hs.length)return topbar('Hills')+'<div class="card empty">No hills</div>';
  return topbar('Hills')+`<div class="cards hills">${hs.map(([k,x])=>{
-  const runs=hillRuns(x),now=runs.find(o=>o.m===champ),best=runs.find(o=>o.m!==champ);
+  const runs=hillRuns(x),now=runs.find(o=>o.m===champ),best=runs.find(o=>o.m!==champ),tsl=st.slices[x.target];
   return `<a class="card hcard" href="#hill/${encodeURIComponent(k)}">
    <div class="row"><span class="chip ${x.status}">${x.status}</span>${x.share?`<span class="sub">${pct(x.share.count/x.share.of)} of failures</span>`:''}</div>
    <div class="t">${esc(x.title)}</div>
    <div class="sym">${esc(x.symptom||firstLine(x.problem))}</div>
    <div class="hprog">
-    <div><span>${esc(champ||'champion')}</span>${scoreBar(now?.r.score,null,'champ')}<b>${now?solved(now.r)+' / '+now.r.n:'—'}</b></div>
-    <div><span>${esc(best?.m||'no attempt')}</span>${scoreBar(best?.r.score,now?.r.score)}<b>${best?solved(best.r)+' / '+best.r.n:'—'}</b></div>
+    <div><span>${esc(champ||'champion')}</span>${isBin(tsl)?scoreBar(now?.r.score,null,'champ'):''}<b>${now?(isBin(tsl)?solved(now.r)+' / '+now.r.n:val(now.r.score,tsl)):'—'}</b></div>
+    <div><span>${esc(best?.m||'no attempt')}</span>${isBin(tsl)?scoreBar(best?.r.score,now?.r.score):''}<b>${best?(isBin(tsl)?solved(best.r)+' / '+best.r.n:val(best.r.score,tsl)):'—'}</b></div>
    </div>
    <div class="meta"><span>dev set ${esc(short(x.target))} · ${st.slices[x.target]?.n??'—'} examples</span><span>${(n=>n+(n===1?' attempt':' attempts'))(runs.filter(o=>o.m!==champ).length)}</span></div></a>`}).join('')}</div>`;
 }
 const solved=r=>Math.round(r.score*r.n);
-function delta(d,n){if(d==null)return '';const k=Math.round(d*n);return `<span class="${k>0?'pos':k<0?'neg':'sub'}">${k>0?'+':''}${k} solved</span>`}
+// a slice scores 0/1 per example unless it says otherwise (`scale: continuous`, optional `unit`)
+const isBin=sl=>sl?.scale!=='continuous';
+const val=(v,sl)=>(Math.abs(v)>=10?v.toFixed(1):num(v,3))+(sl?.unit?' '+sl.unit:'');
+function delta(d,n,sl){if(d==null)return '';if(!isBin(sl))return `<span class="${d>0?'pos':d<0?'neg':'sub'}">${d>0?'+':''}${Math.abs(d)>=10?d.toFixed(1):num(d,3)}${sl?.unit?' '+esc(sl.unit):''}</span>`;const k=Math.round(d*n);return `<span class="${k>0?'pos':k<0?'neg':'sub'}">${k>0?'+':''}${k} solved</span>`}
+const shown=(r,sl)=>isBin(sl)?`<b>${solved(r)}</b> / ${r.n}`:`<b>${esc(val(r.score,sl))}</b><span class="sub"> mean of ${r.n}</span>`
 // the hill's dev set: what it is, who solves how much of it, and which examples each attempt fixed or broke
-function flips(a,b){let f=0,k=0;for(const id in a){if(!(id in b))continue;const x=a[id]>=.5,y=b[id]>=.5;if(x&&!y)f++;if(!x&&y)k++}return {f,k}}
+function flips(a,b,bin=true){let f=0,k=0;for(const id in a){if(!(id in b))continue;const x=bin?a[id]>=.5:a[id],y=bin?b[id]>=.5:b[id];if(x>y)f++;if(x<y)k++}return {f,k}}
 function devSet(x,runs,now){
  const st=S.state,champ=st.champion,sl=st.slices[x.target]||{},ctl=x.control?st.slices[x.control]:null;
  const D=S.hill?.key===x._key?S.hill.data:null,T=D?.target,cr=T?.runs?.[champ];
  const nT=sl.n,nC=ctl?.n;
- const cell=r=>r?`<div class="sc"><div class="frac"><b>${solved(r)}</b> / ${r.n}</div>${scoreBar(r.score,null,'')}</div>`:'<span class="sub">not run</span>';
+ const bin=isBin(sl),cbin=isBin(ctl);
+ const cell=r=>r?`<div class="sc"><div class="frac">${shown(r,sl)}</div>${bin?scoreBar(r.score,null,''):''}</div>`:'<span class="sub">not run</span>';
  let h=`<div class="card section"><h2>Dev set <span class="chip">${esc(short(x.target))}</span><span class="r">${[nT!=null?nT+' examples':'',sl.kind,sl.hash?'#'+String(sl.hash).slice(0,8):''].filter(Boolean).map(esc).join(' · ')}${sl.url?` · <a href="${esc(sl.url)}" target="_blank" rel="noopener" style="color:var(--blue)">data ↗</a>`:''}</span></h2>
   ${sl.description?`<p class="desc" style="margin:-6px 0 10px">${esc(sl.description)}</p>`:''}
   ${x.measure||sl.metric?`<p class="meas">${esc(x.measure||sl.metric)}</p>`:''}`;
  if(!runs.length)return h+'<div class="empty">No runs on this dev set yet</div></div>';
- h+=`<div class="att head"><div>Model</div><div>Solved</div><div class="num">vs champion</div><div class="num">fixed · broke</div>${ctl?`<div class="ctl">Control<div class="sub">${esc(short(x.control))} · ${nC??'—'} examples</div></div>`:''}</div>`;
- h+=runs.map(o=>{const me=o.m===champ,d=now&&!me?o.r.score-now.r.score:null,fl=!me&&cr&&T.runs[o.m]?flips(T.runs[o.m],cr):null,cd=now?.c&&o.c&&!me?o.c.score-now.c.score:null;
+ h+=`<div class="att head"><div>Model</div><div>${bin?'Solved':'Mean score'}</div><div class="num">vs champion</div><div class="num">${bin?'fixed · broke':'better · worse'}</div>${ctl?`<div class="ctl">Control<div class="sub">${esc(short(x.control))} · ${nC??'—'} examples</div></div>`:''}</div>`;
+ h+=runs.map(o=>{const me=o.m===champ,d=now&&!me?o.r.score-now.r.score:null,fl=!me&&cr&&T.runs[o.m]?flips(T.runs[o.m],cr,bin):null,cd=now?.c&&o.c&&!me?o.c.score-now.c.score:null;
   return `<a class="att" href="#model/${encodeURIComponent(o.m)}"><div class="nm"><b>${esc(o.m)}</b>${me?' <span class="chip champion">champion</span>':''}${st.models[o.m]?.change?`<div class="sub">${esc(st.models[o.m].change)}</div>`:''}</div>
-  <div>${cell(o.r)}</div><div class="num">${me?'':delta(d,o.r.n)}</div>
+  <div>${cell(o.r)}</div><div class="num">${me?'':delta(d,o.r.n,sl)}</div>
   <div class="num">${fl?`<span class="pos">+${fl.f}</span> · <span class="neg">−${fl.k}</span>`:''}</div>
-  ${ctl?`<div class="ctl">${o.c?`<span class="frac"><b>${solved(o.c)}</b> / ${o.c.n}</span> ${me?'':delta(cd,o.c.n)}`:'<span class="sub">not run</span>'}</div>`:''}</a>`}).join('');
+  ${ctl?`<div class="ctl">${o.c?`<span class="frac">${shown(o.c,ctl)}</span> ${me?'':delta(cd,o.c.n,ctl)}`:'<span class="sub">not run</span>'}</div>`:''}</a>`}).join('');
  if(T&&T.ids.length){
   const ms=runs.map(o=>o.m).filter(m=>T.runs[m]);
-  const ids=[...T.ids].sort((a,b)=>ms.filter(m=>T.runs[m][a]>=.5).length-ms.filter(m=>T.runs[m][b]>=.5).length);
-  h+=`<div class="pex"><div class="pexh"><b>Per example</b><span class="lg"><i class="c s1"></i>solved<i class="c s0"></i>wrong<i class="c s1 fx"></i>fixed<i class="c s0 bk"></i>broke</span></div>
-  ${ms.map(m=>{const r=T.runs[m],me=m===champ;return `<div class="prow"><div class="pl">${esc(m)}</div><div class="cells">${ids.map(id=>{const v=r[id];if(v==null)return `<i class="c na" title="${esc(id)} · not run"></i>`;const ok=v>=.5,c=!me&&cr&&id in cr?(ok&&cr[id]<.5?' fx':!ok&&cr[id]>=.5?' bk':''):'';return `<i class="c ${ok?'s1':'s0'}${c}" title="${esc(id)} · ${num(v,2)}"></i>`}).join('')}</div></div>`}).join('')}</div>`;
+  const ok1=(m,id)=>bin?T.runs[m][id]>=.5:(cr&&id in cr?T.runs[m][id]>cr[id]:false);
+  const ids=[...T.ids].sort((a,b)=>ms.filter(m=>ok1(m,a)).length-ms.filter(m=>ok1(m,b)).length);
+  h+=`<div class="pex"><div class="pexh"><b>Per example</b><span class="lg">${bin?'<i class="c s1"></i>solved<i class="c s0"></i>wrong<i class="c s1 fx"></i>fixed<i class="c s0 bk"></i>broke':'<i class="c s1 fx"></i>better than champion<i class="c s0"></i>same<i class="c s0 bk"></i>worse'}</span></div>
+  ${ms.map(m=>{const r=T.runs[m],me=m===champ;return `<div class="prow"><div class="pl">${esc(m)}</div><div class="cells">${ids.map(id=>{const v=r[id];if(v==null)return `<i class="c na" title="${esc(id)} · not run"></i>`;const ok=bin?v>=.5:false,c=!me&&cr&&id in cr?(bin?(ok&&cr[id]<.5?' fx':!ok&&cr[id]>=.5?' bk':''):(v>cr[id]?' fx':v<cr[id]?' bk':'')):'';return `<i class="c ${ok?'s1':'s0'}${c}" title="${esc(id)} · ${num(v,2)}${sl.unit?' '+esc(sl.unit):''}"></i>`}).join('')}</div></div>`}).join('')}</div>`;
  }
  return h+'</div>';
 }

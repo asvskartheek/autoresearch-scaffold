@@ -54,11 +54,17 @@ def state(p: Project) -> dict:
     slices = {k: {kk: vv for kk, vv in v.items() if kk != "ids"} | {"name": k} for k, v in p.slices().items()}
     models, tasks = p.models(), p.tasks()
     champ = p.champion()
-    board = {}
+    board, newest = {}, {}
     for t in p.evals():
         cur = board.setdefault(t["slice"], {}).get(t["model"])
         if t.get("slice_hash") == slices.get(t["slice"], {}).get("hash") and (not cur or t["ended"] > cur["ended"]):
             board[t["slice"]][t["model"]] = dict(task=t["id"], ended=t["ended"], **t.get("summary", {}))
+            if t["ended"] > newest.get(t["slice"], (0, 0))[0]:
+                newest[t["slice"]] = (t["ended"], t["id"])
+    for name, sl in slices.items():  # slices frozen before `scale` existed: read it off the scores
+        if not sl.get("scale") and name in newest:
+            vals = {r.get("score") for r in p.rows(newest[name][1]) if not r.get("error")}
+            sl["scale"] = "binary" if vals <= {0, 1} else "continuous"
     gates = {}
     for name, m in models.items():
         if m.get("status") in ("candidate", "champion"):
