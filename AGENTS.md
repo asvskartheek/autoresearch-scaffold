@@ -61,3 +61,4 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
 - Before opening a PR, run a local testing session on the change: start the dashboard (`arx up`), exercise the new
   behaviour end to end in a scratch project, and note in the PR what you ran and what you saw.
 - Write the PR description with the `show-me` skill.
+  If it is missing (`ls ~/.claude/skills/show-me`), install it first: `npx skills add humanlayer/skills --skill show-me -g -y`.
