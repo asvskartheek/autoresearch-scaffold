@@ -69,7 +69,21 @@ Exceptions in `run_one` become rows with `score=0` and `error`.
 `Project` exposes the ledger: `config`, `datasets()`, `slices()`, `slice(name)`, `hills()`, `models()`,
 `champion()`, `tasks()`, `task(id)`, `rows(id)`, `metrics(id)`, `events(id)`, `evals()`,
 `latest_eval(model, slice)`, and the writers `add_dataset`, `add_slice`, `random_slices`, `open_hill`,
-`explain_hill`, `add_model`, `set_model_status`, `gate`, `promote`.
+`explain_hill`, `add_model`, `set_model_status`, `gate`, `promote`, `baseline`, `supersede`.
+
+### Baselines
+
+```python
+p = ar.project()
+p.promote("v2")                      # champion, then p.baseline("v2"); baseline=False skips it
+p.baseline_plan("v2")                # {"have": {slice: {task, score, n, ended, runs}}, "need": [...], "roles": {slice: [...]}}
+p.baseline("v2", jobs=4, budget_s=3600)   # runs `baseline_cmd` for each missing slice; returns the plan after, plus "ran"
+p.baseline("v2", replace=True)       # after a harness change: fresh runs supersede the old ones
+p.supersede("v2", "qa/random50", keep="<task id>")   # the other runs stop counting in gates and baselines
+```
+
+`promote` and `baseline` take `say=` (default `print`) for their progress lines. `promote(..., **kw)` passes
+`dry`, `rerun`, `replace`, `jobs`, `budget_s` through to `baseline`.
 
 ## Statistics
 

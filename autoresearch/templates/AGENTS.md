@@ -34,6 +34,8 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
   Its stdout/stderr stay in the task dir as private logs.
 - Before a candidate runs a rung, the champion must have a run on the same slice with the same harness.
   `arx gate <model>` names the next run; follow it, do not skip rungs.
+- After `arx promote`, the new champion is baselined on every hill (`arx baseline`; reuses runs it already has). If
+  `research.json` has no `baseline_cmd`, run the slices it lists, each as its own eval, before opening new work.
 - Not every hill is pass/fail. If the target's score is a number (latency, length, cost), freeze the slice with
   `--scale continuous --unit <u> --metric "<what score means>"` and score rows higher-is-better. Default is 0/1.
 - Never edit a frozen slice. Make a new one with a new name.
