@@ -4,7 +4,7 @@ from __future__ import annotations
 import json, mimetypes, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit
 
 from . import papers
 from .core import Project, paired, per_id
@@ -135,12 +135,15 @@ def task_detail(p: Project, tid: str) -> dict:
     return out
 
 
+LOCAL = ("127.0.0.1", "localhost", "::1")
 HUMAN_KINDS = ("comment", "reply", "resolve", "reopen", "edit", "delete")
 
 
 def human_event(p: Project, name: str, kind: str, d: dict) -> dict | None:
     """One event from the reader. People never post as the agent; ids they point at must exist in that paper."""
     author = str(d.get("author") or "").strip()[:40] or "Reviewer"
+    if author.lower() in ("agent", "claude", "arx"):  # names the agent signs with; a person never posts as it
+        return None
     body = str(d.get("body") or "").strip()[:4000]
     log = {e["id"]: e for e in papers.thread(p, name)}
     ids = set(log)
@@ -175,8 +178,16 @@ def serve(port: int = 8890, root=None):
             self.end_headers()
             self.wfile.write(body)
 
+        def _local(self) -> bool:
+            # loopback only: a DNS-rebound page carries a foreign Host; a cross-site POST carries a foreign Origin
+            host = urlsplit("//" + (self.headers.get("Host") or "")).hostname
+            origin = self.headers.get("Origin")
+            return host in LOCAL and (not origin or urlsplit(origin).hostname in LOCAL)
+
         def do_GET(self):
             path = self.path.split("?")[0]
+            if not self._local():
+                return self._send(403, b'{"error":"not local"}', "application/json")
             try:
                 if path == "/ui.css":
                     return self._send(200, UI.read_bytes(), "text/css; charset=utf-8")
@@ -206,14 +217,13 @@ def serve(port: int = 8890, root=None):
                     body = dict(version=papers.version(p, parts[2]), meta=papers._read(papers.pdir(p, parts[2]) / "meta.json", {}),
                                 threads=papers.threads(papers.thread(p, parts[2])))
                     return self._send(200, json.dumps(body, default=str).encode(), "application/json")
-            except (KeyError, SystemExit, FileNotFoundError) as e:
+            except (KeyError, SystemExit, FileNotFoundError, ValueError) as e:
                 return self._send(404, json.dumps(dict(error=str(e))).encode(), "application/json")
             self._send(404, b"not found", "text/plain")
 
         def do_POST(self):
             parts = [unquote(x) for x in self.path.split("?")[0].strip("/").split("/")]
-            origin = self.headers.get("Origin")
-            if origin and origin.split("//")[-1].split(":")[0] not in ("127.0.0.1", "localhost"):
+            if not self._local():
                 return self._send(403, b'{"error":"cross-origin"}', "application/json")
             try:
                 if parts[:2] == ["api", "paper"] and len(parts) == 4 and parts[3] in HUMAN_KINDS:

@@ -14,10 +14,10 @@ People comment from the browser; the agent waits on `arx paper poll` and answers
 """
 from __future__ import annotations
 
-import secrets, shutil, time
+import json, os, re, secrets, shutil, time
 from pathlib import Path
 
-from .core import Project, _append, _jsonl, _read, _write, now
+from .core import Project, _jsonl, _read, _write, now
 
 KINDS = ("comment", "reply", "seen", "resolve", "reopen", "edit", "delete")
 
@@ -78,7 +78,9 @@ def file(p: Project, name: str, fname: str) -> Path:
 
 
 def thread(p: Project, name: str) -> list[dict]:
-    return _jsonl(pdir(p, name) / "thread.jsonl")
+    """The event log; a hand-edited or foreign line is dropped, never allowed to take the paper down."""
+    return [e for e in _jsonl(pdir(p, name) / "thread.jsonl")
+            if isinstance(e, dict) and isinstance(e.get("id"), str) and e.get("kind") in KINDS]
 
 
 def post(p: Project, name: str, kind: str, **fields) -> dict:
@@ -87,7 +89,12 @@ def post(p: Project, name: str, kind: str, **fields) -> dict:
     if not (pdir(p, name) / "paper.html").exists():
         raise KeyError(f"no paper {name!r}")
     ev = dict(id=secrets.token_hex(4), t=now(), kind=kind, **{k: v for k, v in fields.items() if v is not None})
-    _append(pdir(p, name) / "thread.jsonl", ev)
+    # one write(2) on an O_APPEND fd: concurrent writers (the page, `arx paper reply`) never interleave a line
+    fd = os.open(pdir(p, name) / "thread.jsonl", os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+    try:
+        os.write(fd, (json.dumps(ev, default=str) + "\n").encode())
+    finally:
+        os.close(fd)
     return ev
 
 
@@ -95,19 +102,22 @@ def threads(log: list[dict]) -> list[dict]:
     """Fold the event log into threads, oldest first. Each has its messages (edits applied, deletes dropped),
     `resolved`, `waiting` (the last message is from a person: the agent owes an answer) and `thinking`
     (the agent has seen that message)."""
-    out, msgs = {}, {}
+    out, msgs, owner = {}, {}, {}  # owner: message id -> thread id
     for e in log:
+        if not isinstance(e, dict) or not isinstance(e.get("id"), str) or e.get("kind") not in KINDS:
+            continue  # same filter as thread(), for logs built elsewhere
+        e.setdefault("t", "")
         k = e["kind"]
         if k == "comment":
             m = dict(id=e["id"], t=e["t"], author=e.get("author") or "you", body=e.get("body", ""), agent=False)
             out[e["id"]] = dict(id=e["id"], t=e["t"], anchor=e.get("anchor"), resolved=False, resolved_by=None,
                                 messages=[m], seen=set())
-            msgs[e["id"]] = m
+            msgs[e["id"]] = m; owner[e["id"]] = e["id"]
         elif k == "reply" and e.get("parent") in out:
             m = dict(id=e["id"], t=e["t"], author=e.get("author") or ("agent" if e.get("agent") else "you"),
                      body=e.get("body") or "", agent=bool(e.get("agent")), link=e.get("link"))
             out[e["parent"]]["messages"].append(m)
-            msgs[e["id"]] = m
+            msgs[e["id"]] = m; owner[e["id"]] = e["parent"]
         elif k in ("resolve", "reopen") and e.get("parent") in out:
             th = out[e["parent"]]
             th["resolved"], th["resolved_by"] = k == "resolve", e.get("author") if k == "resolve" else None
@@ -119,10 +129,8 @@ def threads(log: list[dict]) -> list[dict]:
             msgs[e["target"]].update(body=e.get("body") or "", edited=e["t"])
         elif k == "delete" and e.get("target") in msgs:
             msgs[e["target"]]["deleted"] = True
-        elif k == "seen":
-            for th in out.values():
-                if any(m["id"] == e.get("parent") for m in th["messages"]):
-                    th["seen"].add(e["parent"])
+        elif k == "seen" and e.get("parent") in owner:
+            out[owner[e["parent"]]]["seen"].add(e["parent"])
     res = []
     for th in out.values():
         root_gone = th["messages"][0].get("deleted")
@@ -161,3 +169,51 @@ def poll(p: Project, name: str = None, timeout: float = None, interval: float = 
         if end is not None and time.time() >= end:
             return []
         time.sleep(interval)
+
+
+SERIF = re.compile(r"font-family\s*:[^;}\"]*\b(Georgia|Times|Garamond|Merriweather|Palatino|Cambria|Lora|(?<!sans-)serif)\b", re.I)
+PILL = re.compile(r"border-radius\s*:\s*(\d{3,}px|50%|\d+(\.\d+)?em)", re.I)
+WIDGET = re.compile(r"<(input|button|select|textarea|details|canvas)\b|data-widget", re.I)
+NUMBER = re.compile(r"(\d+(\.\d+)?\s*%|\d+/\d+)(?!\s*(CI|goal|target|interval))")
+N_SIZE = re.compile(r"\bn\s*=\s*\d", re.I)
+
+
+def check(html: str, slices=()) -> list[tuple[str, str]]:
+    """Lint a paper against the rules in PROTOCOL.md. Returns (level, message); level is "error" or "warn"."""
+    out = []
+    body = re.sub(r"<script\b.*?</script>|<style\b.*?</style>", "", html, flags=re.S | re.I)
+    blocks = re.findall(r'data-block="([^"]*)"', body)
+    dup = sorted({b for b in blocks if blocks.count(b) > 1})
+    if dup:
+        out.append(("error", f"duplicate data-block ids: {', '.join(dup)}"))
+    for tag in ("section", "p", "figure"):
+        miss = [m for m in re.findall(rf"<{tag}\b[^>]*>", body, re.I) if "data-block=" not in m]
+        if miss:
+            out.append(("error", f"{len(miss)} <{tag}> without data-block (comments cannot anchor to them)"))
+    sections = re.findall(r'<section\b[^>]*data-block="([^"]*)"[^>]*>(.*?)</section>', body, re.S | re.I)
+    if not sections:
+        out.append(("error", "no <section data-block=...>: the paper needs sections"))
+    for sid, inner in sections:
+        if not WIDGET.search(inner):
+            out.append(("error", f"section {sid!r} has nothing to interact with (input, button, select, details, canvas)"))
+        if not re.search(r"<svg\b|<canvas\b|<img\b|class=\"[^\"]*poster", inner, re.I):
+            out.append(("warn", f"section {sid!r} has no visual (svg, canvas, img or poster)"))
+        text = re.sub(r"<[^>]+>", " ", inner)
+        if NUMBER.search(text) and not N_SIZE.search(text):
+            out.append(("error", f"section {sid!r} reports numbers but never says n = …"))
+    quizzes = len(re.findall(r'class="[^"]*\bquiz\b', body))
+    if quizzes < 3:
+        out.append(("error", f"{quizzes} quizzes (class=\"quiz\"); give a pop quiz per section and a closing test"))
+    if not re.search(r'data-block="remember"', body):
+        out.append(("error", "no Remember section (<section data-block=\"remember\">) for long-term recall"))
+    if slices and not any(s in body for s in slices):
+        out.append(("error", "names no slice from the ledger; every number names its slice and n"))
+    for m in SERIF.finditer(html):
+        out.append(("error", f"serif font: {m.group(0)[:60]!r}; use the shared theme (Instrument Sans)"))
+    for m in PILL.finditer(html):
+        out.append(("warn", f"rounded pill: {m.group(0)!r}; no pill bubbles"))
+    if 'data-theme="dark"' not in html:  # the reader sets data-theme on the paper; it follows the page's toggle
+        out.append(("error", 'no dark mode: style :root[data-theme="dark"] (the reader sets it)'))
+    if "Instrument Sans" not in html:
+        out.append(("warn", "does not use the shared theme fonts (Instrument Sans, Bricolage Grotesque, JetBrains Mono)"))
+    return out

@@ -269,9 +269,30 @@ def cmd_paper(a):
         if not a.file:
             sys.exit("usage: arx paper attach <name> --file page.html")
         print(f"http://127.0.0.1:{port}" + papers.attach(p, a.name, Path(a.file)))
+    elif a.verb == "new":  # a starter page: the worked example, to rewrite with this hill's content
+        if not a.name:
+            sys.exit("usage: arx paper new <hill> [--file paper-<hill>.html]")
+        out = Path(a.file or f"paper-{a.name}.html")
+        if out.exists():
+            sys.exit(f"{out} exists")
+        shutil.copy(TEMPLATE / "paper-example.html", out)
+        print(f"{out}\nrewrite it for hill {a.name!r} (checklist: PROTOCOL.md § Papers), then:\n"
+              f"  arx paper check --file {out}\n  arx paper add {a.name} --hill {a.name} --file {out}")
+    elif a.verb == "check":  # lint a paper (published name or a file) against PROTOCOL.md before publishing it
+        src = Path(a.file) if a.file else papers.pdir(p, a.name or "") / "paper.html"
+        if not src.exists():
+            sys.exit(f"usage: arx paper check <name> | --file paper.html  (no {src})")
+        found = papers.check(src.read_text(), slices=list(p.slices()))
+        for level, msg in found:
+            print(f"{level}: {msg}")
+        errs = sum(1 for lv, _ in found if lv == "error")
+        print(f"{errs} errors, {len(found) - errs} warnings in {src}")
+        sys.exit(1 if errs else 0)
     elif a.verb in ("reply", "resolve"):
         if not a.name or not a.comment:
             sys.exit(f"usage: arx paper {a.verb} <name> <thread id> [text] [--link label=url | --file page.html]")
+        if a.comment not in {t["id"] for t in papers.threads(papers.thread(p, a.name))}:
+            sys.exit(f"no thread {a.comment!r} in paper {a.name!r}; `arx paper poll` prints thread ids")
         link = None
         if a.file:  # the answer is its own page: copy it next to the paper and link to it
             url = papers.attach(p, a.name, Path(a.file))
@@ -356,9 +377,9 @@ def main(argv=None):
     s.set_defaults(fn=cmd_task)
 
     s = sp.add_parser("paper", help="papers: write-ups served at /papers/<name>; people comment, the agent replies")
-    s.add_argument("verb", choices=["add", "edit", "ls", "poll", "reply", "resolve", "attach"]); s.add_argument("name", nargs="?")
+    s.add_argument("verb", choices=["new", "add", "edit", "check", "ls", "poll", "reply", "resolve", "attach"]); s.add_argument("name", nargs="?")
     s.add_argument("comment", nargs="?", help="thread id, for reply / resolve"); s.add_argument("text", nargs="*")
-    s.add_argument("--file", dest="file", help="add/edit: the paper's HTML; reply/attach: a page to link (widget, poster)")
+    s.add_argument("--file", dest="file", help="add/edit/check: the paper's HTML; reply/attach: a page to link (widget, poster)")
     s.add_argument("--title"); s.add_argument("--hill")
     s.add_argument("--link", help="reply: label=url (url may be #block, /papers/<name>#block, an arx page or https://)")
     s.add_argument("--author", default="agent", help="reply: the name shown on the agent's message")

@@ -1,5 +1,5 @@
 """Papers: the thread fold, agent polling and the reader's HTTP routes. Run: python3 -m unittest discover tests"""
-import contextlib, io, json, socket, tempfile, threading, time, unittest, urllib.error, urllib.request
+import contextlib, http.client, io, json, os, socket, subprocess, sys, tempfile, threading, time, unittest, urllib.error, urllib.request
 from pathlib import Path
 
 from autoresearch import papers
@@ -62,6 +62,94 @@ class Threads(unittest.TestCase):
         with self.assertRaises(KeyError):
             papers.pdir(p, "../etc")
 
+    def test_concurrent_appends_never_interleave(self):
+        p, _ = project()
+        big = "x" * 20000  # past one stdio buffer: a buffered write could split the line
+        def w(i):
+            for j in range(40):
+                papers.post(p, "demo", "comment", body=f"{i}-{j}-{big}", anchor=ANCHOR, author="Ann")
+        ts = [threading.Thread(target=w, args=(i,)) for i in range(8)]
+        [t.start() for t in ts]; [t.join() for t in ts]
+        lines = (papers.pdir(p, "demo") / "thread.jsonl").read_text().splitlines()
+        self.assertEqual(len(lines), 320)
+        self.assertEqual(len(papers.threads([json.loads(l) for l in lines])), 320)
+
+    def test_malformed_lines_are_skipped(self):
+        p, _ = project()
+        c = papers.post(p, "demo", "comment", body="ok", anchor=ANCHOR)
+        with open(papers.pdir(p, "demo") / "thread.jsonl", "a") as f:
+            f.write('{"half": \n[1,2]\n"str"\n{"kind": "reply"}\n{"id": 5, "kind": "comment"}\n'
+                    '{"id": "zz", "kind": "nope"}\n{"id": "s1", "kind": "seen", "parent": "missing"}\n')
+        papers.post(p, "demo", "reply", parent=c["id"], body="still works", agent=True)
+        th = papers.threads(papers.thread(p, "demo"))
+        self.assertEqual([len(t["messages"]) for t in th], [2])
+
+    def test_threads_survive_republish(self):
+        p, src = project()
+        c = papers.post(p, "demo", "comment", body="hi", anchor=ANCHOR)
+        v = papers.version(p, "demo"); time.sleep(0.02)
+        src.write_text('<p data-block="b0">new intro</p><p data-block="b1">some text here, edited</p>')
+        papers.add(p, "demo", src)
+        self.assertGreater(papers.version(p, "demo"), v)
+        self.assertEqual(papers.threads(papers.thread(p, "demo"))[0]["anchor"]["block"], "b1")
+        self.assertEqual(papers.papers(p)["demo"]["title"], "Demo")  # meta kept on republish
+
+    def test_many_threads_fold_fast(self):
+        log = []
+        for i in range(3000):
+            log.append(dict(id=f"c{i}", t="", kind="comment", body="q", anchor=ANCHOR))
+            log.append(dict(id=f"s{i}", t="", kind="seen", parent=f"c{i}"))
+            log.append(dict(id=f"r{i}", t="", kind="reply", parent=f"c{i}", body="a", agent=True))
+        t0 = time.time(); th = papers.threads(log)
+        self.assertEqual(len(th), 3000); self.assertLess(time.time() - t0, 0.5)
+
+
+EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "papers" / "gsm8k-percent-base.html"
+
+
+class Check(unittest.TestCase):
+    def test_example_passes(self):
+        errs = [m for lv, m in papers.check(EXAMPLE.read_text(), slices=["full"]) if lv == "error"]
+        self.assertEqual(errs, [])
+
+    def test_template_is_the_example(self):
+        self.assertEqual((Path(papers.__file__).parent / "templates" / "paper-example.html").read_text(), EXAMPLE.read_text())
+
+    def test_flags(self):
+        bad = ('<style>body{font-family:Georgia,serif}.t{border-radius:999px}</style>'
+               '<section data-block="a"><p>Accuracy rose to 81%.</p><p data-block="x">x</p><p data-block="x">y</p></section>')
+        msgs = " | ".join(m for _, m in papers.check(bad, slices=["full"]))
+        for want in ("duplicate data-block", "<p> without data-block", "nothing to interact", "never says n",
+                     "0 quizzes", "Remember", "names no slice", "serif font", "pill", "dark mode"):
+            self.assertIn(want, msgs)
+        self.assertNotIn("serif font", " ".join(m for _, m in papers.check("<style>a{font-family:ui-sans-serif,sans-serif}</style>")))
+
+
+class Cli(unittest.TestCase):
+    def arx(self, root, *args):
+        env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1]))
+        return subprocess.run([sys.executable, "-m", "autoresearch", "paper", *args], cwd=root, env=env,
+                              capture_output=True, text=True)
+
+    def test_reply_needs_a_real_thread(self):
+        p, _ = project()
+        r = self.arx(p.root, "reply", "demo", "deadbeef", "hello")
+        self.assertNotEqual(r.returncode, 0); self.assertIn("no thread", r.stderr)
+        c = papers.post(p, "demo", "comment", body="q", anchor=ANCHOR)
+        self.assertEqual(self.arx(p.root, "reply", "demo", c["id"], "a", "--link", "§1=#b1").returncode, 0)
+        m = papers.threads(papers.thread(p, "demo"))[0]["messages"][-1]
+        self.assertEqual((m["agent"], m["link"]), (True, dict(label="§1", url="#b1")))
+
+    def test_new_then_check(self):
+        p, _ = project()
+        r = self.arx(p.root, "new", "arith")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue((p.root / "paper-arith.html").exists())
+        self.assertNotEqual(self.arx(p.root, "new", "arith").returncode, 0)  # never overwrites
+        bad = p.root / "bad.html"; bad.write_text("<p>hi</p>")
+        r = self.arx(p.root, "check", "--file", str(bad))
+        self.assertEqual(r.returncode, 1); self.assertIn("errors", r.stdout)
+
 
 class Routes(unittest.TestCase):
     @classmethod
@@ -105,6 +193,24 @@ class Routes(unittest.TestCase):
         a = papers.post(self.p, "demo", "reply", parent=cid, body="agent says", agent=True)
         self.assertEqual(self.req("/api/paper/demo/edit", dict(target=a["id"], body="x", author="agent"))[0], 400)
         self.assertEqual(self.req("/papers/demo/files/..%2Fpaper.html")[0], 404)
+        self.assertEqual(self.req("/api/paper/demo/comment", dict(body="x", anchor=ANCHOR, author="Agent"))[0], 400)
+        for o in ("null", "http://localhost.evil.com", "http://127.0.0.1.nip.io:8890"):
+            self.assertEqual(self.req("/api/paper/demo/comment", dict(body="x", anchor=ANCHOR), origin=o)[0], 403, o)
+        self.assertEqual(self.req("/api/paper/demo/comment", dict(body="x", anchor=ANCHOR, author="Ann"),
+                                  origin=self.base)[0], 200)
+        for bad in ("/papers/..%2F..%2Fetc/raw", "/papers/%2e%2e/raw", "/api/paper/%00x", "/papers/demo/files/%2e%2e",
+                    "/api/paper/nope"):
+            self.assertEqual(self.req(bad)[0], 404, bad)
+
+    def test_host_check_blocks_dns_rebinding(self):
+        c = http.client.HTTPConnection(self.base.split("//")[1])
+        c.request("GET", "/api/state", headers={"Host": "evil.example:8890"})
+        self.assertEqual(c.getresponse().status, 403)
+
+    def test_malformed_log_still_serves(self):
+        with open(papers.pdir(self.p, "demo") / "thread.jsonl", "a") as f:
+            f.write('[]\n{"kind":"comment"}\n')
+        self.assertEqual(self.req("/api/paper/demo")[0], 200)
 
 
 if __name__ == "__main__":

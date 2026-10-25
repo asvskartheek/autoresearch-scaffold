@@ -157,7 +157,7 @@ svg .m{fill:var(--muted)}
   <div class="tabs" id="pairTabs"></div>
   <div class="dots" id="pairDots"></div>
   <div class="legend"><span><i style="background:var(--border)"></i>both right</span><span><i style="background:var(--green)"></i>fixed</span><span><i style="background:var(--red)"></i>broken</span><span><i style="background:var(--muted)"></i>both wrong</span></div>
-  <p id="pairText" style="font-size:14px;margin-bottom:0"></p>
+  <p data-block="pairText" id="pairText" style="font-size:14px;margin-bottom:0"></p>
 </div>
 <div class="quiz" data-quiz>
   <div class="q">On full, 106 fixed and 37 broken. What is the net gain?</div>
@@ -197,7 +197,7 @@ svg .m{fill:var(--muted)}
 <div class="lab" data-block="share-lab">
   <div class="hd">Archived errors by category (n = 168)</div>
   <svg id="shareSvg" viewBox="0 0 800 150"></svg>
-  <p id="shareT" style="font-size:14px;margin:6px 0 0"></p>
+  <p data-block="shareT" id="shareT" style="font-size:14px;margin:6px 0 0"></p>
 </div>
 <p data-block="prob-4"><b>Pre-declared aim.</b> +10 points on the target slice (n = 185). Control regression at most 2 points (n = 100).</p>
 <div class="quiz" data-quiz>
@@ -278,7 +278,7 @@ svg .m{fill:var(--muted)}
   <div class="tabs" id="swAdapter"><button aria-pressed="true" data-k="on">Adapter on</button><button data-k="off">Adapter off</button></div>
   <div class="tabs" id="swTok"><button aria-pressed="true" data-k="512">512 tokens</button><button data-k="1024">1024</button><button data-k="2048">2048</button></div>
   <div class="grid3" id="ablOut"></div>
-  <p id="ablT" style="font-size:14px;margin-bottom:0"></p>
+  <p data-block="ablT" id="ablT" style="font-size:14px;margin-bottom:0"></p>
 </div>
 <p data-block="win-2">It passed all four rungs. The control slice also went up: 97% against 93% (n = 100).</p>
 <p data-block="win-3"><b>Do not over-read the control gain.</b> It is 5 wins and 1 loss, 90% CI [0, +8]. That passes "not worse". It does not show "better". The 512-token ablation has the same control result, so the gain comes from removing the adapter, not from the longer cap.</p>
@@ -297,7 +297,7 @@ svg .m{fill:var(--muted)}
 <h2 data-block="h-now"><small>05</small>Where we are now</h2>
 <section data-block="now">
 <div class="poster"><svg id="gap" viewBox="0 0 800 120"></svg></div>
-<p data-block="now-1">The goal is 96% on the full benchmark: 1267 of 1319. The champion has 1224. The gap is 43 answers.</p>
+<p data-block="now-1">The goal is 96% on the full slice (n = 1319): 1267 right. The champion has 1224. The gap is 43 answers.</p>
 <div class="lab" data-block="whatif">
   <div class="hd">Closing the gap</div>
   <div id="leadSliders"></div>
@@ -322,7 +322,7 @@ svg .m{fill:var(--muted)}
 
 <h2 data-block="h-test"><small>Test</small>Make the call</h2>
 <section data-block="test">
-<p class="score" id="score"></p>
+<p data-block="score" class="score" id="score"></p>
 <div class="quiz" data-quiz>
   <div class="q">2048 tokens scores +0.8 points on full, 90% CI [−0.2, +1.8]. Promote?</div>
   <div class="opts"><button data-ok="0">Yes, the point estimate is up</button><button data-ok="1">No. Record it as rejected with the reason; it is a lead</button><button data-ok="0">Re-run until the interval clears zero</button></div>
@@ -349,7 +349,7 @@ svg .m{fill:var(--muted)}
 
 <div class="mem deck" data-block="mem-deck">
   <h3>Recall</h3>
-  <p class="sub" id="deckSub"></p>
+  <p data-block="deckSub" class="sub" id="deckSub"></p>
   <div class="strip" id="deckStrip"></div>
   <div class="fc" id="fc"><div class="pr" id="fcQ"></div><div class="an" id="fcA"></div></div>
   <div class="acts" id="fcActs" style="margin-top:10px"></div>

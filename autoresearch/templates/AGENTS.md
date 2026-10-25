@@ -45,6 +45,15 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
 - "Better" means the gate passed. A noisy delta on a dev slice is a lead, not a result.
 - Failed candidates stay in the ledger as rejected, with the reason. Negative results are results.
 
+## Papers
+- One living paper per hill (`/papers/<hill>`), written on promote, on hill close (negative results too) and kept
+  current while the hill is open. Checklist in PROTOCOL.md; start from `arx paper new <hill>`.
+- `arx paper check --file paper.html` before every publish; fix every error.
+- `arx paper add|edit <name> --file paper.html` publishes; open pages swap the new version in place.
+- `arx paper poll` blocks until someone waits on you, in any paper, and prints one JSON line per thread.
+  Answer with `arx paper reply <name> <thread> "text" [--link "label=#block"] [--file page.html]`;
+  `arx paper resolve <name> <thread> ["note"]` when done. Keep polling while people review.
+
 ## Data
 - Datasets and large slices live on Hugging Face as **private** repos; the slice keeps the URL and the ID hash.
 - Never commit secrets, client data, model weights or `rows.jsonl` from private datasets.

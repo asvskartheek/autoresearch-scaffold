@@ -69,15 +69,41 @@ arx hill explain arith \
 
 ## Papers
 
-One living paper per hill, at `/papers/<hill>`. Write it when the hill closes and when a candidate is promoted on it;
-republish the same name (`arx paper edit`) as the work moves, never start a second paper for the same hill.
+One living paper per hill, named after the hill (`/papers/<hill>`, `arx paper add <hill> --hill <hill>`). Never start
+a second paper for the same hill: republish it with `arx paper edit <hill> --file paper.html`.
 
-- Content follows the course rules: ASD-STE100 prose, a visual poster opening each section, interactive charts,
-  pop quizzes and a closing test, flip cards, light/dark. Every number names its slice and n, as in a report.
-- Put `data-block="<id>"` on every paragraph, figure and section. Comments anchor to blocks, and replies link to them.
-- People select text and comment. Each thread waiting on you shows "thinking…" once you poll. Answer every thread.
-  If the answer changes the paper, republish it and reply with a link to the changed block (`--link "§4=#win-1"`).
-  If the answer is its own page (a chart, a poster), reply with `--file page.html`: it opens next to the thread.
+When to write it:
+- When a candidate is promoted on the hill, and when the hill closes (solved, or abandoned with every candidate
+  rejected: a negative result is written up the same way, with the reasons from the ledger).
+- While the hill is open, after each gate result that changes the story. Say plainly that the work is in progress
+  and what runs next (`arx gate <model>`).
+
+Start from `arx paper new <hill>`: it writes `paper-<hill>.html`, a worked example (gsm8k, real numbers) that
+carries the shared theme and every widget; replace its content with this hill's. Check the page with
+`arx paper check --file paper.html` before every publish. The check enforces the rules below that a machine can see.
+
+Checklist:
+- [ ] Sections `abstract`, `problem`, `method`, `tried`, `win` (or `result`), `now`, `test`, `remember`.
+- [ ] `data-block="<id>"` on every `<section>`, `<p>` and `<figure>`, unique. Comments anchor to blocks, replies link to them.
+- [ ] Every section has a visual (inline SVG chart, poster, diagram) and something to do (slider, tabs, a reveal, a quiz).
+- [ ] A pop quiz (`class="quiz"`) in most sections and a closing test: at least 3. Each answer explains why.
+- [ ] A `remember` section for long-term recall: flip cards, number recall, ordering, explain-it-back; progress in
+      `localStorage` so people can come back.
+- [ ] Real numbers from the ledger only. Every number names its slice and n (`full, n = 1319`), with the paired delta
+      and its 90% interval vs the champion. Noisy deltas are called noisy. For a continuous hill, give the unit and
+      direction (`p50 latency, ms, lower is better`).
+- [ ] ASD-STE100 prose: short sentences, one idea each, active voice, no jargon without a definition.
+- [ ] The shared theme: Instrument Sans, Bricolage Grotesque for headings, JetBrains Mono for numbers; navy/teal/coral/gold;
+      no serif fonts; no pill bubbles; dark mode under `:root[data-theme="dark"]` (the reader sets it from its toggle).
+- [ ] Self-contained HTML (inline CSS and JS). No client text, answers or traces: paraphrase examples.
+
+Review loop:
+- People select text and comment. `arx paper poll` blocks until someone waits on you, in any paper, and prints one
+  JSON line per thread (`paper`, `thread`, `quote`, `block`, `messages`). The page shows "thinking…" from then on.
+- Answer every thread: `arx paper reply <paper> <thread> "text"`. If the answer changes the paper, republish it first
+  and link to the changed block (`--link "§4=#win-1"`). If the answer is its own page (a chart, a poster), reply with
+  `--file page.html`: it opens next to the thread. External sources: `--link "label=https://…"`.
+- `arx paper resolve <paper> <thread> ["note"]` when done. Keep polling while people review.
 
 ## Rules of evidence
 
