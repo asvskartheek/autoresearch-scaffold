@@ -252,7 +252,7 @@ function loadPaper(v) {
   });
 }
 const INJECT = `html,body{background:transparent!important;overflow:hidden!important}
-:root,:root[data-theme="dark"]{--muted:var(--muted-fg)}
+@layer arx{:root,:root[data-theme="dark"]{--muted:var(--muted-fg)}}
 body,body p,body td,body li{font-family:var(--font)}
 ::highlight(arx-c){background:var(--arx-hl)} ::highlight(arx-on){background:var(--arx-hl-on)} ::highlight(arx-draft){background:var(--arx-draft)}
 .arx-flash{animation:arxflash 1.8s ease-out;border-radius:6px}
@@ -263,8 +263,9 @@ function prepare(f, ready) {
   const d = f.contentDocument, w = f.contentWindow;
   d.documentElement.classList.add("arx-embedded");
   d.documentElement.dataset.theme = theme;
-  // the paper takes the product's theme: same tokens, same font (see ui.css)
-  const ln = d.createElement("link"); ln.rel = "stylesheet"; ln.href = "/ui.css"; d.head.appendChild(ln);
+  // the paper takes the product's theme tokens and font, in a cascade layer: anything the paper defines itself
+  // (its own --muted, --gold, .side ...) wins, and none of the app's component classes reach into it
+  const ln = d.createElement("style"); ln.textContent = '@import url("/ui-base.css") layer(arx);'; d.head.appendChild(ln);
   let done = false;
   const show = () => { if (done) return; done = true; fit(f); f.classList.add("ready"); ready && ready(); };
   ln.onload = ln.onerror = show; setTimeout(show, 1500);

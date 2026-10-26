@@ -153,6 +153,7 @@ class Check(unittest.TestCase):
         for want in ("duplicate data-block", "<p> without data-block", "nothing to interact", "never says n", "no visual",
                      "0 quizzes", "Remember", "names no slice", "serif font", "pill", "dark mode"):
             self.assertIn(want, msgs)
+        self.assertIn("vh units", " ".join(m for _, m in papers.check("<style>.a{min-height:100vh}</style>")))
         self.assertNotIn("serif font", " ".join(m for _, m in papers.check("<style>a{font-family:ui-sans-serif,sans-serif}</style>")))
 
 

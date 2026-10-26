@@ -272,6 +272,8 @@ def serve(port: int = 8890, root=None):
                     return self._send(200, json.dumps(project_list(home), default=str).encode(), "application/json")
                 if path == "/ui.css":
                     return self._send(200, UI.read_bytes(), "text/css; charset=utf-8")
+                if path == "/ui-base.css":  # tokens and base type only: what an embedded paper inherits
+                    return self._send(200, UI.read_text().split("/* app shell")[0].encode(), "text/css; charset=utf-8")
                 if path.rstrip("/") == "/papers":  # the list of papers is a dashboard view
                     self.send_response(302); self.send_header("Location", base + "/#papers"); self.end_headers(); return
                 if path in ("/", "/index.html"):

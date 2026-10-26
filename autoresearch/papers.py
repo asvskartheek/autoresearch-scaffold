@@ -234,6 +234,8 @@ def check(html: str, slices=()) -> list[tuple[str, str]]:
     for left in ("Removing the inherited adapter", "a 4B model from 87.6%"):  # ... and text
         if left in html:
             out.append(("warn", f"still has the example's text {left!r}: rewrite it for this paper"))
+    if re.search(r"\d(\.\d+)?(vh|dvh|svh|lvh)\b", html):  # the reader sizes the paper's frame to its content
+        out.append(("warn", "vh units: the reader sizes the paper to its content, so a height in vh grows without limit; use px"))
     if "Instrument Sans" not in html:
         out.append(("warn", "does not use the shared theme fonts (Instrument Sans, Bricolage Grotesque, JetBrains Mono)"))
     return out
