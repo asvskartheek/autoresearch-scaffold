@@ -209,6 +209,7 @@ function renderNav(){
 function toggleTheme(){const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('arx-theme',t)}catch{}}
 addEventListener('storage',e=>{if(e.key==='arx-theme'&&e.newValue)document.documentElement.dataset.theme=e.newValue});
 const paperOf=key=>{const ps=S.state.papers||{};return ps[key]||Object.values(ps).find(p=>p.hill===key)};
+const mn=k=>esc(S.state.models?.[k]?.title||k||'—');  // a model reads by its title; the id stays in the URL
 const paperUrl=p=>'papers/'+encodeURIComponent(p.name);  // relative: /p/<key>/ serves another project
 const PKEY=(location.pathname.match(/^\/p\/([^/]+)/)||[])[1]&&decodeURIComponent(location.pathname.split('/')[2]);
 const goalPaper=g=>Object.values(S.state.papers||{}).find(p=>p.goal===g);
@@ -275,7 +276,7 @@ function taskCard(t){
  return `<div class="card wb ${t.status}" onclick="if(!event.target.closest('a'))location.hash='task/${encodeURIComponent(t.id)}'">
   <div class="row"><span class="chip ${t.status}">${t.status}</span><span class="chip">${esc(t.kind)}</span>${t.agent?`<span class="chip">${esc(t.agent)}</span>`:''}</div>
   <div class="t">${esc(t.title)}</div>
-  ${t.model||t.slice?`<div class="sub">${[t.model,short(t.slice)].filter(Boolean).map(esc).join(' · ')}</div>`:''}
+  ${t.model||t.slice?`<div class="sub">${[t.model&&mn(t.model),t.slice&&esc(short(t.slice))].filter(Boolean).join(' · ')}</div>`:''}
   ${t.description?`<div class="desc">${esc(t.description)}</div>`:''}
   ${noteLine(t.note)}
   ${t.spark?spark(t.spark.y,t.status==='stalled'?'var(--red)':'var(--blue)'):''}
@@ -291,13 +292,13 @@ function vOverview(){
  const cands=Object.entries(st.models).filter(([k,m])=>m.status==='candidate');
  const cf=champ&&fullScore(champ);
  let h=topbar('Overview')+`<div class="grid g4">
-  <div class="card tile"><div class="k">Champion</div><div class="v">${esc(champ||'—')}</div><div class="s">${cf?pct(cf.score)+' on '+esc(short(st.config.primary_dataset+'/full'))+' · n '+cf.n:''}</div></div>
+  <div class="card tile"><div class="k">Champion</div><div class="v">${cf?pct(cf.score):'—'}</div><div class="s">${champ?`<a href="#model/${encodeURIComponent(champ)}">${mn(champ)}</a>`:''}${cf?' · '+esc(short(st.config.primary_dataset+'/full'))+' · n '+cf.n:''}</div></div>
   <div class="card tile"><div class="k">Running</div><div class="v">${active().length}</div><div class="s">${active().filter(t=>t.status==='stalled').length?`<span class="neg">${active().filter(t=>t.status==='stalled').length} stalled</span>`:''}</div></div>
   <div class="card tile"><div class="k">Candidates</div><div class="v">${cands.length}</div><div class="s">${cands.filter(([k])=>st.gates[k]?.promotable).length?cands.filter(([k])=>st.gates[k]?.promotable).length+' promotable':''}</div></div>
   <div class="card tile"><div class="k">Open hills</div><div class="v">${Object.values(st.hills).filter(h=>h.status==='open').length}</div><div class="s">${Object.values(st.hills).filter(h=>h.status==='climbed').length} climbed</div></div></div>`;
  const gs=Object.values(st.goals||{});
  if(gs.length)h+=`<div class="cards" style="margin-top:16px">${gs.map(goalCard).join('')}</div>`;
- h+=`<div class="card section"><h2>Ladder<span class="r">vs ${esc(champ||'—')}</span></h2>${cands.length?`<div class="scroll"><table><tr><th>Model</th><th>Hill</th><th>Rungs</th><th class="num">Next</th></tr>${cands.map(([k,m])=>{const g=st.gates[k]||{};return `<tr class="click" onclick="location.hash='model/${encodeURIComponent(k)}'"><td><b>${esc(k)}</b><div class="sub">${esc(m.change||'')}</div></td><td>${esc(st.hills[m.hill]?.title||m.hill||'—')}</td><td>${ladderPills(g)}</td><td class="num sub">${g.promotable?'<span class="chip pass">promote</span>':g.next?.length?esc(g.next[0].model+' · '+short(g.next[0].slice)):(g.rungs||[]).some(r=>r.status==='fail')?'<span class="chip fail">stopped</span>':''}</td></tr>`}).join('')}</table></div>`:'<div class="empty">No candidates</div>'}</div>`;
+ h+=`<div class="card section"><h2>Ladder<span class="r">vs ${mn(champ)}</span></h2>${cands.length?`<div class="scroll"><table><tr><th>Model</th><th>Hill</th><th>Rungs</th><th class="num">Next</th></tr>${cands.map(([k,m])=>{const g=st.gates[k]||{};return `<tr class="click" onclick="location.hash='model/${encodeURIComponent(k)}'"><td><b>${mn(k)}</b><div class="sub mono">${esc(k)}</div></td><td>${esc(st.hills[m.hill]?.title||m.hill||'—')}</td><td>${ladderPills(g)}</td><td class="num sub">${g.promotable?'<span class="chip pass">promote</span>':g.next?.length?esc(g.next[0].model+' · '+short(g.next[0].slice)):(g.rungs||[]).some(r=>r.status==='fail')?'<span class="chip fail">stopped</span>':''}</td></tr>`}).join('')}</table></div>`:'<div class="empty">No candidates</div>'}</div>`;
  // leaderboard
  if(!S.lbDataset||!st.datasets[S.lbDataset])S.lbDataset=st.config.primary_dataset||ds[0];
  const sl=Object.values(st.slices).filter(s=>s.dataset===S.lbDataset);
@@ -309,7 +310,7 @@ function vOverview(){
  h+=`<div class="card section"><div class="tabs">${ds.map(d=>`<button class="${d===S.lbDataset?'on':''}" onclick="S.lbDataset='${esc(d)}';S.lbSlice=null;render()">${esc(st.datasets[d].title||d)}<small>${st.datasets[d].size}</small></button>`).join('')}</div>
   <div class="seg">${sl.map(s=>`<button class="${s.name===S.lbSlice?'on':''}" onclick="S.lbSlice='${esc(s.name)}';render()">${esc(short(s.name))} <span class="sub">${s.n}</span></button>`).join('')}</div>
   ${board.length?`<div class="scroll"><table><tr><th>#</th><th>Model</th><th style="width:34%">Score</th><th class="num">Δ champion</th><th class="num">Errors</th><th class="num">Cost / ex</th><th class="num">p50</th><th class="num">p95</th></tr>
-  ${board.map(([m,r],i)=>`<tr class="click" onclick="location.hash='task/${encodeURIComponent(r.task)}'"><td class="sub">${i+1}</td><td><b>${esc(m)}</b> ${m===champ?'<span class="chip champion">champion</span>':''}<div class="sub">${ago(r.ended)}</div></td>
+  ${board.map(([m,r],i)=>`<tr class="click" onclick="location.hash='task/${encodeURIComponent(r.task)}'"><td class="sub">${i+1}</td><td><b>${mn(m)}</b> ${m===champ?'<span class="chip champion">champion</span>':''}<div class="sub">${ago(r.ended)}</div></td>
    <td><div style="display:flex;gap:12px;align-items:center"><div class="bar" style="flex:1"><i class="${m===champ?'champ':''}" style="width:${Math.max(0,Math.min(100,(r.score||0)*100))}%"></i></div><b class="num">${pct(r.score)}</b></div></td>
    <td class="num ${cs!=null&&m!==champ?(r.score>cs?'pos':r.score<cs?'neg':''):''}">${cs!=null&&m!==champ?pts(r.score-cs):''}</td><td class="num">${r.errors||0}</td><td class="num">${money(r.cost)}</td><td class="num">${secs(r.latency_p50)}</td><td class="num">${secs(r.latency_p95)}</td></tr>`).join('')}</table></div>`:'<div class="empty">No complete runs on this slice</div>'}</div>`;
  return h;
@@ -327,18 +328,18 @@ function vArchive(){
 }
 function vModels(){
  const st=S.state,ms=Object.entries(st.models).sort((a,b)=>b[1].created-a[1].created);
- return topbar('Models')+`<div class="card"><div class="scroll"><table><tr><th>Model</th><th>Status</th><th>Parent</th><th>Hill</th><th>Rungs</th><th class="num">Full</th></tr>${ms.map(([k,m])=>{const f=fullScore(k);return `<tr class="click" onclick="location.hash='model/${encodeURIComponent(k)}'"><td><b>${esc(k)}</b><div class="sub">${esc(m.change||m.title||'')}</div></td><td><span class="chip ${m.status}">${m.status}</span></td><td>${esc(m.parent||'—')}</td><td>${esc(st.hills[m.hill]?.title||m.hill||'—')}</td><td>${ladderPills(st.gates[k])}</td><td class="num">${f?pct(f.score):'—'}</td></tr>`}).join('')}</table></div></div>`;
+ return topbar('Models')+`<div class="card"><div class="scroll"><table><tr><th>Model</th><th>Status</th><th>Parent</th><th>Hill</th><th>Rungs</th><th class="num">Full</th></tr>${ms.map(([k,m])=>{const f=fullScore(k);return `<tr class="click" onclick="location.hash='model/${encodeURIComponent(k)}'"><td><b>${mn(k)}</b><div class="sub">${m.phase?esc(m.phase)+' · ':''}<span class="mono">${esc(k)}</span></div></td><td><span class="chip ${m.status}">${m.status}</span></td><td>${m.parent?mn(m.parent):'—'}</td><td>${esc(st.hills[m.hill]?.title||m.hill||'—')}</td><td>${ladderPills(st.gates[k])}</td><td class="num">${f?pct(f.score):'—'}</td></tr>`}).join('')}</table></div></div>`;
 }
 function vModel(name){
  const st=S.state,m=st.models[name];if(!m)return topbar('Not found');
  const g=st.gates[name],hill=st.hills[m.hill];
  const evs=st.tasks.filter(t=>t.model===name).slice(0,30);
  let h=topbar(name)+`<a class="back" href="#models">← Models</a><div class="card"><div class="hero"><div class="main">
-  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap"><span class="chip ${m.status}">${m.status}</span>${m.parent?`<span class="chip">from ${esc(m.parent)}</span>`:''}${hill?`<a class="chip" href="#hill/${encodeURIComponent(m.hill)}">${esc(hill.title)}</a>`:''}</div>
+  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap"><span class="chip ${m.status}">${m.status}</span>${m.phase?`<span class="chip">${esc(m.phase)}</span>`:''}${m.parent?`<span class="chip">from ${mn(m.parent)}</span>`:''}${hill?`<a class="chip" href="#hill/${encodeURIComponent(m.hill)}">${esc(hill.title)}</a>`:''}</div>
   <h2>${esc(m.title||name)}</h2>${m.change?`<p class="desc">${esc(m.change)}</p>`:''}${m.reason?`<p class="desc neg">${esc(m.reason)}</p>`:''}
   ${m.links?`<div class="links" style="margin-top:10px">${Object.entries(m.links).map(([k,v])=>`<a href="${esc(v)}" target="_blank" rel="noopener">${esc(k)} ↗</a>`).join('')}</div>`:''}</div>${g?ladderPills(g):''}</div></div>`;
  if(g&&!g.error){
-  h+=`<div class="card section"><h2>Gate<span class="r">vs ${esc(g.champion||'—')}</span></h2><div class="scroll"><table><tr><th>Rung</th><th>Slice</th><th>Rule</th><th class="num">${esc(name)}</th><th class="num">Champion</th><th class="num">Δ pts</th><th>90% CI</th><th class="num">W / L</th><th>State</th></tr>`;
+  h+=`<div class="card section"><h2>Gate<span class="r">vs ${mn(g.champion)}</span></h2><div class="scroll"><table><tr><th>Rung</th><th>Slice</th><th>Rule</th><th class="num">${esc(name)}</th><th class="num">Champion</th><th class="num">Δ pts</th><th>90% CI</th><th class="num">W / L</th><th>State</th></tr>`;
   for(const r of g.rungs){
    if(!r.checks.length){h+=`<tr><td><span class="rung ${r.status}">${esc(r.rung)}</span></td><td colspan="8" class="sub">${r.status}</td></tr>`;continue}
    r.checks.forEach((c,i)=>{h+=`<tr ${c.cand_task?`class="click" onclick="location.hash='task/${encodeURIComponent(c.cand_task)}'"`:''}><td>${i?'':`<span class="rung ${r.status}">${esc(r.rung)}</span>`}</td><td style="white-space:nowrap">${esc(short(c.slice))}<div class="sub">n ${c.n??st.slices[c.slice]?.n??''}${c.cand_runs>1||c.base_runs>1?` · runs ${c.cand_runs}/${c.base_runs}`:''}</div></td><td class="sub" style="white-space:nowrap">${c.rule==='better'?'better':'≥ '+pts(c.threshold)}</td><td class="num">${pct(c.cand)}</td><td class="num">${pct(c.base)}</td><td class="num ${c.delta>0?'pos':c.delta<0?'neg':''}">${pts(c.delta)}</td><td>${ciBar(c)}</td><td class="num">${c.wins!=null?c.wins+' / '+c.losses:''}</td><td><span class="chip ${c.state}">${c.state.replace('_',' ')}</span>${c.noisy?' <span class="chip">noisy</span>':''}</td></tr>`});
@@ -367,8 +368,8 @@ function vHills(){
    <div class="t">${esc(x.title)}</div>${(p=>p?`<span class="btn sm outline" style="align-self:flex-start" onclick="event.preventDefault();event.stopPropagation();location.href='${paperUrl(p)}'">${ICON.papers}Internal notes${p.waiting?` <span class="chip pending">${p.waiting}</span>`:''}</span>`:'')(paperOf(k))}
    <div class="sym">${esc(x.symptom||firstLine(x.problem))}</div>
    <div class="hprog">
-    <div><span>${esc(champ||'champion')}</span>${isBin(tsl)?scoreBar(now?.r.score,null,'champ'):''}<b>${now?(isBin(tsl)?solved(now.r)+' / '+now.r.n:val(now.r.score,tsl)):'—'}</b></div>
-    <div><span>${esc(best?.m||'no attempt')}</span>${isBin(tsl)?scoreBar(best?.r.score,now?.r.score):''}<b>${best?(isBin(tsl)?solved(best.r)+' / '+best.r.n:val(best.r.score,tsl)):'—'}</b></div>
+    <div><span>${champ?mn(champ):'champion'}</span>${isBin(tsl)?scoreBar(now?.r.score,null,'champ'):''}<b>${now?(isBin(tsl)?solved(now.r)+' / '+now.r.n:val(now.r.score,tsl)):'—'}</b></div>
+    <div><span>${best?.m?mn(best.m):'no attempt'}</span>${isBin(tsl)?scoreBar(best?.r.score,now?.r.score):''}<b>${best?(isBin(tsl)?solved(best.r)+' / '+best.r.n:val(best.r.score,tsl)):'—'}</b></div>
    </div>
    <div class="meta"><span>dev set ${esc(short(x.target))} · ${st.slices[x.target]?.n??'—'} examples</span><span>${(n=>n+(n===1?' attempt':' attempts'))(runs.filter(o=>o.m!==champ).length)}</span></div></a>`}).join('')}</div>`;
 }
@@ -392,7 +393,7 @@ function devSet(x,runs,now){
  if(!runs.length)return h+'<div class="empty">No runs on this dev set yet</div></div>';
  h+=`<div class="att head"><div>Model</div><div>${bin?'Solved':'Mean score'}</div><div class="num">vs champion</div><div class="num">${bin?'fixed · broke':'better · worse'}</div>${ctl?`<div class="ctl">Control<div class="sub">${esc(short(x.control))} · ${nC??'—'} examples</div></div>`:''}</div>`;
  h+=runs.map(o=>{const me=o.m===champ,d=now&&!me?o.r.score-now.r.score:null,fl=!me&&cr&&T.runs[o.m]?flips(T.runs[o.m],cr,bin):null,cd=now?.c&&o.c&&!me?o.c.score-now.c.score:null;
-  return `<a class="att" href="#model/${encodeURIComponent(o.m)}"><div class="nm"><b>${esc(o.m)}</b>${me?' <span class="chip champion">champion</span>':''}${st.models[o.m]?.change?`<div class="sub">${esc(st.models[o.m].change)}</div>`:''}</div>
+  return `<a class="att" href="#model/${encodeURIComponent(o.m)}"><div class="nm"><b>${mn(o.m)}</b>${me?' <span class="chip champion">champion</span>':''}${st.models[o.m]?.change?`<div class="sub">${esc(st.models[o.m].change)}</div>`:''}</div>
   <div>${cell(o.r)}</div><div class="num">${me?'':delta(d,o.r.n,sl)}</div>
   <div class="num">${fl?`<span class="pos">+${fl.f}</span> · <span class="neg">−${fl.k}</span>`:''}</div>
   ${ctl?`<div class="ctl">${o.c?`<span class="frac">${shown(o.c,ctl)}</span> ${me?'':delta(cd,o.c.n,ctl)}`:'<span class="sub">not run</span>'}</div>`:''}</a>`}).join('');
@@ -412,7 +413,7 @@ function vHill(key){
  const nT=st.slices[x.target]?.n,nC=x.control?st.slices[x.control]?.n:null;
  const cell=(r,base,n,mark)=>r?`<div class="sc"><div class="frac"><b>${solved(r)}</b> / ${r.n}</div>${scoreBar(r.score,mark,'')}</div>`:'<span class="sub">not run</span>';
  let h=topbar(x.title)+`<a class="back" href="#hills">← Hills</a>
- <div class="hrow"><span class="chip ${x.status}">${x.status}</span>${x.climbed_by?`<a class="chip pass" href="#model/${encodeURIComponent(x.climbed_by)}">climbed by ${esc(x.climbed_by)}</a>`:''}${(p=>p?`<a class="btn sm primary" style="margin-left:auto" href="${paperUrl(p)}">${ICON.papers}Internal notes</a>`:'')(paperOf(key))}</div>
+ <div class="hrow"><span class="chip ${x.status}">${x.status}</span>${x.climbed_by?`<a class="chip pass" href="#model/${encodeURIComponent(x.climbed_by)}">climbed by ${mn(x.climbed_by)}</a>`:''}${(p=>p?`<a class="btn sm primary" style="margin-left:auto" href="${paperUrl(p)}">${ICON.papers}Internal notes</a>`:'')(paperOf(key))}</div>
  ${x.goal&&st.goals?.[x.goal]?`<p class="sub">Serves goal <a href="#goal/${encodeURIComponent(x.goal)}">${esc(st.goals[x.goal].title)}</a></p>`:''}
  ${x.symptom?`<p class="lede">${esc(x.symptom)}</p>`:''}
  <div class="grid ${x.share?'hgrid':''}">
@@ -442,7 +443,7 @@ function vGoals(){
 function goalCard(g){const p=goalPaper(g.name);return `<a class="card hcard" href="#goal/${encodeURIComponent(g.name)}">
   <div class="row"><span class="chip ${g.status}">${esc(g.status)}</span>${g.met&&g.status==='open'?'<span class="chip pass">target met</span>':''}</div>
   <div class="t">${esc(g.title)}</div>
-  <div><b>${gfmt(g,g.value)}</b> <span class="sub">of ${gfmt(g,g.target)} · ${esc(g.model||'no champion')}</span>${gbar(g)}</div>
+  <div><b>${gfmt(g,g.value)}</b> <span class="sub">of ${gfmt(g,g.target)} · ${g.model?mn(g.model):'no champion'}</span>${gbar(g)}</div>
   <div class="sub">${gdelta(g)}</div>
   ${p?`<span class="btn sm outline" style="align-self:flex-start" onclick="event.preventDefault();event.stopPropagation();location.href='${paperUrl(p)}'">${ICON.papers}${g.status==='open'?'Draft paper':'Paper'}</span>`:''}
   <div class="meta"><span>${esc(short(g.slice))} · n ${g.n}</span><span>${Object.keys(g.hills||{}).length} hills</span></div></a>`}
@@ -489,7 +490,7 @@ function vTask(id){
  if(!d||d.task.id!==id)return h+'<div class="empty">Loading…</div>';
  // vs champion
  const vc=d.vs_champion;
- if(vc&&vc.delta!=null)h+=`<div class="card section"><h2>vs ${esc(vc.model)}<span class="r">same ${vc.n} ids</span></h2><div class="grid g4"><div class="tile"><div class="k">Δ</div><div class="v ${vc.delta>0?'pos':vc.delta<0?'neg':''}">${pts(vc.delta)}</div><div class="s">pts</div></div><div class="tile"><div class="k">90% CI</div><div class="v" style="font-size:20px">${pts(vc.lo)} … ${pts(vc.hi)}</div><div style="margin-top:6px">${ciBar({...vc,state:vc.lo>0?'pass':vc.hi<0?'fail':''})}</div></div><div class="tile"><div class="k">Wins / losses</div><div class="v">${vc.wins} / ${vc.losses}</div></div><div class="tile"><div class="k">Champion</div><div class="v">${pct(vc.base)}</div><div class="s"><a href="#task/${encodeURIComponent(vc.task)}" style="color:var(--blue)">run ↗</a></div></div></div></div>`;
+ if(vc&&vc.delta!=null)h+=`<div class="card section"><h2>vs ${mn(vc.model)}<span class="r">same ${vc.n} ids</span></h2><div class="grid g4"><div class="tile"><div class="k">Δ</div><div class="v ${vc.delta>0?'pos':vc.delta<0?'neg':''}">${pts(vc.delta)}</div><div class="s">pts</div></div><div class="tile"><div class="k">90% CI</div><div class="v" style="font-size:20px">${pts(vc.lo)} … ${pts(vc.hi)}</div><div style="margin-top:6px">${ciBar({...vc,state:vc.lo>0?'pass':vc.hi<0?'fail':''})}</div></div><div class="tile"><div class="k">Wins / losses</div><div class="v">${vc.wins} / ${vc.losses}</div></div><div class="tile"><div class="k">Champion</div><div class="v">${pct(vc.base)}</div><div class="s"><a href="#task/${encodeURIComponent(vc.task)}" style="color:var(--blue)">run ↗</a></div></div></div></div>`;
  // charts: every numeric series
  const keys=[...new Set(d.metrics.flatMap(m=>Object.keys(m).filter(k=>k!=='t'&&k!=='step'&&typeof m[k]==='number')))];
  const palette=['var(--blue)','var(--green)','var(--purple)','var(--amber)','var(--red)'];
