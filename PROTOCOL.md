@@ -126,7 +126,11 @@ layout. This holds for every paper, every figure and every widget.
 - [ ] **Theme.** Dark mode under `:root[data-theme="dark"]` (the reader sets it); no serif fonts; no pill bubbles.
 - [ ] **Safe.** Self-contained HTML (inline CSS and JS). No client text, answers or traces: ids, categories, paraphrase.
 - [ ] **Goal papers** also need: a `result` section with the goal KPI, its slice and `n = <n>`, the target, the
-      champion's ledger value and the paired delta vs the starting champion with its 90% interval; a link to every
+      champion's ledger value and the paired delta vs the starting champion with its 90% interval; a `system`
+      section (`<section data-block="system">`) near the top that names the starting champion and the champion and
+      draws both systems side by side: what each added part does, how it works on one paraphrased example, and
+      which errors it fixed. The first thing a reader wants is what the new system is and why it is better; a
+      paper that only reports the number fails them. A link to every
       internal hill paper (`<a class="internal" href="../<hill>" target="_top">`); "draft" while the goal is open,
       "abandoned" if it was. No dev-slice number is the claim.
 

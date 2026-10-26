@@ -249,7 +249,8 @@ def _kpi_text(kpi: str, v: float) -> list[str]:
 def check_goal(html: str, st: dict, hill_papers=()) -> list[tuple[str, str]]:
     """The goal paper is the public one. On top of `check`: a `result` section that states the goal KPI, slice
     and n, the champion's value and the paired delta vs the starting champion; links to every internal hill paper
-    of the goal (relative `../<hill>`, marked class="internal"); and a draft / negative-result label that matches
+    of the goal (relative `../<hill>`, marked class="internal"); a `system` section that shows the starting
+    system and the champion side by side; and a draft / negative-result label that matches
     the goal's status. `st` is `Project.goal_status(goal)`."""
     out = []
     body = re.sub(r"<script\b.*?</script>|<style\b.*?</style>", "", html, flags=re.S | re.I)
@@ -275,6 +276,16 @@ def check_goal(html: str, st: dict, hill_papers=()) -> list[tuple[str, str]]:
                 out.append(("error", f"result section does not give the paired delta {100 * vs['delta']:+.1f} pts vs the start"))
             if not re.search(r"90% CI|interval", text):
                 out.append(("error", "result section gives no 90% interval for the paired delta"))
+    m = re.search(r'<section\b[^>]*data-block="system"[^>]*>(.*?)</section>', body, re.S | re.I)
+    if not m:
+        out.append(("error", 'no system section (<section data-block="system">): show the starting system and the '
+                             "champion side by side, how each added part works and what each one fixed"))
+    else:
+        for who in (st.get("baseline"), st.get("model")):
+            if who and who not in m.group(1):
+                out.append(("error", f"system section does not name {who}: it compares the start with the champion"))
+        if not VISUAL.search(m.group(1)):
+            out.append(("error", "system section has no visual: draw the before and after systems"))
     for h in st.get("hills") or {}:
         if h not in hill_papers:
             continue

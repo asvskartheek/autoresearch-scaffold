@@ -167,7 +167,30 @@ a.internal{color:var(--blue);font-weight:600}
 </div>
 </section>
 
-<h2 data-block="h-result"><small>01</small>Final result</h2>
+<h2 data-block="h-system"><small>01</small>What changed</h2>
+<section data-block="system">
+<figure data-block="system-fig">
+<svg viewBox="0 0 640 170" role="img" aria-label="Starting system versus champion" style="width:100%;font-family:var(--font)">
+  <g fill="none" stroke="var(--border)" stroke-width="1.5">
+    <rect x="10" y="20" width="290" height="130" rx="6"/><rect x="340" y="20" width="290" height="130" rx="6"/>
+  </g>
+  <text x="20" y="42" fill="var(--muted)" font-size="12">qwen3-4b-rl-fresh-v1 · 87.6%</text>
+  <text x="350" y="42" fill="var(--muted)" font-size="12">percent-base-1024-v1 · 92.8%</text>
+  <g font-size="13" fill="var(--ink)">
+    <rect x="25" y="60" width="120" height="34" rx="4" fill="var(--soft)"/><text x="35" y="82">Qwen3-4B</text>
+    <rect x="160" y="60" width="125" height="34" rx="4" fill="var(--soft)" stroke="var(--red)" stroke-dasharray="4 3"/><text x="170" y="82">RL adapter</text>
+    <text x="25" y="125">512 tokens: long chains cut off</text>
+    <rect x="355" y="60" width="120" height="34" rx="4" fill="var(--soft)"/><text x="365" y="82">Qwen3-4B</text>
+    <text x="490" y="82" fill="var(--muted)">no adapter</text>
+    <text x="355" y="125" fill="var(--green)">1024 tokens: chains finish</text>
+  </g>
+</svg>
+<figcaption>Two parts changed. The adapter applied percentages to the wrong base; off, the model sets the base itself. 1024 tokens let long answers finish. Net 106 fixed, 37 broken (gsm8k-test/full, n = 1319).</figcaption>
+</figure>
+<details data-block="system-ex"><summary>One paraphrased example</summary><p data-block="system-ex-p">"A price rises 20%, then falls 20%." The adapter took 20% of the start both times. The champion takes the second 20% of the raised price.</p></details>
+</section>
+
+<h2 data-block="h-result"><small>02</small>Final result</h2>
 <section data-block="result">
 <div class="kpi poster" data-block="kpi">
   <div class="stat"><b>96%</b><span>target · gsm8k-test/full</span></div>
@@ -191,7 +214,7 @@ a.internal{color:var(--blue);font-weight:600}
 </div>
 </section>
 
-<h2 data-block="h-climb"><small>02</small>How we got here</h2>
+<h2 data-block="h-climb"><small>03</small>How we got here</h2>
 <section data-block="climb">
 <p data-block="climb-1">We split the errors into hills. A hill is one named weakness with its own dev slice. Hills are internal debugging notes; each links its own write-up. The shares below are of 168 archived errors (n = 168).</p>
 <div class="poster" data-block="hills-poster">
@@ -214,7 +237,7 @@ a.internal{color:var(--blue);font-weight:600}
 </div>
 </section>
 
-<h2 data-block="h-method"><small>03</small>Why you can trust the number</h2>
+<h2 data-block="h-method"><small>04</small>Why you can trust the number</h2>
 <section data-block="method">
 <p data-block="meth-1">Every candidate climbs the same gate ladder: dev target, dev control, random50, random100, full. Each rung is a paired comparison on identical ids. Errors and timeouts score 0. Partial runs never count.</p>
 <div class="poster" data-block="ladder">
@@ -234,7 +257,7 @@ a.internal{color:var(--blue);font-weight:600}
 </div>
 </section>
 
-<h2 data-block="h-now"><small>04</small>What runs next</h2>
+<h2 data-block="h-now"><small>05</small>What runs next</h2>
 <section data-block="now">
 <div class="poster"><svg id="gapSvg" viewBox="0 0 800 100"></svg></div>
 <p data-block="now-1">43 answers separate 1224 from 1267 on full (n = 1319). The two open hills cover 118 of 168 archived errors. Each needs a fresh champion baseline before its first candidate runs.</p>
