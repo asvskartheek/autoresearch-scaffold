@@ -104,6 +104,7 @@ def _state(p: Project) -> dict:
     return dict(config=p.config, now=time.time(), champion=champ, datasets=p.datasets(), slices=slices,
                 hills=p.hills(), models=models, papers=papers.papers(p), gates=gates, tasks=[_slim(t) for t in tasks], leaderboard=board,
                 goals=goals(p),
+                baseline=p.baseline_plan(champ) if champ else None,
                 decisions=_tail(p.dir / "decisions.jsonl", 50))
 
 

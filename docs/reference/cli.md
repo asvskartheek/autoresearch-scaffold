@@ -40,7 +40,8 @@ See [Goals](../guides/goals.md).
 | `arx hill explain NAME [--symptom] [--measure] [--example-input --example-wrong --example-right --example-why] [--examples-file F] [--share C/N --share-of W]` | Add the hill's explainer; each `--example-*` set appends one example |
 | `arx model add NAME [--champion] [--parent P \| --no-parent] [--hill H] [--change C] [--title] [--link label=url ...] [--status candidate\|historical\|planned]` | Register a model; parent defaults to the champion |
 | `arx gate MODEL [--json]` | Ladder status and next runs |
-| `arx promote MODEL [--force]` | Make champion (re-checks every rung), retire the old one, mark the hill climbed |
+| `arx promote MODEL [--force] [--no-baseline] [--jobs N] [--budget-s S]` | Make champion (re-checks every rung), retire the old one, mark the hill climbed, then run `arx baseline` (skip with `--no-baseline`). Exits 3 if `baseline_cmd` left slices missing |
+| `arx baseline [MODEL] [--dry-run] [--rerun \| --replace] [--jobs N] [--budget-s S]` | Baseline the champion (default) on every hill target/control and the full/random slices: reuses its complete runs, runs the rest with `baseline_cmd`, or lists them if unset. `--rerun` pools fresh runs with old ones, `--replace` supersedes old ones (after a harness change). Exits 3 while any slice is missing. See [gates](../guides/gates.md#new-champion-new-baselines) |
 | `arx reject MODEL --reason R` | Mark rejected, with the reason |
 
 ## Evals

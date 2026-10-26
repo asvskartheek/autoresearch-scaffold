@@ -5,7 +5,7 @@ truth. Gate results are never stored; they are derived from finished eval tasks 
 """
 from __future__ import annotations
 
-import hashlib, json, math, os, random, statistics, sys, threading, time, uuid
+import hashlib, json, math, os, random, shlex, signal, statistics, subprocess, sys, threading, time, uuid
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 
@@ -357,8 +357,20 @@ class Project:
     def slice_evals(self, model: str, slice_name: str) -> list[dict]:
         """Every complete run of the model on the slice's current version, oldest first."""
         h = self.slices().get(slice_name, {}).get("hash")
-        c = [t for t in self.evals() if t.get("model") == model and t.get("slice") == slice_name and t.get("slice_hash") == h]
+        c = [t for t in self.evals() if t.get("model") == model and t.get("slice") == slice_name and t.get("slice_hash") == h
+             and not t.get("superseded_by")]
         return sorted(c, key=lambda t: t.get("ended", 0))
+
+    def supersede(self, model: str, slice_name: str, keep: str) -> list[str]:
+        """Stop counting every earlier run of the model on the slice except `keep` (e.g. after a harness change).
+        The runs stay in the Archive; gates and baselines skip them."""
+        old = [t["id"] for t in self.slice_evals(model, slice_name) if t["id"] != keep]
+        for tid in old:
+            t = _read(self.task_dir(tid) / "task.json")
+            _write(self.task_dir(tid) / "task.json", t | {"superseded_by": keep})
+        if old:
+            self.log_decision("supersede", model=model, slice=slice_name, keep=keep, runs=old)
+        return old
 
     def latest_eval(self, model: str, slice_name: str) -> dict | None:
         c = self.slice_evals(model, slice_name)
@@ -441,7 +453,108 @@ class Project:
         return dict(model=model_name, champion=champ, rungs=rungs, promotable=promotable,
                     next=[dict(model=a, slice=b) for a, b in dict.fromkeys(next_runs)] if not any(r["status"] == "fail" for r in rungs) else [])
 
-    def promote(self, model_name: str, force: bool = False) -> None:
+    def baseline_slices(self) -> dict[str, list[str]]:
+        """Every slice a champion is measured on, with what it measures: each hill's target and control, plus the
+        datasets' full and random slices. These are the numbers any future candidate is compared against."""
+        slices, roles = self.slices(), {}
+        for k, h in self.hills().items():
+            for role in ("target", "control"):
+                if h.get(role) in slices:
+                    roles.setdefault(h[role], []).append(f"hill {k} {role}")
+        for k, v in slices.items():
+            if v.get("kind") in ("full", "random"):
+                roles.setdefault(k, []).append(v["kind"])
+        return roles
+
+    def baseline_plan(self, model: str) -> dict:
+        """Where `model` stands on every baseline slice. A complete run at the slice's current hash is reused as it
+        is (a promoted model already ran most of them on the ladder); only slices without one need a run."""
+        have, need, roles, slices = {}, [], self.baseline_slices(), self.slices()
+        mine = [t for t in self.evals() if t.get("model") == model and not t.get("superseded_by")]  # one scan, not one per slice
+        for sl in roles:
+            runs = sorted((t for t in mine if t.get("slice") == sl and t.get("slice_hash") == slices[sl]["hash"]),
+                          key=lambda t: t.get("ended", 0))
+            if runs:
+                s = runs[-1].get("summary") or {}
+                have[sl] = dict(task=runs[-1]["id"], score=s.get("score"), n=s.get("n"), ended=runs[-1].get("ended"), runs=len(runs))
+            else:
+                need.append(sl)
+        return dict(model=model, have=have, need=need, roles=roles)
+
+    def baseline(self, model: str, dry: bool = False, rerun: bool = False, replace: bool = False, jobs: int = 1,
+                 budget_s: float = None, say=print) -> dict:
+        """Give `model` (normally a new champion) a run on every baseline slice. Its complete runs are reused; the
+        rest run `baseline_cmd` from research.json ({model} and {slice} replaced, shell-quoted) under one Baseline
+        task, `jobs` at a time. Without baseline_cmd the slices are only listed. `rerun` runs every slice again
+        (pooled with earlier runs); `replace` does too, and each fresh complete run supersedes the earlier ones.
+        Returns the plan after the work, plus `ran` (slices that got a fresh run) when anything was run."""
+        plan, cmd, slices = self.baseline_plan(model), self.config.get("baseline_cmd"), self.slices()
+        rerun = rerun or replace
+        todo = list(plan["roles"]) if rerun else plan["need"]
+        say(f"baseline for {model}: {len(plan['have'])} of {len(plan['roles'])} slices already run, {len(todo)} to run")
+        what = lambda sl: ", ".join(plan["roles"][sl])
+        verb = "would run" if dry and cmd else "run" if cmd else "missing"
+        for sl, h in plan["have"].items():
+            score = "—" if h["score"] is None else f"{h['score']:.3f}"
+            pooled = f", {h['runs']} runs pooled" if h["runs"] > 1 else ""
+            say(f"  {verb if rerun else 'reused':<9} {sl:<28} {score}  n={h['n']}  {what(sl)}  ({h['task']}, {_ago(h['ended'])}{pooled})")
+        for sl in plan["need"]:
+            say(f"  {verb:<9} {sl:<28} n={slices[sl]['n']}  {what(sl)}")
+        if not todo or dry:
+            return plan
+        if not cmd:
+            say('to run these automatically, set "baseline_cmd" in research.json, e.g. '
+                '"python eval.py --model {model} --slice {slice}"; or run each with arx.evaluate / arx run')
+            self.log_decision("baseline", model=model, reused=len(plan["have"]), ran=0, missing=plan["need"])
+            return plan
+        desc = (f"Re-run champion {model} on every hill and dataset slice ({len(todo)})." if rerun else
+                f"Run champion {model} on each hill and dataset slice it has no complete run on ({len(todo)}); "
+                f"{len(plan['have'])} existing runs reused.")
+        lock, finished, fresh = threading.Lock(), [], []
+        with Task(self, "baseline", f"Baseline {model}", desc, model=model, total=len(todo), budget_s=budget_s,
+                  config=dict(baseline_cmd=cmd, jobs=jobs, rerun=rerun, replace=replace)) as t:
+            def one(sl):
+                if not t.ok():
+                    return t.note(f"{sl}: skipped, time budget spent", "warn")
+                t.note(f"{sl} ({what(sl)}): running")
+                before = {e["id"] for e in self.slice_evals(model, sl)}
+                # its own process group, so a timeout stops the whole command, not just the shell
+                proc = subprocess.Popen(cmd.replace("{model}", shlex.quote(model)).replace("{slice}", shlex.quote(sl)),
+                                        shell=True, cwd=self.root, start_new_session=True)
+                try:  # the command's evals nest under this task ($ARX_PARENT) and share its budget
+                    code = proc.wait(timeout=t.left())
+                except subprocess.TimeoutExpired:
+                    os.killpg(proc.pid, signal.SIGTERM)
+                    proc.wait()
+                    return t.note(f"{sl}: stopped, time budget spent", "warn")
+                if code:
+                    t.note(f"{sl}: baseline_cmd exited {code}", "error")
+                new = [e for e in self.slice_evals(model, sl) if e["id"] not in before]
+                if replace and new:  # the old runs stop counting only once a fresh complete one exists
+                    gone = self.supersede(model, sl, new[-1]["id"])
+                    if gone:
+                        t.note(f"{sl}: {len(gone)} earlier run(s) superseded by {new[-1]['id']}")
+                with lock:
+                    finished.append(sl)
+                    fresh.extend([sl] if new else [])
+                    t.progress(len(finished))
+
+            with ThreadPoolExecutor(max(1, jobs)) as pool:
+                list(pool.map(one, todo))
+            after = self.baseline_plan(model)
+            t.note(f"still missing: {', '.join(after['need'])}" if after["need"] else f"every slice has a {model} baseline",
+                   "warn" if after["need"] else "info")
+            t.meta["summary"] = dict(reused=0 if rerun else len(plan["have"]), ran=len(fresh), missing=len(after["need"]))
+            self.log_decision("baseline", model=model, task=t.id, reused=t.meta["summary"]["reused"], ran=len(fresh),
+                              missing=after["need"])
+            t.check()  # a spent budget ends the card as `budget`, not `done`
+        say(f"still missing: {', '.join(after['need'])} (baseline_cmd must record a complete eval of {{model}} on {{slice}})"
+            if after["need"] else f"done: {model} has a baseline on all {len(after['roles'])} slices ({len(fresh)} run now)")
+        return after | dict(ran=len(fresh))
+
+    def promote(self, model_name: str, force: bool = False, baseline: bool = True, **baseline_kw) -> dict | None:
+        """Make the model champion, then (unless `baseline=False`) baseline it on every hill: see `baseline()`.
+        Returns the baseline result."""
         g = self.gate(model_name)
         if not g["promotable"] and not force:
             raise SystemExit(f"{model_name} has not passed every rung; see `arx gate {model_name}`")
@@ -453,6 +566,16 @@ class Project:
         if hill and hill in self.hills():
             self._upsert("hills", hill, status="climbed", climbed_by=model_name)
         self.log_decision("promote", model=model_name, replaced=old, gate=g)
+        return self.baseline(model_name, **baseline_kw) if baseline else None
+
+
+def _ago(t) -> str:
+    if not t:
+        return "age unknown"
+    d = now() - t
+    if d < 60:
+        return "just now"
+    return f"{d / 86400:.0f}d ago" if d >= 86400 else f"{d / 3600:.0f}h ago" if d >= 3600 else f"{d / 60:.0f}m ago"
 
 
 # ---------------------------------------------------------------- live tasks

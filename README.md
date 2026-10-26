@@ -134,6 +134,7 @@ them and each lives at `/p/<key>/`.
 | `arx run --manifest m.json --expected-sha256 <sha>` | Launch a reviewed, hash-pinned command as a task; scored runs check rows against the slice |
 | `arx gate <model>` | Where a candidate stands on the ladder, and the next run |
 | `arx promote <model>` | Make it champion, and mark its hill as climbed |
+| `arx baseline [model]` | Run the champion on every hill and dataset slice it lacks (after `promote`, automatic with `baseline_cmd`) |
 | `arx reject <model>` | Keep a failed candidate in the ledger, with the reason |
 | `arx paper new \| check \| add \| edit` | Write, lint and publish a paper at `/papers/<name>` |
 | `arx paper poll \| reply \| resolve` | The agent's side of comment threads |
