@@ -273,6 +273,7 @@ function taskCard(t){
 }
 
 // ---------- views
+const running=(m,s)=>active().some(t=>t.kind==='eval'&&t.model===m&&t.slice===s);
 function vOverview(){
  const st=S.state,champ=st.champion,ds=Object.keys(st.datasets);
  const cands=Object.entries(st.models).filter(([k,m])=>m.status==='candidate');
@@ -282,6 +283,8 @@ function vOverview(){
   <div class="card tile"><div class="k">Running</div><div class="v">${active().length}</div><div class="s">${active().filter(t=>t.status==='stalled').length?`<span class="neg">${active().filter(t=>t.status==='stalled').length} stalled</span>`:''}</div></div>
   <div class="card tile"><div class="k">Candidates</div><div class="v">${cands.length}</div><div class="s">${cands.filter(([k])=>st.gates[k]?.promotable).length?cands.filter(([k])=>st.gates[k]?.promotable).length+' promotable':''}</div></div>
   <div class="card tile"><div class="k">Open hills</div><div class="v">${Object.values(st.hills).filter(h=>h.status==='open').length}</div><div class="s">${Object.values(st.hills).filter(h=>h.status==='climbed').length} climbed</div></div></div>`;
+ const bl=st.baseline;
+ if(bl?.need.length)h+=`<div class="card section"><h2>Champion baseline<span class="r">${Object.keys(bl.have).length} / ${Object.keys(bl.roles).length} slices</span></h2><div class="scroll"><table><tr><th>Slice</th><th>Measures</th><th class="num">n</th><th>${esc(champ)}</th></tr>${bl.need.map(s=>`<tr><td><b>${esc(short(s))}</b></td><td class="sub">${esc(bl.roles[s].join(', '))}</td><td class="num">${st.slices[s]?.n??''}</td><td>${running(champ,s)?'<span class="chip running">running</span>':'<span class="chip need_baseline">not run</span>'}</td></tr>`).join('')}</table></div></div>`;
  h+=`<div class="card section"><h2>Ladder<span class="r">vs ${esc(champ||'—')}</span></h2>${cands.length?`<div class="scroll"><table><tr><th>Model</th><th>Hill</th><th>Rungs</th><th class="num">Next</th></tr>${cands.map(([k,m])=>{const g=st.gates[k]||{};return `<tr class="click" onclick="location.hash='model/${encodeURIComponent(k)}'"><td><b>${esc(k)}</b><div class="sub">${esc(m.change||'')}</div></td><td>${esc(st.hills[m.hill]?.title||m.hill||'—')}</td><td>${ladderPills(g)}</td><td class="num sub">${g.promotable?'<span class="chip pass">promote</span>':g.next?.length?esc(g.next[0].model+' · '+short(g.next[0].slice)):(g.rungs||[]).some(r=>r.status==='fail')?'<span class="chip fail">stopped</span>':''}</td></tr>`}).join('')}</table></div>`:'<div class="empty">No candidates</div>'}</div>`;
  // leaderboard
  if(!S.lbDataset||!st.datasets[S.lbDataset])S.lbDataset=st.config.primary_dataset||ds[0];
@@ -308,7 +311,7 @@ function vArchive(){
  const kinds=['all',...new Set(archived().map(t=>t.kind))];
  const rows=archived().filter(t=>S.archiveKind==='all'||t.kind===S.archiveKind);
  return topbar('Archive')+`<div class="seg">${kinds.map(k=>`<button class="${k===S.archiveKind?'on':''}" onclick="S.archiveKind='${esc(k)}';render()">${esc(k)}</button>`).join('')}</div>
- <div class="card">${rows.length?`<div class="scroll"><table><tr><th>Ended</th><th>Task</th><th>Model</th><th>Slice</th><th>Status</th><th class="num">Score</th><th class="num">Took</th></tr>${rows.map(t=>`<tr class="click" onclick="location.hash='task/${encodeURIComponent(t.id)}'"><td class="sub">${ago(t.ended||t.updated)}</td><td><b>${esc(t.title)}</b><div class="sub">${esc(t.kind)}${t.agent?' · '+esc(t.agent):''}</div></td><td>${esc(t.model||'')}</td><td>${esc(short(t.slice)||'')}</td><td><span class="chip ${t.status}">${t.status}</span>${t.kind==='eval'&&t.status==='done'&&!t.complete?' <span class="chip fail">partial</span>':''}</td><td class="num">${t.summary?.score!=null?pct(t.summary.score):''}</td><td class="num sub">${t.ended?dur(t.created,t.ended):''}</td></tr>`).join('')}</table></div>`:'<div class="empty">Empty</div>'}</div>`;
+ <div class="card">${rows.length?`<div class="scroll"><table><tr><th>Ended</th><th>Task</th><th>Model</th><th>Slice</th><th>Status</th><th class="num">Score</th><th class="num">Took</th></tr>${rows.map(t=>`<tr class="click" onclick="location.hash='task/${encodeURIComponent(t.id)}'"><td class="sub">${ago(t.ended||t.updated)}</td><td><b>${esc(t.title)}</b><div class="sub">${esc(t.kind)}${t.agent?' · '+esc(t.agent):''}</div></td><td>${esc(t.model||'')}</td><td>${esc(short(t.slice)||'')}</td><td><span class="chip ${t.status}">${t.status}</span>${t.kind==='eval'&&t.status==='done'&&!t.complete?' <span class="chip fail">partial</span>':''}${t.superseded_by?' <span class="chip">superseded</span>':''}</td><td class="num">${t.summary?.score!=null?pct(t.summary.score):''}</td><td class="num sub">${t.ended?dur(t.created,t.ended):''}</td></tr>`).join('')}</table></div>`:'<div class="empty">Empty</div>'}</div>`;
 }
 function vModels(){
  const st=S.state,ms=Object.entries(st.models).sort((a,b)=>b[1].created-a[1].created);
@@ -352,7 +355,7 @@ function vHills(){
    <div class="t">${esc(x.title)}</div>${(p=>p?`<span class="btn sm outline" style="align-self:flex-start" onclick="event.preventDefault();event.stopPropagation();location.href='${paperUrl(p)}'">${ICON.papers}Read the paper${p.waiting?` <span class="chip pending">${p.waiting}</span>`:''}</span>`:'')(paperOf(k))}
    <div class="sym">${esc(x.symptom||firstLine(x.problem))}</div>
    <div class="hprog">
-    <div><span>${esc(champ||'champion')}</span>${isBin(tsl)?scoreBar(now?.r.score,null,'champ'):''}<b>${now?(isBin(tsl)?solved(now.r)+' / '+now.r.n:val(now.r.score,tsl)):'—'}</b></div>
+    <div><span>${esc(champ||'champion')}</span>${isBin(tsl)?scoreBar(now?.r.score,null,'champ'):''}<b>${now?(isBin(tsl)?solved(now.r)+' / '+now.r.n:val(now.r.score,tsl)):champ?'<span class="sub">not run</span>':'—'}</b></div>
     <div><span>${esc(best?.m||'no attempt')}</span>${isBin(tsl)?scoreBar(best?.r.score,now?.r.score):''}<b>${best?(isBin(tsl)?solved(best.r)+' / '+best.r.n:val(best.r.score,tsl)):'—'}</b></div>
    </div>
    <div class="meta"><span>dev set ${esc(short(x.target))} · ${st.slices[x.target]?.n??'—'} examples</span><span>${(n=>n+(n===1?' attempt':' attempts'))(runs.filter(o=>o.m!==champ).length)}</span></div></a>`}).join('')}</div>`;
@@ -414,9 +417,14 @@ function vHill(key){
  ${x.problem||x.found_in?`<div class="card section"><details><summary>Pre-declared expectations</summary>${x.problem?`<p class="desc">${esc(x.problem)}</p>`:''}${x.found_in?`<p class="sub">Found in ${esc(x.found_in)}</p>`:''}</details></div>`:''}`;
  return h;
 }
+function champCell(s){
+ const st=S.state,b=st.baseline;if(!b)return '';
+ const h=b.have[s.name];if(h)return `<a href="#task/${encodeURIComponent(h.task)}">${isBin(s)?pct(h.score):esc(val(h.score,s))}</a>`;
+ return b.need.includes(s.name)?(running(st.champion,s.name)?'<span class="chip running">running</span>':'<span class="chip need_baseline">not run</span>'):'';
+}
 function vSlices(){
  const st=S.state;
- return topbar('Slices')+Object.entries(st.datasets).map(([d,x])=>`<div class="card section"><h2>${esc(x.title||d)}<span class="r">${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener" style="color:var(--blue)">dataset ↗</a>`:''}</span></h2><div class="scroll"><table><tr><th>Slice</th><th>Kind</th><th class="num">n</th><th>Hash</th><th>Score means</th><th>Hill</th><th></th></tr>${Object.values(st.slices).filter(s=>s.dataset===d).map(s=>`<tr><td><b>${esc(short(s.name))}</b>${s.description?`<div class="sub">${esc(s.description)}</div>`:''}</td><td><span class="chip">${esc(s.kind)}</span></td><td class="num">${s.n}</td><td class="sub"><code>${esc(s.hash)}</code>${s.seed!=null?' · seed '+s.seed:''}</td><td class="sub">${esc(s.metric||'')}</td><td>${esc(st.hills[s.hill]?.title||'')}</td><td>${s.url?`<a href="${esc(s.url)}" target="_blank" rel="noopener" style="color:var(--blue)">↗</a>`:''}</td></tr>`).join('')}</table></div></div>`).join('');
+ return topbar('Slices')+Object.entries(st.datasets).map(([d,x])=>`<div class="card section"><h2>${esc(x.title||d)}<span class="r">${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener" style="color:var(--blue)">dataset ↗</a>`:''}</span></h2><div class="scroll"><table><tr><th>Slice</th><th>Kind</th><th class="num">n</th><th class="num">${esc(st.champion||'Champion')}</th><th>Hash</th><th>Score means</th><th>Hill</th><th></th></tr>${Object.values(st.slices).filter(s=>s.dataset===d).map(s=>`<tr><td><b>${esc(short(s.name))}</b>${s.description?`<div class="sub">${esc(s.description)}</div>`:''}</td><td><span class="chip">${esc(s.kind)}</span></td><td class="num">${s.n}</td><td class="num">${champCell(s)}</td><td class="sub"><code>${esc(s.hash)}</code>${s.seed!=null?' · seed '+s.seed:''}</td><td class="sub">${esc(s.metric||'')}</td><td>${esc(st.hills[s.hill]?.title||'')}</td><td>${s.url?`<a href="${esc(s.url)}" target="_blank" rel="noopener" style="color:var(--blue)">↗</a>`:''}</td></tr>`).join('')}</table></div></div>`).join('');
 }
 function vTask(id){
  const st=S.state,d=S.detail;

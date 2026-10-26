@@ -42,6 +42,10 @@ project-specific numbers.
    A failed rung stops the candidate. Record why (`arx task note`) and either fix it as a new candidate or reject.
 6. **Promote.** `arx promote v8` re-checks every rung, makes V8 the champion and marks the hill *climbed*.
    A climbed hill's target slice becomes a permanent regression check for every future candidate.
+7. **Re-baseline.** Promotion runs `arx baseline` for the new champion: slices it already ran as a candidate are
+   reused, and it runs every other hill target/control and dataset slice with `baseline_cmd` from `research.json`
+   (e.g. `"python eval.py --model {model} --slice {slice}"`). Without one, it lists what to run. Re-run any time;
+   after a harness or judge change use `arx baseline --replace` so old numbers stop counting.
 
 ## Explaining a hill
 
@@ -113,7 +117,7 @@ Review loop:
 - Errors, crashes and timeouts score 0. A partial run is never ranked.
 - Report n, the paired delta and its 90% bootstrap interval. A delta whose interval spans 0 is shown as *noisy*;
   on 20–50 examples most deltas are. That is why the ladder widens before the claim does.
-- Re-run the champion when the harness, judge, data or tools change. Old numbers do not transfer.
+- Re-run the champion when the harness, judge, data or tools change. Old numbers do not transfer (`arx baseline --replace`).
 - The target slice is used for development. It is never evidence of general improvement; the full rung is.
 - Never show gold answers, gold sources or judge rationale to the system being evaluated.
 - Primary KPIs travel together: score, cost per example, latency p50/p95. A win that triples cost is reported as such.
