@@ -10,7 +10,7 @@ project-specific numbers.
 | **Dataset** | A full eval set (e.g. `qa`, 1,000 examples). Its ID list is frozen once. |
 | **Slice** | A frozen list of example IDs from one dataset, with a hash. Every score names its slice. |
 | **Random slice** | `random50`, `random100`: seeded draws. Nested: `random50` is the first 50 of `random100`. |
-| **Goal** | The outward claim: a target KPI on one slice, usually a full slice ("96% on gsm8k-test/full, n = 1319"). Hills serve it. It gets the public paper. |
+| **Goal** | The outward claim: a target KPI on one slice, usually a full slice ("96% on gsm8k/full, n = 1319"). Hills serve it. It gets the public paper. |
 | **Hill** | A specific weakness found in the champion ("V7 flips answers when the prompt says *please*"). |
 | **Target slice** | The slice that measures one hill. Small (20–60), targeted, often synthetic. Its score can be a custom metric (e.g. agreement with/without *please*), binary or continuous: set `--scale continuous` (and `--unit`) on a slice whose score is a number such as minus seconds; the default is 0/1. |
 | **Control slice** | A small random slice evaluated with every target slice, to see the overall effect. |
@@ -24,7 +24,7 @@ A project fights for one or more goals. A goal is fixed when it opens: the KPI, 
 and the starting champion (`baseline`). It is open, achieved or abandoned.
 
 ```
-arx goal open gsm8k-96 --title "GSM8K at 96%" --slice gsm8k-test/full --target 0.96
+arx goal open gsm8k-96 --title "GSM8K at 96%" --slice gsm8k/full --target 0.96
 arx hill open time-rate ... --goal gsm8k-96      # or: arx hill explain <hill> --goal gsm8k-96
 arx goal status [gsm8k-96]                         # champion's value, gap, paired delta vs the baseline, hills
 arx goal achieve gsm8k-96                          # refused until the champion meets the target on the goal slice

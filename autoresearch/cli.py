@@ -150,6 +150,12 @@ def cmd_slice(a):
     s = p.add_slice(a.name, _ids(a), kind=a.kind, description=a.description, url=a.url, hill=a.hill, metric=a.metric,
                     scale=a.scale, unit=a.unit)
     print(f"{a.name}: n={s['n']} hash={s['hash']}")
+    full = p.slices().get(f"{s['dataset']}/full")
+    if full and s["kind"] in ("dev", "control", "random"):  # synthetic slices may hold ids of their own
+        stray = set(s["ids"]) - set(full["ids"])
+        if stray:
+            print(f"warning: {len(stray)} of {s['n']} ids are not in {s['dataset']}/full (e.g. {sorted(stray)[0]!r}); "
+                  f"use --kind synthetic if that is intended", file=sys.stderr)
 
 
 def cmd_hill(a):
@@ -297,7 +303,7 @@ def cmd_task(a):
         t.progress(int(a.values[0]), int(a.values[1]) if len(a.values) > 1 else None)
     elif a.action == "left":  # exit 3 once spent, so shell loops can `while arx task left $id; do ...; done`
         left = t.left()
-        print("unlimited" if left is None else f"{left:.1f}s")
+        print("unlimited" if left is None else f"{max(left, 0.0):.1f}s")
         if not t.ok():
             sys.exit(3)
     elif a.action == "finish":
@@ -341,6 +347,8 @@ def cmd_paper(a):
     from . import papers
     p = Project()
     port = (json.loads((p.dir / "server.json").read_text()).get("port") if (p.dir / "server.json").exists() else None) or 8890
+    if not _port_open(port):  # stale server.json: point at the command that serves it rather than a dead port
+        print(f"(this project's dashboard is not running on {port}: `arx up` prints where it is served)", file=sys.stderr)
     if a.verb in ("add", "edit"):  # edit = republish; open pages swap the new version in without reloading
         if not a.name or not a.file:
             sys.exit(f"usage: arx paper {a.verb} <name> --file paper.html")

@@ -143,7 +143,7 @@ them and each lives at `/p/<key>/`.
 
 # Goals and papers
 
-A goal is the number the effort is for (`arx goal open gsm8k-96 --slice gsm8k-test/full --target 0.96`); hills
+A goal is the number the effort is for (`arx goal open gsm8k-96 --title "GSM8K at 96%" --slice gsm8k/full --target 0.96`); hills
 serve it. Each goal gets one public paper, each hill an internal one. People comment on any paragraph; a new
 comment goes to the agent automatically, and **Send to agent** (or typing `@agent`) hands a thread back to it.
 An agent answers by running `arx paper poll` in the project. See [goals](docs/guides/goals.md) and

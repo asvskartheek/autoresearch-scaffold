@@ -4,7 +4,7 @@ A goal is the number the work is for: one KPI, one target, on one frozen slice. 
 decides champions; the goal says when the effort is done.
 
 ```bash
-arx goal open gsm8k-96 --title "GSM8K at 96%" --slice gsm8k-test/full --target 0.96 \
+arx goal open gsm8k-96 --title "GSM8K at 96%" --slice gsm8k/full --target 0.96 \
   --problem "the product needs 96% on held-out maths"
 arx hill open percent-base --goal gsm8k-96 --title "Percent of the wrong base" --target percent-dev
 arx goal status [gsm8k-96] [--json]      # value now, gap, Δ vs the starting champion with a 90% CI

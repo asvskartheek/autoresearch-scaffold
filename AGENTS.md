@@ -53,7 +53,7 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
 - Failed candidates stay in the ledger as rejected, with the reason. Negative results are results.
 
 ## Goals
-- Work serves a goal: a target KPI on one slice (`arx goal open <goal> --slice <full slice> --target 0.96`). Open
+- Work serves a goal: a target KPI on one slice (`arx goal open <goal> --title "<title>" --slice <full slice> --target 0.96`). Open
   hills with `--goal <goal>`. `arx goal status` before reporting progress; `arx goal achieve` only when it passes.
 - A goal is not a task. Its evidence comes from the ledger, never from a number typed by hand.
 

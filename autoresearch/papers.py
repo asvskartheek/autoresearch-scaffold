@@ -227,9 +227,12 @@ def check(html: str, slices=()) -> list[tuple[str, str]]:
         out.append(("warn", f"rounded pill: {m.group(0)!r}; no pill bubbles"))
     if 'data-theme="dark"' not in html:  # the reader sets data-theme on the paper; it follows the page's toggle
         out.append(("error", 'no dark mode: style :root[data-theme="dark"] (the reader sets it)'))
-    for left in ("gsm8k-percent-base", "Removing the inherited adapter", "arx-mem:gsm8k-96", "a 4B model from 87.6%"):  # `arx paper new` leftovers
+    for left in ("gsm8k-percent-base", "arx-mem:gsm8k-96"):  # `arx paper new` leftovers: storage keys
         if left in html:
-            out.append(("warn", f"still has the example's {left!r}: rewrite it (a shared storage key mixes Remember progress)"))
+            out.append(("warn", f"still has the example's storage key {left!r}: rename it, or Remember progress mixes with the example's"))
+    for left in ("Removing the inherited adapter", "a 4B model from 87.6%"):  # ... and text
+        if left in html:
+            out.append(("warn", f"still has the example's text {left!r}: rewrite it for this paper"))
     if "Instrument Sans" not in html:
         out.append(("warn", "does not use the shared theme fonts (Instrument Sans, Bricolage Grotesque, JetBrains Mono)"))
     return out

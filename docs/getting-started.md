@@ -30,8 +30,9 @@ cd my-research
 1. Copies `AGENTS.md`, `CLAUDE.md`, `PROTOCOL.md` and `research.json` into the project (only those missing).
 2. **Vendors** the `autoresearch/` package into the project, so `import autoresearch` works from the project's own
    Python environment without installing anything into it. Run `arx sync` after upgrading ARX to refresh the copy.
-3. Adds `scratch/` and `.research/tasks/*/rows.jsonl` to `.gitignore`.
-4. Starts the dashboard (`arx up`) and opens a running **Project setup** task.
+3. Adds `scratch/`, `.research/tasks/*/rows.jsonl`, `.research/server.json` and `.research/server.log` to `.gitignore`.
+4. Registers the project in `~/.arx/projects.json` (`$ARX_HOME` overrides `~/.arx`), starts the dashboard
+   (`arx up`; skip with `--no-serve`) and opens a running **Project setup** task.
 
 Why a setup task? Setup is work too: installs, model downloads and data prep take time and fail in interesting ways.
 Note each step on it (`arx task note <id> "downloaded weights"`) and finish it when the first eval can run.
@@ -39,7 +40,7 @@ Note each step on it (`arx task note <id> "downloaded weights"`) and finish it w
 ## The dashboard: `arx up`
 
 ```bash
-arx up            # prints http://127.0.0.1:8890 (or the next free port)
+arx up            # prints http://127.0.0.1:8890 (or the next free port) and this project's /p/<key>/ URL
 arx up --restart  # after upgrading
 ```
 
@@ -49,11 +50,13 @@ and records the new port and pid. The server only binds to `127.0.0.1`.
 
 | View | Shows |
 |---|---|
+| Goals | Each target KPI: value now, gap, paired Δ vs the starting champion, the hills that serve it |
 | Overview | Champion, candidate ladder, leaderboards by dataset and slice: score, Δ champion, errors, cost, p50/p95 |
 | Workbench | A card per running task: progress, ETA, sparkline, heartbeat. Stalled tasks turn red |
 | Task page | Every logged series as a chart, paired diff vs the champion, per-example strip, log, links |
 | Models | Lineage and rungs; each gate check with its delta, CI and win/loss count |
 | Hills | Each weakness as a card, with an example, how common it is and every attempt |
+| Papers | Goal papers (public) and hill papers (internal), with comment threads |
 | Slices | Frozen ID sets with hash, seed, metric and dataset link |
 | Archive | Finished, failed and partial tasks |
 

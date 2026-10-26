@@ -12,7 +12,7 @@ Every command runs against the project found by walking up from the current dire
 | `arx sync` | Refresh the vendored `autoresearch/` from the installed package and restart the dashboard |
 | `arx serve [--port]` | Run the server in the foreground (what `up` launches) |
 | `arx status` | Running tasks, each candidate's rungs, goals, hills |
-| `arx projects [ls \| add PATH \| rm KEY]` | The projects one dashboard serves (`~/.arx/projects.json`); each is at `/p/<key>/` |
+| `arx projects [ls \| add PATH \| rm KEY]` | The projects one dashboard serves (`~/.arx/projects.json`, or `$ARX_HOME/projects.json`); each is at `/p/<key>/` |
 
 ## Data
 
@@ -25,7 +25,7 @@ Every command runs against the project found by walking up from the current dire
 
 | Command | Does |
 |---|---|
-| `arx goal open NAME --slice S --target T [--title] [--kpi score\|cost\|latency_p50\|latency_p95] [--lower-is-better] [--baseline M] [--problem P]` | Open a goal: a target KPI on one slice |
+| `arx goal open NAME --title T --slice S --target T [--kpi score\|cost\|latency_p50\|latency_p95] [--lower-is-better] [--baseline M] [--problem P]` | Open a goal: a target KPI on one slice |
 | `arx goal status [NAME] [--json]` | Value now, gap to target, paired Δ vs the starting champion |
 | `arx goal achieve NAME [--note N] [--force]` | Close it as achieved; refused unless the ledger meets the target (or `--force`) |
 | `arx goal abandon NAME --reason R` | Close it as abandoned, with the reason |
@@ -74,7 +74,7 @@ arx paper check (NAME | --file F) [--goal GOAL]                       # lint; ex
 arx paper add|edit NAME --file F [--title] [--hill H] [--goal G]       # publish / republish
 arx paper ls
 arx paper poll [NAME] [--timeout S]                                   # block until someone waits on the agent
-arx paper reply NAME THREAD "text" [--link label=url] [--file page.html] [--author agent]
+arx paper reply NAME THREAD "text" [--link label=url|label=#block] [--file page.html] [--author agent]
 arx paper resolve NAME THREAD ["note"]
 arx paper attach NAME --file page.html
 ```

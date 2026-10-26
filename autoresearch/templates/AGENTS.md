@@ -26,6 +26,10 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
   `arx task start --parent <id>`. Keep each card's latest note current; it is the line people read.
 - Long jobs: visible progress, bulk/concurrent calls, a wall-clock deadline. A stalled task (no heartbeat for
   10 minutes) shows red; fix or fail it, never leave it.
+- Time budgets: when the work has a time cap, put it on the task (`budget_s=`; shell `--budget-s`) and drive the
+  loop with `while t.ok():` / `t.check()` (shell: `while arx task left $id; do ...; done`). Sub-tasks and evals are
+  held to the tightest cap above them. Do not keep a separate clock next to the work. A task stopped by its budget
+  ends as `budget`.
 
 ## Evaluating
 - Run evals through `arx.evaluate(model, slice, run_one)`. It enforces the slice's exact IDs, counts errors as 0,
@@ -49,7 +53,7 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
 - Failed candidates stay in the ledger as rejected, with the reason. Negative results are results.
 
 ## Goals
-- Work serves a goal: a target KPI on one slice (`arx goal open <goal> --slice <full slice> --target 0.96`). Open
+- Work serves a goal: a target KPI on one slice (`arx goal open <goal> --title "<title>" --slice <full slice> --target 0.96`). Open
   hills with `--goal <goal>`. `arx goal status` before reporting progress; `arx goal achieve` only when it passes.
 - A goal is not a task. Its evidence comes from the ledger, never from a number typed by hand.
 
