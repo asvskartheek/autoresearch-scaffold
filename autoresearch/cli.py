@@ -379,7 +379,7 @@ def cmd_paper(a):
             sys.exit(f"{out} exists")
         shutil.copy(TEMPLATE / "paper-goal-example.html", out)
         st = p.goal_status(a.goal)
-        print(f"{out}\nrewrite it for goal {a.goal!r} (checklist: PROTOCOL.md § Goal papers). From the ledger:\n"
+        print(f"{out}\na worked example: one possible shape, not a template (PROTOCOL.md § Papers). From the ledger:\n"
               f"  target  {st['kpi']} {_kpi_fmt(st, st['target'])} on {st['slice']}, n = {st['n']}\n"
               f"  now     {st['model']}: {_kpi_fmt(st, st['value'])} [{st['status']}]\n"
               + (f"  vs {st['baseline']}: Δ {_fmt(st['vs_baseline']['delta'])} pts, 90% CI [{_fmt(st['vs_baseline']['lo'])}, {_fmt(st['vs_baseline']['hi'])}], n = {st['vs_baseline']['n']}\n" if st["vs_baseline"] else "")
@@ -392,7 +392,8 @@ def cmd_paper(a):
         if out.exists():
             sys.exit(f"{out} exists")
         shutil.copy(TEMPLATE / "paper-example.html", out)
-        print(f"{out}\nrewrite it for hill {a.name!r} (checklist: PROTOCOL.md § Papers), then:\n"
+        print(f"{out}\na worked example: one possible shape, not a template. Pick the structure hill {a.name!r} needs;\n"
+              f"only the non-negotiables in PROTOCOL.md § Papers are fixed. Then:\n"
               f"  arx paper check --file {out}\n  arx paper add {a.name} --hill {a.name} --file {out}")
     elif a.verb == "check":  # lint a paper (published name or a file) against PROTOCOL.md before publishing it
         src = Path(a.file) if a.file else papers.pdir(p, a.name or "") / "paper.html"

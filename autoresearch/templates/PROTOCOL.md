@@ -103,41 +103,54 @@ Two kinds, one reader (`/papers/<name>`):
   too), and keep it current while the hill is open. The dashboard and the goal paper label it internal.
 
 Never start a second paper for the same goal or hill: republish with `arx paper edit <name> --file paper.html`.
+Check every page before every publish: `arx paper check --file paper.html` (goal papers: add `--goal <goal>`).
 
-Start from `arx paper new --goal <goal>` or `arx paper new <hill>`: each writes a worked example (gsm8k, real
-numbers) that carries the shared theme and every widget; replace its content. `new --goal` also prints the ledger
-numbers the final result needs. Check every page before every publish: `arx paper check --file paper.html`, and
-for a goal paper `arx paper check --goal <goal> --file paper.html`. The checks enforce what a machine can see.
+### Non-negotiables
 
-Goal paper, on top of the checklist below:
-- [ ] A `result` section (`<section data-block="result">`) with the goal KPI, its slice and `n = <n>`, the target,
-      the champion's value from the ledger, and the paired delta vs the starting champion with its 90% interval.
-- [ ] A link to every internal hill paper of the goal: `<a class="internal" href="../<hill>" target="_top">`.
-- [ ] "Draft" on the page while the goal is open; "abandoned" if it was. No dev-slice number is the claim.
+`arx paper check` enforces what a machine can see; the rest is on the author.
 
-**Show, don't tell.** Readers are serious and want to understand fully; text is the slowest way to get there.
-Every claim is carried by something they can see or do: a chart they can hover, a slider that moves the number,
-tabs that switch the run, a per-example grid they can click, a diagram of the mechanism, a before/after they can
-toggle. Prose only captions it: what to look at, and what it means. `arx paper check` enforces a budget: at most
-100 words of prose per section and 50 per paragraph. If an idea does not fit, it needs a better figure, not more
-words. Build the figure first, then write the caption.
+- [ ] **Ledger numbers only.** Every number comes from `.research/`, names its slice and n (`full, n = 1319`), and a
+      comparison is a paired delta vs the champion with its 90% interval. Noisy deltas are called noisy. For a
+      continuous hill, give the unit and direction (`p50 latency, ms, lower is better`).
+- [ ] **A visual carries each claim.** Any section that states a number has a figure (SVG, canvas, image, poster)
+      where the reader can find it without the prose.
+- [ ] **Prose budget.** At most 100 words of prose per section and 50 per paragraph. Prose captions; it never
+      carries the argument. A long paper is fine; a wall of text is not. Split the idea into more sections.
+- [ ] **Anchors.** `data-block="<id>"` on every `<section>`, `<p>` and `<figure>`, unique: comments anchor to them.
+- [ ] **Something to do.** At least one explorable the reader drives (input, button, select, details, canvas).
+- [ ] **Recall.** A `remember` section (`<section data-block="remember">`) for long-term recall, progress in
+      `localStorage` under a key of this paper's own, and at least one quiz (`class="quiz"`) whose answer explains why.
+- [ ] **Theme.** Dark mode under `:root[data-theme="dark"]` (the reader sets it); no serif fonts; no pill bubbles.
+- [ ] **Safe.** Self-contained HTML (inline CSS and JS). No client text, answers or traces: ids, categories, paraphrase.
+- [ ] **Goal papers** also need: a `result` section with the goal KPI, its slice and `n = <n>`, the target, the
+      champion's ledger value and the paired delta vs the starting champion with its 90% interval; a link to every
+      internal hill paper (`<a class="internal" href="../<hill>" target="_top">`); "draft" while the goal is open,
+      "abandoned" if it was. No dev-slice number is the claim.
 
-Checklist:
-- [ ] Hill paper sections: `abstract`, `problem`, `method`, `tried`, `win` (or `result`), `now`, `test`, `remember`.
-      Goal paper sections: `abstract`, `result`, `climb`, `method`, `now`, `test`, `remember`.
-- [ ] `data-block="<id>"` on every `<section>`, `<p>` and `<figure>`, unique. Comments anchor to blocks, replies link to them.
-- [ ] Every section has a visual (inline SVG chart, poster, diagram) and something to do (slider, tabs, a reveal, a quiz).
-      The visual carries the claim; the reader can find the number in it without reading the prose.
-- [ ] A pop quiz (`class="quiz"`) in most sections and a closing test: at least 3. Each answer explains why.
-- [ ] A `remember` section for long-term recall: flip cards, number recall, ordering, explain-it-back; progress in
-      `localStorage` so people can come back.
-- [ ] Real numbers from the ledger only. Every number names its slice and n (`full, n = 1319`), with the paired delta
-      and its 90% interval vs the champion. Noisy deltas are called noisy. For a continuous hill, give the unit and
-      direction (`p50 latency, ms, lower is better`).
-- [ ] ASD-STE100 prose: short sentences, one idea each, active voice, no jargon without a definition.
-- [ ] The shared theme: Instrument Sans, Bricolage Grotesque for headings, JetBrains Mono for numbers; navy/teal/coral/gold;
-      no serif fonts; no pill bubbles; dark mode under `:root[data-theme="dark"]` (the reader sets it from its toggle).
-- [ ] Self-contained HTML (inline CSS and JS). No client text, answers or traces: paraphrase examples.
+### Freedom
+
+Everything else is the author's call: structure, section names, order, length, narrative, widget types, palette
+within the theme. There is no fixed section list. Pick the shape the finding needs: a mystery solved in steps, a
+simulator with commentary, a gallery of failures, a single explorable with a long caption, a timeline of attempts.
+`arx paper new` writes a worked example (gsm8k, real numbers): it is one possible shape, not a template. Two papers
+from one project should not look alike.
+
+### Building intuition
+
+Readers are serious researchers. They want the mechanism in their hands, not a summary of it. Illustrating a
+number is not enough; let them find it. Patterns that work:
+
+- **Explorable explanation.** The reader turns the knob of the mechanism (a threshold, a budget, a step count) and
+  watches the outcome change, using the real per-example rows.
+- **Predict, then reveal.** Ask the reader to guess (a slider, a choice) before showing the ledger value. A wrong
+  guess teaches more than a right caption.
+- **Simulate the failure.** Replay how the baseline breaks, step by step, on a paraphrased example, then the fix.
+- **Per-example drill-down.** A grid of example ids; click one to see where each model won or lost.
+- **Counterfactual toggle.** Turn a component off and see which examples flip, and by how much the score moves.
+- **Build it step by step.** Introduce one piece of the concept at a time; each step adds to the same figure.
+
+One strong explorable that builds the core intuition beats five decorative widgets. Build it first; write the
+captions last. Prose: ASD-STE100, short sentences, active voice, define jargon.
 
 Review loop:
 - People select text and comment. `arx paper poll` blocks until someone waits on you, in any paper, and prints one

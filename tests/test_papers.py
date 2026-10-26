@@ -134,6 +134,15 @@ class Check(unittest.TestCase):
         self.assertTrue(any("60-word paragraph" in m for m in errs), errs)
         self.assertTrue(any("words of prose" in m for m in errs), errs)
 
+    def test_free_structure_passes(self):  # no fixed sections: any shape that meets the non-negotiables
+        free = ('<style>:root[data-theme="dark"]{} body{font-family:"Instrument Sans"}</style>'
+                '<section data-block="sim"><p data-block="c">Step the agent; slice full, n = 40, 31/40 right.</p>'
+                '<figure data-block="f"><svg></svg></figure><input type="range"></section>'
+                '<section data-block="remember"><div class="quiz">Why?</div></section>')
+        self.assertEqual([m for lv, m in papers.check(free, slices=["full"]) if lv == "error"], [])
+        bare = free.replace('<figure data-block="f"><svg></svg></figure>', "")
+        self.assertTrue(any("no visual" in m for _, m in papers.check(bare, slices=["full"])))
+
     def test_template_is_the_example(self):
         self.assertEqual((Path(papers.__file__).parent / "templates" / "paper-example.html").read_text(), EXAMPLE.read_text())
 
@@ -141,7 +150,7 @@ class Check(unittest.TestCase):
         bad = ('<style>body{font-family:Georgia,serif}.t{border-radius:999px}</style>'
                '<section data-block="a"><p>Accuracy rose to 81%.</p><p data-block="x">x</p><p data-block="x">y</p></section>')
         msgs = " | ".join(m for _, m in papers.check(bad, slices=["full"]))
-        for want in ("duplicate data-block", "<p> without data-block", "nothing to interact", "never says n",
+        for want in ("duplicate data-block", "<p> without data-block", "nothing to interact", "never says n", "no visual",
                      "0 quizzes", "Remember", "names no slice", "serif font", "pill", "dark mode"):
             self.assertIn(want, msgs)
         self.assertNotIn("serif font", " ".join(m for _, m in papers.check("<style>a{font-family:ui-sans-serif,sans-serif}</style>")))

@@ -181,12 +181,14 @@ SERIF = re.compile(r"font-family\s*:[^;}\"]*\b(Georgia|Times|Garamond|Merriweath
 PILL = re.compile(r"border-radius\s*:\s*(\d{3,}px|50%|\d+(\.\d+)?em)", re.I)
 WIDGET = re.compile(r"<(input|button|select|textarea|details|canvas)\b|data-widget", re.I)
 NUMBER = re.compile(r"(\d+(\.\d+)?\s*%|\d+/\d+)(?!\s*(CI|goal|target|interval))")
+VISUAL = re.compile(r"<svg\b|<canvas\b|<img\b|class=\"[^\"]*\bposter", re.I)
 N_SIZE = re.compile(r"\bn\s*=\s*\d", re.I)
 PROSE_SECTION, PROSE_PARA = 100, 50  # words: a section's prose captions its visuals; it never carries the argument
 
 
 def check(html: str, slices=()) -> list[tuple[str, str]]:
-    """Lint a paper against the rules in PROTOCOL.md. Returns (level, message); level is "error" or "warn"."""
+    """Lint a paper against the non-negotiables in PROTOCOL.md § Papers; structure is the author's choice.
+    Returns (level, message); level is "error" or "warn"."""
     out = []
     body = re.sub(r"<script\b.*?</script>|<style\b.*?</style>", "", html, flags=re.S | re.I)
     blocks = re.findall(r'data-block="([^"]*)"', body)
@@ -201,10 +203,6 @@ def check(html: str, slices=()) -> list[tuple[str, str]]:
     if not sections:
         out.append(("error", "no <section data-block=...>: the paper needs sections"))
     for sid, inner in sections:
-        if not WIDGET.search(inner):
-            out.append(("error", f"section {sid!r} has nothing to interact with (input, button, select, details, canvas)"))
-        if not re.search(r"<svg\b|<canvas\b|<img\b|class=\"[^\"]*(poster|\bquiz)", inner, re.I):
-            out.append(("error", f"section {sid!r} has no visual (svg, canvas, img or poster): show it, don't tell it"))
         paras = [len(re.sub(r"<[^>]+>", " ", x).split()) for x in re.findall(r"<p\b[^>]*>(.*?)</p>", inner, re.S | re.I)]
         if sum(paras) > PROSE_SECTION:
             out.append(("error", f"section {sid!r} has {sum(paras)} words of prose (max {PROSE_SECTION}): move the argument into a figure or widget"))
@@ -214,9 +212,12 @@ def check(html: str, slices=()) -> list[tuple[str, str]]:
         text = re.sub(r"<[^>]+>", " ", inner)
         if NUMBER.search(text) and not N_SIZE.search(text):
             out.append(("error", f"section {sid!r} reports numbers but never says n = …"))
-    quizzes = len(re.findall(r'class="[^"]*\bquiz\b', body))
-    if quizzes < 3:
-        out.append(("error", f"{quizzes} quizzes (class=\"quiz\"); give a pop quiz per section and a closing test"))
+        if NUMBER.search(text) and not VISUAL.search(inner):
+            out.append(("error", f"section {sid!r} states numbers but has no visual (svg, canvas, img or poster) that carries them"))
+    if not WIDGET.search(body):
+        out.append(("error", "nothing to interact with (input, button, select, details, canvas): give the reader an explorable"))
+    if not re.search(r'class="[^"]*\bquiz\b', body):
+        out.append(("error", "0 quizzes (class=\"quiz\"); give at least one recall question whose answer explains why"))
     if not re.search(r'data-block="remember"', body):
         out.append(("error", "no Remember section (<section data-block=\"remember\">) for long-term recall"))
     if slices and not any(s in body or s.rsplit("/", 1)[-1] in body for s in slices):  # gsm8k-test/full or full

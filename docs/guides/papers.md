@@ -18,9 +18,13 @@ arx paper edit count-list --file paper-count-list.html   # republish; open pages
 arx paper ls
 ```
 
-`arx paper check` must report 0 errors before every publish. It checks that every `section`, `p` and `figure`
-has a `data-block` id (comments anchor to them), that numbers name their slice and n, and for goal papers that the
-final value, the paired delta vs the starting champion and links to the hill papers are present.
+`arx paper new` copies a worked example. It is one possible shape, not a template: structure, length, section
+names and widgets are the author's choice. Only the non-negotiables in PROTOCOL.md § Papers are fixed.
+
+`arx paper check` must report 0 errors before every publish. It checks those non-negotiables: a `data-block` id on
+every `section`, `p` and `figure` (comments anchor to them), numbers that name their slice and n and sit next to a
+visual, the prose budget, at least one explorable, a quiz and a Remember section, dark mode and no serif fonts; for
+goal papers, the final value, the paired delta vs the starting champion and links to the hill papers.
 
 ## Comments and the agent
 
