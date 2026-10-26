@@ -61,11 +61,8 @@ row (`error="deadline"`, score 0), so the run is marked incomplete and never ran
 
 ## Money budgets: not yet
 
-There is no `budget_usd`. ARX can't see cost: it never calls your model, so it only learns what a call cost if the
+Tasks have no money cap. (The `budget_usd` field of a paid [`arx run`](run.md) manifest is a declared limit you approve, not tracked spend.) ARX can't see cost: it never calls your model, so it only learns what a call cost if the
 harness reports it, and most harnesses report nothing or report it late. A money cap that silently counts $0 would
 look like a guardrail without being one. Row `cost` is still recorded and shown on leaderboards, but it does not
 count against anything. The open design question is tracked in
 [issue #6 "Money budgets for tasks"](https://github.com/asvskartheek/autoresearch-scaffold/issues/6).
-
-!!! note
-    Budgets were added in PR #5 (`task-budgets`). These docs describe that branch.

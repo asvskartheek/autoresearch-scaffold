@@ -1,14 +1,17 @@
 """Loopback-only dashboard server. Serves dashboard.html and aggregate JSON computed from `.research/`."""
 from __future__ import annotations
 
-import json, time
+import gzip, json, mimetypes, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit
 
+from . import papers, projects
 from .core import Project, paired, per_id
 
 HTML = Path(__file__).with_name("dashboard.html")
+PAPER = Path(__file__).with_name("paper.html")
+UI = Path(__file__).with_name("ui.css")
 
 
 def _downsample(points: list[dict], cap: int = 600) -> list[dict]:
@@ -51,6 +54,24 @@ def infer_parents(tasks: list[dict]) -> None:
 
 
 def state(p: Project) -> dict:
+    with p.snapshot():
+        return _state(p)
+
+
+_SUMMARY_KEEP = (int, float, bool, type(None))
+
+
+def _slim(t: dict) -> dict:
+    """List views need a task's status, numbers and a line of text; the full record loads with /api/task/<id>."""
+    t = {k: v for k, v in t.items() if k not in ("command", "links", "host", "pid", "env", "manifest")}
+    if isinstance(t.get("summary"), dict):
+        t["summary"] = {k: v for k, v in t["summary"].items() if isinstance(v, _SUMMARY_KEEP)}
+    if isinstance(t.get("description"), str) and len(t["description"]) > 280:
+        t["description"] = t["description"][:277] + "..."
+    return t
+
+
+def _state(p: Project) -> dict:
     slices = {k: {kk: vv for kk, vv in v.items() if kk != "ids"} | {"name": k} for k, v in p.slices().items()}
     models, tasks = p.models(), p.tasks()
     champ = p.champion()
@@ -81,9 +102,41 @@ def state(p: Project) -> dict:
         t["eta"] = eta(p, t)
         t["spark"] = {"key": keys[0], "y": [s.get(keys[0]) for s in series if isinstance(s.get(keys[0]), (int, float))]} if keys else None
     return dict(config=p.config, now=time.time(), champion=champ, datasets=p.datasets(), slices=slices,
-                hills=p.hills(), models=models, gates=gates, tasks=tasks, leaderboard=board,
+                hills=p.hills(), models=models, papers=papers.papers(p), gates=gates, tasks=[_slim(t) for t in tasks], leaderboard=board,
+                goals=goals(p),
                 baseline=p.baseline_plan(champ) if champ else None,
                 decisions=_tail(p.dir / "decisions.jsonl", 50))
+
+
+def goals(p: Project) -> dict:
+    out = {}
+    for name in p.goals():
+        try:
+            out[name] = p.goal_status(name)
+        except SystemExit as e:
+            out[name] = dict(p.goals()[name], name=name, error=str(e))
+    return out
+
+
+def project_list(default: Project) -> list[dict]:
+    """Every registered project with its goals, for the sidebar and the projects view. The served one comes first."""
+    reg = projects.registry()
+    dk = projects.key_for(default.root)
+    keys = ([dk] if dk in reg else []) + [k for k in reg if k != dk]
+    out = []
+    for k in keys:
+        try:
+            q = Project(reg[k]["root"])
+            ps = papers.papers(q)
+            with q.snapshot():
+                out.append(dict(key=k, name=q.config.get("name") or k, root=str(q.root), default=k == dk,
+                                champion=q.champion(), goals=goals(q), hills=len(q.hills()),
+                                open_hills=sum(1 for h in q.hills().values() if h.get("status") == "open"),
+                                waiting=sum(m["waiting"] for m in ps.values()),
+                                running=sum(1 for t in q.tasks() if t.get("status") in ("running", "stalled"))))
+        except Exception as e:  # a broken project never takes the list down
+            out.append(dict(key=k, name=k, root=reg[k]["root"], error=f"{type(e).__name__}: {e}"))
+    return out
 
 
 def _tail(path: Path, n: int) -> list:
@@ -133,23 +186,96 @@ def task_detail(p: Project, tid: str) -> dict:
     return out
 
 
+LOCAL = ("127.0.0.1", "localhost", "::1")
+HUMAN_KINDS = ("comment", "reply", "resolve", "reopen", "edit", "delete")
+
+
+def human_event(p: Project, name: str, kind: str, d: dict) -> dict | None:
+    """One event from the reader. People never post as the agent; ids they point at must exist in that paper."""
+    author = str(d.get("author") or "").strip()[:40] or "Reviewer"
+    if author.lower() in ("agent", "claude", "arx"):  # names the agent signs with; a person never posts as it
+        return None
+    body = str(d.get("body") or "").strip()[:4000]
+    log = {e["id"]: e for e in papers.thread(p, name)}
+    ids = set(log)
+    if kind == "comment":
+        a = d.get("anchor") if isinstance(d.get("anchor"), dict) else None
+        anchor = {k: str(a[k])[:600] for k in ("block", "quote", "prefix", "suffix") if a and a.get(k)} or None
+        return papers.post(p, name, "comment", body=body, anchor=anchor, author=author) if body and anchor else None
+    ref = str(d.get("parent" if kind in ("reply", "resolve", "reopen") else "target") or "")
+    if ref not in ids or (kind in ("reply", "edit") and not body):
+        return None
+    if kind == "reply":
+        return papers.post(p, name, "reply", parent=ref, body=body, author=author)
+    if kind in ("resolve", "reopen"):
+        return papers.post(p, name, kind, parent=ref, author=author)
+    t = log[ref]  # edit / delete: only your own message, never the agent's
+    if t["kind"] not in ("comment", "reply") or t.get("agent") or (t.get("author") or "") != author:
+        return None
+    return papers.post(p, name, kind, target=ref, body=body or None, author=author)
+
+
 def serve(port: int = 8890, root=None):
-    p = Project(root)
+    home = Project(root)
+    try:
+        projects.register(home.root)
+    except OSError:
+        pass  # a read-only home: the served project still works at /
+    cache: dict[str, Project] = {}
+
+    def pick(path: str) -> tuple[Project, str]:
+        """`/p/<key>/rest` serves a registered project; anything else serves the one this server started in."""
+        parts = path.split("/", 3)
+        if len(parts) >= 3 and parts[1] == "p" and parts[2]:
+            key = unquote(parts[2])
+            r = projects.root(key)  # KeyError for anything not in the registry: never an arbitrary path
+            if key not in cache or cache[key].root != r:
+                cache[key] = Project(r)
+            return cache[key], "/" + (parts[3] if len(parts) > 3 else "")
+        return home, path
 
     class H(BaseHTTPRequestHandler):
         def log_message(self, *a):
             pass
 
-        def _send(self, code, body: bytes, ctype):
+        def _send(self, code, body: bytes, ctype, extra=None):
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            for k, v in (extra or {}).items():
+                self.send_header(k, v)
+            if len(body) > 2048 and "gzip" in (self.headers.get("Accept-Encoding") or ""):
+                body = gzip.compress(body, compresslevel=5)
+                self.send_header("Content-Encoding", "gzip")
+            self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
 
+        def _local(self) -> bool:
+            # loopback only: a DNS-rebound page carries a foreign Host; a cross-site POST carries a foreign Origin
+            host = urlsplit("//" + (self.headers.get("Host") or "")).hostname
+            origin = self.headers.get("Origin")
+            return host in LOCAL and (not origin or urlsplit(origin).hostname in LOCAL)
+
         def do_GET(self):
             path = self.path.split("?")[0]
+            if not self._local():
+                return self._send(403, b'{"error":"not local"}', "application/json")
+            if path.startswith("/p/") and path.count("/") == 2:  # /p/<key> -> /p/<key>/ so relative fetches resolve
+                self.send_response(302); self.send_header("Location", path + "/"); self.end_headers(); return
             try:
+                full = path
+                p, path = pick(path)
+                base = full[:len(full) - len(path)]  # "/p/<key>" or ""
+                if path == "/api/projects":
+                    return self._send(200, json.dumps(project_list(home), default=str).encode(), "application/json")
+                if path == "/ui.css":
+                    return self._send(200, UI.read_bytes(), "text/css; charset=utf-8")
+                if path == "/ui-base.css":  # tokens and base type only: what an embedded paper inherits
+                    return self._send(200, UI.read_text().split("/* app shell")[0].encode(), "text/css; charset=utf-8")
+                if path.rstrip("/") == "/papers":  # the list of papers is a dashboard view
+                    self.send_response(302); self.send_header("Location", base + "/#papers"); self.end_headers(); return
                 if path in ("/", "/index.html"):
                     return self._send(200, HTML.read_bytes(), "text/html; charset=utf-8")
                 if path == "/api/state":
@@ -160,15 +286,55 @@ def serve(port: int = 8890, root=None):
                     return self._send(200, json.dumps(hill_detail(p, unquote(path.rsplit("/", 1)[1])), default=str).encode(), "application/json")
                 if path.startswith("/api/gate/"):
                     return self._send(200, json.dumps(p.gate(path.rsplit("/", 1)[1]), default=str).encode(), "application/json")
-            except (KeyError, SystemExit) as e:
-                return self._send(404, json.dumps(dict(error=str(e))).encode(), "application/json")
+                if path == "/api/papers":
+                    return self._send(200, json.dumps(papers.papers(p), default=str).encode(), "application/json")
+                parts = [unquote(x) for x in path.strip("/").split("/")]
+                if parts[0] == "papers" and len(parts) == 2:  # the reader
+                    return self._send(200, PAPER.read_bytes(), "text/html; charset=utf-8")
+                if parts[0] == "papers" and len(parts) == 3 and parts[2] == "raw":
+                    return self._send(200, (papers.pdir(p, parts[1]) / "paper.html").read_bytes(), "text/html; charset=utf-8")
+                if parts[0] == "papers" and len(parts) == 4 and parts[2] == "files":
+                    f = papers.file(p, parts[1], parts[3])
+                    # attachments run sandboxed (opaque origin): a widget cannot read other projects or post comments
+                    return self._send(200, f.read_bytes(), mimetypes.guess_type(f.name)[0] or "application/octet-stream",
+                                      {"Content-Security-Policy": "sandbox allow-scripts allow-popups"})
+                if parts[:2] == ["api", "paper"] and len(parts) == 3:
+                    body = dict(version=papers.version(p, parts[2]), meta=papers._read(papers.pdir(p, parts[2]) / "meta.json", {}),
+                                threads=papers.threads(papers.thread(p, parts[2])))
+                    return self._send(200, json.dumps(body, default=str).encode(), "application/json")
+            except (KeyError, SystemExit, OSError, ValueError):
+                return self._send(404, b'{"error":"not found"}', "application/json")
             self._send(404, b"not found", "text/plain")
 
+        def do_POST(self):
+            if not self._local():
+                return self._send(403, b'{"error":"cross-origin"}', "application/json")
+            try:
+                p, path = pick(self.path.split("?")[0])
+                parts = [unquote(x) for x in path.strip("/").split("/")]
+                if parts[:2] == ["api", "paper"] and len(parts) == 4 and parts[3] in HUMAN_KINDS:
+                    n = int(self.headers.get("Content-Length") or 0)
+                    if not 0 <= n <= 64_000:
+                        return self._send(413, b'{"error":"too large"}', "application/json")
+                    d = json.loads(self.rfile.read(n) or b"{}")
+                    if not isinstance(d, dict):
+                        return self._send(400, b'{"error":"bad request"}', "application/json")
+                    ev = human_event(p, parts[2], parts[3], d)
+                    if ev is None:
+                        return self._send(400, b'{"error":"bad request"}', "application/json")
+                    return self._send(200, json.dumps(ev).encode(), "application/json")
+            except (KeyError, ValueError, OSError):
+                return self._send(404, b'{"error":"not found"}', "application/json")
+            self._send(404, b"not found", "text/plain")
+
+    srv = None
     for port_try in range(port, port + 20):
         try:
             srv = ThreadingHTTPServer(("127.0.0.1", port_try), H)
             break
         except OSError:
             continue
+    if srv is None:
+        raise SystemExit(f"no free port in {port}-{port + 19}")
     print(f"dashboard: http://127.0.0.1:{port_try}")
     srv.serve_forever()

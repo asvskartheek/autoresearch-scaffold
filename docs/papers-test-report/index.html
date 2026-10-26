@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Papers Test Report</title>
+<style>
+:root{--bg:#f7f8fa;--card:#fff;--ink:#16213a;--muted:#5b6475;--border:#e3e6ec;--ok:#0f766e;--bad:#c2410c;--warn:#a16207;
+--font:"Instrument Sans",ui-sans-serif,system-ui,sans-serif;--mono:"JetBrains Mono",ui-monospace,Menlo,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#22272e;--card:#2d333b;--ink:#cdd9e5;--muted:#909dab;--border:#444c56;--ok:#5eb8a8;--bad:#f0886a;--warn:#d9b45c}}
+:root[data-theme="dark"]{--bg:#22272e;--card:#2d333b;--ink:#cdd9e5;--muted:#909dab;--border:#444c56;--ok:#5eb8a8;--bad:#f0886a;--warn:#d9b45c}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--font)}
+main{max-width:980px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:28px;margin:0 0 4px}h2{font-size:19px;margin:32px 0 10px}
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden;font-size:14px}
+td,th{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}th{color:var(--muted);font-weight:600}
+.ok{color:var(--ok);font-weight:600}.bad{color:var(--bad);font-weight:600}.warn{color:var(--warn);font-weight:600}
+code,pre{font-family:var(--mono);font-size:13px}pre{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;overflow:auto}
+.shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+figure{margin:0;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px}figure img{width:100%;border-radius:4px}
+figcaption{font-size:13px;color:var(--muted);margin-top:6px}
+.wrap{overflow-x:auto}
+</style></head><body><main>
+<h1>Papers: test report</h1>
+<p>PR #15, branch <code>claude/nifty-dewdney-d321a4</code>. Run on 2026-10-26 on macOS, Python 3.12, in the Claude desktop browser pane.</p>
+
+<h2>Rerun it</h2>
+<pre>./verify.sh                          # tests + lint + HTTP/CLI round trip in a throwaway project
+python3 -m unittest discover tests   # 17 tests</pre>
+
+<h2>What ran</h2>
+<div class="wrap"><table>
+<tr><th>Area</th><th>Check</th><th>Result</th></tr>
+<tr><td>Log</td><td>8 threads × 40 appends of 20 KB lines to thread.jsonl at the same time</td><td class="ok">pass: 320 intact lines</td></tr>
+<tr><td>Log</td><td>Malformed lines (half JSON, array, string, no id, bad kind, orphan seen)</td><td class="ok">pass after fix</td></tr>
+<tr><td>Anchors</td><td>Threads keep their block after a republish; meta kept</td><td class="ok">pass</td></tr>
+<tr><td>Anchors</td><td>Browser: edit text before a quote, thread re-highlights the same words</td><td class="ok">pass</td></tr>
+<tr><td>Poll</td><td>Across papers; marks seen; <code>@agent</code> on a resolved thread pages the agent with the whole thread</td><td class="ok">pass</td></tr>
+<tr><td>Permissions</td><td>Edit/delete own only; agent messages never editable; nobody posts as "agent"; seen not postable</td><td class="ok">pass after fix</td></tr>
+<tr><td>Origin/Host</td><td>Origins <code>null</code>, <code>localhost.evil.com</code>, <code>127.0.0.1.nip.io</code>, <code>evil.com</code>; Host <code>evil.example</code></td><td class="ok">pass: 403 (Host check is new)</td></tr>
+<tr><td>Traversal</td><td><code>..%2F</code>, <code>%2e%2e</code>, <code>%00</code> in paper and file names</td><td class="ok">pass: 404, no crash</td></tr>
+<tr><td>CLI</td><td><code>reply</code> to an unknown thread id</td><td class="ok">pass after fix: exits with an error</td></tr>
+<tr><td>Browser</td><td>Select → comment → poll ("thinking…") → replies: text, <code>#block</code> link, <code>--file</code> page in overlay, external link</td><td class="ok">pass</td></tr>
+<tr><td>Browser</td><td>Live republish while a draft is open: frame swaps, no reload, draft text kept, "1 passage changed"</td><td class="ok">pass after fix</td></tr>
+<tr><td>Browser</td><td>Resolve, reopen, <code>#c-&lt;id&gt;</code> deep link (desktop)</td><td class="ok">pass</td></tr>
+<tr><td>Browser</td><td><code>#c-&lt;id&gt;</code> deep link on mobile, on first load</td><td class="warn">flaky: 2 fails, then passes; hashchange always works</td></tr>
+<tr><td>Widgets</td><td>65 controls clicked, 8 sliders, 12 quizzes answered, Remember saved to localStorage</td><td class="ok">pass, 0 console errors</td></tr>
+<tr><td>Perf</td><td>301 threads: DOM ready 31 ms; long tasks 74 + 83 ms at start, none while polling; API 127 KB in 4 ms</td><td class="ok">pass</td></tr>
+<tr><td>Perf</td><td>Folding 3000 threads (9000 events)</td><td class="ok">under 0.5 s; was quadratic</td></tr>
+<tr><td>Lint</td><td><code>arx paper check</code>: example passes; a bad page fails on 10 rules</td><td class="ok">pass</td></tr>
+</table></div>
+
+<h2>Bugs found and fixed</h2>
+<div class="wrap"><table>
+<tr><th>Bug</th><th>Effect before</th><th>Fix</th></tr>
+<tr><td><code>arx init</code> templates had no Papers section</td><td>Agents in new projects got no paper rules at all</td><td>Templates synced; <code>arx paper new</code> ships the example as a starter</td></tr>
+<tr><td>One malformed thread.jsonl line</td><td>The paper returned 404 and every comment POST dropped the connection</td><td><code>thread()</code> skips invalid events</td></tr>
+<tr><td>"seen" fold scanned every thread</td><td>Quadratic in the number of threads</td><td>Index of message → thread</td></tr>
+<tr><td>Buffered append</td><td>Lines over the stdio buffer could interleave</td><td>One <code>os.write</code> on an O_APPEND fd</td></tr>
+<tr><td>People could sign as "agent"</td><td>A message looked like the agent's</td><td>Reserved names refused</td></tr>
+<tr><td>No Host check</td><td>A DNS-rebound page could read the ledger</td><td>Host and Origin must be loopback</td></tr>
+<tr><td>Reply to a typo'd thread id</td><td>Orphan event, the reply is lost silently</td><td>CLI exits with an error</td></tr>
+<tr><td>"Passages changed" compared the live DOM</td><td>Widgets that shuffle on load were flagged as changed</td><td>Compares the page source</td></tr>
+<tr><td>Example paper</td><td>5 paragraphs not commentable; one number without n</td><td>Fixed</td></tr>
+<tr><td>Resolved threads ignored <code>@agent</code></td><td>The agent never answered</td><td><code>@agent</code> pages it with the whole thread</td></tr>
+</table></div>
+
+<h2>Papers written from the docs only</h2>
+<p>Three fresh subagents, each with its own arx task. All three papers pass <code>arx paper check</code> with 0 errors.</p>
+<div class="wrap"><table>
+<tr><th>Scenario</th><th>Outcome</th><th>Where the guidance failed</th></tr>
+<tr><td>In progress: <code>time-rate</code> on a scratch copy of gsm8k_ft</td><td>Published. Says no delta yet. Only real number is 427/500 on dev-time-rate-v1</td><td>The template is a win paper. No rule covers "no runs yet". Nothing names the current champion. The check enforces less than the checklist</td></tr>
+<tr><td>Negative: 3 candidates, all rejected (synthetic)</td><td>Published, reasons and paired deltas from the gate</td><td>No <code>hill close</code> command. <code>run_one</code> return keys only in source. <code>slice add --size</code> takes the first ids, not random ones</td></tr>
+<tr><td>Continuous (latency, ms): full loop, 1 rejected, 1 promoted, paper at each step</td><td>Numbers match <code>arx gate</code> (full n = 400: +55.7 ms [+48.3, +63.1])</td><td>Gate prints ms ×100 as "pts". Tolerances are absolute, so ms gets almost none. Dataset slices can't be continuous. A <code>latency</code> from <code>run_one</code> is ignored</td></tr>
+</table></div>
+
+<h2>Not production-ready</h2>
+<ul>
+<li>"Edit/delete own only" trusts the name the browser sends. Anyone on the machine can claim any name. Fine on loopback, not for a shared server.</li>
+<li>Each tab polls the full thread state every 1.5 s (127 KB at 300 threads). No ETag or diff yet.</li>
+<li>Mobile deep link on first load is flaky (see above).</li>
+<li>Continuous hills: gate units and tolerances are wrong for ms (from the loop run). This is outside papers but it makes papers on those hills misleading.</li>
+<li><code>arx paper ls</code> prints port 8890 when the server runs elsewhere without server.json.</li>
+<li>The check is a heuristic. It can't tell if a widget teaches anything or if a number is real.</li>
+</ul>
+
+<h2>Screenshots</h2>
+<div class="shots">
+<figure><img src="shots/01-thread-four-reply-kinds-dark.jpg" alt=""><figcaption>Thread with text, file, #block and external replies (dark)</figcaption></figure>
+<figure><img src="shots/02-300-threads-light.jpg" alt=""><figcaption>301 threads in the margin (light)</figcaption></figure>
+<figure><img src="shots/03-mobile-light.jpg" alt=""><figcaption>Mobile, 375 px</figcaption></figure>
+<figure><img src="shots/04-mobile-win-widget.jpg" alt=""><figcaption>Mobile, a widget and quiz</figcaption></figure>
+</div>
+</main></body></html>

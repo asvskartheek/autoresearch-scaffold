@@ -66,10 +66,10 @@ Exceptions in `run_one` become rows with `score=0` and `error`.
 
 ## `ar.project(root=None) -> Project`
 
-`Project` exposes the ledger: `config`, `datasets()`, `slices()`, `slice(name)`, `hills()`, `models()`,
+`Project` exposes the ledger: `config`, `datasets()`, `slices()`, `slice(name)`, `goals()`, `goal_status(name)`, `hills()`, `models()`,
 `champion()`, `tasks()`, `task(id)`, `rows(id)`, `metrics(id)`, `events(id)`, `evals()`,
-`latest_eval(model, slice)`, and the writers `add_dataset`, `add_slice`, `random_slices`, `open_hill`,
-`explain_hill`, `add_model`, `set_model_status`, `gate`, `promote`, `baseline`, `supersede`.
+`latest_eval(model, slice)`, and the writers `add_dataset`, `add_slice`, `random_slices`, `open_goal`, `achieve_goal`,
+`abandon_goal`, `open_hill`, `explain_hill`, `add_model`, `set_model_status`, `gate`, `promote`, `baseline`, `supersede`.
 
 ### Baselines
 

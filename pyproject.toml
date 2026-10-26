@@ -18,4 +18,4 @@ build-backend = "setuptools.build_meta"
 packages = ["autoresearch"]
 
 [tool.setuptools.package-data]
-autoresearch = ["dashboard.html", "templates/*"]
+autoresearch = ["dashboard.html", "paper.html", "ui.css", "templates/*"]

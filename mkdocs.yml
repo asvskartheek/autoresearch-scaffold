@@ -27,7 +27,9 @@ nav:
   - How-to:
       - Tasks and the Workbench: guides/tasks.md
       - Slices and datasets: guides/slices.md
+      - Goals: guides/goals.md
       - Hills: guides/hills.md
+      - Papers: guides/papers.md
       - Evals: guides/evals.md
       - The gate ladder: guides/gates.md
       - arx run manifests: guides/run.md

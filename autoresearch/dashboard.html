@@ -4,26 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Research Observatory</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="/ui.css">
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("arx-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch{}</script>
 <style>
-:root{--bg:#f5f5f1;--card:#fff;--ink:#202a32;--muted:#7d858c;--border:#e5e8e7;--soft:#f0f1ee;--blue:#3d73dd;--green:#299b7d;--amber:#c58a37;--purple:#9075cd;--red:#d16c61;--nav:#202d36;--navink:#c9d1d6;--radius:18px}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#151b20;--card:#1d252b;--ink:#e6eaed;--muted:#8d979e;--border:#2c363d;--soft:#242d34;--nav:#10161a;--navink:#aab4ba}}
-:root[data-theme="dark"]{--bg:#151b20;--card:#1d252b;--ink:#e6eaed;--muted:#8d979e;--border:#2c363d;--soft:#242d34;--nav:#10161a;--navink:#aab4ba}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+:root,:root[data-theme="dark"]{--muted:var(--muted-fg)} /* here --muted is the grey text colour */
 a{color:inherit;text-decoration:none}
-.app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
-nav{background:var(--nav);color:var(--navink);padding:28px 16px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
-.brand{display:flex;gap:10px;align-items:center;color:#fff;font-weight:600;font-size:17px;padding:0 10px 28px}
-.brand svg{flex:none}
-nav a{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;margin-bottom:4px;font-size:14.5px}
-nav a:hover{background:rgba(255,255,255,.05)}
-nav a.on{background:rgba(255,255,255,.09);color:#fff}
-nav a .count{margin-left:auto;font-size:12px;background:rgba(255,255,255,.1);padding:1px 8px;border-radius:99px}
-nav .foot{margin-top:auto;padding:0 12px;font-size:13px}
-nav .foot b{color:#fff;display:block;font-weight:600}
+.app{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
 main{padding:36px 40px 80px;max-width:1320px;width:100%;min-width:0}
 header.top{display:flex;align-items:center;gap:16px;margin-bottom:26px}
-h1{font-size:28px;letter-spacing:-.02em;margin:0;font-weight:650}
+h1{font-size:24px;letter-spacing:-.02em;margin:0;font-weight:600}
 h2{font-size:17px;margin:0;font-weight:620}
 .live{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;white-space:nowrap}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--green)}
@@ -31,7 +21,7 @@ h2{font-size:17px;margin:0;font-weight:620}
 .back{color:var(--muted);font-size:13px;display:inline-block;margin:-14px 0 18px}
 .grid{display:grid;gap:16px}
 .g4{grid-template-columns:repeat(4,minmax(0,1fr))}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
-.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:22px 24px;min-width:0}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px;min-width:0;box-shadow:var(--shadow)}
 .card h2{margin-bottom:16px;display:flex;align-items:center;gap:10px}
 .card h2 .r{margin-left:auto;font-size:12px;font-weight:500;color:var(--muted)}
 .section{margin-top:16px}
@@ -41,7 +31,7 @@ h2{font-size:17px;margin:0;font-weight:620}
 .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:2px 9px;border-radius:7px;background:var(--soft);color:var(--muted);white-space:nowrap;font-weight:500}
 .chip.running{background:color-mix(in srgb,var(--blue) 14%,transparent);color:var(--blue)}
 .chip.stalled,.chip.failed,.chip.budget,.chip.fail,.chip.rejected{background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red)}
-.chip.done,.chip.pass,.chip.climbed{background:color-mix(in srgb,var(--green) 14%,transparent);color:var(--green)}
+.chip.done,.chip.pass,.chip.climbed,.chip.achieved{background:color-mix(in srgb,var(--green) 14%,transparent);color:var(--green)}
 .chip.champion{background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--amber)}
 .chip.pending,.chip.open,.chip.candidate{background:color-mix(in srgb,var(--purple) 14%,transparent);color:var(--purple)}
 .tabs{display:flex;gap:26px;border-bottom:1px solid var(--border);margin-bottom:18px;overflow-x:auto}
@@ -115,6 +105,10 @@ pre{background:var(--soft);padding:14px;border-radius:12px;overflow:auto;font-si
 .ci.pass .pt{background:var(--green)}.ci.fail .pt{background:var(--red)}
 .ci.pass .span{background:color-mix(in srgb,var(--green) 30%,transparent)}.ci.fail .span{background:color-mix(in srgb,var(--red) 30%,transparent)}
 .matrix td.cell{text-align:center;font-variant-numeric:tabular-nums;border-radius:8px}
+h2.sec{font-size:13px;font-weight:600;color:var(--muted);margin:22px 0 10px}h2.sec:first-of-type{margin-top:0}
+.side .plabel{padding:18px 10px 6px;font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.side a.proj{height:34px;flex:none;font-size:13px;margin-bottom:2px}.side a.proj .pn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gbar{position:relative;height:10px;background:var(--soft);border-radius:3px;margin:4px 0 2px}.gbar i{display:block;height:100%;border-radius:3px;background:var(--green)}.gbar b{position:absolute;top:-4px;width:2px;height:18px;background:var(--ink);opacity:.6}
 .hcard{display:flex;flex-direction:column;gap:10px;transition:border-color .15s}.hcard:hover{border-color:var(--muted)}
 .hcard .row,.hrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.hcard .row .sub{margin-left:auto}
 .hcard .t{font-weight:620;font-size:16px}
@@ -158,16 +152,16 @@ pre{background:var(--soft);padding:14px;border-radius:12px;overflow:auto;font-si
 .att .num{text-align:right;font-variant-numeric:tabular-nums}.att .ctl{font-size:13px}
 .scroll{overflow-x:auto}
 .filters{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
-@media (max-width:900px){.app{grid-template-columns:1fr}nav{position:static;height:auto;flex-direction:row;flex-wrap:wrap;padding:12px 16px;gap:2px}.brand{padding:6px 10px 6px 4px;width:100%}nav .foot{display:none}nav a{padding:8px 10px;font-size:13px}main{padding:22px 16px 60px}.hgrid{grid-template-columns:1fr}.att{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 50px}.att .ctl,.att>div:nth-child(4){display:none}.prow{grid-template-columns:1fr}.g4{grid-template-columns:repeat(2,minmax(0,1fr))}.g3,.g2{grid-template-columns:1fr}.hero{flex-direction:column}.charts,.cards{grid-template-columns:1fr}h1{font-size:23px}}
+@media (max-width:900px){.app{grid-template-columns:1fr}.side{position:sticky;z-index:10;height:auto;flex-direction:row;align-items:center;overflow-x:auto;padding:8px 12px;border-right:0;border-bottom:1px solid var(--border)}.side .brand{padding:0 6px 0 0}.side .brand span,.side .foot b{display:none}.side .foot{margin:0 0 0 auto;padding:0}.side a{height:32px;padding:0 9px;font-size:13px;flex:none}.side a:not(.brand) svg{display:none}main{padding:22px 16px 60px}.hgrid{grid-template-columns:1fr}.att{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 50px}.att .ctl,.att>div:nth-child(4){display:none}.prow{grid-template-columns:1fr}.g4{grid-template-columns:repeat(2,minmax(0,1fr))}.g3,.g2{grid-template-columns:1fr}.hero{flex-direction:column}.charts,.cards{grid-template-columns:1fr}h1{font-size:23px}}
 </style>
 </head>
 <body>
 <div class="app">
-<nav id="nav"></nav>
+<nav id="nav" class="side"></nav>
 <main id="main"><div class="empty">Loading…</div></main>
 </div>
 <script>
-const S={ex:{},state:null,detail:null,ok:true,lbDataset:null,lbSlice:null,archiveKind:'all'};
+const S={projects:[],ex:{},state:null,detail:null,ok:true,lbDataset:null,lbSlice:null,archiveKind:'all'};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pct=x=>x==null?'—':(100*x).toFixed(1)+'%';
@@ -185,10 +179,13 @@ const ICON={
  over:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
  wb:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M4 12h10M4 17h6"/><circle cx="18" cy="16" r="3"/></svg>',
  models:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M8.3 7l7.5 4M8.3 17l7.5-4"/></svg>',
+ goals:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
  hills:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 19l6-10 4 6 3-4 5 8z"/></svg>',
  slices:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>',
+ papers:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>',
+ theme:'<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
  archive:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v10h14V9M10 13h4"/></svg>'};
-const ROUTES=[['overview','Overview','over'],['workbench','Workbench','wb'],['models','Models','models'],['hills','Hills','hills'],['slices','Slices','slices'],['archive','Archive','archive']];
+const ROUTES=[['overview','Overview','over'],['workbench','Workbench','wb'],['goals','Goals','goals'],['models','Models','models'],['hills','Hills','hills'],['papers','Papers','papers'],['slices','Slices','slices'],['archive','Archive','archive']];
 
 function route(){const h=location.hash.slice(1)||'overview';const [r,...rest]=h.split('/');return {r,arg:decodeURIComponent(rest.join('/'))}}
 const active=()=>S.state.tasks.filter(t=>t.status==='running'||t.status==='stalled');
@@ -201,11 +198,33 @@ function tree(id,depth=0,seen=new Set([id])){return kids(id).filter(k=>!seen.has
 
 function renderNav(){
  const {r}=route();const st=S.state;
- const navOn={task:active().some(t=>t.id===route().arg)?'workbench':'archive',model:'models',hill:'hills'}[r]||r;
- const counts={workbench:st?active().length:0,hills:st?Object.values(st.hills).filter(h=>h.status==='open').length:0};
- $('#nav').innerHTML=`<div class="brand"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="#fff" stroke-width="1.6"><rect x="1" y="1" width="24" height="24" rx="7" opacity=".5"/><path d="M6 17l4.5-6 3.5 4 6-8"/></svg>Observatory</div>`+
- ROUTES.map(([k,l,i])=>`<a href="#${k}" class="${navOn===k?'on':''}">${ICON[i]}${l}${counts[k]?`<span class="count">${counts[k]}</span>`:''}</a>`).join('')+
- (st?`<div class="foot"><b>${esc(st.config.name)}</b>${Object.keys(st.models).length} models · ${Object.keys(st.hills).length} hills</div>`:'');
+ const navOn={task:active().some(t=>t.id===route().arg)?'workbench':'archive',model:'models',hill:'hills',goal:'goals'}[r]||r;
+ const waiting=st?Object.values(st.papers||{}).reduce((a,p)=>a+p.waiting,0):0;
+ const counts={goals:st?Object.values(st.goals||{}).filter(g=>g.status==='open').length:0,workbench:st?active().length:0,hills:st?Object.values(st.hills).filter(h=>h.status==='open').length:0,papers:waiting};
+ setHTML($('#nav'),`<a class="brand" href="#overview" style="height:auto;padding:6px 8px 18px;background:none"><i><svg class="i" viewBox="0 0 24 24"><path d="M4 17l5-6 4 4 7-8"/></svg></i><span>Observatory</span></a>`+
+ ROUTES.map(([k,l,i])=>`<a href="#${k}" class="${navOn===k?'on':''}">${ICON[i]}${l}${counts[k]?`<span class="count${k==='papers'?' hot':''}">${counts[k]}</span>`:''}</a>`).join('')+
+ (S.projects.length>1?`<div class="plabel">Projects</div>`+S.projects.map(q=>`<a class="proj${q.key===PKEY||(!PKEY&&q.default)?' on':''}" href="/p/${encodeURIComponent(q.key)}/" title="${esc(q.name)} · ${esc(q.root)}"><span class="pn">${esc(q.name)}</span>${q.waiting?`<span class="count hot">${q.waiting}</span>`:q.running?`<span class="count">${q.running}</span>`:''}</a>`).join(''):'')+
+ `<div class="foot">${st?`<b>${esc(st.config.name)}</b>`:''}<button class="btn icon sm ghost" onclick="toggleTheme()" title="Theme">${ICON.theme}</button></div>`);
+}
+function toggleTheme(){const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('arx-theme',t)}catch{}}
+addEventListener('storage',e=>{if(e.key==='arx-theme'&&e.newValue)document.documentElement.dataset.theme=e.newValue});
+const paperOf=key=>{const ps=S.state.papers||{};return ps[key]||Object.values(ps).find(p=>p.hill===key)};
+const mn=k=>esc(S.state.models?.[k]?.title||k||'—');  // a model reads by its title; the id stays in the URL
+const paperUrl=p=>'papers/'+encodeURIComponent(p.name);  // relative: /p/<key>/ serves another project
+const PKEY=(location.pathname.match(/^\/p\/([^/]+)/)||[])[1]&&decodeURIComponent(location.pathname.split('/')[2]);
+const goalPaper=g=>Object.values(S.state.papers||{}).find(p=>p.goal===g);
+const isGoalPaper=p=>!!p.goal;
+function vPapers(){
+ const ps=Object.values(S.state.papers||{}).sort((a,b)=>(b.updated||0)-(a.updated||0));
+ if(!ps.length)return topbar('Papers')+'<div class="card empty">No papers</div>';
+ const pub=ps.filter(isGoalPaper),int=ps.filter(p=>!isGoalPaper(p));
+ return topbar('Papers')+(pub.length?`<h2 class="sec">Goal papers</h2>`+paperCards(pub):'')+(int.length?`<h2 class="sec">Internal notes</h2>`+paperCards(int):'');
+}
+function paperCards(ps){
+ return `<div class="cards">${ps.map(p=>{const h=S.state.hills[p.hill],g=(S.state.goals||{})[p.goal];return `<a class="card hcard" href="${paperUrl(p)}">
+  <div class="row">${g?`<span class="chip ${g.status}">${g.status==='open'?'draft':esc(g.status)}</span>`:''}${h?`<span class="chip ${h.status}">${esc(h.title)}</span>`:''}${p.waiting?`<span class="chip pending">${p.waiting} waiting</span>`:''}</div>
+  <div class="t">${esc(p.title||p.name)}</div>
+  <div class="meta"><span>${p.open} open · ${p.comments-p.open} resolved</span><span>${ago(p.updated)}</span></div></a>`}).join('')}</div>`;
 }
 function topbar(title){return `<header class="top"><h1>${esc(title)}</h1><div class="live"><span class="dot ${S.ok?'':'off'}"></span>${S.ok?clock(S.state.now):'Offline'}</div></header>`}
 
@@ -257,7 +276,7 @@ function taskCard(t){
  return `<div class="card wb ${t.status}" onclick="if(!event.target.closest('a'))location.hash='task/${encodeURIComponent(t.id)}'">
   <div class="row"><span class="chip ${t.status}">${t.status}</span><span class="chip">${esc(t.kind)}</span>${t.agent?`<span class="chip">${esc(t.agent)}</span>`:''}</div>
   <div class="t">${esc(t.title)}</div>
-  ${t.model||t.slice?`<div class="sub">${[t.model,short(t.slice)].filter(Boolean).map(esc).join(' · ')}</div>`:''}
+  ${t.model||t.slice?`<div class="sub">${[t.model&&mn(t.model),t.slice&&esc(short(t.slice))].filter(Boolean).join(' · ')}</div>`:''}
   ${t.description?`<div class="desc">${esc(t.description)}</div>`:''}
   ${noteLine(t.note)}
   ${t.spark?spark(t.spark.y,t.status==='stalled'?'var(--red)':'var(--blue)'):''}
@@ -274,13 +293,15 @@ function vOverview(){
  const cands=Object.entries(st.models).filter(([k,m])=>m.status==='candidate');
  const cf=champ&&fullScore(champ);
  let h=topbar('Overview')+`<div class="grid g4">
-  <div class="card tile"><div class="k">Champion</div><div class="v">${esc(champ||'—')}</div><div class="s">${cf?pct(cf.score)+' on '+esc(short(st.config.primary_dataset+'/full'))+' · n '+cf.n:''}</div></div>
+  <div class="card tile"><div class="k">Champion</div><div class="v">${cf?pct(cf.score):'—'}</div><div class="s">${champ?`<a href="#model/${encodeURIComponent(champ)}">${mn(champ)}</a>`:''}${cf?' · '+esc(short(st.config.primary_dataset+'/full'))+' · n '+cf.n:''}</div></div>
   <div class="card tile"><div class="k">Running</div><div class="v">${active().length}</div><div class="s">${active().filter(t=>t.status==='stalled').length?`<span class="neg">${active().filter(t=>t.status==='stalled').length} stalled</span>`:''}</div></div>
   <div class="card tile"><div class="k">Candidates</div><div class="v">${cands.length}</div><div class="s">${cands.filter(([k])=>st.gates[k]?.promotable).length?cands.filter(([k])=>st.gates[k]?.promotable).length+' promotable':''}</div></div>
   <div class="card tile"><div class="k">Open hills</div><div class="v">${Object.values(st.hills).filter(h=>h.status==='open').length}</div><div class="s">${Object.values(st.hills).filter(h=>h.status==='climbed').length} climbed</div></div></div>`;
+ const gs=Object.values(st.goals||{});
+ if(gs.length)h+=`<div class="cards" style="margin-top:16px">${gs.map(goalCard).join('')}</div>`;
  const bl=st.baseline;
- if(bl?.need.length)h+=`<div class="card section"><h2>Champion baseline<span class="r">${Object.keys(bl.have).length} / ${Object.keys(bl.roles).length} slices</span></h2><div class="scroll"><table><tr><th>Slice</th><th>Measures</th><th class="num">n</th><th>${esc(champ)}</th></tr>${bl.need.map(s=>`<tr><td><b>${esc(short(s))}</b></td><td class="sub">${esc(bl.roles[s].join(', '))}</td><td class="num">${st.slices[s]?.n??''}</td><td>${running(champ,s)?'<span class="chip running">running</span>':'<span class="chip need_baseline">not run</span>'}</td></tr>`).join('')}</table></div></div>`;
- h+=`<div class="card section"><h2>Ladder<span class="r">vs ${esc(champ||'—')}</span></h2>${cands.length?`<div class="scroll"><table><tr><th>Model</th><th>Hill</th><th>Rungs</th><th class="num">Next</th></tr>${cands.map(([k,m])=>{const g=st.gates[k]||{};return `<tr class="click" onclick="location.hash='model/${encodeURIComponent(k)}'"><td><b>${esc(k)}</b><div class="sub">${esc(m.change||'')}</div></td><td>${esc(st.hills[m.hill]?.title||m.hill||'—')}</td><td>${ladderPills(g)}</td><td class="num sub">${g.promotable?'<span class="chip pass">promote</span>':g.next?.length?esc(g.next[0].model+' · '+short(g.next[0].slice)):(g.rungs||[]).some(r=>r.status==='fail')?'<span class="chip fail">stopped</span>':''}</td></tr>`}).join('')}</table></div>`:'<div class="empty">No candidates</div>'}</div>`;
+ if(bl?.need.length)h+=`<div class="card section"><h2>Champion baseline<span class="r">${Object.keys(bl.have).length} / ${Object.keys(bl.roles).length} slices</span></h2><div class="scroll"><table><tr><th>Slice</th><th>Measures</th><th class="num">n</th><th>${mn(champ)}</th></tr>${bl.need.map(s=>`<tr><td><b>${esc(short(s))}</b></td><td class="sub">${esc(bl.roles[s].join(', '))}</td><td class="num">${st.slices[s]?.n??''}</td><td>${running(champ,s)?'<span class="chip running">running</span>':'<span class="chip need_baseline">not run</span>'}</td></tr>`).join('')}</table></div></div>`;
+ h+=`<div class="card section"><h2>Ladder<span class="r">vs ${mn(champ)}</span></h2>${cands.length?`<div class="scroll"><table><tr><th>Model</th><th>Hill</th><th>Rungs</th><th class="num">Next</th></tr>${cands.map(([k,m])=>{const g=st.gates[k]||{};return `<tr class="click" onclick="location.hash='model/${encodeURIComponent(k)}'"><td><b>${mn(k)}</b><div class="sub mono">${esc(k)}</div></td><td>${esc(st.hills[m.hill]?.title||m.hill||'—')}</td><td>${ladderPills(g)}</td><td class="num sub">${g.promotable?'<span class="chip pass">promote</span>':g.next?.length?esc(g.next[0].model+' · '+short(g.next[0].slice)):(g.rungs||[]).some(r=>r.status==='fail')?'<span class="chip fail">stopped</span>':''}</td></tr>`}).join('')}</table></div>`:'<div class="empty">No candidates</div>'}</div>`;
  // leaderboard
  if(!S.lbDataset||!st.datasets[S.lbDataset])S.lbDataset=st.config.primary_dataset||ds[0];
  const sl=Object.values(st.slices).filter(s=>s.dataset===S.lbDataset);
@@ -292,7 +313,7 @@ function vOverview(){
  h+=`<div class="card section"><div class="tabs">${ds.map(d=>`<button class="${d===S.lbDataset?'on':''}" onclick="S.lbDataset='${esc(d)}';S.lbSlice=null;render()">${esc(st.datasets[d].title||d)}<small>${st.datasets[d].size}</small></button>`).join('')}</div>
   <div class="seg">${sl.map(s=>`<button class="${s.name===S.lbSlice?'on':''}" onclick="S.lbSlice='${esc(s.name)}';render()">${esc(short(s.name))} <span class="sub">${s.n}</span></button>`).join('')}</div>
   ${board.length?`<div class="scroll"><table><tr><th>#</th><th>Model</th><th style="width:34%">Score</th><th class="num">Δ champion</th><th class="num">Errors</th><th class="num">Cost / ex</th><th class="num">p50</th><th class="num">p95</th></tr>
-  ${board.map(([m,r],i)=>`<tr class="click" onclick="location.hash='task/${encodeURIComponent(r.task)}'"><td class="sub">${i+1}</td><td><b>${esc(m)}</b> ${m===champ?'<span class="chip champion">champion</span>':''}<div class="sub">${ago(r.ended)}</div></td>
+  ${board.map(([m,r],i)=>`<tr class="click" onclick="location.hash='task/${encodeURIComponent(r.task)}'"><td class="sub">${i+1}</td><td><b>${mn(m)}</b> ${m===champ?'<span class="chip champion">champion</span>':''}<div class="sub">${ago(r.ended)}</div></td>
    <td><div style="display:flex;gap:12px;align-items:center"><div class="bar" style="flex:1"><i class="${m===champ?'champ':''}" style="width:${Math.max(0,Math.min(100,(r.score||0)*100))}%"></i></div><b class="num">${pct(r.score)}</b></div></td>
    <td class="num ${cs!=null&&m!==champ?(r.score>cs?'pos':r.score<cs?'neg':''):''}">${cs!=null&&m!==champ?pts(r.score-cs):''}</td><td class="num">${r.errors||0}</td><td class="num">${money(r.cost)}</td><td class="num">${secs(r.latency_p50)}</td><td class="num">${secs(r.latency_p95)}</td></tr>`).join('')}</table></div>`:'<div class="empty">No complete runs on this slice</div>'}</div>`;
  return h;
@@ -310,18 +331,18 @@ function vArchive(){
 }
 function vModels(){
  const st=S.state,ms=Object.entries(st.models).sort((a,b)=>b[1].created-a[1].created);
- return topbar('Models')+`<div class="card"><div class="scroll"><table><tr><th>Model</th><th>Status</th><th>Parent</th><th>Hill</th><th>Rungs</th><th class="num">Full</th></tr>${ms.map(([k,m])=>{const f=fullScore(k);return `<tr class="click" onclick="location.hash='model/${encodeURIComponent(k)}'"><td><b>${esc(k)}</b><div class="sub">${esc(m.change||m.title||'')}</div></td><td><span class="chip ${m.status}">${m.status}</span></td><td>${esc(m.parent||'—')}</td><td>${esc(st.hills[m.hill]?.title||m.hill||'—')}</td><td>${ladderPills(st.gates[k])}</td><td class="num">${f?pct(f.score):'—'}</td></tr>`}).join('')}</table></div></div>`;
+ return topbar('Models')+`<div class="card"><div class="scroll"><table><tr><th>Model</th><th>Status</th><th>Parent</th><th>Hill</th><th>Rungs</th><th class="num">Full</th></tr>${ms.map(([k,m])=>{const f=fullScore(k);return `<tr class="click" onclick="location.hash='model/${encodeURIComponent(k)}'"><td><b>${mn(k)}</b><div class="sub">${m.phase?esc(m.phase)+' · ':''}<span class="mono">${esc(k)}</span></div></td><td><span class="chip ${m.status}">${m.status}</span></td><td>${m.parent?mn(m.parent):'—'}</td><td>${esc(st.hills[m.hill]?.title||m.hill||'—')}</td><td>${ladderPills(st.gates[k])}</td><td class="num">${f?pct(f.score):'—'}</td></tr>`}).join('')}</table></div></div>`;
 }
 function vModel(name){
  const st=S.state,m=st.models[name];if(!m)return topbar('Not found');
  const g=st.gates[name],hill=st.hills[m.hill];
  const evs=st.tasks.filter(t=>t.model===name).slice(0,30);
  let h=topbar(name)+`<a class="back" href="#models">← Models</a><div class="card"><div class="hero"><div class="main">
-  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap"><span class="chip ${m.status}">${m.status}</span>${m.parent?`<span class="chip">from ${esc(m.parent)}</span>`:''}${hill?`<a class="chip" href="#hill/${encodeURIComponent(m.hill)}">${esc(hill.title)}</a>`:''}</div>
+  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap"><span class="chip ${m.status}">${m.status}</span>${m.phase?`<span class="chip">${esc(m.phase)}</span>`:''}${m.parent?`<span class="chip">from ${mn(m.parent)}</span>`:''}${hill?`<a class="chip" href="#hill/${encodeURIComponent(m.hill)}">${esc(hill.title)}</a>`:''}</div>
   <h2>${esc(m.title||name)}</h2>${m.change?`<p class="desc">${esc(m.change)}</p>`:''}${m.reason?`<p class="desc neg">${esc(m.reason)}</p>`:''}
   ${m.links?`<div class="links" style="margin-top:10px">${Object.entries(m.links).map(([k,v])=>`<a href="${esc(v)}" target="_blank" rel="noopener">${esc(k)} ↗</a>`).join('')}</div>`:''}</div>${g?ladderPills(g):''}</div></div>`;
  if(g&&!g.error){
-  h+=`<div class="card section"><h2>Gate<span class="r">vs ${esc(g.champion||'—')}</span></h2><div class="scroll"><table><tr><th>Rung</th><th>Slice</th><th>Rule</th><th class="num">${esc(name)}</th><th class="num">Champion</th><th class="num">Δ pts</th><th>90% CI</th><th class="num">W / L</th><th>State</th></tr>`;
+  h+=`<div class="card section"><h2>Gate<span class="r">vs ${mn(g.champion)}</span></h2><div class="scroll"><table><tr><th>Rung</th><th>Slice</th><th>Rule</th><th class="num">${esc(name)}</th><th class="num">Champion</th><th class="num">Δ pts</th><th>90% CI</th><th class="num">W / L</th><th>State</th></tr>`;
   for(const r of g.rungs){
    if(!r.checks.length){h+=`<tr><td><span class="rung ${r.status}">${esc(r.rung)}</span></td><td colspan="8" class="sub">${r.status}</td></tr>`;continue}
    r.checks.forEach((c,i)=>{h+=`<tr ${c.cand_task?`class="click" onclick="location.hash='task/${encodeURIComponent(c.cand_task)}'"`:''}><td>${i?'':`<span class="rung ${r.status}">${esc(r.rung)}</span>`}</td><td style="white-space:nowrap">${esc(short(c.slice))}<div class="sub">n ${c.n??st.slices[c.slice]?.n??''}${c.cand_runs>1||c.base_runs>1?` · runs ${c.cand_runs}/${c.base_runs}`:''}</div></td><td class="sub" style="white-space:nowrap">${c.rule==='better'?'better':'≥ '+pts(c.threshold)}</td><td class="num">${pct(c.cand)}</td><td class="num">${pct(c.base)}</td><td class="num ${c.delta>0?'pos':c.delta<0?'neg':''}">${pts(c.delta)}</td><td>${ciBar(c)}</td><td class="num">${c.wins!=null?c.wins+' / '+c.losses:''}</td><td><span class="chip ${c.state}">${c.state.replace('_',' ')}</span>${c.noisy?' <span class="chip">noisy</span>':''}</td></tr>`});
@@ -347,11 +368,11 @@ function vHills(){
   const runs=hillRuns(x),now=runs.find(o=>o.m===champ),best=runs.find(o=>o.m!==champ),tsl=st.slices[x.target];
   return `<a class="card hcard" href="#hill/${encodeURIComponent(k)}">
    <div class="row"><span class="chip ${x.status}">${x.status}</span>${x.share?`<span class="sub">${pct(x.share.count/x.share.of)} of failures</span>`:''}</div>
-   <div class="t">${esc(x.title)}</div>
+   <div class="t">${esc(x.title)}</div>${(p=>p?`<span class="btn sm outline" style="align-self:flex-start" onclick="event.preventDefault();event.stopPropagation();location.href='${paperUrl(p)}'">${ICON.papers}Internal notes${p.waiting?` <span class="chip pending">${p.waiting}</span>`:''}</span>`:'')(paperOf(k))}
    <div class="sym">${esc(x.symptom||firstLine(x.problem))}</div>
    <div class="hprog">
-    <div><span>${esc(champ||'champion')}</span>${isBin(tsl)?scoreBar(now?.r.score,null,'champ'):''}<b>${now?(isBin(tsl)?solved(now.r)+' / '+now.r.n:val(now.r.score,tsl)):champ?'<span class="sub">not run</span>':'—'}</b></div>
-    <div><span>${esc(best?.m||'no attempt')}</span>${isBin(tsl)?scoreBar(best?.r.score,now?.r.score):''}<b>${best?(isBin(tsl)?solved(best.r)+' / '+best.r.n:val(best.r.score,tsl)):'—'}</b></div>
+    <div><span>${champ?mn(champ):'champion'}</span>${isBin(tsl)?scoreBar(now?.r.score,null,'champ'):''}<b>${now?(isBin(tsl)?solved(now.r)+' / '+now.r.n:val(now.r.score,tsl)):champ?'<span class="sub">not run</span>':'—'}</b></div>
+    <div><span>${best?.m?mn(best.m):'no attempt'}</span>${isBin(tsl)?scoreBar(best?.r.score,now?.r.score):''}<b>${best?(isBin(tsl)?solved(best.r)+' / '+best.r.n:val(best.r.score,tsl)):'—'}</b></div>
    </div>
    <div class="meta"><span>dev set ${esc(short(x.target))} · ${st.slices[x.target]?.n??'—'} examples</span><span>${(n=>n+(n===1?' attempt':' attempts'))(runs.filter(o=>o.m!==champ).length)}</span></div></a>`}).join('')}</div>`;
 }
@@ -375,7 +396,7 @@ function devSet(x,runs,now){
  if(!runs.length)return h+'<div class="empty">No runs on this dev set yet</div></div>';
  h+=`<div class="att head"><div>Model</div><div>${bin?'Solved':'Mean score'}</div><div class="num">vs champion</div><div class="num">${bin?'fixed · broke':'better · worse'}</div>${ctl?`<div class="ctl">Control<div class="sub">${esc(short(x.control))} · ${nC??'—'} examples</div></div>`:''}</div>`;
  h+=runs.map(o=>{const me=o.m===champ,d=now&&!me?o.r.score-now.r.score:null,fl=!me&&cr&&T.runs[o.m]?flips(T.runs[o.m],cr,bin):null,cd=now?.c&&o.c&&!me?o.c.score-now.c.score:null;
-  return `<a class="att" href="#model/${encodeURIComponent(o.m)}"><div class="nm"><b>${esc(o.m)}</b>${me?' <span class="chip champion">champion</span>':''}${st.models[o.m]?.change?`<div class="sub">${esc(st.models[o.m].change)}</div>`:''}</div>
+  return `<a class="att" href="#model/${encodeURIComponent(o.m)}"><div class="nm"><b>${mn(o.m)}</b>${me?' <span class="chip champion">champion</span>':''}${st.models[o.m]?.change?`<div class="sub">${esc(st.models[o.m].change)}</div>`:''}</div>
   <div>${cell(o.r)}</div><div class="num">${me?'':delta(d,o.r.n,sl)}</div>
   <div class="num">${fl?`<span class="pos">+${fl.f}</span> · <span class="neg">−${fl.k}</span>`:''}</div>
   ${ctl?`<div class="ctl">${o.c?`<span class="frac">${shown(o.c,ctl)}</span> ${me?'':delta(cd,o.c.n,ctl)}`:'<span class="sub">not run</span>'}</div>`:''}</a>`}).join('');
@@ -395,7 +416,8 @@ function vHill(key){
  const nT=st.slices[x.target]?.n,nC=x.control?st.slices[x.control]?.n:null;
  const cell=(r,base,n,mark)=>r?`<div class="sc"><div class="frac"><b>${solved(r)}</b> / ${r.n}</div>${scoreBar(r.score,mark,'')}</div>`:'<span class="sub">not run</span>';
  let h=topbar(x.title)+`<a class="back" href="#hills">← Hills</a>
- <div class="hrow"><span class="chip ${x.status}">${x.status}</span>${x.climbed_by?`<a class="chip pass" href="#model/${encodeURIComponent(x.climbed_by)}">climbed by ${esc(x.climbed_by)}</a>`:''}</div>
+ <div class="hrow"><span class="chip ${x.status}">${x.status}</span>${x.climbed_by?`<a class="chip pass" href="#model/${encodeURIComponent(x.climbed_by)}">climbed by ${mn(x.climbed_by)}</a>`:''}${(p=>p?`<a class="btn sm primary" style="margin-left:auto" href="${paperUrl(p)}">${ICON.papers}Internal notes</a>`:'')(paperOf(key))}</div>
+ ${x.goal&&st.goals?.[x.goal]?`<p class="sub">Serves goal <a href="#goal/${encodeURIComponent(x.goal)}">${esc(st.goals[x.goal].title)}</a></p>`:''}
  ${x.symptom?`<p class="lede">${esc(x.symptom)}</p>`:''}
  <div class="grid ${x.share?'hgrid':''}">
   <div class="card"><h2>Examples${exs.length>1?`<span class="r exnav">${exs.map((_,j)=>`<button class="${j===i?'on':''}" onclick="S.ex={...S.ex,['${esc(key)}']:${j}};render()">${j+1}</button>`).join('')}</span>`:''}</h2>
@@ -410,6 +432,39 @@ function vHill(key){
  </div>
  ${devSet(x,runs,now)}
  ${x.problem||x.found_in?`<div class="card section"><details><summary>Pre-declared expectations</summary>${x.problem?`<p class="desc">${esc(x.problem)}</p>`:''}${x.found_in?`<p class="sub">Found in ${esc(x.found_in)}</p>`:''}</details></div>`:''}`;
+ return h;
+}
+// goals: the outward-facing target a set of hills serves; one public paper each
+const gfmt=(g,v)=>v==null?'—':(g.kpi||'score')==='score'?(100*v).toFixed(1)+'%':num(v);
+function gbar(g){if(g.value==null||(g.kpi||'score')!=='score')return '';return `<div class="gbar"><i style="width:${(100*Math.min(g.value,1)).toFixed(1)}%"></i><b style="left:${(100*g.target).toFixed(1)}%"></b></div>`}
+function gdelta(g){const v=g.vs_baseline;return v&&v.delta!=null?`<span class="${v.lo>0?'pos':v.hi<0?'neg':'sub'}">${pts(v.delta)} pts</span> <span class="sub">[${pts(v.lo)}, ${pts(v.hi)}] vs ${esc(g.baseline)}</span>`:''}
+function vGoals(){
+ const gs=Object.values(S.state.goals||{}).sort((a,b)=>(a.status==='open'?0:1)-(b.status==='open'?0:1)||b.created-a.created);
+ if(!gs.length)return topbar('Goals')+'<div class="card empty">No goals</div>';
+ return topbar('Goals')+`<div class="cards">${gs.map(goalCard).join('')}</div>`;
+}
+function goalCard(g){const p=goalPaper(g.name);return `<a class="card hcard" href="#goal/${encodeURIComponent(g.name)}">
+  <div class="row"><span class="chip ${g.status}">${esc(g.status)}</span>${g.met&&g.status==='open'?'<span class="chip pass">target met</span>':''}</div>
+  <div class="t">${esc(g.title)}</div>
+  <div><b>${gfmt(g,g.value)}</b> <span class="sub">of ${gfmt(g,g.target)} · ${g.model?mn(g.model):'no champion'}</span>${gbar(g)}</div>
+  <div class="sub">${gdelta(g)}</div>
+  ${p?`<span class="btn sm outline" style="align-self:flex-start" onclick="event.preventDefault();event.stopPropagation();location.href='${paperUrl(p)}'">${ICON.papers}${g.status==='open'?'Draft paper':'Paper'}</span>`:''}
+  <div class="meta"><span>${esc(short(g.slice))} · n ${g.n}</span><span>${Object.keys(g.hills||{}).length} hills</span></div></a>`}
+function vGoal(name){
+ const st=S.state,g=(st.goals||{})[name];if(!g)return topbar('Not found');
+ const p=goalPaper(name),v=g.vs_baseline,ev=g.evidence;
+ let h=topbar(g.title)+`<a class="back" href="#goals">← Goals</a>
+ <div class="hrow"><span class="chip ${g.status}">${esc(g.status)}</span>${g.slice_changed?'<span class="chip fail">slice changed</span>':''}${p?`<a class="btn sm primary" style="margin-left:auto" href="${paperUrl(p)}">${ICON.papers}${g.status==='open'?'Draft paper':'Paper'}</a>`:''}</div>
+ ${g.problem?`<p class="lede">${esc(g.problem)}</p>`:''}
+ <div class="grid g4">
+  <div class="card tile"><div class="k">Target</div><div class="v">${gfmt(g,g.target)}</div><div class="s">${esc(g.kpi||'score')} · ${esc(short(g.slice))} · n ${g.n}</div></div>
+  <div class="card tile"><div class="k">${g.status==='achieved'?'Achieved by':'Champion'}</div><div class="v">${gfmt(g,g.value)}</div><div class="s">${esc(g.model||'—')}${g.runs>1?' · '+g.runs+' runs':''}</div></div>
+  <div class="card tile"><div class="k">vs ${esc(g.baseline||'start')}</div><div class="v">${v&&v.delta!=null?pts(v.delta):'—'}</div><div class="s">${v&&v.delta!=null?`90% CI [${pts(v.lo)}, ${pts(v.hi)}] · ${v.wins} / ${v.losses}`:''}</div></div>
+  <div class="card tile"><div class="k">Gap</div><div class="v">${g.gap==null?'—':g.gap<=0?'met':gfmt(g,g.gap).replace('%',' pts')}</div><div class="s">${g.gap>0&&(g.kpi||'score')==='score'?Math.ceil(g.gap*g.n)+' answers':''}</div></div></div>
+ <div class="card section">${gbar(g)}</div>
+ <div class="card section"><h2>Hills</h2>${Object.keys(g.hills||{}).length?`<table>${Object.entries(g.hills).map(([k,s])=>{const x=st.hills[k]||{},hp=paperOf(k);return `<tr class="click" onclick="location.hash='hill/${encodeURIComponent(k)}'"><td><b>${esc(x.title||k)}</b><div class="sub">${esc(short(x.target))}</div></td><td><span class="chip ${s}">${esc(s)}</span></td><td class="num">${hp?`<a href="${paperUrl(hp)}" onclick="event.stopPropagation()">Internal notes</a>`:''}</td></tr>`}).join('')}</table>`:'<div class="empty">No hills</div>'}</div>
+ ${ev?`<div class="card section"><h2>Evidence</h2><div class="kv"><div><span>model</span><b>${esc(ev.model)}</b></div><div><span>run</span><b><a href="#task/${encodeURIComponent(ev.task)}">${esc(ev.task)}</a></b></div><div><span>value</span><b>${gfmt(g,ev.value)}</b></div><div><span>n</span><b>${ev.n}</b></div>${ev.forced?'<div><span>forced</span><b class="neg">target not met</b></div>':''}</div></div>`:''}
+ ${g.reason?`<div class="card section"><h2>Abandoned</h2><p class="desc">${esc(g.reason)}</p></div>`:''}`;
  return h;
 }
 function champCell(s){
@@ -443,7 +498,7 @@ function vTask(id){
  if(!d||d.task.id!==id)return h+'<div class="empty">Loading…</div>';
  // vs champion
  const vc=d.vs_champion;
- if(vc&&vc.delta!=null)h+=`<div class="card section"><h2>vs ${esc(vc.model)}<span class="r">same ${vc.n} ids</span></h2><div class="grid g4"><div class="tile"><div class="k">Δ</div><div class="v ${vc.delta>0?'pos':vc.delta<0?'neg':''}">${pts(vc.delta)}</div><div class="s">pts</div></div><div class="tile"><div class="k">90% CI</div><div class="v" style="font-size:20px">${pts(vc.lo)} … ${pts(vc.hi)}</div><div style="margin-top:6px">${ciBar({...vc,state:vc.lo>0?'pass':vc.hi<0?'fail':''})}</div></div><div class="tile"><div class="k">Wins / losses</div><div class="v">${vc.wins} / ${vc.losses}</div></div><div class="tile"><div class="k">Champion</div><div class="v">${pct(vc.base)}</div><div class="s"><a href="#task/${encodeURIComponent(vc.task)}" style="color:var(--blue)">run ↗</a></div></div></div></div>`;
+ if(vc&&vc.delta!=null)h+=`<div class="card section"><h2>vs ${mn(vc.model)}<span class="r">same ${vc.n} ids</span></h2><div class="grid g4"><div class="tile"><div class="k">Δ</div><div class="v ${vc.delta>0?'pos':vc.delta<0?'neg':''}">${pts(vc.delta)}</div><div class="s">pts</div></div><div class="tile"><div class="k">90% CI</div><div class="v" style="font-size:20px">${pts(vc.lo)} … ${pts(vc.hi)}</div><div style="margin-top:6px">${ciBar({...vc,state:vc.lo>0?'pass':vc.hi<0?'fail':''})}</div></div><div class="tile"><div class="k">Wins / losses</div><div class="v">${vc.wins} / ${vc.losses}</div></div><div class="tile"><div class="k">Champion</div><div class="v">${pct(vc.base)}</div><div class="s"><a href="#task/${encodeURIComponent(vc.task)}" style="color:var(--blue)">run ↗</a></div></div></div></div>`;
  // charts: every numeric series
  const keys=[...new Set(d.metrics.flatMap(m=>Object.keys(m).filter(k=>k!=='t'&&k!=='step'&&typeof m[k]==='number')))];
  const palette=['var(--blue)','var(--green)','var(--purple)','var(--amber)','var(--red)'];
@@ -463,26 +518,59 @@ function vTask(id){
 }
 function ring(done,total){const f=Math.min(1,done/total),r=52,c=2*Math.PI*r;return `<svg width="130" height="130" viewBox="0 0 130 130" style="flex:none"><circle cx="65" cy="65" r="${r}" fill="none" stroke="var(--soft)" stroke-width="11"/><circle cx="65" cy="65" r="${r}" fill="none" stroke="var(--green)" stroke-width="11" stroke-linecap="round" stroke-dasharray="${c*f} ${c}" transform="rotate(-90 65 65)"/><text x="65" y="66" text-anchor="middle" style="font-size:26px;font-weight:650;fill:var(--ink)">${done}</text><text x="65" y="86" text-anchor="middle">/ ${total}</text></svg>`}
 
-function render(){
- if(!S.state)return;renderNav();
+// replace a container's HTML only when it changed; keep open <details> and focus across the swap
+function setHTML(el,html){
+ if(el._html===html)return false;el._html=html;
+ const key=d=>d.querySelector('summary')?.textContent||'';
+ const open=new Set([...el.querySelectorAll('details[open]')].map(key));
+ const f=document.activeElement,fk=f&&el.contains(f)?(f.id||f.getAttribute('href')||f.name):null;
+ el.innerHTML=html;
+ el.querySelectorAll('details').forEach(d=>{if(open.has(key(d)))d.open=true});
+ if(fk){const n=[...el.querySelectorAll('[id],[href],[name]')].find(n=>(n.id||n.getAttribute('href')||n.name)===fk);n?.focus({preventScroll:true})}
+ return true;
+}
+// never swap the DOM under a pressed pointer or a live text selection; catch up on pointerup
+let pdown=false,pending=false;
+addEventListener('pointerdown',()=>{pdown=true},true);
+addEventListener('pointerup',()=>{pdown=false;if(pending)setTimeout(render,0)},true);
+addEventListener('pointercancel',()=>{pdown=false;if(pending)render()},true);
+const busy=()=>{const g=getSelection();return pdown||(g&&!g.isCollapsed&&$('#main').contains(g.anchorNode))};
+function render(force){
+ if(!S.state)return;
+ if(force!==true&&busy()){pending=true;return}
+ pending=false;const t0=performance.now();
+ renderNav();
  const {r,arg}=route();
- const v={overview:vOverview,workbench:vWorkbench,archive:vArchive,models:vModels,hills:vHills,slices:vSlices}[r];
- const y=scrollY,open=[...document.querySelectorAll('#main details')].map(d=>d.open);
- $('#main').innerHTML=v?v():r==='task'?vTask(arg):r==='model'?vModel(arg):r==='hill'?vHill(arg):vOverview();
- document.querySelectorAll('#main details').forEach((d,i)=>{if(open[i])d.open=true});
- scrollTo(0,y);
+ const v={overview:vOverview,workbench:vWorkbench,archive:vArchive,models:vModels,goals:vGoals,hills:vHills,papers:vPapers,slices:vSlices}[r];
+ const y=scrollY;
+ const html=v?v():r==='task'?vTask(arg):r==='model'?vModel(arg):r==='hill'?vHill(arg):r==='goal'?vGoal(arg):vOverview();
+ if(setHTML($('#main'),html)&&force!==true)scrollTo(0,y);
+ S.renderMs=performance.now()-t0;
 }
-async function tick(){
- try{
+async function loadDetail(){
+ const {r,arg}=route();
+ if(r==='hill'&&arg){const d=await fetch('api/hill/'+encodeURIComponent(arg),{cache:'no-store'});S.hill=d.ok?{key:arg,data:await d.json()}:null}
+ if(r==='task'&&arg){const d=await fetch('api/task/'+encodeURIComponent(arg),{cache:'no-store'});S.detail=d.ok?await d.json():null}
+}
+// one poll in flight; a request made meanwhile runs once after it lands
+let inflight=null,again=false;
+function tick(){
+ if(inflight){again=true;return inflight}
+ inflight=(async()=>{try{
   const s=await fetch('api/state',{cache:'no-store'});S.state=await s.json();S.ok=true;
-  const {r,arg}=route();
-  if(r==='hill'&&arg){const d=await fetch('api/hill/'+encodeURIComponent(arg),{cache:'no-store'});S.hill=d.ok?{key:arg,data:await d.json()}:null}
-  if(r==='task'&&arg){const d=await fetch('api/task/'+encodeURIComponent(arg),{cache:'no-store'});S.detail=d.ok?await d.json():null}
+  if(!S.pt||Date.now()-S.pt>15000){S.pt=Date.now();try{S.projects=await (await fetch('/api/projects',{cache:'no-store'})).json()}catch{}}
+  await loadDetail();
  }catch(e){S.ok=false}
- render();
+ render()})().finally(()=>{inflight=null;if(again){again=false;tick()}});
+ return inflight;
 }
-addEventListener('hashchange',()=>{S.detail=null;scrollTo(0,0);tick()});
-tick();setInterval(tick,4000);
+// route change: paint at once from cached state; fetch only the detail the new route needs
+addEventListener('hashchange',async()=>{
+ const {r,arg}=route();
+ S.detail=null;scrollTo(0,0);render(true);
+ if((r==='hill'||r==='task')&&arg){try{await loadDetail()}catch{}render(true)}
+});
+tick();setInterval(()=>{if(!document.hidden)tick()},4000);
 </script>
 </body>
 </html>

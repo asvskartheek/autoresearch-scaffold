@@ -43,11 +43,13 @@ def cmd_init(a):
     (root / ".research").mkdir(exist_ok=True)
     gi = root / ".gitignore"
     lines = gi.read_text().splitlines() if gi.exists() else []
-    for want in ("scratch/", ".research/tasks/*/rows.jsonl"):
+    for want in ("scratch/", ".research/tasks/*/rows.jsonl", ".research/server.json", ".research/server.log"):
         if want not in lines:
             lines.append(want)
     gi.write_text("\n".join(lines) + "\n")
     # Step 0: the dashboard is up and setup itself is a visible task before any other work happens.
+    from .projects import register
+    register(root)
     url = _up(root, a.port) if not a.no_serve else None
     os.chdir(root)
     t = Task(Project(root), "setup", "Project setup", "Environment, model and dataset preparation. Note each step; finish when the first eval can run.")
@@ -68,10 +70,14 @@ def _up(root: Path, port: int, restart: bool = False) -> str:
     info = root / ".research" / "server.json"
     if info.exists():
         old = json.loads(info.read_text())
+        try:
+            old["port"], old["pid"] = int(old.get("port") or 0), int(old.get("pid") or 0)
+        except (TypeError, ValueError):
+            old = {}
         if old.get("port") and _port_open(old["port"]):
             if not restart:
                 return f"http://127.0.0.1:{old['port']}"
-            if old.get("pid"):
+            if old.get("pid") and _is_dashboard(old["pid"], old["port"]):
                 try:
                     os.kill(old["pid"], 15)
                 except OSError:
@@ -85,6 +91,7 @@ def _up(root: Path, port: int, restart: bool = False) -> str:
             port = old["port"]
     while _port_open(port):
         port += 1
+    (root / ".research").mkdir(exist_ok=True)
     log = open(root / ".research" / "server.log", "a")
     # `python -m` would put the project dir first on sys.path and pick up a vendored copy; run the CLI's own package.
     pkg = str(Path(__file__).resolve().parents[1])
@@ -100,7 +107,23 @@ def _up(root: Path, port: int, restart: bool = False) -> str:
 
 
 def cmd_up(a):
-    print(_up(Project().root, a.port, a.restart))
+    from .projects import register
+    root = Project().root
+    key = register(root)
+    url = _up(root, a.port, a.restart)
+    print(f"{url}\n{url}/p/{key}/  (this project; every registered project is listed in the sidebar)")
+
+
+def cmd_projects(a):
+    from . import projects
+    if a.verb == "add":
+        print(projects.register(Path(a.path or ".")))
+    elif a.verb == "rm":
+        if not projects.unregister(a.path or ""):
+            sys.exit(f"no project {a.path!r}")
+    else:
+        for k, v in projects.registry().items():
+            print(f"{k}  {v['root']}")
 
 
 def cmd_sync(a):
@@ -127,6 +150,12 @@ def cmd_slice(a):
     s = p.add_slice(a.name, _ids(a), kind=a.kind, description=a.description, url=a.url, hill=a.hill, metric=a.metric,
                     scale=a.scale, unit=a.unit)
     print(f"{a.name}: n={s['n']} hash={s['hash']}")
+    full = p.slices().get(f"{s['dataset']}/full")
+    if full and s["kind"] in ("dev", "control", "random"):  # synthetic slices may hold ids of their own
+        stray = set(s["ids"]) - set(full["ids"])
+        if stray:
+            print(f"warning: {len(stray)} of {s['n']} ids are not in {s['dataset']}/full (e.g. {sorted(stray)[0]!r}); "
+                  f"use --kind synthetic if that is intended", file=sys.stderr)
 
 
 def cmd_hill(a):
@@ -141,12 +170,50 @@ def cmd_hill(a):
         share = dict(count=int(count), of=int(of), of_what=a.share_of)
     explainer = dict(symptom=a.symptom, measure=a.measure, examples=examples, share=share)
     if a.verb == "explain":
+        explainer["goal"] = a.goal
         p.explain_hill(a.name, **explainer)
         return print(f"hill {a.name} explained")
     if not (a.title and a.target):
         raise SystemExit("arx hill open needs --title and --target")
-    h = p.open_hill(a.name, a.title, a.target, a.control, a.problem, a.found_in, **explainer)
-    print(f"hill {a.name} open: target {h['target']}, control {h.get('control')}")
+    h = p.open_hill(a.name, a.title, a.target, a.control, a.problem, a.found_in, goal=a.goal, **explainer)
+    print(f"hill {a.name} open: target {h['target']}, control {h.get('control')}" + (f", serves goal {a.goal}" if a.goal else ""))
+
+
+def _kpi_fmt(g, v):
+    if v is None:
+        return "—"
+    return f"{100 * v:.1f}%" if g.get("kpi", "score") == "score" else f"{v:.4g}"
+
+
+def cmd_goal(a):
+    p = Project()
+    if a.verb == "open":
+        if not (a.title and a.slice and a.target is not None):
+            raise SystemExit("arx goal open needs --title, --slice and --target")
+        g = p.open_goal(a.name, a.title, a.slice, a.target, kpi=a.kpi, baseline=a.baseline, problem=a.problem,
+                        higher_is_better=False if a.lower_is_better else None)
+        return print(f"goal {a.name} open: {g['kpi']} {'>=' if g['higher_is_better'] else '<='} {g['target']} "
+                     f"on {g['slice']} (n = {g['n']}), baseline {g.get('baseline') or 'none yet (no champion)'}")
+    if a.verb == "achieve":
+        ev = p.achieve_goal(a.name, a.force, a.note)
+        return print(f"goal {a.name} achieved by {ev['model']} ({ev['task']}); write its paper: arx paper new --goal {a.name}")
+    if a.verb == "abandon":
+        if not a.reason:
+            raise SystemExit("arx goal abandon needs --reason")
+        p.abandon_goal(a.name, a.reason)
+        return print(f"goal {a.name} abandoned; its paper reports the negative result")
+    for name in ([a.name] if a.name else list(p.goals())):
+        st = p.goal_status(name)
+        if a.json:
+            print(json.dumps(st, default=str))
+            continue
+        vs = st["vs_baseline"]
+        print(f"{name} [{st['status']}] {st['title']}\n"
+              f"  target {st['kpi']} {'>=' if st['higher_is_better'] else '<='} {_kpi_fmt(st, st['target'])} on {st['slice']} (n = {st['n']})\n"
+              f"  {st['model'] or 'no champion'}: {_kpi_fmt(st, st['value'])}{'  MET' if st['met'] else ''}"
+              + (f"  Δ vs {st['baseline']} {_fmt(vs['delta'])} pts [{_fmt(vs['lo'])}, {_fmt(vs['hi'])}] n={vs['n']}" if vs and vs['delta'] is not None else ""))
+        for h, s in st["hills"].items():
+            print(f"  hill {h} [{s}]")
 
 
 def cmd_model(a):
@@ -236,7 +303,7 @@ def cmd_task(a):
         t.progress(int(a.values[0]), int(a.values[1]) if len(a.values) > 1 else None)
     elif a.action == "left":  # exit 3 once spent, so shell loops can `while arx task left $id; do ...; done`
         left = t.left()
-        print("unlimited" if left is None else f"{left:.1f}s")
+        print("unlimited" if left is None else f"{max(left, 0.0):.1f}s")
         if not t.ok():
             sys.exit(3)
     elif a.action == "finish":
@@ -260,8 +327,103 @@ def cmd_status(a):
         if m.get("status") == "candidate":
             g = p.gate(name)
             print(f"  candidate {name}: " + " → ".join(f"{r['rung']}:{r['status']}" for r in g["rungs"]))
+    for name in p.goals():
+        st = p.goal_status(name)
+        print(f"  goal {name} [{st['status']}] {_kpi_fmt(st, st['value'])} / {_kpi_fmt(st, st['target'])} on {st['slice']}")
     for name, h in p.hills().items():
-        print(f"  hill {name} [{h['status']}] {h['title']}")
+        print(f"  hill {name} [{h['status']}] {h['title']}" + (f" (goal {h['goal']})" if h.get("goal") else ""))
+
+
+def _is_dashboard(pid: int, port: int) -> bool:
+    """The pid in server.json may have been reused: only signal it if it is still our server on that port."""
+    try:
+        cmd = subprocess.run(["ps", "-o", "command=", "-p", str(pid)], capture_output=True, text=True).stdout
+    except OSError:
+        return False
+    return "autoresearch.cli" in cmd and f"serve --port {port}" in cmd
+
+
+def cmd_paper(a):
+    from . import papers
+    p = Project()
+    port = (json.loads((p.dir / "server.json").read_text()).get("port") if (p.dir / "server.json").exists() else None) or 8890
+    if not _port_open(port):  # stale server.json: point at the command that serves it rather than a dead port
+        print(f"(this project's dashboard is not running on {port}: `arx up` prints where it is served)", file=sys.stderr)
+    if a.verb in ("add", "edit"):  # edit = republish; open pages swap the new version in without reloading
+        if not a.name or not a.file:
+            sys.exit(f"usage: arx paper {a.verb} <name> --file paper.html")
+        if a.goal and a.goal not in p.goals():
+            sys.exit(f"unknown goal {a.goal}")
+        f = papers.add(p, a.name, Path(a.file), title=a.title, hill=a.hill, goal=a.goal)
+        print(f"{f}\nhttp://127.0.0.1:{port}/papers/{a.name}")
+    elif a.verb == "ls":
+        for name, m in papers.papers(p).items():
+            print(f"{name}  {m.get('title') or ''}  threads={m['comments']} open={m['open']} waiting={m['waiting']}"
+                  f"  http://127.0.0.1:{port}/papers/{name}")
+    elif a.verb == "poll":  # blocks until a person is waiting on the agent; one JSON line per thread
+        for th in papers.poll(p, a.name, timeout=a.timeout):
+            print(json.dumps(dict(paper=th["paper"], thread=th["id"], quote=(th.get("anchor") or {}).get("quote"),
+                                  block=(th.get("anchor") or {}).get("block"), mention=th["mention"],
+                                  resolved=th["resolved"],  # the whole thread, so the agent answers in context
+                                  messages=[dict(author=m["author"], agent=m["agent"], body=m["body"], link=m.get("link"))
+                                            for m in th["messages"]])))
+    elif a.verb == "attach":
+        if not a.file:
+            sys.exit("usage: arx paper attach <name> --file page.html")
+        print(f"http://127.0.0.1:{port}" + papers.attach(p, a.name, Path(a.file)))
+    elif a.verb == "new" and a.goal:  # the public paper: the worked goal example, to rewrite with this goal's result
+        if a.goal not in p.goals():
+            sys.exit(f"unknown goal {a.goal}")
+        out = Path(a.file or f"paper-{a.goal}.html")
+        if out.exists():
+            sys.exit(f"{out} exists")
+        shutil.copy(TEMPLATE / "paper-goal-example.html", out)
+        st = p.goal_status(a.goal)
+        print(f"{out}\na worked example: one possible shape, not a template (PROTOCOL.md § Papers). From the ledger:\n"
+              f"  target  {st['kpi']} {_kpi_fmt(st, st['target'])} on {st['slice']}, n = {st['n']}\n"
+              f"  now     {st['model']}: {_kpi_fmt(st, st['value'])} [{st['status']}]\n"
+              + (f"  vs {st['baseline']}: Δ {_fmt(st['vs_baseline']['delta'])} pts, 90% CI [{_fmt(st['vs_baseline']['lo'])}, {_fmt(st['vs_baseline']['hi'])}], n = {st['vs_baseline']['n']}\n" if st["vs_baseline"] else "")
+              + "".join(f"  internal: ../{h} (hill {h}, {s})\n" for h, s in st["hills"].items())
+              + f"  arx paper check --goal {a.goal} --file {out}\n  arx paper add {a.goal} --goal {a.goal} --file {out}")
+    elif a.verb == "new":  # a starter page: the worked example, to rewrite with this hill's content
+        if not a.name:
+            sys.exit("usage: arx paper new <hill> [--file paper-<hill>.html] | arx paper new --goal <goal>")
+        out = Path(a.file or f"paper-{a.name}.html")
+        if out.exists():
+            sys.exit(f"{out} exists")
+        shutil.copy(TEMPLATE / "paper-example.html", out)
+        print(f"{out}\na worked example: one possible shape, not a template. Pick the structure hill {a.name!r} needs;\n"
+              f"only the non-negotiables in PROTOCOL.md § Papers are fixed. Then:\n"
+              f"  arx paper check --file {out}\n  arx paper add {a.name} --hill {a.name} --file {out}")
+    elif a.verb == "check":  # lint a paper (published name or a file) against PROTOCOL.md before publishing it
+        src = Path(a.file) if a.file else papers.pdir(p, a.name or "") / "paper.html"
+        if not src.exists():
+            sys.exit(f"usage: arx paper check <name> | --file paper.html  (no {src})")
+        goal = a.goal or (papers._read(papers.pdir(p, a.name) / "meta.json", {}).get("goal") if a.name else None)
+        if goal and goal not in p.goals():
+            sys.exit(f"unknown goal {goal}")
+        found = papers.check(src.read_text(), slices=list(p.slices()))
+        if goal:  # the public paper: final result, paired delta, internal hill papers
+            found += papers.check_goal(src.read_text(), p.goal_status(goal), hill_papers=papers.names(p))
+        for level, msg in found:
+            print(f"{level}: {msg}")
+        errs = sum(1 for lv, _ in found if lv == "error")
+        print(f"{errs} errors, {len(found) - errs} warnings in {src}")
+        sys.exit(1 if errs else 0)
+    elif a.verb in ("reply", "resolve"):
+        if not a.name or not a.comment:
+            sys.exit(f"usage: arx paper {a.verb} <name> <thread id> [text] [--link label=url | --file page.html]")
+        if a.comment not in {t["id"] for t in papers.threads(papers.thread(p, a.name))}:
+            sys.exit(f"no thread {a.comment!r} in paper {a.name!r}; `arx paper poll` prints thread ids")
+        link = None
+        if a.file:  # the answer is its own page: copy it next to the paper and link to it
+            url = papers.attach(p, a.name, Path(a.file))
+            link = dict(label=a.link or Path(a.file).stem.replace("-", " "), url=url)
+        elif a.link:
+            label, _, url = a.link.rpartition("=") if "=" in a.link else ("", "", a.link)
+            link = dict(label=label or url, url=url)
+        papers.post(p, a.name, a.verb, parent=a.comment, body=" ".join(a.text) or None, link=link, agent=True,
+                    author=a.author)
 
 
 def cmd_serve(a):
@@ -302,7 +464,7 @@ def main(argv=None):
                                  epilog=WORKFLOW)
     sp = ap.add_subparsers(dest="cmd", required=True, metavar="command")
     _add = sp.add_parser
-    sp.add_parser = lambda name, help=None, **kw: _add(name, help=help, description=help, **kw)  # `arx X -h` shows it too
+    sp.add_parser = lambda name, help=None, **kw: _add(name, help=help, **{"description": help, **kw})  # `arx X -h` shows it too
 
     s = sp.add_parser("init", help="create research.json and .research/ in a folder, open the setup task, start the dashboard"); s.add_argument("path", nargs="?", default=".", help="project folder (default .)"); s.add_argument("--name", help="project name shown in the dashboard")
     s.add_argument("--port", type=int, default=8890, help="dashboard port"); s.add_argument("--no-serve", action="store_true", help="do not start the dashboard"); s.set_defaults(fn=cmd_init)
@@ -331,7 +493,21 @@ def main(argv=None):
     s.add_argument("--example-input"); s.add_argument("--example-wrong"); s.add_argument("--example-right")
     s.add_argument("--example-why", help="one clause: why the model gets it wrong"); s.add_argument("--examples-file", help="JSON list of {input, wrong, right, why}")
     s.add_argument("--share", help="failures this hill explains, COUNT/OF, e.g. 63/495"); s.add_argument("--share-of", help="what OF counts, e.g. \"v1's wrong answers on full\"")
+    s.add_argument("--goal", help="the goal this hill serves")
     s.set_defaults(fn=cmd_hill)
+
+    s = sp.add_parser("goal", help="a target KPI on one slice; hills serve it; it gets the public paper")
+    s.add_argument("verb", choices=["open", "status", "achieve", "abandon"]); s.add_argument("name", nargs="?")
+    s.add_argument("--title"); s.add_argument("--slice", help="e.g. gsm8k-test/full"); s.add_argument("--target", type=float, help="e.g. 0.96")
+    s.add_argument("--kpi", default="score", help="score (default), cost, latency_p50, latency_p95")
+    s.add_argument("--lower-is-better", action="store_true"); s.add_argument("--baseline", help="starting champion (default: the champion now)")
+    s.add_argument("--problem", help="why this goal matters"); s.add_argument("--reason", help="abandon: why")
+    s.add_argument("--note", help="achieve: a line for the record"); s.add_argument("--force", action="store_true", help="achieve without the target met")
+    s.add_argument("--json", action="store_true"); s.set_defaults(fn=cmd_goal)
+
+    s = sp.add_parser("projects", help="the projects one dashboard serves (~/.arx/projects.json)")
+    s.add_argument("verb", nargs="?", choices=["ls", "add", "rm"], default="ls"); s.add_argument("path", nargs="?", help="add: project root; rm: key")
+    s.set_defaults(fn=cmd_projects)
 
     s = sp.add_parser("model", help="register a version (candidate, or --champion for the baseline)")
     s.add_argument("verb", choices=["add"]); s.add_argument("name"); s.add_argument("--parent"); s.add_argument("--hill")
@@ -380,6 +556,25 @@ def main(argv=None):
     s.add_argument("--step", type=int); s.add_argument("--level", default="info"); s.add_argument("--status", default="done")
     s.add_argument("--summary-file", help="JSON merged into the task summary on finish")
     s.set_defaults(fn=cmd_task)
+
+    s = sp.add_parser("paper", help="papers: write-ups served at /papers/<name>; people comment, the agent replies",
+                     formatter_class=argparse.RawDescriptionHelpFormatter, description="""verbs:
+  new <hill> | new --goal <goal>   copy the worked example to start a paper
+  check <name> | --file F          lint against PROTOCOL.md (add --goal for goal papers); exit 1 on errors
+  add|edit <name> --file F         publish / republish (open pages update in place)
+  ls                               papers with thread counts
+  poll [name]                      block until someone waits on the agent; one JSON line per thread
+  reply <name> <thread> "text"     answer a thread (--link label=url, --file page.html)
+  resolve <name> <thread> [note]   close a thread
+  attach <name> --file F           serve a page next to the paper""")
+    s.add_argument("verb", choices=["new", "add", "edit", "check", "ls", "poll", "reply", "resolve", "attach"]); s.add_argument("name", nargs="?")
+    s.add_argument("comment", nargs="?", help="thread id, for reply / resolve"); s.add_argument("text", nargs="*")
+    s.add_argument("--file", dest="file", help="add/edit/check: the paper's HTML; reply/attach: a page to link (widget, poster)")
+    s.add_argument("--title"); s.add_argument("--hill"); s.add_argument("--goal", help="new/add/check: the goal paper (public)")
+    s.add_argument("--link", help="reply: label=url (url may be #block, /papers/<name>#block, an arx page or https://)")
+    s.add_argument("--author", default="agent", help="reply: the name shown on the agent's message")
+    s.add_argument("--timeout", type=float, help="poll: give up after this many seconds")
+    s.set_defaults(fn=cmd_paper)
 
     s = sp.add_parser("status", help="champion, running tasks, each candidate's ladder position, open hills"); s.set_defaults(fn=cmd_status)
     s = sp.add_parser("serve", help="run the dashboard in the foreground (`arx up` runs it in the background)"); s.add_argument("--port", type=int, default=8890, help="dashboard port"); s.set_defaults(fn=cmd_serve)
