@@ -104,6 +104,11 @@ t.finish(); backdate(t, 2)
 run_eval("v7", "qa/dev-please")
 p.open_hill("please-robust", "Politeness robustness", "qa/dev-please", "qa/dev-control",
             "Adding 'please' changes v7's answer. Expect +20 pts on dev-please; no other slice should move.", "v7")
+p.explain_hill("please-robust", symptom="Adding 'please' to a question changes v7's answer.",
+               measure="1 if the answer with and without 'please' agree and are correct",
+               examples=[{"input": "Please, what year did the Berlin Wall fall?", "wrong": "1991",
+                          "right": "1989", "why": "the politeness marker pulls attention off the retrieved passage"}],
+               share={"count": 31, "of": 140, "of_what": "v7's wrong answers on full"})
 
 # v8b: fixes politeness but breaks long-context → stops at dev
 p.add_model("v8b", parent="v7", hill="please-robust", change="Strip politeness tokens in the system prompt")

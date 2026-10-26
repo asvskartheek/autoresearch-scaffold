@@ -51,7 +51,7 @@ def cmd_init(a):
     url = _up(root, a.port) if not a.no_serve else None
     os.chdir(root)
     t = Task(Project(root), "setup", "Project setup", "Environment, model and dataset preparation. Note each step; finish when the first eval can run.")
-    t.note("ar init")
+    t.note("arx init")
     if url:
         t.link("Dashboard", url)
     print(f"initialised {root}\ndashboard: {url or 'not started (arx up)'}\nsetup task: {t.id}  (arx task note {t.id} ... ; arx task finish {t.id})")
