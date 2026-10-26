@@ -105,6 +105,9 @@ Two kinds, one reader (`/papers/<name>`):
 Never start a second paper for the same goal or hill: republish with `arx paper edit <name> --file paper.html`.
 Check every page before every publish: `arx paper check --file paper.html` (goal papers: add `--goal <goal>`).
 
+**Golden rule.** Cut taglines, helper text and secondary labels. If a screen needs them to make sense, fix the
+layout. This holds for every paper, every figure and every widget.
+
 ### Non-negotiables
 
 `arx paper check` enforces what a machine can see; the rest is on the author.
