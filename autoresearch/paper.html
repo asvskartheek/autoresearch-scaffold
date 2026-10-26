@@ -417,7 +417,8 @@ function cardFor(t) {
       msgs.map((m, i) => msgHtml(m, i, t)).join("") +
       (hidden > 0 ? `<div class="collapsed">${hidden} more ${hidden === 1 ? "reply" : "replies"}</div>` : "") +
       (t.thinking ? `<div class="think"><span class="av agent">${I.spark}</span>Agent is thinking<span class="dots"><i></i><i></i><i></i></span></div>` :
-        "") +
+        t.waiting ? `<div class="think"><span class="av agent">${I.spark}</span>Sent to the agent</div>` :
+        `<div class="think"><button class="btn sm outline" data-act="ask"><span class="av agent">${I.spark}</span>Send to agent</button></div>`) +
       (t.resolved ? `<div class="res">${I.check}Resolved${t.resolved_by ? " by " + esc(t.resolved_by) : ""}<button class="btn sm outline" data-act="reopen">${I.reopen}Re-open</button></div>` : "");
   }
   c.classList.toggle("resolved", t.resolved); c.classList.toggle("waiting", t.waiting);
@@ -545,6 +546,7 @@ function onCardClick(e, id) {
   if (act === "send") sendReply(id);
   else if (act === "cancel") { const ta = cards.get(id).querySelector("textarea"); ta.value = ""; drafts[id] = ""; saveDrafts(); grow(ta); cards.get(id).querySelector(".reply").classList.remove("typing"); ta.blur(); layout(); }
   else if (act === "resolve") { needName() && api("resolve", { parent: id }).then(() => { setActive(null); refresh(); }); }
+  else if (act === "ask") { needName() && api("reply", { parent: id, body: "@agent" }).then(refresh); }
   else if (act === "reopen") { needName() && api("reopen", { parent: id }).then(refresh); }
   else if (act === "menu") menu(b, id, b.dataset.mid, b.dataset.mine === "1", t);
 }
