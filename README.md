@@ -96,7 +96,9 @@ Shell-only work: `arx task start | log | note | link | progress | left | finish`
 
 # The dashboard
 
-`arx up` serves it on `127.0.0.1` (it starts automatically with `arx init`). It refreshes every few seconds.
+`arx up` serves it on `127.0.0.1` (it starts automatically with `arx init`). It refreshes every few seconds without
+disturbing open sections, focus or clicks. One dashboard serves every registered project: `arx projects` lists
+them and each lives at `/p/<key>/`.
 
 | Workbench | Gate |
 |---|---|
@@ -106,11 +108,13 @@ Shell-only work: `arx task start | log | note | link | progress | left | finish`
 
 | View | Shows |
 |---|---|
+| Goals | Each target KPI: value now, gap, paired Δ vs the starting champion, the hills that serve it |
 | Overview | Champion, the candidate ladder, leaderboards by dataset and slice: score, Δ champion, errors, cost, p50/p95 |
 | Workbench | A card for every running task: progress, ETA, sparkline, heartbeat. Stalled tasks turn red |
 | Task page | Every logged series as a chart, paired diff with the champion, per-example strip, log, links, setup |
 | Models | Lineage and rungs. A model page lists every gate check with its delta, CI and win/loss count |
 | Hills | Every weakness as a card; each hill's page shows an example, how common it is and every attempt |
+| Papers | Goal papers (public) and hill papers (internal), with comment threads the agent answers |
 | Slices | Frozen ID sets with hash, seed, metric and dataset link |
 | Archive | Finished, failed and partial tasks, each with the same full page |
 
@@ -123,14 +127,26 @@ Shell-only work: `arx task start | log | note | link | progress | left | finish`
 | `arx sync` | Refresh the project's vendored `autoresearch/` copy and restart the dashboard |
 | `arx dataset add` | Register a full eval set and its nested random slices |
 | `arx slice add` | Freeze a dev / control / synthetic slice. Slices never change once frozen |
-| `arx hill open` | Name a weakness with its target and control slices |
+| `arx goal open \| status \| achieve \| abandon` | A target KPI on one slice; achieved only when the ledger shows it |
+| `arx hill open` | Name a weakness with its target and control slices (`--goal` to serve a goal) |
 | `arx hill explain` | Give a hill its symptom, example, metric and share for its page |
 | `arx model add` | Register a candidate (or `--champion` for the baseline) |
 | `arx run --manifest m.json --expected-sha256 <sha>` | Launch a reviewed, hash-pinned command as a task; scored runs check rows against the slice |
 | `arx gate <model>` | Where a candidate stands on the ladder, and the next run |
 | `arx promote <model>` | Make it champion, and mark its hill as climbed |
 | `arx reject <model>` | Keep a failed candidate in the ledger, with the reason |
-| `arx status` | What is running, where each candidate stands, which hills are open |
+| `arx paper new \| check \| add \| edit` | Write, lint and publish a paper at `/papers/<name>` |
+| `arx paper poll \| reply \| resolve` | The agent's side of comment threads |
+| `arx projects [ls \| add \| rm]` | The projects one dashboard serves |
+| `arx status` | What is running, where each candidate stands, which goals and hills are open |
+
+# Goals and papers
+
+A goal is the number the effort is for (`arx goal open gsm8k-96 --slice gsm8k-test/full --target 0.96`); hills
+serve it. Each goal gets one public paper, each hill an internal one. People comment on any paragraph; a new
+comment goes to the agent automatically, and **Send to agent** (or typing `@agent`) hands a thread back to it.
+An agent answers by running `arx paper poll` in the project. See [goals](docs/guides/goals.md) and
+[papers](docs/guides/papers.md).
 
 # Configure
 
@@ -163,7 +179,7 @@ Scores in the demo are simulated. Nothing calls a model.
 ```
 research.json          ladder, thresholds, KPIs
 AGENTS.md  PROTOCOL.md rules for agents, and the research method
-.research/             the ledger: datasets, slices, hills, models, decisions, tasks/<id>/{task.json, metrics, rows, events}
+.research/             the ledger: datasets, slices, goals, hills, models, decisions, tasks/<id>/{...}, papers/<name>/{paper.html, thread.jsonl}
 autoresearch/          ledger, gates, task tracker, evaluate(), dashboard server
 ```
 

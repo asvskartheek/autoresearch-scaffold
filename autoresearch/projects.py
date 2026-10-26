@@ -24,7 +24,7 @@ def registry() -> dict[str, dict]:
 
 def key_for(root: Path) -> str | None:
     root = str(Path(root).resolve())
-    return next((k for k, v in (_read(home() / "projects.json", {}) or {}).items() if v.get("root") == root), None)
+    return next((k for k, v in (_read(home() / "projects.json", {}) or {}).items() if isinstance(v, dict) and v.get("root") == root), None)
 
 
 def register(root: Path) -> str:

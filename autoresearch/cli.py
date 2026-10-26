@@ -43,7 +43,7 @@ def cmd_init(a):
     (root / ".research").mkdir(exist_ok=True)
     gi = root / ".gitignore"
     lines = gi.read_text().splitlines() if gi.exists() else []
-    for want in ("scratch/", ".research/tasks/*/rows.jsonl"):
+    for want in ("scratch/", ".research/tasks/*/rows.jsonl", ".research/server.json", ".research/server.log"):
         if want not in lines:
             lines.append(want)
     gi.write_text("\n".join(lines) + "\n")
@@ -70,10 +70,14 @@ def _up(root: Path, port: int, restart: bool = False) -> str:
     info = root / ".research" / "server.json"
     if info.exists():
         old = json.loads(info.read_text())
+        try:
+            old["port"], old["pid"] = int(old.get("port") or 0), int(old.get("pid") or 0)
+        except (TypeError, ValueError):
+            old = {}
         if old.get("port") and _port_open(old["port"]):
             if not restart:
                 return f"http://127.0.0.1:{old['port']}"
-            if old.get("pid"):
+            if old.get("pid") and _is_dashboard(old["pid"], old["port"]):
                 try:
                     os.kill(old["pid"], 15)
                 except OSError:
@@ -183,7 +187,7 @@ def cmd_goal(a):
         g = p.open_goal(a.name, a.title, a.slice, a.target, kpi=a.kpi, baseline=a.baseline, problem=a.problem,
                         higher_is_better=False if a.lower_is_better else None)
         return print(f"goal {a.name} open: {g['kpi']} {'>=' if g['higher_is_better'] else '<='} {g['target']} "
-                     f"on {g['slice']} (n = {g['n']}), baseline {g['baseline']}")
+                     f"on {g['slice']} (n = {g['n']}), baseline {g.get('baseline') or 'none yet (no champion)'}")
     if a.verb == "achieve":
         ev = p.achieve_goal(a.name, a.force, a.note)
         return print(f"goal {a.name} achieved by {ev['model']} ({ev['task']}); write its paper: arx paper new --goal {a.name}")
@@ -305,6 +309,15 @@ def cmd_status(a):
         print(f"  goal {name} [{st['status']}] {_kpi_fmt(st, st['value'])} / {_kpi_fmt(st, st['target'])} on {st['slice']}")
     for name, h in p.hills().items():
         print(f"  hill {name} [{h['status']}] {h['title']}" + (f" (goal {h['goal']})" if h.get("goal") else ""))
+
+
+def _is_dashboard(pid: int, port: int) -> bool:
+    """The pid in server.json may have been reused: only signal it if it is still our server on that port."""
+    try:
+        cmd = subprocess.run(["ps", "-o", "command=", "-p", str(pid)], capture_output=True, text=True).stdout
+    except OSError:
+        return False
+    return "autoresearch.cli" in cmd and f"serve --port {port}" in cmd
 
 
 def cmd_paper(a):
@@ -473,7 +486,16 @@ def main(argv=None):
     s.add_argument("--summary-file", help="JSON merged into the task summary on finish")
     s.set_defaults(fn=cmd_task)
 
-    s = sp.add_parser("paper", help="papers: write-ups served at /papers/<name>; people comment, the agent replies")
+    s = sp.add_parser("paper", help="papers: write-ups served at /papers/<name>; people comment, the agent replies",
+                     formatter_class=argparse.RawDescriptionHelpFormatter, description="""verbs:
+  new <hill> | new --goal <goal>   copy the worked example to start a paper
+  check <name> | --file F          lint against PROTOCOL.md (add --goal for goal papers); exit 1 on errors
+  add|edit <name> --file F         publish / republish (open pages update in place)
+  ls                               papers with thread counts
+  poll [name]                      block until someone waits on the agent; one JSON line per thread
+  reply <name> <thread> "text"     answer a thread (--link label=url, --file page.html)
+  resolve <name> <thread> [note]   close a thread
+  attach <name> --file F           serve a page next to the paper""")
     s.add_argument("verb", choices=["new", "add", "edit", "check", "ls", "poll", "reply", "resolve", "attach"]); s.add_argument("name", nargs="?")
     s.add_argument("comment", nargs="?", help="thread id, for reply / resolve"); s.add_argument("text", nargs="*")
     s.add_argument("--file", dest="file", help="add/edit/check: the paper's HTML; reply/attach: a page to link (widget, poster)")

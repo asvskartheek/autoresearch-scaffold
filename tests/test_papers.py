@@ -222,6 +222,23 @@ class Routes(unittest.TestCase):
         c.request("GET", "/api/state", headers={"Host": "evil.example:8890"})
         self.assertEqual(c.getresponse().status, 403)
 
+    def test_hardening(self):
+        c = http.client.HTTPConnection(self.base.split("//")[1])
+        c.request("POST", "/api/paper/demo/comment", body=b"{}", headers={"Content-Length": "999999999"})
+        self.assertEqual(c.getresponse().status, 413)
+        self.assertEqual(self.req("/api/paper/demo/comment", [1, 2])[0], 400)  # body must be an object
+        code, body = self.req("/papers/nope/raw")
+        self.assertEqual(code, 404); self.assertNotIn(str(self.p.root).encode(), body)  # no paths in errors
+        self.assertEqual(self.req("/p/not-registered/api/state")[0], 404)
+        w = Path(tempfile.mkdtemp()) / "w.html"; w.write_text("<p>widget</p>")
+        url = papers.attach(self.p, "demo", w)
+        with urllib.request.urlopen(self.base + url) as f:
+            self.assertIn("sandbox", f.headers["Content-Security-Policy"])  # attachments get an opaque origin
+            self.assertEqual(f.headers["X-Content-Type-Options"], "nosniff")
+        for bad in ("a\x00b", "x" * 200, "-x", "a b"):
+            with self.assertRaises(KeyError):
+                papers.pdir(self.p, bad)
+
     def test_malformed_log_still_serves(self):
         with open(papers.pdir(self.p, "demo") / "thread.jsonl", "a") as f:
             f.write('[]\n{"kind":"comment"}\n')

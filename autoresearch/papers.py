@@ -23,9 +23,12 @@ MENTION = re.compile(r"(?<![\w@])@agent\b", re.I)
 KINDS = ("comment", "reply", "seen", "resolve", "reopen", "edit", "delete")
 
 
+NAME = re.compile(r"[A-Za-z0-9][\w.+-]{0,99}")  # paper and file names: no separators, dotfiles or control chars
+
+
 def pdir(p: Project, name: str) -> Path:
-    if not name or "/" in name or "\\" in name or name.startswith("."):
-        raise KeyError(f"bad paper name {name!r}")
+    if not name or not NAME.fullmatch(name):
+        raise KeyError("bad paper name")
     return p.dir / "papers" / name
 
 
@@ -66,15 +69,15 @@ def attach(p: Project, name: str, src: Path) -> str:
     """Copy a page (widget, poster) next to the paper; returns the URL path a reply can link to."""
     if not (pdir(p, name) / "paper.html").exists():
         raise KeyError(f"no paper {name!r}")
-    f = pdir(p, name) / "files" / Path(src).name
+    f = file(p, name, Path(src).name)
     f.parent.mkdir(exist_ok=True)
     shutil.copyfile(src, f)
     return f"/papers/{name}/files/{f.name}"
 
 
 def file(p: Project, name: str, fname: str) -> Path:
-    if not fname or "/" in fname or "\\" in fname or fname.startswith("."):
-        raise KeyError(f"bad file {fname!r}")
+    if not fname or not NAME.fullmatch(fname):
+        raise KeyError("bad file name")
     return pdir(p, name) / "files" / fname
 
 

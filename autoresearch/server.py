@@ -237,10 +237,13 @@ def serve(port: int = 8890, root=None):
         def log_message(self, *a):
             pass
 
-        def _send(self, code, body: bytes, ctype):
+        def _send(self, code, body: bytes, ctype, extra=None):
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            for k, v in (extra or {}).items():
+                self.send_header(k, v)
             if len(body) > 2048 and "gzip" in (self.headers.get("Accept-Encoding") or ""):
                 body = gzip.compress(body, compresslevel=5)
                 self.send_header("Content-Encoding", "gzip")
@@ -289,13 +292,15 @@ def serve(port: int = 8890, root=None):
                     return self._send(200, (papers.pdir(p, parts[1]) / "paper.html").read_bytes(), "text/html; charset=utf-8")
                 if parts[0] == "papers" and len(parts) == 4 and parts[2] == "files":
                     f = papers.file(p, parts[1], parts[3])
-                    return self._send(200, f.read_bytes(), mimetypes.guess_type(f.name)[0] or "application/octet-stream")
+                    # attachments run sandboxed (opaque origin): a widget cannot read other projects or post comments
+                    return self._send(200, f.read_bytes(), mimetypes.guess_type(f.name)[0] or "application/octet-stream",
+                                      {"Content-Security-Policy": "sandbox allow-scripts allow-popups"})
                 if parts[:2] == ["api", "paper"] and len(parts) == 3:
                     body = dict(version=papers.version(p, parts[2]), meta=papers._read(papers.pdir(p, parts[2]) / "meta.json", {}),
                                 threads=papers.threads(papers.thread(p, parts[2])))
                     return self._send(200, json.dumps(body, default=str).encode(), "application/json")
-            except (KeyError, SystemExit, FileNotFoundError, ValueError) as e:
-                return self._send(404, json.dumps(dict(error=str(e))).encode(), "application/json")
+            except (KeyError, SystemExit, OSError, ValueError):
+                return self._send(404, b'{"error":"not found"}', "application/json")
             self._send(404, b"not found", "text/plain")
 
         def do_POST(self):
@@ -305,20 +310,28 @@ def serve(port: int = 8890, root=None):
                 p, path = pick(self.path.split("?")[0])
                 parts = [unquote(x) for x in path.strip("/").split("/")]
                 if parts[:2] == ["api", "paper"] and len(parts) == 4 and parts[3] in HUMAN_KINDS:
-                    d = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                    n = int(self.headers.get("Content-Length") or 0)
+                    if not 0 <= n <= 64_000:
+                        return self._send(413, b'{"error":"too large"}', "application/json")
+                    d = json.loads(self.rfile.read(n) or b"{}")
+                    if not isinstance(d, dict):
+                        return self._send(400, b'{"error":"bad request"}', "application/json")
                     ev = human_event(p, parts[2], parts[3], d)
                     if ev is None:
                         return self._send(400, b'{"error":"bad request"}', "application/json")
                     return self._send(200, json.dumps(ev).encode(), "application/json")
-            except (KeyError, ValueError) as e:
-                return self._send(404, json.dumps(dict(error=str(e))).encode(), "application/json")
+            except (KeyError, ValueError, OSError):
+                return self._send(404, b'{"error":"not found"}', "application/json")
             self._send(404, b"not found", "text/plain")
 
+    srv = None
     for port_try in range(port, port + 20):
         try:
             srv = ThreadingHTTPServer(("127.0.0.1", port_try), H)
             break
         except OSError:
             continue
+    if srv is None:
+        raise SystemExit(f"no free port in {port}-{port + 19}")
     print(f"dashboard: http://127.0.0.1:{port_try}")
     srv.serve_forever()

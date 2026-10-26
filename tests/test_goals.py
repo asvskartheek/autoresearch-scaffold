@@ -176,6 +176,11 @@ class Cli(unittest.TestCase):
         self.assertNotEqual(self.arx(p.root, "goal", "abandon", "half").returncode, 0)  # needs --reason
         self.assertIn("[achieved]", self.arx(p.root, "status").stdout)
 
+    def test_open_before_any_champion(self):
+        p = ledger()
+        r = self.arx(p.root, "goal", "open", "g", "--title", "G", "--slice", "full", "--target", "0.9")
+        self.assertEqual(r.returncode, 0, r.stderr); self.assertIn("no champion", r.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
