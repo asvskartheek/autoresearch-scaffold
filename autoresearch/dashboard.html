@@ -201,10 +201,10 @@ function renderNav(){
  const navOn={task:active().some(t=>t.id===route().arg)?'workbench':'archive',model:'models',hill:'hills',goal:'goals'}[r]||r;
  const waiting=st?Object.values(st.papers||{}).reduce((a,p)=>a+p.waiting,0):0;
  const counts={goals:st?Object.values(st.goals||{}).filter(g=>g.status==='open').length:0,workbench:st?active().length:0,hills:st?Object.values(st.hills).filter(h=>h.status==='open').length:0,papers:waiting};
- $('#nav').innerHTML=`<a class="brand" href="#overview" style="height:auto;padding:6px 8px 18px;background:none"><i><svg class="i" viewBox="0 0 24 24"><path d="M4 17l5-6 4 4 7-8"/></svg></i><span>Observatory</span></a>`+
+ setHTML($('#nav'),`<a class="brand" href="#overview" style="height:auto;padding:6px 8px 18px;background:none"><i><svg class="i" viewBox="0 0 24 24"><path d="M4 17l5-6 4 4 7-8"/></svg></i><span>Observatory</span></a>`+
  ROUTES.map(([k,l,i])=>`<a href="#${k}" class="${navOn===k?'on':''}">${ICON[i]}${l}${counts[k]?`<span class="count${k==='papers'?' hot':''}">${counts[k]}</span>`:''}</a>`).join('')+
  (S.projects.length>1?`<div class="plabel">Projects</div>`+S.projects.map(q=>`<a class="proj${q.key===PKEY||(!PKEY&&q.default)?' on':''}" href="/p/${encodeURIComponent(q.key)}/" title="${esc(q.name)} · ${esc(q.root)}"><span class="pn">${esc(q.name)}</span>${q.waiting?`<span class="count hot">${q.waiting}</span>`:q.running?`<span class="count">${q.running}</span>`:''}</a>`).join(''):'')+
- `<div class="foot">${st?`<b>${esc(st.config.name)}</b>`:''}<button class="btn icon sm ghost" onclick="toggleTheme()" title="Theme">${ICON.theme}</button></div>`;
+ `<div class="foot">${st?`<b>${esc(st.config.name)}</b>`:''}<button class="btn icon sm ghost" onclick="toggleTheme()" title="Theme">${ICON.theme}</button></div>`);
 }
 function toggleTheme(){const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('arx-theme',t)}catch{}}
 addEventListener('storage',e=>{if(e.key==='arx-theme'&&e.newValue)document.documentElement.dataset.theme=e.newValue});
@@ -509,29 +509,59 @@ function vTask(id){
 }
 function ring(done,total){const f=Math.min(1,done/total),r=52,c=2*Math.PI*r;return `<svg width="130" height="130" viewBox="0 0 130 130" style="flex:none"><circle cx="65" cy="65" r="${r}" fill="none" stroke="var(--soft)" stroke-width="11"/><circle cx="65" cy="65" r="${r}" fill="none" stroke="var(--green)" stroke-width="11" stroke-linecap="round" stroke-dasharray="${c*f} ${c}" transform="rotate(-90 65 65)"/><text x="65" y="66" text-anchor="middle" style="font-size:26px;font-weight:650;fill:var(--ink)">${done}</text><text x="65" y="86" text-anchor="middle">/ ${total}</text></svg>`}
 
-function render(){
- if(!S.state)return;renderNav();
+// replace a container's HTML only when it changed; keep open <details> and focus across the swap
+function setHTML(el,html){
+ if(el._html===html)return false;el._html=html;
+ const key=d=>d.querySelector('summary')?.textContent||'';
+ const open=new Set([...el.querySelectorAll('details[open]')].map(key));
+ const f=document.activeElement,fk=f&&el.contains(f)?(f.id||f.getAttribute('href')||f.name):null;
+ el.innerHTML=html;
+ el.querySelectorAll('details').forEach(d=>{if(open.has(key(d)))d.open=true});
+ if(fk){const n=[...el.querySelectorAll('[id],[href],[name]')].find(n=>(n.id||n.getAttribute('href')||n.name)===fk);n?.focus({preventScroll:true})}
+ return true;
+}
+// never swap the DOM under a pressed pointer or a live text selection; catch up on pointerup
+let pdown=false,pending=false;
+addEventListener('pointerdown',()=>{pdown=true},true);
+addEventListener('pointerup',()=>{pdown=false;if(pending)setTimeout(render,0)},true);
+addEventListener('pointercancel',()=>{pdown=false;if(pending)render()},true);
+const busy=()=>{const g=getSelection();return pdown||(g&&!g.isCollapsed&&$('#main').contains(g.anchorNode))};
+function render(force){
+ if(!S.state)return;
+ if(force!==true&&busy()){pending=true;return}
+ pending=false;const t0=performance.now();
+ renderNav();
  const {r,arg}=route();
  const v={overview:vOverview,workbench:vWorkbench,archive:vArchive,models:vModels,goals:vGoals,hills:vHills,papers:vPapers,slices:vSlices}[r];
- const y=scrollY,open=[...document.querySelectorAll('#main details')].map(d=>d.open);
+ const y=scrollY;
  const html=v?v():r==='task'?vTask(arg):r==='model'?vModel(arg):r==='hill'?vHill(arg):r==='goal'?vGoal(arg):vOverview();
- if(html===S.html)return;S.html=html;  // a poll that changed nothing leaves the page alone
- $('#main').innerHTML=html;
- document.querySelectorAll('#main details').forEach((d,i)=>{if(open[i])d.open=true});
- scrollTo(0,y);
+ if(setHTML($('#main'),html)&&force!==true)scrollTo(0,y);
+ S.renderMs=performance.now()-t0;
 }
-async function tick(){
- try{
+async function loadDetail(){
+ const {r,arg}=route();
+ if(r==='hill'&&arg){const d=await fetch('api/hill/'+encodeURIComponent(arg),{cache:'no-store'});S.hill=d.ok?{key:arg,data:await d.json()}:null}
+ if(r==='task'&&arg){const d=await fetch('api/task/'+encodeURIComponent(arg),{cache:'no-store'});S.detail=d.ok?await d.json():null}
+}
+// one poll in flight; a request made meanwhile runs once after it lands
+let inflight=null,again=false;
+function tick(){
+ if(inflight){again=true;return inflight}
+ inflight=(async()=>{try{
   const s=await fetch('api/state',{cache:'no-store'});S.state=await s.json();S.ok=true;
   if(!S.pt||Date.now()-S.pt>15000){S.pt=Date.now();try{S.projects=await (await fetch('/api/projects',{cache:'no-store'})).json()}catch{}}
-  const {r,arg}=route();
-  if(r==='hill'&&arg){const d=await fetch('api/hill/'+encodeURIComponent(arg),{cache:'no-store'});S.hill=d.ok?{key:arg,data:await d.json()}:null}
-  if(r==='task'&&arg){const d=await fetch('api/task/'+encodeURIComponent(arg),{cache:'no-store'});S.detail=d.ok?await d.json():null}
+  await loadDetail();
  }catch(e){S.ok=false}
- render();
+ render()})().finally(()=>{inflight=null;if(again){again=false;tick()}});
+ return inflight;
 }
-addEventListener('hashchange',()=>{S.detail=null;scrollTo(0,0);tick()});
-tick();setInterval(tick,4000);
+// route change: paint at once from cached state; fetch only the detail the new route needs
+addEventListener('hashchange',async()=>{
+ const {r,arg}=route();
+ S.detail=null;scrollTo(0,0);render(true);
+ if((r==='hill'||r==='task')&&arg){try{await loadDetail()}catch{}render(true)}
+});
+tick();setInterval(()=>{if(!document.hidden)tick()},4000);
 </script>
 </body>
 </html>

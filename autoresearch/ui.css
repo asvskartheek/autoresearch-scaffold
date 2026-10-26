@@ -6,9 +6,9 @@
   --display:"Bricolage Grotesque","Instrument Sans",ui-sans-serif,system-ui,sans-serif;
   --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
   --background:#f6f8fb;--page:#fff;--foreground:#14213d;--muted:#eaf0f8;--muted-fg:#5b6678;--border:#d9e0ea;--input:#d9e0ea;
-  --ring:#0b7a75;--primary:#0b7a75;--primary-fg:#fff;--accent:#eaf0f8;--sidebar:#fff;
-  --blue:#0b7a75;--green:#1b7f45;--amber:#b7791f;--purple:#e4572e;--red:#c0392b;--gold:#f2b134;
-  --hl:rgba(242,177,52,.3);--hl-on:rgba(242,177,52,.62);--draft:rgba(11,122,117,.2);--agent:#e4572e;--agent-soft:#fdeee8;--ok:#1b7f45;
+  --ring:#4f46e5;--primary:#4f46e5;--primary-fg:#fff;--accent:#eaf0f8;--sidebar:#fff;
+  --blue:#0d9488;--teal:#0d9488;--green:#15803d;--amber:#b45309;--purple:#7c3aed;--red:#c0392b;--gold:#f2b134;
+  --hl:rgba(242,177,52,.3);--hl-on:rgba(242,177,52,.62);--draft:rgba(79,70,229,.18);--agent:#7c3aed;--agent-soft:#f1ebfe;--ok:#15803d;
   --radius:12px;--shadow:0 1px 2px rgba(20,33,61,.06),0 6px 18px rgba(20,33,61,.06);--pop:0 12px 32px -10px rgba(20,33,61,.28),0 2px 6px rgba(20,33,61,.08);
   /* dashboard names, mapped onto the tokens */
   --bg:var(--background);--card:var(--page);--ink:var(--foreground);--soft:#eaf0f8;
@@ -16,9 +16,9 @@
 /* dark: "dimmed", as in GitHub's dimmed theme: grey-blue, not black; soft text; calm accents */
 :root[data-theme="dark"]{
   --background:#22272e;--page:#2d333b;--foreground:#cdd9e5;--muted:#373e47;--muted-fg:#909dab;--border:#444c56;--input:#545d68;
-  --ring:#6cb6ae;--primary:#6cb6ae;--primary-fg:#1c2128;--accent:#373e47;--sidebar:#1c2128;
-  --blue:#6cb6ae;--green:#6bc46d;--amber:#daaa3f;--purple:#f69d50;--red:#f47067;--gold:#e0b34e;
-  --hl:rgba(218,170,63,.2);--hl-on:rgba(218,170,63,.4);--draft:rgba(108,182,174,.22);--agent:#f69d50;--agent-soft:#3d3128;
+  --ring:#a5b4fc;--primary:#a5b4fc;--primary-fg:#1c2128;--accent:#373e47;--sidebar:#1c2128;
+  --blue:#5eead4;--teal:#5eead4;--green:#6bc46d;--amber:#daaa3f;--purple:#c4b5fd;--red:#f47067;--gold:#e0b34e;
+  --hl:rgba(218,170,63,.2);--hl-on:rgba(218,170,63,.4);--draft:rgba(165,180,252,.22);--agent:#c4b5fd;--agent-soft:#352f4a;
   --soft:#373e47;--shadow:0 1px 2px rgba(0,0,0,.2);--pop:0 12px 32px -8px rgba(0,0,0,.5);color-scheme:dark}
 *{box-sizing:border-box}
 html,body{margin:0}
