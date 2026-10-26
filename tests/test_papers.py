@@ -230,3 +230,12 @@ class Routes(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PaperViewerNoFlash(unittest.TestCase):
+    def test_frame_hidden_until_themed(self):
+        src = (Path(__file__).resolve().parents[1] / "autoresearch" / "paper.html").read_text()
+        self.assertIn(".page iframe{display:block;width:100%;border:0;height:600px;background:transparent;color-scheme:normal;visibility:hidden}", src)
+        self.assertIn('f.classList.add("ready")', src)
+        self.assertIn('f.className = "ready"; old.remove()', src)  # live swap keeps the new frame visible
+        self.assertNotIn("background:#fff", src)

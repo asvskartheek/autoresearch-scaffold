@@ -41,7 +41,8 @@
 .canvas{display:flex;justify-content:center;gap:20px;padding:28px 16px 120px}
 .sheet{position:relative;width:816px;min-width:0;flex:0 1 816px}
 .page{background:var(--page);border:1px solid var(--border);border-radius:4px;box-shadow:var(--shadow);overflow:hidden;position:relative}
-.page iframe{display:block;width:100%;border:0;height:600px;background:transparent}
+.page iframe{display:block;width:100%;border:0;height:600px;background:transparent;color-scheme:normal;visibility:hidden}
+.page iframe.ready{visibility:visible}  /* hidden until the theme is in: no white canvas flash */
 .page iframe.next{position:absolute;left:0;top:0;visibility:hidden;pointer-events:none}
 .col{position:relative;width:320px;flex:none}
 .empty{position:absolute;top:0;left:0;right:0;border:1px dashed var(--input);border-radius:var(--radius);padding:16px;color:var(--muted-fg);font-size:13px;text-align:center}
@@ -114,7 +115,7 @@ kbd{font:11px ui-monospace,Menlo,monospace;border:1px solid var(--input);border-
 .dlg{background:var(--page);border-radius:12px;box-shadow:var(--pop);width:min(1100px,100%);height:min(820px,100%);display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--border)}
 .dlg header{display:flex;align-items:center;gap:8px;padding:10px 12px 10px 16px;border-bottom:1px solid var(--border)}
 .dlg header b{flex:1;font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dlg iframe{flex:1;border:0;width:100%;background:#fff}
+.dlg iframe{flex:1;border:0;width:100%;background:var(--page)}
 /* paper list */
 .list{max-width:816px;margin:28px auto;padding:0 16px;display:grid;gap:10px}
 .list a{display:block;background:var(--page);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;text-decoration:none;color:inherit;box-shadow:var(--shadow)}
@@ -246,7 +247,7 @@ function loadPaper(v) {
   return new Promise(res => {
     const f = h("iframe"); f.title = "Paper"; f.setAttribute("scrolling", "no"); f.className = frame ? "next" : "";
     f.src = `${BASE}/papers/${encodeURIComponent(NAME)}/raw?v=${v}`;
-    f.onload = () => { prepare(f); res(f); };
+    f.onload = () => prepare(f, () => res(f));
     page.appendChild(f);
   });
 }
@@ -258,13 +259,15 @@ body,body p,body td,body li{font-family:var(--font)}
 @keyframes arxflash{0%,30%{box-shadow:0 0 0 6px var(--arx-hl-on);background:var(--arx-hl)}100%{box-shadow:0 0 0 6px transparent;background:transparent}}
 .arx-changed{animation:arxchg 4s ease-out}
 @keyframes arxchg{0%,40%{box-shadow:-10px 0 0 -6px #22c55e}100%{box-shadow:-10px 0 0 -6px transparent}}`;
-function prepare(f) {
+function prepare(f, ready) {
   const d = f.contentDocument, w = f.contentWindow;
   d.documentElement.classList.add("arx-embedded");
   d.documentElement.dataset.theme = theme;
   // the paper takes the product's theme: same tokens, same font (see ui.css)
   const ln = d.createElement("link"); ln.rel = "stylesheet"; ln.href = "/ui.css"; d.head.appendChild(ln);
-  ln.onload = () => fit(f);
+  let done = false;
+  const show = () => { if (done) return; done = true; fit(f); f.classList.add("ready"); ready && ready(); };
+  ln.onload = ln.onerror = show; setTimeout(show, 1500);
   const st = d.createElement("style"); st.textContent = INJECT; d.head.appendChild(st);
   syncHlVars(d);
   new w.MutationObserver(() => { const t = d.documentElement.dataset.theme; if (t && t !== theme && f === frame) setTheme(t); })
@@ -621,7 +624,7 @@ function jumpTo(target) {
 addEventListener("hashchange", () => { const h = decodeURIComponent(location.hash.slice(1)); if (h) jumpTo(h); });
 
 // ---------- previews of attached pages ----------
-function preview(url, title) { $("#ovT").textContent = title; $("#ovOpen").href = url; $("#ovF").src = url; $("#ov").classList.add("show"); }
+function preview(url, title) { $("#ovT").textContent = title; $("#ovOpen").href = url; const F = $("#ovF"); F.style.visibility = "hidden"; F.onload = () => { F.style.visibility = ""; }; F.src = url; $("#ov").classList.add("show"); }
 function closePreview() { $("#ov").classList.remove("show"); $("#ovF").src = "about:blank"; }
 $("#ovX").onclick = closePreview; $("#ov").onclick = e => e.target === $("#ov") && closePreview();
 
@@ -654,7 +657,7 @@ async function swapPaper(v, prev) {
   fit(f);
   const nd = f.contentDocument, after = await srcTexts(v).catch(() => blockTexts(nd));
   const changed = Object.keys(after).filter(k => before[k] !== after[k]);
-  f.className = ""; old.remove(); frame = f;
+  f.className = "ready"; old.remove(); frame = f;
   if (keep) { const el = [...nd.querySelectorAll("[data-block]")].find(x => x.dataset.block === keep[0]);
     if (el) scrollTo({ top: el.getBoundingClientRect().top + frame.getBoundingClientRect().top + scrollY - keep[1], behavior: "instant" }); }
   reanchor(); for (const c of cards.values()) c._sig = null; renderAll();
