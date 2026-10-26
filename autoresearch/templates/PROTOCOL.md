@@ -115,11 +115,19 @@ Goal paper, on top of the checklist below:
 - [ ] A link to every internal hill paper of the goal: `<a class="internal" href="../<hill>" target="_top">`.
 - [ ] "Draft" on the page while the goal is open; "abandoned" if it was. No dev-slice number is the claim.
 
+**Show, don't tell.** Readers are serious and want to understand fully; text is the slowest way to get there.
+Every claim is carried by something they can see or do: a chart they can hover, a slider that moves the number,
+tabs that switch the run, a per-example grid they can click, a diagram of the mechanism, a before/after they can
+toggle. Prose only captions it: what to look at, and what it means. `arx paper check` enforces a budget: at most
+100 words of prose per section and 50 per paragraph. If an idea does not fit, it needs a better figure, not more
+words. Build the figure first, then write the caption.
+
 Checklist:
 - [ ] Hill paper sections: `abstract`, `problem`, `method`, `tried`, `win` (or `result`), `now`, `test`, `remember`.
       Goal paper sections: `abstract`, `result`, `climb`, `method`, `now`, `test`, `remember`.
 - [ ] `data-block="<id>"` on every `<section>`, `<p>` and `<figure>`, unique. Comments anchor to blocks, replies link to them.
 - [ ] Every section has a visual (inline SVG chart, poster, diagram) and something to do (slider, tabs, a reveal, a quiz).
+      The visual carries the claim; the reader can find the number in it without reading the prose.
 - [ ] A pop quiz (`class="quiz"`) in most sections and a closing test: at least 3. Each answer explains why.
 - [ ] A `remember` section for long-term recall: flip cards, number recall, ordering, explain-it-back; progress in
       `localStorage` so people can come back.

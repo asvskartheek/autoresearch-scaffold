@@ -127,6 +127,13 @@ class Check(unittest.TestCase):
         errs = [m for lv, m in papers.check(EXAMPLE.read_text(), slices=["full"]) if lv == "error"]
         self.assertEqual(errs, [])
 
+    def test_prose_budget(self):
+        wall = " ".join(["word"] * 60)
+        html = EXAMPLE.read_text().replace('<section data-block="abstract"', f'<section data-block="abstract"><p data-block="wall">{wall}</p', 1)
+        errs = [m for lv, m in papers.check(html, slices=["full"]) if lv == "error"]
+        self.assertTrue(any("60-word paragraph" in m for m in errs), errs)
+        self.assertTrue(any("words of prose" in m for m in errs), errs)
+
     def test_template_is_the_example(self):
         self.assertEqual((Path(papers.__file__).parent / "templates" / "paper-example.html").read_text(), EXAMPLE.read_text())
 

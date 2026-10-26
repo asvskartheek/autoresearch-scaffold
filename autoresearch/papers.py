@@ -182,6 +182,7 @@ PILL = re.compile(r"border-radius\s*:\s*(\d{3,}px|50%|\d+(\.\d+)?em)", re.I)
 WIDGET = re.compile(r"<(input|button|select|textarea|details|canvas)\b|data-widget", re.I)
 NUMBER = re.compile(r"(\d+(\.\d+)?\s*%|\d+/\d+)(?!\s*(CI|goal|target|interval))")
 N_SIZE = re.compile(r"\bn\s*=\s*\d", re.I)
+PROSE_SECTION, PROSE_PARA = 100, 50  # words: a section's prose captions its visuals; it never carries the argument
 
 
 def check(html: str, slices=()) -> list[tuple[str, str]]:
@@ -202,8 +203,14 @@ def check(html: str, slices=()) -> list[tuple[str, str]]:
     for sid, inner in sections:
         if not WIDGET.search(inner):
             out.append(("error", f"section {sid!r} has nothing to interact with (input, button, select, details, canvas)"))
-        if not re.search(r"<svg\b|<canvas\b|<img\b|class=\"[^\"]*poster", inner, re.I):
-            out.append(("warn", f"section {sid!r} has no visual (svg, canvas, img or poster)"))
+        if not re.search(r"<svg\b|<canvas\b|<img\b|class=\"[^\"]*(poster|\bquiz)", inner, re.I):
+            out.append(("error", f"section {sid!r} has no visual (svg, canvas, img or poster): show it, don't tell it"))
+        paras = [len(re.sub(r"<[^>]+>", " ", x).split()) for x in re.findall(r"<p\b[^>]*>(.*?)</p>", inner, re.S | re.I)]
+        if sum(paras) > PROSE_SECTION:
+            out.append(("error", f"section {sid!r} has {sum(paras)} words of prose (max {PROSE_SECTION}): move the argument into a figure or widget"))
+        long = [n for n in paras if n > PROSE_PARA]
+        if long:
+            out.append(("error", f"section {sid!r} has a {max(long)}-word paragraph (max {PROSE_PARA}): split it or show it"))
         text = re.sub(r"<[^>]+>", " ", inner)
         if NUMBER.search(text) and not N_SIZE.search(text):
             out.append(("error", f"section {sid!r} reports numbers but never says n = …"))
