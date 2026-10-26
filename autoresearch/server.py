@@ -1,7 +1,7 @@
 """Loopback-only dashboard server. Serves dashboard.html and aggregate JSON computed from `.research/`."""
 from __future__ import annotations
 
-import json, mimetypes, time
+import gzip, json, mimetypes, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -54,6 +54,24 @@ def infer_parents(tasks: list[dict]) -> None:
 
 
 def state(p: Project) -> dict:
+    with p.snapshot():
+        return _state(p)
+
+
+_SUMMARY_KEEP = (int, float, bool, type(None))
+
+
+def _slim(t: dict) -> dict:
+    """List views need a task's status, numbers and a line of text; the full record loads with /api/task/<id>."""
+    t = {k: v for k, v in t.items() if k not in ("command", "links", "host", "pid", "env", "manifest")}
+    if isinstance(t.get("summary"), dict):
+        t["summary"] = {k: v for k, v in t["summary"].items() if isinstance(v, _SUMMARY_KEEP)}
+    if isinstance(t.get("description"), str) and len(t["description"]) > 280:
+        t["description"] = t["description"][:277] + "..."
+    return t
+
+
+def _state(p: Project) -> dict:
     slices = {k: {kk: vv for kk, vv in v.items() if kk != "ids"} | {"name": k} for k, v in p.slices().items()}
     models, tasks = p.models(), p.tasks()
     champ = p.champion()
@@ -84,7 +102,7 @@ def state(p: Project) -> dict:
         t["eta"] = eta(p, t)
         t["spark"] = {"key": keys[0], "y": [s.get(keys[0]) for s in series if isinstance(s.get(keys[0]), (int, float))]} if keys else None
     return dict(config=p.config, now=time.time(), champion=champ, datasets=p.datasets(), slices=slices,
-                hills=p.hills(), models=models, papers=papers.papers(p), gates=gates, tasks=tasks, leaderboard=board,
+                hills=p.hills(), models=models, papers=papers.papers(p), gates=gates, tasks=[_slim(t) for t in tasks], leaderboard=board,
                 goals=goals(p),
                 decisions=_tail(p.dir / "decisions.jsonl", 50))
 
@@ -109,11 +127,12 @@ def project_list(default: Project) -> list[dict]:
         try:
             q = Project(reg[k]["root"])
             ps = papers.papers(q)
-            out.append(dict(key=k, name=q.config.get("name") or k, root=str(q.root), default=k == dk,
-                            champion=q.champion(), goals=goals(q), hills=len(q.hills()),
-                            open_hills=sum(1 for h in q.hills().values() if h.get("status") == "open"),
-                            waiting=sum(m["waiting"] for m in ps.values()),
-                            running=sum(1 for t in q.tasks() if t.get("status") in ("running", "stalled"))))
+            with q.snapshot():
+                out.append(dict(key=k, name=q.config.get("name") or k, root=str(q.root), default=k == dk,
+                                champion=q.champion(), goals=goals(q), hills=len(q.hills()),
+                                open_hills=sum(1 for h in q.hills().values() if h.get("status") == "open"),
+                                waiting=sum(m["waiting"] for m in ps.values()),
+                                running=sum(1 for t in q.tasks() if t.get("status") in ("running", "stalled"))))
         except Exception as e:  # a broken project never takes the list down
             out.append(dict(key=k, name=k, root=reg[k]["root"], error=f"{type(e).__name__}: {e}"))
     return out
@@ -222,6 +241,10 @@ def serve(port: int = 8890, root=None):
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Cache-Control", "no-store")
+            if len(body) > 2048 and "gzip" in (self.headers.get("Accept-Encoding") or ""):
+                body = gzip.compress(body, compresslevel=5)
+                self.send_header("Content-Encoding", "gzip")
+            self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
 

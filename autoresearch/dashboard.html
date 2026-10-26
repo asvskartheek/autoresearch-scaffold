@@ -107,7 +107,7 @@ pre{background:var(--soft);padding:14px;border-radius:12px;overflow:auto;font-si
 .matrix td.cell{text-align:center;font-variant-numeric:tabular-nums;border-radius:8px}
 h2.sec{font-size:13px;font-weight:600;color:var(--muted);margin:22px 0 10px}h2.sec:first-of-type{margin-top:0}
 .side .plabel{padding:18px 10px 6px;font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-.side a.proj{height:30px;font-size:13px}
+.side a.proj{height:34px;flex:none;font-size:13px;margin-bottom:2px}.side a.proj .pn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gbar{position:relative;height:10px;background:var(--soft);border-radius:3px;margin:4px 0 2px}.gbar i{display:block;height:100%;border-radius:3px;background:var(--green)}.gbar b{position:absolute;top:-4px;width:2px;height:18px;background:var(--ink);opacity:.6}
 .hcard{display:flex;flex-direction:column;gap:10px;transition:border-color .15s}.hcard:hover{border-color:var(--muted)}
 .hcard .row,.hrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.hcard .row .sub{margin-left:auto}
@@ -203,7 +203,7 @@ function renderNav(){
  const counts={goals:st?Object.values(st.goals||{}).filter(g=>g.status==='open').length:0,workbench:st?active().length:0,hills:st?Object.values(st.hills).filter(h=>h.status==='open').length:0,papers:waiting};
  $('#nav').innerHTML=`<a class="brand" href="#overview" style="height:auto;padding:6px 8px 18px;background:none"><i><svg class="i" viewBox="0 0 24 24"><path d="M4 17l5-6 4 4 7-8"/></svg></i><span>Observatory</span></a>`+
  ROUTES.map(([k,l,i])=>`<a href="#${k}" class="${navOn===k?'on':''}">${ICON[i]}${l}${counts[k]?`<span class="count${k==='papers'?' hot':''}">${counts[k]}</span>`:''}</a>`).join('')+
- (S.projects.length>1?`<div class="plabel">Projects</div>`+S.projects.map(q=>`<a class="proj${q.key===PKEY||(!PKEY&&q.default)?' on':''}" href="/p/${encodeURIComponent(q.key)}/" title="${esc(q.root)}">${esc(q.name)}${q.waiting?`<span class="count hot">${q.waiting}</span>`:q.running?`<span class="count">${q.running}</span>`:''}</a>`).join(''):'')+
+ (S.projects.length>1?`<div class="plabel">Projects</div>`+S.projects.map(q=>`<a class="proj${q.key===PKEY||(!PKEY&&q.default)?' on':''}" href="/p/${encodeURIComponent(q.key)}/" title="${esc(q.name)} · ${esc(q.root)}"><span class="pn">${esc(q.name)}</span>${q.waiting?`<span class="count hot">${q.waiting}</span>`:q.running?`<span class="count">${q.running}</span>`:''}</a>`).join(''):'')+
  `<div class="foot">${st?`<b>${esc(st.config.name)}</b>`:''}<button class="btn icon sm ghost" onclick="toggleTheme()" title="Theme">${ICON.theme}</button></div>`;
 }
 function toggleTheme(){const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('arx-theme',t)}catch{}}
@@ -514,7 +514,9 @@ function render(){
  const {r,arg}=route();
  const v={overview:vOverview,workbench:vWorkbench,archive:vArchive,models:vModels,goals:vGoals,hills:vHills,papers:vPapers,slices:vSlices}[r];
  const y=scrollY,open=[...document.querySelectorAll('#main details')].map(d=>d.open);
- $('#main').innerHTML=v?v():r==='task'?vTask(arg):r==='model'?vModel(arg):r==='hill'?vHill(arg):r==='goal'?vGoal(arg):vOverview();
+ const html=v?v():r==='task'?vTask(arg):r==='model'?vModel(arg):r==='hill'?vHill(arg):r==='goal'?vGoal(arg):vOverview();
+ if(html===S.html)return;S.html=html;  // a poll that changed nothing leaves the page alone
+ $('#main').innerHTML=html;
  document.querySelectorAll('#main details').forEach((d,i)=>{if(open[i])d.open=true});
  scrollTo(0,y);
 }

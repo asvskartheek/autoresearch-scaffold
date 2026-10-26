@@ -22,11 +22,34 @@ def now() -> float:
     return time.time()
 
 
+_CACHE: dict = {}  # path -> (mtime_ns, size, parsed); the dashboard re-reads the same files on every poll
+
+
+def _cached(p: Path, parse):
+    """Parse a file once per version (mtime and size); callers get a fresh copy, so mutating it is safe."""
+    st = os.stat(p)
+    key = (st.st_mtime_ns, st.st_size)
+    hit = _CACHE.get(p)
+    if hit and hit[0] == key:
+        return hit[1]
+    val = parse(p.read_text())
+    _CACHE[p] = (key, val)
+    return val
+
+
 def _read(p: Path, default=None):
     try:
-        return json.loads(p.read_text())
+        return _copy(_cached(p, json.loads))
     except (OSError, ValueError):
         return default
+
+
+def _copy(o):
+    if isinstance(o, dict):
+        return {k: _copy(v) for k, v in o.items()}
+    if isinstance(o, list):
+        return [_copy(v) for v in o]
+    return o
 
 
 def _write(p: Path, obj) -> None:
@@ -42,16 +65,21 @@ def _append(p: Path, obj) -> None:
         f.write(json.dumps(obj, default=str) + "\n")
 
 
-def _jsonl(p: Path) -> list[dict]:
-    if not p.exists():
-        return []
+def _parse_jsonl(text: str) -> list[dict]:
     out = []
-    for line in p.read_text().splitlines():
+    for line in text.splitlines():
         try:
             out.append(json.loads(line))
         except ValueError:
             pass  # a writer may be mid-line
     return out
+
+
+def _jsonl(p: Path) -> list[dict]:
+    try:
+        return [dict(r) if isinstance(r, dict) else r for r in _cached(p, _parse_jsonl)]
+    except OSError:
+        return []
 
 
 def ids_hash(ids) -> str:
@@ -270,12 +298,32 @@ class Project:
     def task_dir(self, tid: str) -> Path:
         return self.dir / "tasks" / tid
 
+    def snapshot(self):
+        """Within the block, tasks() is read once: the dashboard's state and gates call it many times per request."""
+        proj = self
+
+        class _Snap:
+            def __enter__(self):
+                proj._snap = None
+                proj._snap = proj.tasks()
+                return proj
+
+            def __exit__(self, *exc):
+                proj._snap = None
+        return _Snap()
+
     def tasks(self) -> list[dict]:
-        out = []
-        for p in (self.dir / "tasks").glob("*/task.json"):
-            t = _read(p)
+        if getattr(self, "_snap", None) is not None:
+            return [dict(t) for t in self._snap]
+        out, stall = [], self._stall()
+        try:
+            dirs = os.scandir(self.dir / "tasks")
+        except OSError:
+            return []
+        for d in dirs:
+            t = _read(Path(d.path) / "task.json") if d.is_dir() else None
             if t:
-                out.append(self._liveness(t))
+                out.append(self._liveness(t, stall))
         return sorted(out, key=lambda t: t.get("updated", 0), reverse=True)
 
     def task(self, tid: str) -> dict:
@@ -284,8 +332,11 @@ class Project:
             raise KeyError(tid)
         return self._liveness(t)
 
-    def _liveness(self, t: dict) -> dict:
-        stall = 60 * self.config.get("stall_minutes", 10)
+    def _stall(self) -> float:
+        return 60 * self.config.get("stall_minutes", 10)
+
+    def _liveness(self, t: dict, stall: float = None) -> dict:
+        stall = self._stall() if stall is None else stall
         if t.get("status") == "running" and now() - t.get("heartbeat", t.get("updated", 0)) > stall:
             t = t | {"status": "stalled"}
         return t
