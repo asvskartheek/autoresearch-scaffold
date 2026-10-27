@@ -1,3 +1,4 @@
+'use strict';
 // Archive: what has finished, and how did it end? Search by title, model or slice; sort by any column.
 let archiveShown=100;
 const ARC_OK=new Set(['done','completed']);
@@ -10,18 +11,15 @@ function archiveSort(k){if(ARC.sort===k)ARC.dir=-ARC.dir;else{ARC.sort=k;ARC.dir
 const when=t=>t.ended||t.updated;
 const took=t=>t.ended?t.ended-t.created:null;
 const score=t=>t.summary?.score??null;
-const KEYS={title:t=>String(t.title||'').toLowerCase(),model:t=>String(t.model||'~').toLowerCase(),state:t=>wbState(t)[0],score,took,ended:when};
-const match=(t,q)=>!q||[t.title,t.model,t.slice,t.id,t.agent].some(v=>v&&String(v).toLowerCase().includes(q));
-// keep the search box's focus and caret across the 4s redraw: read them before the new HTML lands, put them back after
-function keepFocus(){
- const el=document.activeElement;if(el?.id!=='arc-q')return;
- const a=el.selectionStart,b=el.selectionEnd;
- queueMicrotask(()=>{const n=document.getElementById('arc-q');if(n){n.focus();try{n.setSelectionRange(a,b)}catch(e){}}});
-}
+const mt=t=>t.model?S.state.models[t.model]?.title||t.model:'';
+// a continuous slice scores a mean (with its unit), not a share solved
+const cont=t=>S.state.slices[t.slice]?.scale==='continuous';
+const cv=(v,t)=>{const a=Math.abs(v),u=S.state.slices[t.slice]?.unit;return (v<0?'−':'')+(a>=10?a.toFixed(1):num(a,3))+(u?'&nbsp;'+esc(u):'')};
+const KEYS={title:t=>String(t.title||'').toLowerCase(),model:t=>String(mt(t)||'~').toLowerCase(),state:t=>wbState(t)[0],score,took,ended:when};
+const match=(t,q)=>!q||[t.title,t.model,mt(t),t.slice,t.id,t.agent].some(v=>v&&String(v).toLowerCase().includes(q));
 const SEARCH=I('<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>',15);
 
 VIEWS.archive=()=>{
- keepFocus();
  const all=archived();
  const counts={};for(const t of all){const k=t.kind||'other';counts[k]=(counts[k]||0)+1}
  const kinds=Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
@@ -49,17 +47,17 @@ VIEWS.archive=()=>{
  const bar=`<div class="arc-bar">${search}${kindCtl}${sortSel}</div>`;
  const vis=rows.slice(0,archiveShown);
  const body=vis.map(t=>{
-  const [sl,sc]=wbState(t),nk=kids(t.id).length,tk=took(t),n=t.summary?.n,s=score(t);
+  const [sl,sc]=wbState(t),nk=kids(t.id).length,tk=took(t),n=t.summary?.n,s=score(t),c=cont(t);
   const sub=[esc(wbKind(t.kind||'other')),t.agent&&'by '+esc(t.agent),nk&&plural(nk,'sub-task')].filter(Boolean).join(' · ');
   const href=`#task/${enc(t.id)}`;
   return `<tr class="click" onclick="if(!event.target.closest('a'))location.hash='${href}'">
   <td class="arc-task"><div class="two"><a href="${href}" class="ell"><b>${esc(t.title)}</b></a><span class="sub ell">${sub}</span></div></td>
-  <td class="arc-mod">${t.model?`<div class="two"><a class="ell arc-ml" href="#model/${enc(t.model)}">${esc(t.model)}</a><span class="sub ell" title="${esc(t.slice||'')}">${t.slice?esc(short(t.slice)):''}</span></div>`:DASH}</td>
-  <td>${st(sc,sl)}</td>
-  <td class="num">${s!=null?`<div class="two"><span>${pct(s)}</span><span class="sub">${n?`${Math.round(s*n).toLocaleString()} of ${n.toLocaleString()}`:''}</span></div>`:DASH}</td>
+  <td class="arc-mod">${t.model?`<div class="two"><a class="ell arc-ml" href="#model/${enc(t.model)}" title="${esc(t.model)}">${mn(t.model)}</a><span class="sub ell" title="${esc(t.slice||'')}">${t.slice?esc(short(t.slice)):''}</span></div>`:DASH}</td>
+  <td>${st(sc,sl)}${t.superseded_by?`<span class="arc-sup" title="A later run replaced it; gates and baselines skip it">superseded</span>`:''}</td>
+  <td class="num">${s!=null?`<div class="two"><span>${c?cv(s,t):pct(s)}</span><span class="sub">${n?(c?`mean of ${n.toLocaleString()}`:`${Math.round(s*n).toLocaleString()} of ${n.toLocaleString()}`):''}</span></div>`:DASH}</td>
   <td class="num">${tk!=null?wbSpan(tk):DASH}</td>
   <td class="num"><div class="two"><span>${wbWhen(when(t))}</span><span class="sub">${wbAgo(when(t))}</span></div></td>
-  <td class="arc-m"><div class="two"><a href="${href}" class="ell"><b>${esc(t.title)}</b></a><span class="sub ell">${[sl,s!=null?pct(s)+(n?` · ${Math.round(s*n)} of ${n}`:''):'',t.model&&esc(t.model),tk!=null?wbSpan(tk):'',wbAgo(when(t))].filter(Boolean).join(' · ')}</span></div></td></tr>`}).join('');
+  <td class="arc-m"><div class="two"><a href="${href}" class="ell"><b>${esc(t.title)}</b></a><span class="sub ell">${[sl+(t.superseded_by?', superseded':''),s!=null?(c?cv(s,t):pct(s)+(n?` · ${Math.round(s*n)} of ${n}`:'')):'',t.model&&mn(t.model),tk!=null?wbSpan(tk):'',wbAgo(when(t))].filter(Boolean).join(' · ')}</span></div></td></tr>`}).join('');
  const th=(k,label,cls='')=>{const on=ARC.sort===k,dir=ARC.dir>0?'ascending':'descending';
   return `<th class="${cls}" ${on?`aria-sort="${dir}"`:''}><button class="arc-sort ${on?'on':''}" onclick="archiveSort('${k}')">${label}<i aria-hidden="true">${on?(ARC.dir>0?'↑':'↓'):''}</i></button></th>`};
  const more=`<div class="arc-more"><span class="sub">${rows.length>vis.length?`1–${vis.length.toLocaleString()} of ${rows.length.toLocaleString()}`:plural(rows.length,'task')}</span>${rows.length>vis.length?`<button class="btn" onclick="archiveMore()">Show ${Math.min(100,rows.length-vis.length)} more</button>`:''}</div>`;

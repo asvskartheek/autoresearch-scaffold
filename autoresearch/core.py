@@ -5,7 +5,7 @@ truth. Gate results are never stored; they are derived from finished eval tasks 
 """
 from __future__ import annotations
 
-import hashlib, json, math, os, random, statistics, sys, threading, time, uuid
+import hashlib, json, math, os, random, shlex, signal, statistics, subprocess, sys, threading, time, uuid
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 
@@ -22,11 +22,34 @@ def now() -> float:
     return time.time()
 
 
+_CACHE: dict = {}  # path -> (mtime_ns, size, parsed); the dashboard re-reads the same files on every poll
+
+
+def _cached(p: Path, parse):
+    """Parse a file once per version (mtime and size); callers get a fresh copy, so mutating it is safe."""
+    st = os.stat(p)
+    key = (st.st_mtime_ns, st.st_size)
+    hit = _CACHE.get(p)
+    if hit and hit[0] == key:
+        return hit[1]
+    val = parse(p.read_text())
+    _CACHE[p] = (key, val)
+    return val
+
+
 def _read(p: Path, default=None):
     try:
-        return json.loads(p.read_text())
+        return _copy(_cached(p, json.loads))
     except (OSError, ValueError):
         return default
+
+
+def _copy(o):
+    if isinstance(o, dict):
+        return {k: _copy(v) for k, v in o.items()}
+    if isinstance(o, list):
+        return [_copy(v) for v in o]
+    return o
 
 
 def _write(p: Path, obj) -> None:
@@ -42,16 +65,21 @@ def _append(p: Path, obj) -> None:
         f.write(json.dumps(obj, default=str) + "\n")
 
 
-def _jsonl(p: Path) -> list[dict]:
-    if not p.exists():
-        return []
+def _parse_jsonl(text: str) -> list[dict]:
     out = []
-    for line in p.read_text().splitlines():
+    for line in text.splitlines():
         try:
             out.append(json.loads(line))
         except ValueError:
             pass  # a writer may be mid-line
     return out
+
+
+def _jsonl(p: Path) -> list[dict]:
+    try:
+        return [dict(r) if isinstance(r, dict) else r for r in _cached(p, _parse_jsonl)]
+    except OSError:
+        return []
 
 
 def ids_hash(ids) -> str:
@@ -113,6 +141,7 @@ class Project:
     def slices(self) -> dict: return self._coll("slices")
     def hills(self) -> dict: return self._coll("hills")
     def models(self) -> dict: return self._coll("models")
+    def goals(self) -> dict: return self._coll("goals")
 
     def champion(self) -> str | None:
         return next((k for k, m in self.models().items() if m.get("status") == "champion"), None)
@@ -137,7 +166,8 @@ class Project:
             _write(self.root / "research.json", cfg)
 
     def add_slice(self, name: str, ids: list, kind: str = "dev", description: str = None, url: str = None,
-                  seed: int = None, hill: str = None, metric: str = None):
+                  seed: int = None, hill: str = None, metric: str = None,
+                  scale: str = None, unit: str = None):
         if "/" not in name:
             name = f"{self.config['primary_dataset']}/{name}"
         ids = [str(i) for i in ids]
@@ -145,7 +175,8 @@ class Project:
         if old and old["hash"] != ids_hash(ids):
             raise SystemExit(f"slice {name} is frozen with different ids; create a new slice name")
         return self._upsert("slices", name, dataset=name.split("/")[0], kind=kind, ids=ids, n=len(ids),
-                            hash=ids_hash(ids), description=description, url=url, seed=seed, hill=hill, metric=metric)
+                            hash=ids_hash(ids), description=description, url=url, seed=seed, hill=hill, metric=metric,
+                            scale=scale, unit=unit)
 
     def random_slices(self, dataset: str, sizes=(50, 100), seed: int = 42):
         """Nested random slices: random50 is the first 50 of random100."""
@@ -165,19 +196,92 @@ class Project:
         raise SystemExit(f"unknown slice {name}")
 
     # hills and models ------------------------------------------------------------------
-    def open_hill(self, name, title, target, control=None, problem=None, found_in=None, **explainer):
+    def open_hill(self, name, title, target, control=None, problem=None, found_in=None, goal=None, **explainer):
         target, control = self.slice(target)["name"], (self.slice(control)["name"] if control else None)
+        if goal and goal not in self.goals():
+            raise SystemExit(f"unknown goal {goal}; `arx goal open {goal} ...` first")
         self._upsert("hills", name, title=title, target=target, control=control, problem=problem,
-                     found_in=found_in or self.champion(), status="open")
+                     found_in=found_in or self.champion(), status="open", goal=goal)
         return self.explain_hill(name, **explainer)
 
-    def explain_hill(self, name, symptom=None, measure=None, examples=None, share=None):
+    def explain_hill(self, name, symptom=None, measure=None, examples=None, share=None, goal=None):
         """The hill's page: `symptom` one plain line; `measure` when one target example scores 1; `examples` a list
         of {input, wrong, right, why} (illustrative, never client text); `share` {count, of, of_what}: how many of
         which failures this hill explains."""
         if name not in self.hills():
             raise SystemExit(f"unknown hill {name}")
-        return self._upsert("hills", name, symptom=symptom, measure=measure, examples=examples, share=share)
+        if goal and goal not in self.goals():
+            raise SystemExit(f"unknown goal {goal}")
+        return self._upsert("hills", name, symptom=symptom, measure=measure, examples=examples, share=share, goal=goal)
+
+    # goals: the outward-facing claim a set of hills serves ---------------------------------
+    KPI_LOWER = ("cost", "latency_p50", "latency_p95", "latency_mean")
+
+    def open_goal(self, name, title, slice, target: float, kpi="score", baseline=None, problem=None,
+                  higher_is_better=None):
+        """A goal is a target KPI on one slice (usually a full slice), e.g. score >= 0.96 on gsm8k-test/full.
+        `baseline` is the starting champion: the final result is reported as a paired delta against it."""
+        sl = self.slice(slice)
+        if higher_is_better is None:
+            higher_is_better = kpi not in self.KPI_LOWER and self.config.get("higher_is_better", True)
+        base = baseline or self.champion()
+        if name in self.goals() and self.goals()[name].get("status") != "open":
+            raise SystemExit(f"goal {name} is {self.goals()[name]['status']}; open a new goal with a new name")
+        rec = self._upsert("goals", name, title=title, slice=sl["name"], slice_hash=sl["hash"], n=sl["n"], kpi=kpi,
+                           target=float(target), higher_is_better=bool(higher_is_better), baseline=base,
+                           problem=problem, status="open")
+        self.log_decision("goal_open", goal=name, target=target, slice=sl["name"], baseline=base)
+        return rec
+
+    def _kpi(self, model, sl, kpi) -> tuple[float | None, dict | None]:
+        ev = self.latest_eval(model, sl) if model else None
+        if not ev:
+            return None, None
+        if kpi == "score":  # pooled over every complete run, like the gates
+            sc = self.pooled_scores(model, sl)
+            return (sum(sc.values()) / len(sc) if sc else None), ev
+        return (ev.get("summary") or {}).get(kpi), ev
+
+    def goal_status(self, name) -> dict:
+        """Where a goal stands: the champion's KPI on the goal slice, the gap to target, the paired delta vs the
+        starting champion, and the hills that serve it. Pure function of the ledger, like the gates."""
+        g = self.goals().get(name)
+        if not g:
+            raise SystemExit(f"unknown goal {name}")
+        sl, kpi, sign = g["slice"], g.get("kpi", "score"), 1 if g.get("higher_is_better", True) else -1
+        cur = (self.slices().get(sl) or {}).get("hash")
+        model = (g.get("evidence") or {}).get("model") if g.get("status") == "achieved" else self.champion()
+        value, ev = self._kpi(model, sl, kpi)
+        vs = None
+        if kpi == "score" and model and g.get("baseline") and g["baseline"] != model and self.latest_eval(g["baseline"], sl):
+            vs = paired(self.pooled_scores(model, sl), self.pooled_scores(g["baseline"], sl), sign)
+        hills = {k: h.get("status") for k, h in self.hills().items() if h.get("goal") == name}
+        return dict(g, name=name, model=model, value=value, task=ev["id"] if ev else None,
+                    runs=len(self.slice_evals(model, sl)) if model else 0,
+                    met=value is not None and sign * (value - g["target"]) >= 0,
+                    gap=None if value is None else sign * (g["target"] - value), vs_baseline=vs, hills=hills,
+                    slice_changed=bool(cur and g.get("slice_hash") and cur != g["slice_hash"]))
+
+    def achieve_goal(self, name, force=False, note=None) -> dict:
+        st = self.goal_status(name)
+        if st["status"] != "open":
+            raise SystemExit(f"goal {name} is {st['status']}")
+        if st["slice_changed"]:
+            raise SystemExit(f"slice {st['slice']} changed since the goal opened; open a new goal")
+        if not st["met"] and not force:
+            have = "no complete run" if st["value"] is None else f"{st['value']:.4f}"
+            raise SystemExit(f"champion {st['model']} has {have} on {st['slice']}; target {st['target']}")
+        evidence = dict(model=st["model"], task=st["task"], value=st["value"], runs=st["runs"], slice=st["slice"],
+                        n=st["n"], vs_baseline=st["vs_baseline"], forced=bool(force and not st["met"]), note=note)
+        self._upsert("goals", name, status="achieved", achieved=now(), evidence=evidence)
+        self.log_decision("goal_achieved", goal=name, **{k: v for k, v in evidence.items() if k != "vs_baseline"})
+        return evidence
+
+    def abandon_goal(self, name, reason):
+        if name not in self.goals():
+            raise SystemExit(f"unknown goal {name}")
+        self._upsert("goals", name, status="abandoned", abandoned=now(), reason=reason)
+        self.log_decision("goal_abandoned", goal=name, reason=reason)
 
     def add_model(self, name, parent=None, hill=None, change=None, title=None, links=None, status="candidate"):
         rec = self._upsert("models", name, parent=parent if parent is not None else self.champion(), hill=hill,
@@ -194,12 +298,32 @@ class Project:
     def task_dir(self, tid: str) -> Path:
         return self.dir / "tasks" / tid
 
+    def snapshot(self):
+        """Within the block, tasks() is read once: the dashboard's state and gates call it many times per request."""
+        proj = self
+
+        class _Snap:
+            def __enter__(self):
+                proj._snap = None
+                proj._snap = proj.tasks()
+                return proj
+
+            def __exit__(self, *exc):
+                proj._snap = None
+        return _Snap()
+
     def tasks(self) -> list[dict]:
-        out = []
-        for p in (self.dir / "tasks").glob("*/task.json"):
-            t = _read(p)
+        if getattr(self, "_snap", None) is not None:
+            return [dict(t) for t in self._snap]
+        out, stall = [], self._stall()
+        try:
+            dirs = os.scandir(self.dir / "tasks")
+        except OSError:
+            return []
+        for d in dirs:
+            t = _read(Path(d.path) / "task.json") if d.is_dir() else None
             if t:
-                out.append(self._liveness(t))
+                out.append(self._liveness(t, stall))
         return sorted(out, key=lambda t: t.get("updated", 0), reverse=True)
 
     def task(self, tid: str) -> dict:
@@ -208,8 +332,11 @@ class Project:
             raise KeyError(tid)
         return self._liveness(t)
 
-    def _liveness(self, t: dict) -> dict:
-        stall = 60 * self.config.get("stall_minutes", 10)
+    def _stall(self) -> float:
+        return 60 * self.config.get("stall_minutes", 10)
+
+    def _liveness(self, t: dict, stall: float = None) -> dict:
+        stall = self._stall() if stall is None else stall
         if t.get("status") == "running" and now() - t.get("heartbeat", t.get("updated", 0)) > stall:
             t = t | {"status": "stalled"}
         return t
@@ -227,10 +354,31 @@ class Project:
         """Finished, complete eval tasks only; partial runs never count."""
         return [t for t in self.tasks() if t.get("kind") == "eval" and t.get("status") == "done" and t.get("complete")]
 
-    def latest_eval(self, model: str, slice_name: str) -> dict | None:
+    def slice_evals(self, model: str, slice_name: str) -> list[dict]:
+        """Every complete run of the model on the slice's current version, oldest first."""
         h = self.slices().get(slice_name, {}).get("hash")
-        c = [t for t in self.evals() if t.get("model") == model and t.get("slice") == slice_name and t.get("slice_hash") == h]
-        return max(c, key=lambda t: t.get("ended", 0)) if c else None
+        c = [t for t in self.evals() if t.get("model") == model and t.get("slice") == slice_name and t.get("slice_hash") == h
+             and not t.get("superseded_by")]
+        return sorted(c, key=lambda t: t.get("ended", 0))
+
+    def supersede(self, model: str, slice_name: str, keep: str) -> list[str]:
+        """Stop counting every earlier run of the model on the slice except `keep` (e.g. after a harness change).
+        The runs stay in the Archive; gates and baselines skip them."""
+        old = [t["id"] for t in self.slice_evals(model, slice_name) if t["id"] != keep]
+        for tid in old:
+            t = _read(self.task_dir(tid) / "task.json")
+            _write(self.task_dir(tid) / "task.json", t | {"superseded_by": keep})
+        if old:
+            self.log_decision("supersede", model=model, slice=slice_name, keep=keep, runs=old)
+        return old
+
+    def latest_eval(self, model: str, slice_name: str) -> dict | None:
+        c = self.slice_evals(model, slice_name)
+        return c[-1] if c else None
+
+    def pooled_scores(self, model: str, slice_name: str) -> dict[str, float]:
+        """Per-id score averaged over every complete run: repeat runs tighten the estimate, none are dropped."""
+        return per_id([r for t in self.slice_evals(model, slice_name) for r in self.rows(t["id"])])
 
     # gates -----------------------------------------------------------------------------
     def _resolve(self, ref: str, model: dict) -> list[str]:
@@ -279,10 +427,11 @@ class Project:
                         c["state"] = "need_run"
                         next_runs.append((model_name, sl))
                     else:
-                        p = paired(per_id(self.rows(ce["id"])), per_id(self.rows(be["id"])), sign)
+                        p = paired(self.pooled_scores(model_name, sl), self.pooled_scores(champ, sl), sign)
                         ok = p["delta"] is not None and (p["delta"] > c["threshold"] if chk["rule"] == "better" else p["delta"] >= c["threshold"])
                         c |= dict(state="pass" if ok else "fail", noisy=p["lo"] is not None and p["lo"] < 0 < p["hi"],
-                                  cand_task=ce["id"], base_task=be["id"], **p)
+                                  cand_task=ce["id"], base_task=be["id"],
+                                  cand_runs=len(self.slice_evals(model_name, sl)), base_runs=len(self.slice_evals(champ, sl)), **p)
                     checks.append(c)
             states = {c["state"] for c in checks}
             if blocked:
@@ -304,7 +453,108 @@ class Project:
         return dict(model=model_name, champion=champ, rungs=rungs, promotable=promotable,
                     next=[dict(model=a, slice=b) for a, b in dict.fromkeys(next_runs)] if not any(r["status"] == "fail" for r in rungs) else [])
 
-    def promote(self, model_name: str, force: bool = False) -> None:
+    def baseline_slices(self) -> dict[str, list[str]]:
+        """Every slice a champion is measured on, with what it measures: each hill's target and control, plus the
+        datasets' full and random slices. These are the numbers any future candidate is compared against."""
+        slices, roles = self.slices(), {}
+        for k, h in self.hills().items():
+            for role in ("target", "control"):
+                if h.get(role) in slices:
+                    roles.setdefault(h[role], []).append(f"hill {k} {role}")
+        for k, v in slices.items():
+            if v.get("kind") in ("full", "random"):
+                roles.setdefault(k, []).append(v["kind"])
+        return roles
+
+    def baseline_plan(self, model: str) -> dict:
+        """Where `model` stands on every baseline slice. A complete run at the slice's current hash is reused as it
+        is (a promoted model already ran most of them on the ladder); only slices without one need a run."""
+        have, need, roles, slices = {}, [], self.baseline_slices(), self.slices()
+        mine = [t for t in self.evals() if t.get("model") == model and not t.get("superseded_by")]  # one scan, not one per slice
+        for sl in roles:
+            runs = sorted((t for t in mine if t.get("slice") == sl and t.get("slice_hash") == slices[sl]["hash"]),
+                          key=lambda t: t.get("ended", 0))
+            if runs:
+                s = runs[-1].get("summary") or {}
+                have[sl] = dict(task=runs[-1]["id"], score=s.get("score"), n=s.get("n"), ended=runs[-1].get("ended"), runs=len(runs))
+            else:
+                need.append(sl)
+        return dict(model=model, have=have, need=need, roles=roles)
+
+    def baseline(self, model: str, dry: bool = False, rerun: bool = False, replace: bool = False, jobs: int = 1,
+                 budget_s: float = None, say=print) -> dict:
+        """Give `model` (normally a new champion) a run on every baseline slice. Its complete runs are reused; the
+        rest run `baseline_cmd` from research.json ({model} and {slice} replaced, shell-quoted) under one Baseline
+        task, `jobs` at a time. Without baseline_cmd the slices are only listed. `rerun` runs every slice again
+        (pooled with earlier runs); `replace` does too, and each fresh complete run supersedes the earlier ones.
+        Returns the plan after the work, plus `ran` (slices that got a fresh run) when anything was run."""
+        plan, cmd, slices = self.baseline_plan(model), self.config.get("baseline_cmd"), self.slices()
+        rerun = rerun or replace
+        todo = list(plan["roles"]) if rerun else plan["need"]
+        say(f"baseline for {model}: {len(plan['have'])} of {len(plan['roles'])} slices already run, {len(todo)} to run")
+        what = lambda sl: ", ".join(plan["roles"][sl])
+        verb = "would run" if dry and cmd else "run" if cmd else "missing"
+        for sl, h in plan["have"].items():
+            score = "—" if h["score"] is None else f"{h['score']:.3f}"
+            pooled = f", {h['runs']} runs pooled" if h["runs"] > 1 else ""
+            say(f"  {verb if rerun else 'reused':<9} {sl:<28} {score}  n={h['n']}  {what(sl)}  ({h['task']}, {_ago(h['ended'])}{pooled})")
+        for sl in plan["need"]:
+            say(f"  {verb:<9} {sl:<28} n={slices[sl]['n']}  {what(sl)}")
+        if not todo or dry:
+            return plan
+        if not cmd:
+            say('to run these automatically, set "baseline_cmd" in research.json, e.g. '
+                '"python eval.py --model {model} --slice {slice}"; or run each with arx.evaluate / arx run')
+            self.log_decision("baseline", model=model, reused=len(plan["have"]), ran=0, missing=plan["need"])
+            return plan
+        desc = (f"Re-run champion {model} on every hill and dataset slice ({len(todo)})." if rerun else
+                f"Run champion {model} on each hill and dataset slice it has no complete run on ({len(todo)}); "
+                f"{len(plan['have'])} existing runs reused.")
+        lock, finished, fresh = threading.Lock(), [], []
+        with Task(self, "baseline", f"Baseline {model}", desc, model=model, total=len(todo), budget_s=budget_s,
+                  config=dict(baseline_cmd=cmd, jobs=jobs, rerun=rerun, replace=replace)) as t:
+            def one(sl):
+                if not t.ok():
+                    return t.note(f"{sl}: skipped, time budget spent", "warn")
+                t.note(f"{sl} ({what(sl)}): running")
+                before = {e["id"] for e in self.slice_evals(model, sl)}
+                # its own process group, so a timeout stops the whole command, not just the shell
+                proc = subprocess.Popen(cmd.replace("{model}", shlex.quote(model)).replace("{slice}", shlex.quote(sl)),
+                                        shell=True, cwd=self.root, start_new_session=True)
+                try:  # the command's evals nest under this task ($ARX_PARENT) and share its budget
+                    code = proc.wait(timeout=t.left())
+                except subprocess.TimeoutExpired:
+                    os.killpg(proc.pid, signal.SIGTERM)
+                    proc.wait()
+                    return t.note(f"{sl}: stopped, time budget spent", "warn")
+                if code:
+                    t.note(f"{sl}: baseline_cmd exited {code}", "error")
+                new = [e for e in self.slice_evals(model, sl) if e["id"] not in before]
+                if replace and new:  # the old runs stop counting only once a fresh complete one exists
+                    gone = self.supersede(model, sl, new[-1]["id"])
+                    if gone:
+                        t.note(f"{sl}: {len(gone)} earlier run(s) superseded by {new[-1]['id']}")
+                with lock:
+                    finished.append(sl)
+                    fresh.extend([sl] if new else [])
+                    t.progress(len(finished))
+
+            with ThreadPoolExecutor(max(1, jobs)) as pool:
+                list(pool.map(one, todo))
+            after = self.baseline_plan(model)
+            t.note(f"still missing: {', '.join(after['need'])}" if after["need"] else f"every slice has a {model} baseline",
+                   "warn" if after["need"] else "info")
+            t.meta["summary"] = dict(reused=0 if rerun else len(plan["have"]), ran=len(fresh), missing=len(after["need"]))
+            self.log_decision("baseline", model=model, task=t.id, reused=t.meta["summary"]["reused"], ran=len(fresh),
+                              missing=after["need"])
+            t.check()  # a spent budget ends the card as `budget`, not `done`
+        say(f"still missing: {', '.join(after['need'])} (baseline_cmd must record a complete eval of {{model}} on {{slice}})"
+            if after["need"] else f"done: {model} has a baseline on all {len(after['roles'])} slices ({len(fresh)} run now)")
+        return after | dict(ran=len(fresh))
+
+    def promote(self, model_name: str, force: bool = False, baseline: bool = True, **baseline_kw) -> dict | None:
+        """Make the model champion, then (unless `baseline=False`) baseline it on every hill: see `baseline()`.
+        Returns the baseline result."""
         g = self.gate(model_name)
         if not g["promotable"] and not force:
             raise SystemExit(f"{model_name} has not passed every rung; see `arx gate {model_name}`")
@@ -316,6 +566,16 @@ class Project:
         if hill and hill in self.hills():
             self._upsert("hills", hill, status="climbed", climbed_by=model_name)
         self.log_decision("promote", model=model_name, replaced=old, gate=g)
+        return self.baseline(model_name, **baseline_kw) if baseline else None
+
+
+def _ago(t) -> str:
+    if not t:
+        return "age unknown"
+    d = now() - t
+    if d < 60:
+        return "just now"
+    return f"{d / 86400:.0f}d ago" if d >= 86400 else f"{d / 3600:.0f}h ago" if d >= 3600 else f"{d / 60:.0f}m ago"
 
 
 # ---------------------------------------------------------------- live tasks

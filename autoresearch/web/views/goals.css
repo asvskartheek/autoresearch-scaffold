@@ -1,0 +1,108 @@
+/* goals view: each goal is a card whose biggest element is the track from its baseline to its target; a goal's page
+   adds its runs on the goal slice over time, the hills that serve it and what to run next */
+.st.achieved::before{background:var(--positive)}
+.st.abandoned::before{background:var(--faint)}
+.gl-grp+.gl-grp{margin-top:32px}
+.gl-gh{display:flex;align-items:baseline;gap:8px;margin-bottom:12px}
+.gl-gh .meta{color:var(--muted);font-size:13px}
+.gl-cards{display:flex;flex-direction:column;gap:var(--gap)}
+.gl-cmd{margin-top:12px;display:flex;justify-content:center}
+.gl-card{display:flex;flex-direction:column;gap:6px}
+.gl-top{display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap}
+.gl-top h3{font-size:16px;font-weight:600;line-height:1.35;margin:0;min-width:0}
+.gl-top h3 a:hover{color:var(--accent)}
+.gl-r{margin-left:auto;display:flex;gap:8px}
+.gl-wait{margin-left:4px;color:var(--on-primary);background:var(--accent);border-radius:9px;padding:0 6px;line-height:18px;font-size:12px}
+.gl-meta{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px;margin:0;color:var(--muted);font-size:13px}
+.gl-body{display:grid;grid-template-columns:200px minmax(0,1fr) auto;gap:var(--gap);align-items:center;padding:18px 0 14px}
+.gl-big{font-size:32px;font-weight:400;letter-spacing:-.015em;line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap}
+.gl-now .sub{margin-top:4px;overflow:hidden;text-overflow:ellipsis}
+.gl-figs{display:grid;grid-template-columns:repeat(3,150px);gap:0;margin:0}
+.gl-figs>div{padding:0 16px;border-left:1px solid var(--border);min-width:0}
+.gl-figs dt{font-size:13px;font-weight:500;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:134px}
+.gl-figs dd{margin:2px 0 0;font-size:18px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.gl-figs dd.sub{font-size:12px;margin-top:2px;max-width:134px;overflow:hidden;text-overflow:ellipsis}
+.gl-foot{display:flex;gap:16px;align-items:baseline;justify-content:space-between;border-top:1px solid var(--rule);padding-top:12px;font-size:13px;min-width:0}
+.gl-hl{color:var(--muted);min-width:0}
+.gl-foot .more{white-space:nowrap}
+
+/* the track: baseline at the left end, target at the right, filled in the data hue to the champion now */
+.gl-trk{min-width:0}
+.gl-bar{position:relative;height:10px;border-radius:5px;background:var(--rule)}
+.gl-bar i{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:var(--chart-1)}
+.gl-bar b{position:absolute;top:-4px;width:2px;height:18px;margin-left:-1px;background:var(--chart-1);border-radius:1px}
+.gl-bar b.tgt{background:var(--text)}
+.gl-bar.met i{background:var(--positive)}
+.gl-bar.back{background:var(--pill-negative-bg)}
+.gl-trk.big .gl-bar{height:14px;border-radius:7px}.gl-trk.big .gl-bar i{border-radius:7px}
+.gl-trk.big .gl-bar b{height:22px}
+.gl-ends{display:flex;justify-content:space-between;gap:12px;margin-top:8px;font-size:12px;color:var(--muted);position:relative;min-width:0}
+.gl-ends span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.gl-ends b{color:var(--text);font-weight:500;font-variant-numeric:tabular-nums}
+.gl-trk.big .gl-ends{font-size:13px}
+.gl-tgt{position:relative;height:18px;margin-bottom:6px;font-size:12px;color:var(--muted)}
+.gl-tgt span{position:absolute;left:calc(var(--m) * 1%);transform:translateX(calc(var(--m) * -1%));white-space:nowrap}
+.gl-tgt b{color:var(--text);font-weight:500}
+.gl-trk.big .gl-tgt{font-size:13px}
+
+/* abandoned: a table */
+.gl-ab td .two{max-width:360px}
+.gl-why{color:var(--muted);font-size:13px;line-height:1.5;max-width:560px;padding-top:10px!important;padding-bottom:10px!important}
+
+/* detail */
+.gl-acts{display:inline-flex;align-items:center;gap:12px}
+.gl-lede{font-size:16px;line-height:1.55;margin:-8px 0 var(--gap);max-width:72ch;text-wrap:pretty}
+.gl-prog .ph{flex-wrap:wrap;row-gap:4px}
+.gl-hh{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:16px}
+.gl-hero{font-size:36px;font-weight:400;letter-spacing:-.02em;line-height:1.05;font-variant-numeric:tabular-nums}
+.gl-hh .sub{margin-top:6px}
+.gl-hgap{text-align:right}
+.gl-gv{font-size:24px;line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap}
+.gl-strip{margin-top:20px}
+.gl-strip .kpi .v{font-size:22px}
+.gl-chart svg{display:block;overflow:visible}
+.gl-pt{cursor:pointer}
+a:hover>.gl-pt,a:focus-visible>.gl-pt{stroke:var(--text);stroke-width:2}
+.gl-lgs{display:inline-flex;flex-wrap:wrap;gap:4px 14px;justify-content:flex-end}
+.gl-lg{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
+.gl-note{margin:10px 0 0;font-size:13px;color:var(--muted)}
+.gl-two{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:var(--gap);align-items:start}
+.gl-next{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
+.gl-next p{margin:0 0 6px;font-size:13px;line-height:1.5}
+.gl-kv{margin:0;display:grid;gap:0}
+.gl-kv>div{display:grid;grid-template-columns:110px minmax(0,1fr);gap:12px;align-items:baseline;padding:8px 0;border-bottom:1px solid var(--rule);font-size:13px}
+.gl-kv>div:last-child{border-bottom:0}
+.gl-kv dt{color:var(--muted)}
+.gl-kv dd{margin:0;min-width:0;overflow-wrap:anywhere;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.gl-reason{margin:0 0 10px;line-height:1.55;text-wrap:pretty}
+
+@media (max-width:1180px){
+ .gl-body{grid-template-columns:minmax(140px,180px) minmax(0,1fr)}
+ .gl-figs{grid-column:1/-1;grid-template-columns:repeat(3,minmax(0,1fr))}
+ .gl-figs>div:first-child{border-left:0;padding-left:0}
+ .gl-figs dt,.gl-figs dd.sub{max-width:none}
+}
+@media (max-width:900px){
+ .gl-two{grid-template-columns:1fr}
+}
+@media (max-width:640px){
+ .gl-bn{display:none}
+ .gl-ends span:last-child{flex:none}
+ .gl-strip .kpi .s{white-space:normal}
+ .gl-body{grid-template-columns:1fr;gap:14px;padding:12px 0 10px}
+ .gl-big{font-size:28px}
+ .gl-figs{grid-template-columns:1fr;gap:0}
+ .gl-figs>div{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;border-left:0;padding:8px 0;border-top:1px solid var(--rule)}
+ .gl-figs dt{grid-row:1/3;align-self:center}
+ .gl-figs dd{text-align:right;font-size:16px}
+ .gl-figs dd.sub{text-align:right;white-space:normal}
+ .gl-foot{flex-direction:column;gap:6px}
+ .gl-r{margin-left:0;width:100%}
+ .gl-hh{flex-direction:column;align-items:flex-start;gap:10px}
+ .gl-hgap{text-align:left}
+ .gl-hero{font-size:32px}
+ .gl-ab table,.gl-ab tbody,.gl-ab tr,.gl-ab td{display:block}
+ .gl-ab thead{display:none}
+ .gl-ab tr{padding:10px 0;border-bottom:1px solid var(--rule)}
+ .gl-ab td{height:auto;border:0;padding:2px 0!important;text-align:left!important}
+}

@@ -146,6 +146,9 @@ def run_manifest(a):
     (t.dir / "manifest.json").write_bytes(m["raw"])
     t0 = time.monotonic()
     code, timed_out, exc = _run(t, m)
+    # A streamed external harness may have published progress and summary fields.
+    # Reload those before finalizing so the launcher does not overwrite them.
+    t.meta = json.loads((t.dir / "task.json").read_text())
     failed = timed_out or exc is not None or code != 0
     summary = dict(exit_code=code, timed_out=timed_out, wall_s=round(time.monotonic() - t0, 1), manifest_sha256=m["sha"])
     if scored:

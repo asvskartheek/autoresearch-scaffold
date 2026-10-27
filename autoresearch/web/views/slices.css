@@ -43,3 +43,7 @@ tr:hover .sl-hw .copy,.sl-hw .copy:focus-visible{opacity:1}
  .sl-id .row{gap:6px}
 }
 tr.sl-on td{background:var(--active)}
+th.sl-ch,td.sl-ch{width:96px;white-space:nowrap}
+a.sl-cs{color:var(--text);font-variant-numeric:tabular-nums}
+a.sl-cs:hover{color:var(--accent)}
+@media (max-width:640px){th.sl-ch,td.sl-ch{width:auto}}

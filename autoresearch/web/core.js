@@ -7,7 +7,7 @@
 //   pill(text, cls) / st(status, label?)         status marks; ladder(gate, {compact}) the gate track
 //   meter(frac, {mark, cls}) / ciBar(check) / lineChart(series, opts) / spark(ys)
 //   empty(title, hint) / table(head, rows)
-const S={ex:{},state:null,detail:null,hill:null,ok:true,lbDataset:null,lbSlice:null,archiveKind:'all',crumbs:[]};
+const S={projects:[],ex:{},state:null,detail:null,hill:null,ok:true,lbDataset:null,lbSlice:null,archiveKind:'all',crumbs:[]};
 const VIEWS={};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -57,6 +57,9 @@ const ICON={
  models:I('<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M8.3 7l7.5 4M8.3 17l7.5-4"/>'),
  hills:I('<path d="M3 19l6-10 4 6 3-4 5 8z"/>'),
  slices:I('<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>'),
+ goals:I('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="0.6" fill="currentColor"/>'),
+ papers:I('<path d="M7 3.5h7l4.5 4.5v12a.5.5 0 0 1-.5.5H7a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5z"/><path d="M14 3.5V8h4.5M9.5 12.5h6M9.5 16h6"/>'),
+ search:I('<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>',14),
  archive:I('<rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v10h14V9M10 13h4"/>'),
  ext:I('<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',13),
  back:I('<path d="M15 6l-6 6 6 6"/>',14),
@@ -66,29 +69,52 @@ const ICON={
  copy:I('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',13)};
 // the product's mark: a ladder (two rails, three rungs) in the accent
 const MARK='<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="6" fill="var(--accent)"/><path d="M8 18.5V5.5M16 18.5V5.5M8 15h8M8 11.5h8M8 8h8" stroke="var(--surface)" stroke-width="1.8" stroke-linecap="round"/></svg>';
-const ROUTES=[['overview','Overview'],['workbench','Workbench'],['models','Models'],['hills','Hills'],['slices','Slices'],['archive','Archive']];
+const ROUTES=[['overview','Overview'],['workbench','Workbench'],['goals','Goals'],['models','Models'],['hills','Hills'],['papers','Papers'],['slices','Slices'],['archive','Archive']];
+// the project this page serves: /p/<key>/ for a registered project, the server's own at /
+const PKEY=(location.pathname.match(/^\/p\/([^/]+)/)||[])[1]&&decodeURIComponent(location.pathname.split('/')[2]);
+const mn=k=>esc(S.state?.models?.[k]?.title||k||'—');  // a model reads by its title; the id stays in the URL
+const paperOf=key=>{const ps=S.state.papers||{};return ps[key]||Object.values(ps).find(p=>p.hill===key)};
+const paperUrl=p=>'papers/'+enc(p.name);  // relative, so /p/<key>/ serves another project's papers
+const goalPaper=g=>Object.values(S.state.papers||{}).find(p=>p.goal===g);
 
 // ---------- shell
 function renderNav(){
  const {r,arg}=route(),st=S.state;
- const navOn={task:st&&isLive(byId(arg))?'workbench':'archive',model:'models',hill:'hills'}[r]||r;
+ const navOn={task:st&&isLive(byId(arg))?'workbench':'archive',model:'models',hill:'hills',goal:'goals'}[r]||r;
  const stalled=st?active().filter(t=>t.status==='stalled').length:0;
- const counts=st?{workbench:active().length,hills:Object.values(st.hills).filter(h=>h.status==='open').length}:{};
- $('#nav').innerHTML=`<a class="brand" href="#overview">${MARK}<span>arx<span class="proj">${esc(st?.config?.name||'')}</span></span></a>`+
-  ROUTES.map(([k,l])=>`<a class="nav ${navOn===k?'on':''}" href="#${k}" ${navOn===k?'aria-current="page"':''}>${ICON[k]}${l}${counts[k]?`<span class="count ${k==='workbench'&&stalled?'bad':''}" title="${k==='workbench'?plural(counts[k],'task')+' running'+(stalled?', '+stalled+' stalled':''):plural(counts[k],'open hill')}">${counts[k]}</span>`:''}</a>`).join('')+
-  (st?`<div class="foot"><b>${esc(st.champion||'No champion yet')}</b><span>${st.champion?'champion · ':''}${plural(Object.keys(st.models).length,'model')}</span></div>`:'');
+ const waiting=st?Object.values(st.papers||{}).reduce((a,p)=>a+(p.waiting||0),0):0;
+ const counts=st?{workbench:active().length,goals:Object.values(st.goals||{}).filter(g=>g.status==='open').length,hills:Object.values(st.hills).filter(h=>h.status==='open').length,papers:waiting}:{};
+ const tip={workbench:n=>plural(n,'task')+' running'+(stalled?', '+stalled+' stalled':''),goals:n=>plural(n,'open goal'),hills:n=>plural(n,'open hill'),papers:n=>plural(n,'comment')+' waiting for the agent'};
+ setHTML($('#nav'),`<a class="brand" href="#overview">${MARK}<span>arx<span class="proj">${esc(st?.config?.name||'')}</span></span></a>`+
+  ROUTES.map(([k,l])=>`<a class="nav ${navOn===k?'on':''}" href="#${k}" ${navOn===k?'aria-current="page"':''}>${ICON[k]}${l}${counts[k]?`<span class="count ${(k==='workbench'&&stalled)?'bad':k==='papers'?'hot':''}" title="${tip[k](counts[k])}">${counts[k]}</span>`:''}</a>`).join('')+
+  (S.projects.length>1?`<div class="grp">Projects</div>`+S.projects.map(q=>{const on=q.key===PKEY||(!PKEY&&q.default);return `<a class="nav proj ${on?'on':''}" href="/p/${enc(q.key)}/" title="${esc(q.name)} · ${esc(q.root)}" ${on?'aria-current="true"':''}><span class="pdot ${q.error?'bad':q.running?'run':''}"></span><span class="ell">${esc(q.name)}</span>${q.waiting?`<span class="count hot" title="${plural(q.waiting,'comment')} waiting">${q.waiting}</span>`:q.running?`<span class="count" title="${plural(q.running,'task')} running">${q.running}</span>`:''}</a>`}).join(''):'')+
+  (st?`<div class="foot"><b>${esc(st.champion||'No champion yet')}</b><span>${st.champion?'champion · ':''}${plural(Object.keys(st.models).length,'model')}</span></div>`:''));
 }
 function renderTop(){
  const dark=document.documentElement.dataset.theme==='dark'||(!document.documentElement.dataset.theme&&matchMedia('(prefers-color-scheme: dark)').matches);
  const c=S.crumbs.length?S.crumbs:[[ROUTES.find(([k])=>k===route().r)?.[1]||'Overview']];
- $('#top').innerHTML=`<button class="iconbtn menu-btn" aria-label="Menu" onclick="$('#app').classList.toggle('nav-open')">${ICON.menu}</button>
+ setHTML($('#top'),`<button class="iconbtn menu-btn" aria-label="Menu" onclick="$('#app').classList.toggle('nav-open')">${ICON.menu}</button>
  <nav class="crumbs" aria-label="Breadcrumb">${c.map(([l,h],i)=>i===c.length-1?`<b>${esc(l)}</b>`:`<a href="${h}">${esc(l)}</a><span class="sep">/</span>`).join('')}</nav>
  <div class="right"><span class="live" title="${S.ok?'Polling the ledger every 4s':'The dashboard server is not answering'}"><span class="dot ${S.ok?'':'off'}"></span>${S.ok?'Live':'Offline'}<span class="clk">${S.state&&S.ok?' · '+clock(S.state.now):''}</span></span>
- <button class="iconbtn" aria-label="Toggle theme" onclick="toggleTheme()">${dark?ICON.sun:ICON.moon}</button></div>`;
+ <button class="iconbtn" aria-label="Toggle theme" onclick="toggleTheme()">${dark?ICON.sun:ICON.moon}</button></div>`);
 }
 function toggleTheme(){
  const el=document.documentElement,dark=el.dataset.theme==='dark'||(!el.dataset.theme&&matchMedia('(prefers-color-scheme: dark)').matches);
  el.dataset.theme=dark?'light':'dark';try{localStorage.setItem('arx-theme',el.dataset.theme)}catch(e){}renderTop();render();
+}
+
+addEventListener('storage',e=>{if(e.key==='arx-theme'&&e.newValue){document.documentElement.dataset.theme=e.newValue;renderTop()}});
+// swap an element's HTML only when it changed, keeping open <details>, focus and caret across the 4s poll
+function setHTML(el,html){
+ if(el._html===html)return false;el._html=html;
+ const key=d=>d.querySelector('summary')?.textContent||'';
+ const open=new Set([...el.querySelectorAll('details[open]')].map(key));
+ const f=document.activeElement,fk=f&&el.contains(f)?(f.id||f.getAttribute('href')||f.name):null;
+ const caret=fk&&'selectionStart' in f?[f.selectionStart,f.selectionEnd]:null;
+ el.innerHTML=html;
+ el.querySelectorAll('details').forEach(d=>{if(open.has(key(d)))d.open=true});
+ if(fk){const n=[...el.querySelectorAll('[id],[href],[name]')].find(n=>(n.id||n.getAttribute('href')||n.name)===fk);if(n){n.focus({preventScroll:true});if(caret)try{n.setSelectionRange(...caret)}catch(e){}}}
+ return true;
 }
 
 // ---------- shared components

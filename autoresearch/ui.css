@@ -1,0 +1,55 @@
+/* One design system for every arx page: the dashboard's "framed-sheet" style (web/app.css), as the token names the
+   paper reader and embedded papers read. Served at /ui.css; /ui-base.css is everything before "app shell" (tokens and
+   base type only) and is what an embedded paper inherits, in a cascade layer under its own styles.
+   Keep every variable NAME: paper.html and published papers depend on them. Change values only.
+   Theme: <html data-theme="light|dark">, stored in localStorage "arx-theme". No gradients; no shadow at rest
+   (--shadow is a no-op kept for papers that use it); --pop is for real popovers only. */
+:root{
+  --font:"IBM Plex Sans",Inter,system-ui,sans-serif;
+  --display:"IBM Plex Sans",Inter,system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --background:#f2f5f8;--page:#fff;--foreground:#131416;--muted:#f5f7f9;--muted-fg:#5b6168;--border:#e3e7eb;--input:#cdd3d9;
+  --ring:#1b6c80;--primary:#16181a;--primary-fg:#fff;--accent:#e4e9ee;--sidebar:#f2f5f8;
+  --blue:#2f70bb;--teal:#1b6c80;--green:#1e7b4f;--amber:#a86f0c;--purple:#6b4fa8;--red:#c4242a;--gold:#c08a1e;
+  --hl:rgba(217,164,65,.26);--hl-on:rgba(217,164,65,.55);--draft:rgba(27,108,128,.16);--agent:#1b6c80;--agent-soft:#e3f0f3;--ok:#1e7b4f;
+  --warn-bg:#fff5db;--warn-ink:#7a3a0b;
+  --radius:8px;--shadow:0 0 0 0 transparent;--pop:0 12px 32px -12px rgba(19,20,22,.22),0 2px 6px rgba(19,20,22,.06);
+  /* dashboard names, mapped onto the tokens */
+  --bg:var(--background);--card:var(--page);--ink:var(--foreground);--soft:#eef1f4;
+  color-scheme:light}
+/* dark: the dashboard's dark frame (web/app.css): near-black blue-grey ground, the sheet one step up, teal lifted */
+:root[data-theme="dark"]{
+  --background:#0c0f12;--page:#13171b;--foreground:#eef1f3;--muted:#1a1f24;--muted-fg:#a3abb3;--border:#232a30;--input:#3a434b;
+  --ring:#5cb8cc;--primary:#eef1f3;--primary-fg:#0c0f12;--accent:#232a31;--sidebar:#0c0f12;
+  --blue:#6aa1e6;--teal:#5cb8cc;--green:#4cc38a;--amber:#d9a441;--purple:#b19ce8;--red:#f07575;--gold:#d9a441;
+  --hl:rgba(217,164,65,.18);--hl-on:rgba(217,164,65,.38);--draft:rgba(92,184,204,.2);--agent:#5cb8cc;--agent-soft:#163038;--ok:#4cc38a;
+  --warn-bg:#2b2215;--warn-ink:#e8b765;
+  --soft:#1a1f24;--shadow:0 0 0 0 transparent;--pop:0 12px 32px -8px rgba(0,0,0,.55),0 0 0 1px #232a30;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--background);color:var(--foreground);font:400 14px/1.5 var(--font);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+h1,h2,.display{font-family:var(--display)}
+button,input,textarea,select{font-family:inherit}
+code,pre,kbd,.mono{font-family:var(--mono)}
+
+/* app shell: the sidebar every page shares */
+.side{background:var(--sidebar);padding:16px 12px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:2px}
+.side .brand{display:flex;gap:10px;align-items:center;font:600 15px var(--font);padding:6px 8px 18px;color:var(--foreground)}
+.side .brand svg{flex:none}
+.side a{display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:6px;font-size:14px;font-weight:500;color:var(--muted-fg);text-decoration:none}
+.side a:hover{background:var(--accent);color:var(--foreground)}
+.side a.on{background:var(--accent);color:var(--foreground)}
+.side a .count{margin-left:auto;font-size:12px;font-weight:500;color:var(--foreground)}
+.side a .count.hot{color:var(--primary-fg);background:var(--agent);border-radius:9px;padding:0 6px;line-height:18px}
+.side .foot{margin-top:auto;display:flex;align-items:center;gap:8px;padding:8px;font-size:13px;color:var(--muted-fg)}
+.side .foot b{color:var(--foreground);font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* buttons, badges, inputs */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 12px;border-radius:6px;border:1px solid transparent;
+  background:transparent;color:inherit;font-size:13px;font-weight:500;white-space:nowrap;cursor:pointer;text-decoration:none;transition:background .15s,color .15s,border-color .15s}
+.btn:focus-visible,.ta:focus-visible,.in:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+.btn.primary{background:var(--primary);color:var(--primary-fg)} .btn.primary:hover{opacity:.9} .btn.primary:disabled{opacity:.4;cursor:default}
+.btn.outline{border-color:var(--input);background:var(--page)} .btn.outline:hover{background:var(--muted)}
+.btn.ghost:hover{background:var(--accent)}
+.btn.icon{width:32px;padding:0} .btn.sm{height:28px;padding:0 10px;font-size:12.5px} .btn.icon.sm{width:28px;padding:0}
+svg.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}

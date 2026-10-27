@@ -4,7 +4,8 @@ Read `PROTOCOL.md` before changing a model, an eval or a slice. `research.json` 
 gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) reads only that.
 
 ## Step 0: the dashboard, before anything else
-- `arx up` (also run by `arx init`) starts the dashboard in the background. Check it is up before doing other work,
+- `arx up` (also run by `arx init`) starts the dashboard in the background and registers the project in
+  `~/.arx/projects.json`; one dashboard lists every registered project (`/p/<key>/`, `arx projects`). Check it is up before doing other work,
   and give the user the URL. If it goes down, `arx up` again.
 - Setup is work too: `arx init` opens a running "Project setup" task. Note every step on it (environment, installs,
   model download, dataset prep) and finish it when the first eval can run.
@@ -41,6 +42,10 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
   Its stdout/stderr stay in the task dir as private logs.
 - Before a candidate runs a rung, the champion must have a run on the same slice with the same harness.
   `arx gate <model>` names the next run; follow it, do not skip rungs.
+- After `arx promote`, the new champion is baselined on every hill (`arx baseline`; reuses runs it already has). If
+  `research.json` has no `baseline_cmd`, run the slices it lists, each as its own eval, before opening new work.
+- Not every hill is pass/fail. If the target's score is a number (latency, length, cost), freeze the slice with
+  `--scale continuous --unit <u> --metric "<what score means>"` and score rows higher-is-better. Default is 0/1.
 - Never edit a frozen slice. Make a new one with a new name.
 - Every hill gets an explainer (`arx hill explain`: symptom, example, measure, share). See PROTOCOL.md.
 - Pre-declare what a change should move (in the hill's `problem` or the model's `change`) before running it.
@@ -49,6 +54,23 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
 - Every number names its slice and n. Show paired deltas vs the champion, not raw scores from different slices.
 - "Better" means the gate passed. A noisy delta on a dev slice is a lead, not a result.
 - Failed candidates stay in the ledger as rejected, with the reason. Negative results are results.
+
+## Goals
+- Work serves a goal: a target KPI on one slice (`arx goal open <goal> --title "<title>" --slice <full slice> --target 0.96`). Open
+  hills with `--goal <goal>`. `arx goal status` before reporting progress; `arx goal achieve` only when it passes.
+- A goal is not a task. Its evidence comes from the ledger, never from a number typed by hand.
+
+## Papers
+- One public paper per goal (`/papers/<goal>`, `arx paper new --goal <goal>`): a labelled draft while the goal is
+  open, the final result when it is achieved, the negative result if it is abandoned.
+- One living paper per hill (`/papers/<hill>`), internal debugging notes: written on promote, on hill close
+  (negative results too) and kept current while the hill is open. Start from `arx paper new <hill>`.
+- Checklist in PROTOCOL.md. `arx paper check --file paper.html` (goal papers: add `--goal <goal>`) before every
+  publish; fix every error.
+- `arx paper add|edit <name> --file paper.html` publishes; open pages swap the new version in place.
+- `arx paper poll` blocks until someone waits on you, in any paper, and prints one JSON line per thread.
+  Answer with `arx paper reply <name> <thread> "text" [--link "label=#block"] [--file page.html]`;
+  `arx paper resolve <name> <thread> ["note"]` when done. Keep polling while people review.
 
 ## Data
 - Datasets and large slices live on Hugging Face as **private** repos; the slice keeps the URL and the ID hash.
@@ -59,6 +81,12 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
 - Cut taglines, helper text and secondary labels. If a screen needs them to make sense, fix the layout.
 
 ## Pull requests
+- Every feature is verified on the real projects before review. Run parallel sub-agents, one per local arx project
+  (`arx projects`), each porting its project to the new version (`arx sync`, plus any ledger migration) in its own
+  task. Then serve them all from one dashboard (`arx up`) and give the user the link.
+- The PR stays a draft (`gh pr create --draft`) until the user has checked the ported projects by hand and said so.
+  Only then mark it ready (`gh pr ready`).
 - Before opening a PR, run a local testing session on the change: start the dashboard (`arx up`), exercise the new
   behaviour end to end in a scratch project, and note in the PR what you ran and what you saw.
 - Write the PR description with the `show-me` skill.
+  If it is missing (`ls ~/.claude/skills/show-me`), install it first: `npx skills add humanlayer/skills --skill show-me -g -y`.
