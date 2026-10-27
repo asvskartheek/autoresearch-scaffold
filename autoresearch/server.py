@@ -1,4 +1,4 @@
-"""Loopback-only dashboard server. Serves dashboard.html and aggregate JSON computed from `.research/`."""
+"""Loopback-only dashboard server. Serves web/ and aggregate JSON computed from `.research/`."""
 from __future__ import annotations
 
 import json, time
@@ -7,8 +7,10 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from .core import Project, paired, per_id
+from .readable import readable
 
-HTML = Path(__file__).with_name("dashboard.html")
+WEB = Path(__file__).with_name("web")
+TYPES = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml"}
 
 
 def _downsample(points: list[dict], cap: int = 600) -> list[dict]:
@@ -16,6 +18,21 @@ def _downsample(points: list[dict], cap: int = 600) -> list[dict]:
         return points
     stride = len(points) / cap
     return [points[int(i * stride)] for i in range(cap)] + [points[-1]]
+
+
+class Snapshot(Project):
+    """One request's read-only view of the ledger: config and the task list are read once, not once per gate check."""
+
+    @property
+    def config(self) -> dict:
+        if not hasattr(self, "_cfg"):
+            self._cfg = super().config
+        return self._cfg
+
+    def tasks(self) -> list[dict]:
+        if not hasattr(self, "_tasks"):
+            self._tasks = super().tasks()
+        return [dict(t) for t in self._tasks]
 
 
 def eta(p: Project, t: dict) -> dict | None:
@@ -69,13 +86,15 @@ def state(p: Project) -> dict:
     infer_parents(tasks)
     for t in tasks:
         ev = p.events(t["id"])
-        t["note"] = ev[-1] if ev else None
+        t["note"] = ev[-1] | {"text": readable(ev[-1].get("msg"))} if ev else None
         series = p.metrics(t["id"])[-40:]
         keys = [k for k in (t.get("last") or {}) if isinstance(t["last"][k], (int, float))]
         t["eta"] = eta(p, t)
+        if t.get("description"):
+            t["description"] = readable(t["description"])
         t["spark"] = {"key": keys[0], "y": [s.get(keys[0]) for s in series if isinstance(s.get(keys[0]), (int, float))]} if keys else None
     return dict(config=p.config, now=time.time(), champion=champ, datasets=p.datasets(), slices=slices,
-                hills=p.hills(), models=models, gates=gates, tasks=tasks, leaderboard=board,
+                hills=p.hills(), models={k: m | {f: readable(m[f]) for f in ("change", "reason") if m.get(f)} for k, m in models.items()}, gates=gates, tasks=tasks, leaderboard=board,
                 decisions=_tail(p.dir / "decisions.jsonl", 50))
 
 
@@ -115,7 +134,9 @@ def task_detail(p: Project, tid: str) -> dict:
     infer_parents(tasks)
     t = next((x for x in tasks if x["id"] == tid), None) or p.task(tid)
     t["eta"] = eta(p, t)
-    out = dict(task=t, metrics=_downsample(p.metrics(tid)), events=p.events(tid)[-300:])
+    if t.get("description"):
+        t["description"] = readable(t["description"])
+    out = dict(task=t, metrics=_downsample(p.metrics(tid)), events=[e | {"text": readable(e.get("msg"))} for e in p.events(tid)[-300:]])
     if t.get("kind") == "eval":
         rows = p.rows(tid)
         out["rows"] = [dict(id=r["id"], score=r.get("score"), error=bool(r.get("error")), latency_s=r.get("latency_s"), cost=r.get("cost")) for r in rows]
@@ -127,7 +148,7 @@ def task_detail(p: Project, tid: str) -> dict:
 
 
 def serve(port: int = 8890, root=None):
-    p = Project(root)
+    root0 = Project(root)
 
     class H(BaseHTTPRequestHandler):
         def log_message(self, *a):
@@ -142,9 +163,12 @@ def serve(port: int = 8890, root=None):
 
         def do_GET(self):
             path = self.path.split("?")[0]
+            p = Snapshot(root0.root)
             try:
-                if path in ("/", "/index.html"):
-                    return self._send(200, HTML.read_bytes(), "text/html; charset=utf-8")
+                if not path.startswith("/api/"):
+                    f = (WEB / unquote(path).lstrip("/")).resolve() if path != "/" else WEB / "index.html"
+                    if f.is_file() and f.suffix in TYPES and WEB.resolve() in f.parents:
+                        return self._send(200, f.read_bytes(), TYPES[f.suffix])
                 if path == "/api/state":
                     return self._send(200, json.dumps(state(p), default=str).encode(), "application/json")
                 if path.startswith("/api/task/"):
@@ -157,6 +181,7 @@ def serve(port: int = 8890, root=None):
                 return self._send(404, json.dumps(dict(error=str(e))).encode(), "application/json")
             self._send(404, b"not found", "text/plain")
 
+    ThreadingHTTPServer.request_queue_size = 64  # the page loads ~20 files at once; the default backlog of 5 drops some
     for port_try in range(port, port + 20):
         try:
             srv = ThreadingHTTPServer(("127.0.0.1", port_try), H)
