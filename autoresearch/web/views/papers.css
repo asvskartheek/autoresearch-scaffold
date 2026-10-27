@@ -1,0 +1,32 @@
+/* papers view: goal papers and internal notes, each a flush table; a row opens the reader */
+.pgroup+.pgroup{margin-top:32px}
+.pgh{display:flex;align-items:baseline;gap:8px;margin-bottom:12px}
+.pgh .meta{color:var(--muted);font-size:13px}
+.ptbl table{table-layout:fixed}
+.ptbl td{height:60px}
+.ptbl th:nth-child(2){width:140px}.ptbl th:nth-child(3){width:120px}.ptbl th:nth-child(4){width:130px}
+.ptbl .pp-t .two{gap:3px}
+.ptbl .pp-t a:hover b{color:var(--accent)}
+.pp-lns{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:13px;color:var(--muted);min-width:0}
+.pp-ln{display:inline-flex;align-items:center;gap:6px;min-width:0;max-width:100%}
+.pp-ln .st{font-size:13px}
+.pp-ln a.ln .st{color:var(--accent)}
+.pp-k{color:var(--faint)}
+.ptbl .pp-c .two{align-items:flex-end}
+.ptbl .pp-c .fig{font-size:13px}
+.ptbl .pp-c .sub{font-size:12px}
+.ptbl .pp-u{color:var(--muted);font-size:13px;white-space:nowrap}
+.pp-cmds{display:flex;flex-direction:column;align-items:center;gap:8px;padding-bottom:8px}
+@media (max-width:900px){
+ .ptbl thead{display:none}
+ .ptbl tr{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;padding:12px var(--card-pad);border-bottom:1px solid var(--rule)}
+ .ptbl tr:last-child{border-bottom:0}
+ .ptbl td{height:auto;padding:0!important;border:0}
+ .ptbl .pp-t{grid-column:1/-1;width:auto;margin-bottom:8px}
+ .ptbl .pp-c{text-align:left}.ptbl .pp-c .two{flex-direction:row;gap:8px;align-items:baseline}
+ .ptbl .pp-w{grid-column:2;grid-row:2}
+ .ptbl .pp-w.none{display:none}
+ .ptbl table{table-layout:auto}
+ .ptbl .pp-u{grid-column:1/-1;text-align:left;font-size:12px;margin-top:2px}
+ .pp-cmds .cmd{max-width:100%}
+}

@@ -1,3 +1,4 @@
+'use strict';
 // Workbench: what is running right now, is any of it stuck, and when will it finish?
 // Also defines the task helpers archive.js and task.js use (loaded after this file); they are prefixed wb*.
 
@@ -40,7 +41,7 @@ function wbFacts(t){
  const last=Object.entries(t.last||{}).filter(([k,v])=>typeof v==='number'&&k!==t.spark?.key).slice(0,2);
  for(const [k,v] of last)kv.push([esc(wbMetric(k)),fmtv(v)]);
  rows.push(`<dl class="wb-kv">${kv.map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>`);
- if(t.spark?.y?.length>1){const y=t.spark.y,k=t.spark.key,isPct=/score|acc/.test(k);
+ if(t.spark?.y?.length>1){const y=t.spark.y,k=t.spark.key,isPct=/score|acc/.test(k)&&S.state.slices[t.slice]?.scale!=='continuous';
   rows.push(`<div class="wb-spark"><div class="wb-pl"><span>${esc(wbMetric(k))}</span><b>${isPct?pct(y.at(-1)):fmtv(y.at(-1))}</b></div>${spark(y,stalled?'var(--faint)':'var(--chart-1)',28)}</div>`)}
  return rows.join('');
 }
@@ -53,7 +54,7 @@ function taskCard(t){
  const stalled=t.status==='stalled',sub=tree(t.id),live=sub.filter(([k])=>isLive(k));
  const shown=live.concat(sub.filter(([k])=>!isLive(k))).slice(0,Math.max(5,live.length));
  const href=`#task/${enc(t.id)}`;
- const meta=[esc(wbKind(t.kind)),t.agent&&`by ${esc(t.agent)}`,t.model&&`<a class="wb-in" href="#model/${enc(t.model)}">${esc(t.model)}</a>`,t.slice&&`<span title="${esc(t.slice)}">${esc(short(t.slice))}</span>`].filter(Boolean);
+ const meta=[esc(wbKind(t.kind)),t.agent&&`by ${esc(t.agent)}`,t.model&&`<a class="wb-in" href="#model/${enc(t.model)}" title="${esc(t.model)}">${mn(t.model)}</a>`,t.slice&&`<span title="${esc(t.slice)}">${esc(short(t.slice))}</span>`].filter(Boolean);
  const note=t.note?`<div class="note ${esc(t.note.level)}"><span class="msg" title="${esc(t.note.text??t.note.msg)}">${esc(t.note.text??t.note.msg)}</span><span class="when">${wbAgo(t.note.t)}</span></div>`:`<div class="note"><span class="msg faint">No notes yet</span></div>`;
  return `<article class="card wb-card ${stalled?'is-stalled':''}">
  <div class="wb-main">

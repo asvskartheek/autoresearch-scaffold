@@ -253,3 +253,11 @@ svg .ax{stroke:var(--grid)}
 .copy.ok svg{display:none}.copy.ok::after{content:"";width:9px;height:5px;border-left:1.75px solid currentColor;border-bottom:1.75px solid currentColor;transform:translateY(-1px) rotate(-45deg)}
 .cmd{display:inline-flex;align-items:center;gap:4px;max-width:100%;min-width:0;background:var(--raised);border-radius:var(--radius-control);padding:2px 2px 2px 10px}
 .cmd code{font:12.5px/1.6 var(--mono);color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+
+/* ---------- projects in the sidebar */
+.side a.nav.proj{font-weight:400;gap:9px}
+.side a.nav.proj .ell{flex:1}
+.pdot{width:6px;height:6px;border-radius:50%;background:var(--control);flex:none}
+.pdot.run{background:var(--accent)}.pdot.bad{background:var(--negative)}
+.side a.nav .count.hot{color:var(--on-primary);background:var(--accent);border-radius:9px;padding:0 6px;line-height:18px}
+.side{overflow-y:auto}

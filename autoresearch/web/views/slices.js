@@ -1,3 +1,4 @@
+'use strict';
 /* slices: what frozen eval sets exist, how big, which hill uses them, which have runs, and where their IDs live */
 const slN=n=>n==null?'—':Number(n).toLocaleString();
 const slOrder={full:0,random:1,control:2,dev:3,synthetic:4};
@@ -9,6 +10,16 @@ function slHills(s){
   .map(([k,h])=>[k,h,h.target===s.name?'target':h.control===s.name?'control':'']);
 }
 const slRuns=s=>Object.keys(S.state.leaderboard[s.name]||{}).length;
+// a slice scores 0/1 per example unless it says `scale: continuous`: then its figure is a mean in its unit, never a %
+const slBin=s=>s?.scale!=='continuous';
+const slVal=(v,s)=>v==null?'—':slBin(s)?pct(v):esc((Math.abs(v)>=10?v.toFixed(1):num(v,3))+(s?.unit?' '+s.unit:''));
+// the champion on this slice: its run (from the baseline plan), or whether the slice still needs one
+function slChamp(s){
+ const st=S.state,b=st.baseline;if(!b)return DASH;
+ const h=b.have?.[s.name];if(h)return `<a class="sl-cs" href="#task/${enc(h.task)}" title="${h.runs>1?h.runs+' runs pooled · ':''}n ${slN(h.n)}">${slVal(h.score,s)}</a>`;
+ if(!(b.need||[]).includes(s.name))return DASH;
+ return active().some(t=>t.kind==='eval'&&t.model===st.champion&&t.slice===s.name)?pill('Running','running'):pill('Not run','warn');
+}
 function slSet(k,v){S[k]=v;render()}
 function slSortBy(k){const s=S.slSort||{k:'kind',d:1};S.slSort={k,d:s.k===k?-s.d:(k==='kind'||k==='name'?1:-1)};render()}
 function slQuery(el){S.slQ=el.value;S.slCaret=el.selectionStart;S.slFocus=true;render()}
@@ -58,15 +69,15 @@ VIEWS.slices=(arg)=>{
   if(filtering&&!sl.length)return '';
   const anyPin=mine.some(s=>s.url),capped=sl.length>CAP+2&&!filtering,open=!capped||S.slOpen[d],shown=open?sl:sl.slice(0,CAP);
   const rows=shown.map(s=>{
-   const hs=slHills(s),nr=slRuns(s),about=s.description||s.metric||'';
+   const hs=slHills(s),nr=slRuns(s),about=[slBin(s)?'':'Continuous score'+(s.unit?' in '+s.unit:''),s.description||s.metric||''].filter(Boolean).join(' · ');
    const hill=hs.length?hs.map(([k,hh,role])=>`<a class="sl-hill" href="#hill/${enc(k)}" title="${esc(hh.title||k)}${role?' · '+role:''}"><span class="st ${esc(hh.status||'')}"></span><span class="ell">${esc(hh.title||k)}</span>${role?`<span class="faint"> · ${role}</span>`:''}</a>`).join(''):DASH;
    return `<tr id="slice-${esc(s.name)}" class="${s.name===focus?'sl-on':''}"><td class="sl-id"><div class="two"><span class="row"><b class="ell mono" title="${esc(s.name)}">${esc(short(s.name))}</b><span class="sl-show-s">${pill(s.kind||'—',s.kind==='full'?'acc':'')}</span></span>${about?`<span class="sub ell" title="${esc(about)}">${esc(about)}</span>`:''}</div></td>
-    <td class="sl-hide-s sl-kind">${pill(s.kind||'—',s.kind==='full'?'acc':'')}</td><td class="num">${slN(s.n)}</td>
+    <td class="sl-hide-s sl-kind">${pill(s.kind||'—',s.kind==='full'?'acc':'')}</td><td class="num">${slN(s.n)}</td><td class="num sl-ch">${slChamp(s)}</td>
     <td class="sl-hide-s sl-hash"><span class="sl-hw"><span class="id">${esc(s.hash||'')}</span>${s.hash?copyBtn(s.hash):''}</span></td>
     <td class="sl-hl sl-hide-m">${hill}</td>
-    <td class="num sl-runs">${nr?`<button class="sl-go" onclick="slBoard(${esc(JSON.stringify(s.name))})" title="Open on the leaderboard">${plural(nr,'model')}</button>`:'<span class="faint">None</span>'}</td>
+    <td class="num sl-runs sl-hide-s">${nr?`<button class="sl-go" onclick="slBoard(${esc(JSON.stringify(s.name))})" title="Open on the leaderboard">${plural(nr,'model')}</button>`:'<span class="faint">None</span>'}</td>
     ${anyPin?`<td class="num sl-hide-s">${s.url?`<a class="ln" href="${esc(s.url)}" target="_blank" rel="noopener">Hugging Face ${ICON.ext}</a>`:'<span class="faint">ID hash</span>'}</td>`:''}</tr>`});
-  const head=[sh('Slice','name',''),['Kind','sl-hide-s sl-kind'],sh('n','n','num sl-n'),['ID hash','sl-hide-s sl-hash'],['Hill','sl-hide-m sl-hl'],sh('Runs','runs','num sl-runs'),...(anyPin?[['Stored','num sl-hide-s']]:[])];
+  const head=[sh('Slice','name',''),['Kind','sl-hide-s sl-kind'],sh('n','n','num sl-n'),[st.champion?`<span title="${mn(st.champion)} · ${esc(st.champion)}">Champion</span>`:'Champion','num sl-ch'],['ID hash','sl-hide-s sl-hash'],['Hill','sl-hide-m sl-hl'],sh('Runs','runs','num sl-runs sl-hide-s'),...(anyPin?[['Stored','num sl-hide-s']]:[])];
   const more=capped?`<button class="btn sl-more" onclick="S.slOpen[${esc(JSON.stringify(d))}]=${open?'false':'true'};render()">${open?'Show fewer':`Show all ${sl.length} slices`}</button>`:'';
   const title=x.title&&x.title!==d?esc(x.title):'';
   return panel(`<span class="mono">${esc(d)}</span>`,sl.length?table(head,rows)+more:empty('No slices in this dataset',`<p>Freeze one from a list of IDs.</p>${cmd(`arx slice add ${d}/<name> --ids-file ids.txt`)}`),

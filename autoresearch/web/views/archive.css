@@ -45,3 +45,4 @@ th.num .arc-sort{flex-direction:row-reverse}
 }
 .arc-sortsel{display:none}
 @media (max-width:640px){.arc-sortsel{display:block}.arc-bar{gap:8px}}
+.arc-sup{display:block;margin-top:2px;font-size:12px;color:var(--muted)}

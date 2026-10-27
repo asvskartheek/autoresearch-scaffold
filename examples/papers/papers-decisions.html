@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Papers Decisions</title>
+<style>
+:root{--bg:#f5f5f1;--card:#fff;--ink:#202a32;--muted:#7d858c;--border:#e5e8e7;--soft:#f0f1ee;--green:#299b7d;--red:#d16c61;--amber:#c58a37;--purple:#9075cd}
+:root[data-theme="dark"]{--bg:#151b20;--card:#1d252b;--ink:#e6eaed;--muted:#8d979e;--border:#2c363d;--soft:#242d34}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Inter",sans-serif}
+main{max-width:860px;margin:0 auto;padding:32px 16px 80px}
+h1{font-size:30px;line-height:1.2;margin:0 0 6px} h2{font-size:21px;margin:40px 0 8px}
+.top{display:flex;justify-content:space-between;align-items:start;gap:12px}
+.theme{border:1px solid var(--border);background:var(--card);color:var(--ink);border-radius:999px;width:38px;height:38px;flex:none;cursor:pointer}
+.muted{color:var(--muted)}
+.poster{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin:14px 0}
+.poster svg{width:100%;height:auto;display:block}
+svg text{fill:var(--ink);font-family:inherit}
+.d{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin:12px 0}
+.d .k{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--purple);font-weight:600}
+.d .pick{font-weight:700;margin:2px 0 4px}
+.d .alt{font-size:14px;color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{padding:8px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
+th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:500}
+.y{color:var(--green);font-weight:600}.n{color:var(--red);font-weight:600}.m{color:var(--amber);font-weight:600}
+</style>
+</head>
+<body><main>
+<div class="top"><div>
+<h1 data-block="title">Papers in arx: what we built, what to decide</h1>
+<p class="muted" data-block="sub">Trial on gsm8k_ft · percent-base hill · select any line to comment</p>
+</div><button class="theme" id="theme" aria-label="Toggle theme">◐</button></div>
+
+<div class="poster" data-block="loop">
+<svg viewBox="0 0 800 170" role="img" aria-label="Loop: ledger to paper to comment to agent to paper">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
+  <g font-size="14">
+  <rect x="0" y="55" width="130" height="56" rx="10" fill="var(--soft)"/><text x="65" y="80" text-anchor="middle" font-weight="700">.research/</text><text x="65" y="98" text-anchor="middle" font-size="12" style="fill:var(--muted)">ledger</text>
+  <rect x="190" y="55" width="140" height="56" rx="10" fill="var(--soft)"/><text x="260" y="80" text-anchor="middle" font-weight="700">paper.html</text><text x="260" y="98" text-anchor="middle" font-size="12" style="fill:var(--muted)">agent writes</text>
+  <rect x="390" y="55" width="160" height="56" rx="10" fill="color-mix(in srgb,var(--amber) 18%,var(--card))"/><text x="470" y="80" text-anchor="middle" font-weight="700">you comment</text><text x="470" y="98" text-anchor="middle" font-size="12" style="fill:var(--muted)">on selected text</text>
+  <rect x="610" y="55" width="190" height="56" rx="10" fill="color-mix(in srgb,var(--purple) 18%,var(--card))"/><text x="705" y="80" text-anchor="middle" font-weight="700">arx paper poll</text><text x="705" y="98" text-anchor="middle" font-size="12" style="fill:var(--muted)">agent answers / edits</text>
+  </g>
+  <path d="M130 83H186M330 83H386M550 83H606" stroke="var(--muted)" stroke-width="2" marker-end="url(#a)"/>
+  <path d="M705 115V150H260V115" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#a)"/>
+  <text x="480" y="166" text-anchor="middle" font-size="12" style="fill:var(--muted)">edit swaps in place: no reload, scroll and drafts kept</text>
+</svg>
+</div>
+
+<h2 data-block="h-v">Two versions, same paper</h2>
+<table data-block="cmp">
+<thead><tr><th></th><th>V1 · lavish-axi</th><th>V2 · arx /papers</th></tr></thead>
+<tbody>
+<tr><td>Comments on selected text</td><td class="y">yes, rich</td><td class="y">yes</td></tr>
+<tr><td>Paper buttons work while annotating</td><td class="m">annotate mode can intercept</td><td class="y">yes, paper is in an iframe</td></tr>
+<tr><td>Agent answer in place</td><td class="m">conversation panel</td><td class="y">threaded under the quote</td></tr>
+<tr><td>Answer as a link (widget, poster)</td><td class="n">no</td><td class="y">link card, in-paper links scroll</td></tr>
+<tr><td>Update without reload</td><td class="m">not tested</td><td class="y">hidden swap, keeps place + draft</td></tr>
+<tr><td>Comments outlive the session</td><td class="n">session-scoped</td><td class="y">thread.jsonl in the ledger</td></tr>
+<tr><td>Next to hills/models in dashboard</td><td class="n">separate app</td><td class="y">same server</td></tr>
+<tr><td>Share with others</td><td class="y">ht-ml.app share (public by default)</td><td class="n">loopback only today</td></tr>
+<tr><td>Polish: layout checks, whiteboards, export</td><td class="y">yes</td><td class="n">no</td></tr>
+</tbody></table>
+
+<h2 data-block="h-d">Decisions to make</h2>
+<div class="d" data-block="d1"><div class="k">1 · Where papers live</div><div class="pick">Recommend: arx-native (V2). Keep lavish for one-off reviews.</div><div class="alt">Papers are part of the ledger. Comments must survive sessions and sit next to hills.</div></div>
+<div class="d" data-block="d2"><div class="k">2 · When a paper is written</div><div class="pick">Recommend: on promote and on hill close, the agent must write or update the hill's paper.</div><div class="alt">Rejections append to "What we tried". The project paper is written when you ask.</div></div>
+<div class="d" data-block="d3"><div class="k">3 · One paper or many</div><div class="pick">Recommend: one living paper per hill, plus one project paper.</div><div class="alt">Alternative: one paper per champion (immutable, like a release note).</div></div>
+<div class="d" data-block="d4"><div class="k">4 · Content rules</div><div class="pick">Recommend: the create-course rules in PROTOCOL.md: STE prose, poster per section, interactive charts, pop quizzes, decision-style tests, flip cards.</div><div class="alt">Plus ours: every number names slice and n, deltas are paired, negative results stay.</div></div>
+<div class="d" data-block="d5"><div class="k">5 · Sharing</div><div class="pick">Open: loopback only, or a share step (static export with the thread)?</div><div class="alt">Client data rules apply. A paper is aggregate-only like rows, but examples need review.</div></div>
+<div class="d" data-block="d6"><div class="k">6 · How the agent listens</div><div class="pick">Open: a background `arx paper poll` per session, or one poll across all papers?</div><div class="alt">Today: one paper per poll. A poll across papers is a small change.</div></div>
+</main>
+<script>
+document.getElementById("theme").addEventListener("click",()=>{const r=document.documentElement;r.dataset.theme=r.dataset.theme==="dark"?"light":"dark"});
+</script>
+</body></html>
