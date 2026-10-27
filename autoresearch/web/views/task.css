@@ -1,0 +1,101 @@
+/* task view */
+.title .finding code{background:var(--raised);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+.tk-pos{margin-right:4px;white-space:nowrap}
+.tk-nav svg{flex:none}
+.tk-nav[aria-disabled="true"]{opacity:.4;cursor:default}
+.tk-nav[aria-disabled="true"]:hover{background:var(--surface)}
+.tk-meta{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:-8px 0 0;font-size:13px;color:var(--muted)}
+.tk-mi{display:flex;flex-wrap:wrap;min-width:0;row-gap:2px}
+.tk-mi>span{white-space:nowrap}
+.tk-mi>span+span::before{content:"·";color:var(--faint);margin:0 8px}
+.tk-meta .ln{display:inline-flex;align-items:center;gap:4px}
+.tk-desc{margin:12px 0 0;color:var(--muted);max-width:76ch;line-height:1.55;overflow-wrap:anywhere}
+.tk-fix{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:16px;padding:12px 14px;border-radius:var(--radius-card);background:var(--pill-negative-bg);color:var(--pill-negative-ink);font-size:13px}
+.tk-fix .cmd{background:var(--surface)}
+.tk-prog{margin-top:12px}
+.tk-charts .tk-span{grid-column:1/-1}
+.tk-lv{color:var(--text);font-weight:500;font-size:14px;margin-left:4px}
+.tk-vc{display:grid;grid-template-columns:auto minmax(0,1fr) 240px;gap:32px;align-items:center}
+.tk-vcd{display:flex;flex-direction:column}
+.tk-big{font-size:var(--fs-kpi);line-height:1.2}
+.tk-ax{display:flex;justify-content:space-between;font-size:12px;margin-top:6px}
+.tk-kv{margin:0;display:flex;flex-direction:column}
+.tk-kv div{display:flex;justify-content:space-between;align-items:baseline;gap:16px;min-height:28px;font-size:13px;border-bottom:1px solid var(--rule)}
+.tk-kv div:last-child{border-bottom:0}
+.tk-kv dt{color:var(--muted);white-space:nowrap}
+.tk-kv dd{margin:0;text-align:right;min-width:0}
+.tk-strip{display:flex;flex-wrap:wrap;gap:3px}
+.tk-strip span{width:12px;height:12px;border-radius:2px;background:color-mix(in srgb,var(--chart-1) var(--s,0%),var(--rule))}
+.tk-strip span.e{background:var(--negative)}
+.tk-legend{display:flex;gap:16px;margin-top:12px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.tk-legend span{display:inline-flex;align-items:center;gap:6px}
+.tk-legend i{width:10px;height:10px;border-radius:2px}
+.tk-legend .k1{background:var(--chart-1)}.tk-legend .k0{background:var(--rule);border:1px solid var(--control)}.tk-legend .ke{background:var(--negative)}
+
+/* log: the time in a narrow column, the note as a paragraph at a reading measure, a day line when the date turns */
+.tk-log{list-style:none;margin:0;padding:0}
+.tk-day{font-size:12px;font-weight:500;color:var(--muted);padding:14px 0 6px;border-bottom:1px solid var(--rule)}
+.tk-day:first-child{padding-top:0}
+.tk-e{display:grid;grid-template-columns:56px minmax(0,1fr);gap:16px;padding:10px 0;border-bottom:1px solid var(--rule)}
+.tk-e:last-child{border-bottom:0;padding-bottom:0}
+.tk-e time{color:var(--muted);font-size:13px;line-height:22px;white-space:nowrap}
+.tk-e p{margin:0;font-size:14px;line-height:22px;max-width:78ch;overflow-wrap:anywhere;text-wrap:pretty}
+.tk-e .pill{margin-right:8px;vertical-align:1px}
+.tk-none{margin:0;color:var(--muted);font-size:13px}
+.tk-all{margin-bottom:8px}
+.tk-sub .tk-all{margin:8px 0 0}
+
+/* details: one label column and one value column; mono only for ids, hashes and paths */
+.tk-det.two{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:32px}
+.tk-dl{margin:0;display:flex;flex-direction:column}
+.tk-dl div{display:grid;grid-template-columns:112px minmax(0,1fr);gap:16px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--rule);font-size:13px;line-height:20px}
+.tk-dl div:first-child{padding-top:0}
+.tk-dl div:last-child{border-bottom:0}
+.tk-dl dt{color:var(--muted)}
+.tk-dl dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.tk-dl dd .copy{margin:-2px 0 0 4px}
+.tk-dl dd .faint{margin-left:4px;white-space:nowrap}
+.tk-dl dd .copy{width:20px;height:20px}
+.tk-dl .ln{display:inline-flex;align-items:center;gap:4px}
+/* ids, hashes and paths only */ .tk-mono{font-family:var(--mono);font-size:12.5px;overflow-wrap:anywhere;min-width:0}
+.tk-cmdline .cmd{max-width:100%}
+.tk-right{display:flex;flex-direction:column;gap:24px;min-width:0}
+.tk-sh{display:flex;align-items:center;gap:8px;margin-bottom:8px;min-height:24px}
+.tk-sh .copy,.tk-sh .sub{margin-left:auto}
+.tk-cmd{margin:0;padding:12px 14px;white-space:pre-wrap;overflow-wrap:anywhere;font:12.5px/1.7 var(--mono);color:var(--text)}
+.tk-cmd .tk-cf{color:var(--muted)}
+.tk-cfg div{grid-template-columns:minmax(120px,40%) minmax(0,1fr)}
+/* config keys are keys */ .tk-cfg dt{font-family:var(--mono);font-size:12px;overflow-wrap:anywhere}
+@media (max-width:1100px){
+ .tk-det.two{grid-template-columns:1fr;gap:24px}
+}
+@media (max-width:900px){
+ .tk-vc{grid-template-columns:1fr;gap:16px}
+ .tk-e{grid-template-columns:44px minmax(0,1fr);gap:12px}
+ .tk-dl div{grid-template-columns:96px minmax(0,1fr);gap:12px}
+ .tk-cfg div{grid-template-columns:1fr;gap:2px}
+ .title .acts{flex-wrap:wrap}
+}
+.tk-dl.cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(var(--rows),auto);grid-auto-flow:column;column-gap:32px}
+.tk-dl.cols div:nth-child(n){border-bottom:1px solid var(--rule);padding-top:7px}
+.tk-dl.cols div:first-child,.tk-dl.cols div.top{padding-top:0}
+.tk-dl.cols div.end,.tk-dl.cols div:last-child{border-bottom:0}
+.tk-more{margin-top:12px}
+.tk-fig{margin:0;display:flex;flex-direction:column}
+.tk-fig div{display:grid;grid-template-columns:minmax(0,1fr) repeat(3,auto);gap:16px;align-items:baseline;padding:10px 0;border-bottom:1px solid var(--rule);font-size:13px}
+.tk-fig div:first-child{padding-top:0}
+.tk-fig div:last-child{border-bottom:0}
+.tk-fig dt{color:var(--muted)}
+.tk-fig dd{margin:0;text-align:right;white-space:nowrap}
+.tk-fig dd b{font-weight:500}
+@media (max-width:900px){.tk-dl.cols{grid-template-columns:1fr;grid-template-rows:none;grid-auto-flow:row}.tk-dl.cols div.top{padding-top:7px}.tk-dl.cols div.end{border-bottom:1px solid var(--rule)}}
+.tk-fig1 div{min-height:40px;align-items:center}.tk-fig1 dd b{font-weight:500}
+
+.tk-vcp .ph{flex-wrap:wrap;row-gap:4px}
+.tk-vcp .ph h2{flex:0 1 auto;min-width:0;overflow-wrap:anywhere}
+.tk-vcp .ph .meta{white-space:normal}
+@media (max-width:640px){
+ .tk-mi{column-gap:14px}
+ .tk-mi>span+span::before{content:none}
+ .tk-vcp .ph .r{margin-left:0;flex-basis:100%}
+}
