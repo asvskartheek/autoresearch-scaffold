@@ -95,7 +95,8 @@ for s in ("qa/dev-multihop", "qa/dev-control", "qa/dev-longctx", "qa/random50", 
     run_eval("v7", s, 1.5 if s.endswith("full") else .3)
 p.promote("v7")
 
-# The politeness hill, found in v7
+# The goal the next hills serve, then the politeness hill, found in v7
+p.open_goal("qa-75", "QA accuracy at 75%", "qa/full", 0.75)
 t = Task(p, "analysis", "v7 error analysis: politeness flips", "Paired prompts with and without 'please' disagree on 23% of examples.", model="v7")
 t.note("Clustered 140 full-set failures; 31 involve a politeness marker.")
 t.note("Built 40 synthetic paired probes; v7 agrees and is correct on 52%.")
@@ -103,7 +104,7 @@ t.link("Probe set", "https://huggingface.co/datasets/your-org/qa-please-probes")
 t.finish(); backdate(t, 2)
 run_eval("v7", "qa/dev-please")
 p.open_hill("please-robust", "Politeness robustness", "qa/dev-please", "qa/dev-control",
-            "Adding 'please' changes v7's answer. Expect +20 pts on dev-please; no other slice should move.", "v7")
+            "Adding 'please' changes v7's answer. Expect +20 pts on dev-please; no other slice should move.", "v7", goal="qa-75")
 p.explain_hill("please-robust", symptom="Adding 'please' to a question changes v7's answer.",
                measure="1 if the answer with and without 'please' agree and are correct",
                examples=[{"input": "Please, what year did the Berlin Wall fall?", "wrong": "1991",
