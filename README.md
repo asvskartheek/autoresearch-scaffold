@@ -120,7 +120,7 @@ hash-pinned command with `arx run --manifest m.json --expected-sha256 <sha> --dr
 
 # The dashboard
 
-`arx up` serves it on `127.0.0.1` (it starts automatically with `arx init`). It refreshes every few seconds without
+`arx up` serves it on `127.0.0.1` (it starts automatically with `arx init`). Dark by default, with a light theme one click away. It refreshes every few seconds without
 disturbing open sections, focus or clicks. One dashboard serves every registered project: `arx projects` lists
 them and each lives at `/p/<key>/`.
 
@@ -151,7 +151,16 @@ examples each version fixed or broke.
 
 <img src="docs/hills.png" alt="Hill page with an example, its share of failures, the dev set table and per-example grid" width="900">
 
-| Slices | Archive |
+### Goal page: the number the effort is for
+
+The champion's value against the target, the gap in points and answers, every run on the goal's slice over time,
+the hills that serve it and the next step.
+
+<img src="docs/goal.png" alt="Goal page with progress to target, runs over time and the hills that serve it" width="900">
+
+### Every screen
+
+| Screen | Shows |
 |---|---|
 | Goals | Each target KPI: value now, gap, paired Δ vs the starting champion, the hills that serve it |
 | Overview | Champion, the candidate ladder, leaderboards by dataset and slice: score, Δ champion, errors, cost, p50/p95 |
@@ -214,7 +223,7 @@ The screenshots above are this demo. Scores are simulated; nothing calls a model
 
 ```bash
 git clone https://github.com/asvskartheek/autoresearch-scaffold && cd autoresearch-scaffold
-python3 examples/demo/seed.py demo-project      # v5 → v6 → v7 promoted, v8b rejected, v8 mid-ladder
+python3 examples/demo/seed.py demo-project      # v5 → v6 → v7 promoted, v8b rejected, v8 mid-ladder, a goal open
 cd demo-project
 PYTHONPATH=.. python3 ../examples/demo/live.py &  # a live eval, a training run and a data job
 PYTHONPATH=.. python3 -m autoresearch.cli up
