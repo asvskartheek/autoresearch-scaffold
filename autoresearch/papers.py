@@ -223,7 +223,7 @@ def check(html: str, slices=()) -> list[tuple[str, str]]:
     if slices and not any(s in body or s.rsplit("/", 1)[-1] in body for s in slices):  # gsm8k-test/full or full
         out.append(("error", "names no slice from the ledger; every number names its slice and n"))
     for m in SERIF.finditer(html):
-        out.append(("error", f"serif font: {m.group(0)[:60]!r}; use the shared theme (Instrument Sans)"))
+        out.append(("error", f"serif font: {m.group(0)[:60]!r}; use the shared theme (IBM Plex Sans)"))
     for m in PILL.finditer(html):
         out.append(("warn", f"rounded pill: {m.group(0)!r}; no pill bubbles"))
     if 'data-theme="dark"' not in html:  # the reader sets data-theme on the paper; it follows the page's toggle
@@ -236,8 +236,8 @@ def check(html: str, slices=()) -> list[tuple[str, str]]:
             out.append(("warn", f"still has the example's text {left!r}: rewrite it for this paper"))
     if re.search(r"\d(\.\d+)?(vh|dvh|svh|lvh)\b", html):  # the reader sizes the paper's frame to its content
         out.append(("warn", "vh units: the reader sizes the paper to its content, so a height in vh grows without limit; use px"))
-    if "Instrument Sans" not in html:
-        out.append(("warn", "does not use the shared theme fonts (Instrument Sans, Bricolage Grotesque, JetBrains Mono)"))
+    if "IBM Plex Sans" not in html:
+        out.append(("warn", "does not use the shared theme fonts (IBM Plex Sans, IBM Plex Mono)"))
     return out
 
 

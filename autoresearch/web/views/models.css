@@ -1,0 +1,43 @@
+/* models view */
+#ms-root [hidden]{display:none!important}
+.ms-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:var(--gap)}
+.ms-q{all:unset;box-sizing:border-box;height:var(--control-height);width:280px;max-width:100%;padding:0 10px;border-radius:var(--radius-control);box-shadow:inset 0 0 0 1px var(--control);font-size:13px;color:var(--text);background:var(--surface)} /* a 1px inset ring is the field's border; taste-skill-ignore */
+.ms-q::placeholder{color:var(--faint)}
+.ms-q:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.ms-ladder td{white-space:nowrap;padding-top:8px;padding-bottom:8px}
+.ms-id{display:inline-flex;align-items:center;gap:2px}
+.ms-nm{font-size:13px;font-weight:500;color:var(--text)}
+a.ms-nm:hover,a.ms-par:hover,a.ms-hill:hover{color:var(--accent)}
+.ms-ch{display:block;max-width:300px;white-space:normal}
+.ms-par{font-size:13px;color:var(--muted)}
+.ms-hill{display:block;max-width:200px;white-space:normal;color:var(--muted);font-size:13px}
+.ms-next{font-size:13px}
+.ms-sl{font-family:var(--mono);font-size:12.5px} /* slice ids are ids; taste-skill-ignore */
+.ms-why{min-width:280px;max-width:560px;white-space:normal;padding-top:10px;padding-bottom:10px}
+.ms-kc{font-size:20px}
+.ms-tree .kid{height:32px;position:relative;padding-left:calc(8px + var(--d,0)*18px)}
+.ms-tree .nm{font-size:12.5px}
+.ms-tree .vl{display:flex;align-items:center;gap:8px}
+.ms-of{font-size:12px;color:var(--muted)}
+.ms-elbow{width:8px;height:8px;margin-left:-14px;margin-top:-8px;border-left:1px solid var(--control);border-bottom:1px solid var(--control);flex:none}
+.sd.ms-champion{background:var(--accent)}.sd.ms-rejected{background:var(--negative)}
+.sd.ms-candidate{background:transparent;box-shadow:inset 0 0 0 1.5px var(--faint)} /* a hollow dot drawn as a ring, not a shadow; taste-skill-ignore */
+@media (max-width:900px){.ms-q{width:100%}.ms-ch{max-width:220px}}
+.ms-id{white-space:nowrap}
+.ms-par{display:inline-block;max-width:220px;white-space:normal;line-height:1.35}
+.ms-ladder .ms-hill{min-width:150px;max-width:220px}
+.ms-ladder .ms-ch{max-width:240px}
+.ms-ladder td,.ms-ladder th{padding-left:10px;padding-right:10px}
+.ms-ladder td:first-child,.ms-ladder th:first-child{padding-left:0}.ms-ladder td:last-child,.ms-ladder th:last-child{padding-right:0}
+.kpi .v:has(.ms-kc){white-space:normal}
+.ms-kc{overflow-wrap:anywhere;line-height:1.25;display:block}
+@media (max-width:900px){.ms-kc{font-size:16px}.ms-tree .vl .ladder{display:none}.ms-tree .kid{padding-left:calc(8px + var(--d,0)*10px)}.ms-tree .nm{white-space:normal;overflow-wrap:anywhere}}
+.ms-line{display:flex;align-items:center;flex-wrap:wrap;gap:0 2px;min-width:0}
+.ms-kid{font-size:12px;color:var(--muted)}
+.ms-line .copy{opacity:0}
+tr:hover .ms-line .copy,.ms-line .copy:focus-visible{opacity:1}
+a.ms-nm:not(.mono){display:block;white-space:normal;max-width:240px;line-height:1.35}
+.ms-ladder .ms-line{white-space:normal;max-width:240px}
+.kpi .s a.ms-kn{color:var(--text);font-weight:500}
+.kpi .s a.ms-kn:hover{color:var(--accent)}
+.ms-tree .nm:not(.mono){font-size:13px}

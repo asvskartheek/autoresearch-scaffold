@@ -9,7 +9,8 @@ autoresearch/
 ├── cli.py           # `arx`: argparse over the same Project / Task operations
 ├── execution.py     # `arx run`: hash-pinned manifests, subprocess, row checking
 ├── server.py        # loopback HTTP server: aggregate JSON computed from the ledger
-└── dashboard.html   # single-page dashboard; polls the server
+├── readable.py      # display-only cleanup of notes written without spaces
+└── web/             # the dashboard: app.css + core.js (design system, shell), boot.js, one file per view in views/
 ```
 
 ```mermaid
@@ -21,7 +22,7 @@ flowchart LR
     execution --> core
     core <-->|read / write JSON, JSONL| ledger[(.research/)]
     server -->|read only| core
-    dashboard[dashboard.html] -->|GET /api/*| server
+    dashboard[web/] -->|GET /api/*| server
 ```
 
 There is one writer library (`core.py`) and many readers. The CLI, `arx run` and the Python API all go through
@@ -138,20 +139,22 @@ Key consequences:
   the project learns.
 - `promote` re-runs `gate()` and snapshots it into `decisions.jsonl`.
 
-## `server.py` and `dashboard.html`
+## `server.py` and `web/`
 
 `arx serve` binds `127.0.0.1` only and serves:
 
 | Route | Returns |
 |---|---|
-| `/` | `dashboard.html` |
+| `/`, `/app.css`, `/views/*.js` … | the dashboard's static files from `web/` |
 | `/api/state` | config, slices (without ID lists), hills, models, every candidate's gate, tasks with latest note, sparkline and ETA, leaderboard, last 50 decisions |
 | `/api/task/<id>` | the task, metrics (downsampled to ~600 points), last 300 events; for evals, rows and the paired diff vs the champion |
 | `/api/hill/<name>` | per-example scores of every model on the hill's target and control |
 | `/api/gate/<model>` | `gate()` |
 
-Everything is computed per request from the files, with `Cache-Control: no-store`. The dashboard is a single HTML
-file with no build step; it polls `api/state` every few seconds and fetches detail routes for task and hill pages.
+Everything is computed per request from the files, with `Cache-Control: no-store`. The dashboard has no build step: `web/index.html` loads `app.css` and `core.js` (tokens, shell and the shared
+components every view uses), one script and stylesheet per view (`views/<route>.js` registers `VIEWS.<route>`), then
+`boot.js`, which polls `api/state` every few seconds and fetches detail routes for task and hill pages. Notes and
+descriptions also come back with a cleaned `text` (see `readable.py`); the ledger keeps the raw message.
 
 ## `cli.py`
 

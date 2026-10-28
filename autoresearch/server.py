@@ -1,4 +1,4 @@
-"""Loopback-only dashboard server. Serves dashboard.html and aggregate JSON computed from `.research/`."""
+"""Loopback-only dashboard server. Serves web/ and aggregate JSON computed from `.research/`."""
 from __future__ import annotations
 
 import gzip, json, mimetypes, time
@@ -8,8 +8,10 @@ from urllib.parse import unquote, urlsplit
 
 from . import papers, projects
 from .core import Project, paired, per_id
+from .readable import readable
 
-HTML = Path(__file__).with_name("dashboard.html")
+WEB = Path(__file__).with_name("web")
+TYPES = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml"}
 PAPER = Path(__file__).with_name("paper.html")
 UI = Path(__file__).with_name("ui.css")
 
@@ -96,13 +98,15 @@ def _state(p: Project) -> dict:
     infer_parents(tasks)
     for t in tasks:
         ev = p.events(t["id"])
-        t["note"] = ev[-1] if ev else None
+        t["note"] = ev[-1] | {"text": readable(ev[-1].get("msg"))} if ev else None
+        if t.get("description"):
+            t["description"] = readable(t["description"])
         series = p.metrics(t["id"])[-40:]
         keys = [k for k in (t.get("last") or {}) if isinstance(t["last"][k], (int, float))]
         t["eta"] = eta(p, t)
         t["spark"] = {"key": keys[0], "y": [s.get(keys[0]) for s in series if isinstance(s.get(keys[0]), (int, float))]} if keys else None
     return dict(config=p.config, now=time.time(), champion=champ, datasets=p.datasets(), slices=slices,
-                hills=p.hills(), models=models, papers=papers.papers(p), gates=gates, tasks=[_slim(t) for t in tasks], leaderboard=board,
+                hills=p.hills(), models={k: m | {f: readable(m[f]) for f in ("change", "reason") if isinstance(m.get(f), str)} for k, m in models.items()}, papers=papers.papers(p), gates=gates, tasks=[_slim(t) for t in tasks], leaderboard=board,
                 goals=goals(p),
                 baseline=p.baseline_plan(champ) if champ else None,
                 decisions=_tail(p.dir / "decisions.jsonl", 50))
@@ -174,7 +178,9 @@ def task_detail(p: Project, tid: str) -> dict:
     infer_parents(tasks)
     t = next((x for x in tasks if x["id"] == tid), None) or p.task(tid)
     t["eta"] = eta(p, t)
-    out = dict(task=t, metrics=_downsample(p.metrics(tid)), events=p.events(tid)[-300:])
+    if t.get("description"):
+        t["description"] = readable(t["description"])
+    out = dict(task=t, metrics=_downsample(p.metrics(tid)), events=[e | {"text": readable(e.get("msg"))} for e in p.events(tid)[-300:]])
     if t.get("kind") == "eval":
         rows = p.rows(tid)
         out["rows"] = [dict(id=r["id"], score=r.get("score"), error=bool(r.get("error")), latency_s=r.get("latency_s"), cost=r.get("cost")) for r in rows]
@@ -277,7 +283,11 @@ def serve(port: int = 8890, root=None):
                 if path.rstrip("/") == "/papers":  # the list of papers is a dashboard view
                     self.send_response(302); self.send_header("Location", base + "/#papers"); self.end_headers(); return
                 if path in ("/", "/index.html"):
-                    return self._send(200, HTML.read_bytes(), "text/html; charset=utf-8")
+                    return self._send(200, (WEB / "index.html").read_bytes(), TYPES[".html"])
+                if not path.startswith(("/api/", "/papers")):
+                    f = (WEB / unquote(path).lstrip("/")).resolve()
+                    if f.is_file() and f.suffix in TYPES and WEB.resolve() in f.parents:
+                        return self._send(200, f.read_bytes(), TYPES[f.suffix])
                 if path == "/api/state":
                     return self._send(200, json.dumps(state(p), default=str).encode(), "application/json")
                 if path.startswith("/api/task/"):
@@ -327,6 +337,7 @@ def serve(port: int = 8890, root=None):
                 return self._send(404, b'{"error":"not found"}', "application/json")
             self._send(404, b"not found", "text/plain")
 
+    ThreadingHTTPServer.request_queue_size = 64  # the page loads ~20 files at once; the default backlog of 5 drops some
     srv = None
     for port_try in range(port, port + 20):
         try:

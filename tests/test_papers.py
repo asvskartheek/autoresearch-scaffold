@@ -135,7 +135,7 @@ class Check(unittest.TestCase):
         self.assertTrue(any("words of prose" in m for m in errs), errs)
 
     def test_free_structure_passes(self):  # no fixed sections: any shape that meets the non-negotiables
-        free = ('<style>:root[data-theme="dark"]{} body{font-family:"Instrument Sans"}</style>'
+        free = ('<style>:root[data-theme="dark"]{} body{font-family:"IBM Plex Sans"}</style>'
                 '<section data-block="sim"><p data-block="c">Step the agent; slice full, n = 40, 31/40 right.</p>'
                 '<figure data-block="f"><svg></svg></figure><input type="range"></section>'
                 '<section data-block="remember"><div class="quiz">Why?</div></section>')
