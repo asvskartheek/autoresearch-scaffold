@@ -370,7 +370,8 @@ def _build(p, model, vs):
         for (mm, ss), runs in ix.runs.items():
             if ss == sl:
                 sc = ix.pooled(mm, ss)
-                field.append([mm, _r(sum(sc.values()) / len(sc) if sc else None), (models.get(mm) or {}).get("status")])
+                field.append([mm, _r(sum(sc.values()) / len(sc) if sc else None), (models.get(mm) or {}).get("status"),
+                              [t["id"] for t in runs]])
         ids = [str(i) for i in meta.get("ids", [])]
         cells = None
         if ids and budget >= len(ids):
@@ -380,11 +381,13 @@ def _build(p, model, vs):
             slice=sl, kind=meta.get("kind"), n=meta.get("n"), hash=meta.get("hash"), scale=scale, unit=meta.get("unit"),
             metric=meta.get("metric"), description=_txt(meta.get("description")), url=meta.get("url"), hill=meta.get("hill"),
             roles=roles.get(sl, []), runs=len(ix.runs[(model, sl)]), task=last["id"], ended=last.get("ended"),
+            run_ids=[t["id"] for t in ix.runs[(model, sl)]],
             score=_r(sum(pm.values()) / len(pm) if pm else None), scored=len(pm),
             right=round(sum(pm.values())) if scale == "binary" else None,
             errors=summ.get("errors"), cost=_r(summ.get("cost")), cost_total=_r(summ.get("cost_total")),
             latency_p50=_r(summ.get("latency_p50")), latency_p95=_r(summ.get("latency_p95")),
             base=dict(task=(ix.latest(base, sl) or {}).get("id"), runs=len(ix.runs.get((base, sl), [])),
+                      run_ids=[t["id"] for t in ix.runs.get((base, sl), [])],
                       cost=_r(bsum.get("cost")), latency_p50=_r(bsum.get("latency_p50")),
                       latency_p95=_r(bsum.get("latency_p95"))) if bm else None,
             vs=_paired(ix, model, base, sl, sign), field=sorted(field, key=lambda f: -(f[1] or -1e18) * sign), ids=ids if cells else None,
@@ -479,11 +482,11 @@ def _build(p, model, vs):
 
     # reproduce: the spec on the model record, the runs behind every number, the commands
     runs = []
-    for r in results:
-        t = ix.latest(model, r["slice"])
-        runs.append(dict(slice=r["slice"], hash=r["hash"], task=t["id"], command=str(t.get("command") or "")[:400],
-                         config=_flat(t.get("config")) if isinstance(t.get("config"), dict) else [],
-                         ended=t.get("ended"), url=r["url"]))
+    for r in results:  # every complete run pooled into a number on this page, not only the latest
+        for t in ix.runs[(model, r["slice"])]:
+            runs.append(dict(slice=r["slice"], hash=r["hash"], task=t["id"], command=clean_note(str(t.get("command") or ""), 400),
+                             config=_flat(t.get("config")) if isinstance(t.get("config"), dict) else [],
+                             ended=t.get("ended"), url=r["url"]))
     spec = _flat({k: v for k, v in me.items() if k not in CORE_FIELDS})
 
     goal_list = []

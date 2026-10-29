@@ -283,7 +283,8 @@ const stPill = s => `<span class="st ${esc(s || "")}">${esc(s || "—")}</span>`
 /* ---------------- evidence registry ---------------- */
 const EV = {}; let evN = 0;
 function ev(v, o) { const k = "e" + (++evN); EV[k] = { v, ...o }; return `<button class="ev" data-ev="${k}">${esc(v)}</button>`; }
-const evRes = (r, label, note) => ({ label: label || `${mnt(CH)} on ${r.slice}`, slice: r.slice, hash: r.hash, n: r.n, runs: [r.task, r.base?.task], src: `${r.runs} complete run${r.runs === 1 ? "" : "s"} pooled per id` + (r.base ? `, ${mnt(PV)}: ${r.base.runs}` : ""), note });
+const runIds = r => [...(r.run_ids || [r.task]), ...(r.base ? r.base.run_ids || [r.base.task] : [])];
+const evRes = (r, label, note) => ({ label: label || `${mnt(CH)} on ${r.slice}`, slice: r.slice, hash: r.hash, n: r.n, runs: runIds(r), src: `${r.runs} complete run${r.runs === 1 ? "" : "s"} pooled per id` + (r.base ? `, ${mnt(PV)}: ${r.base.runs}` : ""), note });
 const evPair = (r, p) => evRes(r, `Paired delta vs ${mnt(PV)} on ${r.slice}`, p ? `delta ${dl(p.delta, r)}, 90% CI ${ciTxt(p, r)}, n ${N0(p.n)} shared ids, ${p.wins} better, ${p.losses} worse` : null);
 
 /* ---------------- shell ---------------- */
@@ -462,7 +463,7 @@ section("gates", () => {
   const rungs = L.map((rg, i) => {
     const checks = rg.checks.map(c => {
       const r = RS[c.slice] || { slice: c.slice, scale: "binary", n: c.n };
-      const e = { label: `${rg.rung} · ${c.slice}`, slice: c.slice, n: c.n, src: `ladder rule ${c.ref}`, note: c.delta != null ? `${rule(c)} · observed ${dl(c.delta, r)} · CI ${ciTxt(c, r)} · ${c.wins} better / ${c.losses} worse` : stateTxt[c.state] || c.state, runs: [RS[c.slice]?.task, RS[c.slice]?.base?.task] };
+      const e = { label: `${rg.rung} · ${c.slice}`, slice: c.slice, n: c.n, src: `ladder rule ${c.ref}`, note: c.delta != null ? `${rule(c)} · observed ${dl(c.delta, r)} · CI ${ciTxt(c, r)} · ${c.wins} better / ${c.losses} worse` : stateTxt[c.state] || c.state, runs: RS[c.slice] ? runIds(RS[c.slice]) : [] };
       return `<div class="chk"><div class="rl">${esc(short(c.slice))} · ${rule(c)}</div>
       <div class="ob">${c.delta != null ? `${isBin(r) && c.cand != null ? ev(N0(c.cand * c.n) + " vs " + N0(c.base * c.n), e) + " · " : ""}<b class="${c.state === "pass" ? "pos" : "neg"}">${ev(dl(c.delta, r), e)}</b> ${c.state === "pass" ? '<span class="pos">✓</span>' : '<span class="neg">✗</span>'}${c.noisy ? ' <span class="warn">noisy</span>' : ""}` : `<span class="warn">${esc(stateTxt[c.state] || c.state)}</span>`}</div>${mini(c)}</div>`;
     }).join("") || `<div class="chk"><div class="ob faint">no slice to check</div></div>`;
@@ -509,7 +510,7 @@ section("flips", () => {
       tip.style.display = "block"; tip.style.left = Math.min(e.clientX + 12, innerWidth - 240) + "px"; tip.style.top = e.clientY + 14 + "px"; });
     g.addEventListener("mouseleave", () => tip.style.display = "none");
     g.addEventListener("click", e => { const el = e.target.closest("rect[data-i]"); if (!el) return; const c = CELLS[+el.dataset.i], r = RS[cur];
-      openPop(el, { v: labs(r)[c.o], label: "Example " + c.id, slice: r.slice, hash: r.hash, n: r.n, runs: [r.task, r.base?.task], src: "rows.jsonl, mean per id", note: `this ${c.c == null ? "—" : num(c.c, 3)} over ${r.runs} runs · before ${c.b == null ? "—" : num(c.b, 3)}` }); });
+      openPop(el, { v: labs(r)[c.o], label: "Example " + c.id, slice: r.slice, hash: r.hash, n: r.n, runs: runIds(r), src: "rows.jsonl, mean per id", note: `this ${c.c == null ? "—" : num(c.c, 3)} over ${r.runs} runs · before ${c.b == null ? "—" : num(c.b, 3)}` }); });
     let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(draw, 150); });
   });
   return `<div class="ctl"><div class="seg" id="fmode">${can.slice(0, 12).map((r, i) => `<button class="${i ? "" : "on"}" data-m="${esc(r.slice)}">${esc(short(r.slice))} · ${N0(r.n)}</button>`).join("")}</div></div>
@@ -541,7 +542,7 @@ section("failures", () => {
     ${h.examples.map(x => `<div class="exm">${x.input ? `<div class="q">${esc(x.input)}</div>` : ""}${x.wrong ? `<div class="row"><span class="neg">wrong</span><code>${esc(x.wrong)}</code></div>` : ""}${x.right ? `<div class="row"><span class="pos">right</span><code>${esc(x.right)}</code></div>` : ""}${x.why ? `<div class="why">${esc(x.why)}</div>` : ""}</div>`).join("")}</div>`;
   };
   const still = MAIN && MAIN.cells && isBin(MAIN) ? MAIN.ids.map((id, i) => ({ id, c: MAIN.cells.m[i], b: MAIN.cells.b?.[i] })).filter(x => x.c != null && x.c < .5).sort((a, b) => a.c - b.c) : [];
-  setTimeout(() => { const ic = $("#still"); if (ic) ic.onclick = e => { const b = e.target.closest("button"); if (!b) return; const x = still[+b.dataset.i]; openPop(b, { v: "wrong", label: "Example " + x.id, slice: MAIN.slice, hash: MAIN.hash, n: MAIN.n, runs: [MAIN.task], src: "rows.jsonl, mean per id", note: `this right in ${Math.round(x.c * MAIN.runs)} of ${MAIN.runs} runs · before ${x.b == null ? "—" : x.b >= .5 ? "right" : "wrong"}` }); }; });
+  setTimeout(() => { const ic = $("#still"); if (ic) ic.onclick = e => { const b = e.target.closest("button"); if (!b) return; const x = still[+b.dataset.i]; openPop(b, { v: "wrong", label: "Example " + x.id, slice: MAIN.slice, hash: MAIN.hash, n: MAIN.n, runs: MAIN.run_ids || [MAIN.task], src: "rows.jsonl, mean per id", note: `this right in ${Math.round(x.c * MAIN.runs)} of ${MAIN.runs} runs · before ${x.b == null ? "—" : x.b >= .5 ? "right" : "wrong"}` }); }; });
   const first = G.slice(0, 9), rest = G.slice(9);
   return `${bar}<div class="hills">${first.map(card).join("")}</div>${rest.length ? `<details class="noprint-open"><summary class="more-btn" style="display:inline-block;cursor:pointer">${rest.length} more hills</summary><div class="hills" style="margin-top:12px">${rest.map(card).join("")}</div></details>` : ""}
   ${still.length ? `<h3>still wrong on ${esc(short(MAIN.slice))} · ${N0(still.length)} of ${N0(MAIN.n)}${MAIN.runs > 1 ? ` · right in k of ${MAIN.runs} runs` : ""}</h3><div class="idchips" id="still">${still.slice(0, 240).map((x, i) => `<button data-i="${i}">${esc(String(x.id).slice(0, 10))}${MAIN.runs > 1 ? " · " + Math.round(x.c * MAIN.runs) + "/" + MAIN.runs : ""}${x.b >= .5 ? " · was right" : ""}</button>`).join("")}${still.length > 240 ? `<span class="faint">+${still.length - 240}</span>` : ""}</div>` : ""}`;
@@ -647,9 +648,9 @@ function openPop(anchor, e) {
   if (!e) return;
   $$(".ev.open").forEach(x => x.classList.remove("open")); anchor.classList?.add("open"); popFor = anchor;
   const rows = [["slice", e.slice], ["hash", e.hash], ["n", e.n != null ? N0(e.n) : null], ["source", e.src], ["detail", e.note]].filter(r => r[1] != null && r[1] !== "");
-  const runs = (e.runs || []).filter(Boolean);
+  const runs = [...new Set((e.runs || []).filter(Boolean))];
   pop.innerHTML = `<button class="x" aria-label="Close">×</button><div class="pv">${esc(e.v)}</div><div class="pl">${esc(e.label || "")}</div>
-  <dl class="f">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}${runs.length ? `<dt>runs</dt><dd>${runs.map(id => SNAP ? `<div>${esc(id)}</div>` : `<div><a href="${BASE}/#task/${enc(id)}" target="_top">${esc(id)}</a></div>`).join("")}</dd>` : ""}</dl>
+  <dl class="f">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}${runs.length ? `<dt>runs · ${runs.length}</dt><dd style="max-height:9.5em;overflow:auto">${runs.map(id => SNAP ? `<div>${esc(id)}</div>` : `<div><a href="${BASE}/#task/${enc(id)}" target="_top">${esc(id)}</a></div>`).join("")}</dd>` : ""}</dl>
   <div class="pa"><button class="tb" id="pCopy">Copy evidence</button></div>`;
   pop.classList.add("show");
   const r = anchor.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
