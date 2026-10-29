@@ -79,7 +79,7 @@ function rowValue(t){
 const smoothLast=(pts,w)=>{const s=XC.ema(pts,w);return s.length?s[s.length-1][1]:null};
 // one panel: label, the big number, a live chart
 function pn(t,p,lead){
- const grp=`wb-${t.id}`+(p.x?'-'+p.x:''),pts=p.series?.[0]?.pts||[];
+ const grp=`wb-${t.id}`+(p.x?'-'+p.x:''),ser=p.series?.[0]?.pts||[];
  const sm=p.smooth===true,w=XC.g(grp,{w:.6}).w;
  let big='',sub='',lb=p.title,extra='';
  const f=p.fmt,quiet=t.health?.silent_s??(t.status==='stalled'?now()-t.heartbeat:0);
@@ -93,7 +93,7 @@ function pn(t,p,lead){
  else if(p.id==='rate'){big=`${p.value<10?p.value.toFixed(1):n0(p.value)}<small>a minute</small>`}
  else if(t.kind==='eval'&&p.id==='main'){const b=p.band?.at(-1),n=p.n;
   big=f==='pct'?`${n0(p.value*n)} of ${n0(n)}<small>${pct(p.value)}${b?` · 90% CI ${(100*b[1]).toFixed(1)}–${(100*b[2]).toFixed(1)}`:''}</small>`:`${val(f,p.value)}<small>over ${n0(n)}</small>`}
- else{lb=wbMetric(p.key||p.title);const v=sm?smoothLast(pts,w):p.value;big=`${val(f,v)}${sm&&pts.length?`<small>raw ${val(f,p.value)}</small>`:''}`;sub=pts.length?`step ${n0(pts.at(-1)[0])}`:''}
+ else{lb=wbMetric(p.key||p.title);const v=sm?smoothLast(ser,w):p.value;big=`${val(f,v)}${sm&&ser.length?`<small>raw ${val(f,p.value)}</small>`:''}`;sub=ser.length?`step ${n0(ser.at(-1)[0])}`:''}
  const ch=XC.box(`wb-${t.id}-${p.id}`,{group:grp,mode:'mini',h:lead?150:52,yfmt:p.yfmt||f,xfmt:p.x==='clock'?'clock':p.x==='time'?'time':'num',
   domain:p.domain||null,ymin:p.ymin,ymax:p.ymax,yfix:p.yfix,zero:p.zero,band:p.band,ref:p.ref,smooth:sm,logOk:false,
   series:(p.series||[]).map((s,i)=>({name:s.name,pts:s.pts,faint:s.faint,color:p.id==='gpu'||p.id==='sec'?'var(--chart-2)':s.faint?'var(--chart-3)':'var(--chart-1)'}))});
