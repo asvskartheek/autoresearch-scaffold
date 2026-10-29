@@ -300,7 +300,7 @@ VIEWS.task=(id)=>{
  const pr=t.progress||{};
  if(live&&pr.total)h+=`<div class="tk-prog">${meter(pr.done/pr.total,{cls:t.status==='stalled'?'muted':''})}</div>`;
  if(!d)return h+`<div class="section">${panel('Log','<div class="skel" style="height:96px"></div>')}</div>`+`<div class="section">${panel('Details','<div class="skel" style="height:160px"></div>')}</div>`;
- h+=vsChamp(d.vs_champion,t)+etaCard(t)+curves(t,d)+examples(d.rows)+log(t,d)+subTasks(t)+details(t,d);
+ h+=vsChamp(d.vs_champion,t)+etaCard(t)+curves(t,d)+(d.snapshot_cut&&t.kind==='eval'?empty('Per-example rows are not in this snapshot','The live dashboard has them'):examples(d.rows))+log(t,d)+subTasks(t)+details(t,d);
  return h;
 };
 }
