@@ -225,6 +225,44 @@ def _ladder(p, ix, model, base, sign):
     return rungs
 
 
+def _promotion(p, ix, model):
+    """The gate a model was promoted on, from its promote decision: the same checks and numbers the model page shows.
+    A record written before run counts were kept gets them back from the runs that had ended by then."""
+    rec = None
+    f = p.dir / "decisions.jsonl"
+    if not f.exists():
+        return None
+    for line in f.read_text().splitlines():
+        if '"promote"' not in line:
+            continue
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        if d.get("kind") == "promote" and d.get("model") == model and isinstance(d.get("gate"), dict):
+            rec = d
+    if not rec:
+        return None
+    t, old = rec.get("t") or 0, rec.get("replaced")
+    upto = lambda m, sl: sum(1 for r in ix.runs.get((m, sl), []) if (r.get("ended") or 0) <= t) or None
+    rungs = []
+    for rg in rec["gate"].get("rungs") or []:
+        if not isinstance(rg, dict):
+            continue
+        checks = []
+        for c in rg.get("checks") or []:
+            if not isinstance(c, dict):
+                continue
+            c = {k: v for k, v in c.items() if k not in ("trace",)}
+            if c.get("delta") is not None:
+                c.setdefault("cand_runs", upto(model, c.get("slice")))
+                c.setdefault("base_runs", upto(old, c.get("slice")))
+            c.setdefault("ref", c.get("slice"))
+            checks.append({k: _r(v) for k, v in c.items()})
+        rungs.append(dict(rung=rg.get("rung"), status=rg.get("status"), checks=checks))
+    return dict(t=t, replaced=old, rungs=rungs)
+
+
 def _flat(d, pre="", out=None, depth=0):
     out = [] if out is None else out
     for k, v in (d or {}).items():
@@ -383,7 +421,7 @@ def _build(p, model, vs):
             roles=roles.get(sl, []), runs=len(ix.runs[(model, sl)]), task=last["id"], ended=last.get("ended"),
             run_ids=[t["id"] for t in ix.runs[(model, sl)]],
             score=_r(sum(pm.values()) / len(pm) if pm else None), scored=len(pm),
-            right=round(sum(pm.values())) if scale == "binary" else None,
+            right=round(sum(pm.values()), 1) if scale == "binary" else None,  # 96.6 of 100 when runs are pooled
             errors=summ.get("errors"), cost=_r(summ.get("cost")), cost_total=_r(summ.get("cost_total")),
             latency_p50=_r(summ.get("latency_p50")), latency_p95=_r(summ.get("latency_p95")),
             base=dict(task=(ix.latest(base, sl) or {}).get("id"), runs=len(ix.runs.get((base, sl), [])),
@@ -430,6 +468,13 @@ def _build(p, model, vs):
     gallery.sort(key=lambda g: (not g["mine"], g["status"] not in ("climbed", "open"), g["name"]))
 
     ladder = _ladder(p, ix, model, base, sign)
+    promotion = _promotion(p, ix, model)
+    if promotion:  # a promoted model's ladder is the evidence it was promoted on, as the model page shows it
+        ladder = promotion["rungs"]
+        for r in results:
+            c = next((c for rg in ladder for c in rg["checks"] if c.get("slice") == r["slice"] and c.get("delta") is not None), None)
+            if c and promotion["replaced"] == base:
+                r["at_promotion"] = {k: c.get(k) for k in ("delta", "lo", "hi", "cand", "base", "n", "cand_runs", "base_runs")}
     plan = p.baseline_plan(model)
 
     # what is unknown or not run
@@ -512,6 +557,7 @@ def _build(p, model, vs):
         champion=champ, base=base, base_title=_txt((models.get(base) or {}).get("title")) if base else None,
         main=main, goals=goal_list, results=results, lineage=lineage, children=children, ladder=ladder,
         gallery=gallery, unknown=uniq, decisions=decisions, runs=runs, spec=spec,
+        promotion=dict(t=promotion["t"], replaced=promotion["replaced"]) if promotion else None,
         base_spec=_flat({k: v for k, v in models[base].items() if k not in CORE_FIELDS}) if base in models else [],
         baseline=dict(have=list(plan["have"]), need=plan["need"],
                       meta={sl: dict(kind=ix.slices[sl].get("kind"), n=ix.slices[sl].get("n"), hash=ix.slices[sl].get("hash"),

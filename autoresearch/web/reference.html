@@ -302,10 +302,12 @@ const unit = r => r?.unit ? " " + r.unit : "";
 // stored negated (higher is better) and reads as the plain amount
 const negR = r => /^\s*minus\b/i.test(r?.metric || "");
 const grp = x => Math.abs(x) >= 100 ? fmt.format(Math.round(x)) : (+x.toPrecision(3)).toLocaleString("en-US");
-const sc = (v, r) => v == null ? "—" : isBin(r) ? (r?.n ? `${N0(v * r.n)} of ${N0(r.n)}` : pct(v)) : grp(negR(r) ? -v : v) + unit(r);
+// a count pooled over several runs keeps its fraction (96.6 of 100), so the count and its percent never disagree
+const NC = x => x == null ? "—" : Math.abs(x - Math.round(x)) < 0.05 ? N0(x) : (Math.round(x * 10) / 10).toLocaleString("en-US", { minimumFractionDigits: 1 });
+const sc = (v, r) => v == null ? "—" : isBin(r) ? (r?.n ? `${NC(v * r.n)} of ${N0(r.n)}` : pct(v)) : grp(negR(r) ? -v : v) + unit(r);
 const sdc = (x, r) => (x > 0 ? "+" : x < 0 ? "−" : "") + grp(Math.abs(x)) + unit(r);
 const dl = (v, r) => v == null ? "—" : isBin(r) ? pts(v) + " pts" : sdc(negR(r) ? -v : v, r);
-const cnt = (v, r) => v == null ? "—" : isBin(r) ? N0(v * r.n) : num(v);
+const cnt = (v, r) => v == null ? "—" : isBin(r) ? NC(v * r.n) : num(v);
 const short = s => { const p = String(s || "").split("/"); return p.length > 1 && p[0] === D.project.primary_dataset ? p.slice(1).join("/") : String(s || ""); };
 const ciTxt = (p, r) => p && p.lo != null ? (isBin(r) ? `[${pts(p.lo)}, ${pts(p.hi)}]` : negR(r) ? `[${sdc(-p.hi, r)}, ${sdc(-p.lo, r)}]` : `[${sdc(p.lo, r)}, ${sdc(p.hi, r)}]`) : "—";
 const runsTxt = r => `${r.runs} run${r.runs === 1 ? "" : "s"}`;
@@ -410,7 +412,7 @@ section("claim", () => {
   const cost = r.cost != null ? `${ev("$" + num(r.cost, 3), evRes(r, "Cost per example on " + r.slice))} per example${r.base?.cost != null ? " vs $" + num(r.base.cost, 3) + ratio(r.cost, r.base.cost, "the cost", "cheaper") : ""}` : "";
   return `<div class="fig">${s}</div>
   <dl class="f">
-    <dt>result</dt><dd>${bin ? ev(N0(r.right) + " / " + N0(r.n), evRes(r)) + ` right (${pct(r.score)})` : ev(sc(r.score, r), evRes(r))} on ${esc(r.slice)} · ${runsTxt(r)}</dd>
+    <dt>result</dt><dd>${bin ? ev(NC(r.right) + " / " + N0(r.n), evRes(r)) + ` right (${pct(r.score)})` : ev(sc(r.score, r), evRes(r))} on ${esc(r.slice)} · ${runsTxt(r)}</dd>
     ${p ? `<dt>vs before</dt><dd>${ev(dl(p.delta, r), evPair(r, p))} paired, 90% CI ${ev(ciTxt(p, r), evPair(r, p))}${p.noisy ? ' <span class="warn">noisy</span>' : ""}, same ${N0(p.n)} ids</dd>
     <dt>churn</dt><dd><span class="pos">${ev(p.wins + " fixed", evPair(r, p))}</span> · <span class="neg">${ev(p.losses + " broken", evPair(r, p))}</span> · net ${sgn(p.wins - p.losses, 0)}</dd>` : `<dt>vs before</dt><dd class="warn">${PV ? mn(PV) + " has no run on this slice" : "no comparator in the ledger"}</dd>`}
     ${g ? `<dt>goal</dt><dd>${esc(g.title || g.name)}: ${g.met ? '<span class="pos">met</span>' : g.need != null && g.have != null ? ev(N0(g.need - g.have) + " more", { label: "Distance to goal " + g.name, slice: g.slice, n: g.n, runs: [g.task], src: ".research/goals.json › " + g.name, note: `target ${g.target} → ${N0(g.need)} of ${N0(g.n)}; now ${N0(g.have)}` }) + ` of ${N0(g.n)} to reach ${N0(g.need)}` : "target " + g.target}</dd>` : ""}
@@ -486,6 +488,13 @@ section("data", () => {
 });
 
 /* ================= 04 results ================= */
+// the gate this model was promoted on pooled fewer runs than today: say what it read then, so one comparison never
+// shows two unexplained numbers
+function atProm(r) {
+  const a = r.at_promotion, p = r.vs;
+  if (!a || !p || Math.abs(a.delta - p.delta) < 5e-4) return "";
+  return `<div class="faint" style="font-size:11.5px" title="The promotion gate (${dt(D.promotion.t)}) pooled ${a.cand_runs ?? "?"} vs ${a.base_runs ?? "?"} runs">at promotion ${isBin(r) ? cnt(a.cand, r) + ", " : ""}${dl(a.delta, r)}</div>`;
+}
 section("results", () => {
   if (!R.length) return `<div class="empty">No complete runs.</div>`;
   const bins = R.filter(r => isBin(r) && r.vs);
@@ -517,7 +526,7 @@ section("results", () => {
     <td class="n">${ev(isBin(r) ? cnt(r.score, r) : sc(r.score, r), evRes(r))} ${isBin(r) ? `<span class="faint hn">${pct(r.score)}</span>` : ""}</td>
     <td class="n hn">${p ? (isBin(r) ? cnt(p.base, r) + ` <span class="faint">${pct(p.base)}</span>` : sc(p.base, r)) : '<span class="faint">—</span>'}</td>
     <td class="n ${p ? (p.lo > 0 ? "pos" : p.hi < 0 ? "neg" : "") : ""}">${p ? ev(dl(p.delta, r), evPair(r, p)) : "—"}</td><td class="n">${p ? ev(ciTxt(p, r), evPair(r, p)) : "—"}</td>
-    <td class="n hn">${p ? `<span class="pos">${p.wins}</span> / <span class="neg">${p.losses}</span>` : "—"}</td><td class="n hn">${r.runs}${r.base ? " · " + r.base.runs : ""}</td><td class="hn">${strip(r)}</td></tr>`; }).join("")}
+    <td class="n hn">${p ? `<span class="pos">${p.wins}</span> / <span class="neg">${p.losses}</span>` : "—"}</td><td class="n hn">${r.runs}${r.base ? " · " + r.base.runs : ""}${atProm(r)}</td><td class="hn">${strip(r)}</td></tr>`; }).join("")}
   </tbody></table></div>
   <dl class="f" style="margin-top:12px"><dt>this</dt><dd>${mn(CH)}: mean per id over every complete run</dd><dt>before</dt><dd>${PV ? mn(PV) : "no comparator"}</dd><dt>CI</dt><dd>paired bootstrap over shared ids, 2,000 resamples, seed 0</dd><dt>errors</dt><dd>count as 0</dd></dl>`;
 });
@@ -537,15 +546,16 @@ section("gates", () => {
   const rungs = L.map((rg, i) => {
     const checks = rg.checks.map(c => {
       const r = RS[c.slice] || { slice: c.slice, scale: "binary", n: c.n };
-      const e = { label: `${rg.rung} · ${c.slice}`, slice: c.slice, n: c.n, src: `ladder rule ${c.ref}`, note: c.delta != null ? `${rule(c)} · observed ${dl(c.delta, r)} · CI ${ciTxt(c, r)} · ${c.wins} better / ${c.losses} worse` : stateTxt[c.state] || c.state, runs: RS[c.slice] ? runIds(RS[c.slice]) : [] };
+      const e = { label: `${rg.rung} · ${c.slice}`, slice: c.slice, n: c.n, src: `ladder rule ${c.ref}`, note: c.delta != null ? `${rule(c)} · observed ${dl(c.delta, r)} · CI ${ciTxt(c, r)} · ${c.wins} better / ${c.losses} worse${c.cand_runs ? ` · ${c.cand_runs} vs ${c.base_runs ?? "?"} runs pooled` : ""}` : stateTxt[c.state] || c.state, runs: [c.cand_task, c.base_task].filter(Boolean).length ? [c.cand_task, c.base_task].filter(Boolean) : RS[c.slice] ? runIds(RS[c.slice]) : [] };
       return `<div class="chk"><div class="rl">${esc(short(c.slice))} · ${rule(c)}</div>
-      <div class="ob">${c.delta != null ? `${isBin(r) && c.cand != null ? ev(N0(c.cand * c.n) + " vs " + N0(c.base * c.n), e) + " · " : ""}<b class="${c.state === "pass" ? "pos" : "neg"}">${ev(dl(c.delta, r), e)}</b> ${c.state === "pass" ? '<span class="pos">✓</span>' : '<span class="neg">✗</span>'}${c.noisy ? ' <span class="warn">noisy</span>' : ""}` : `<span class="warn">${esc(stateTxt[c.state] || c.state)}</span>`}</div>${mini(c)}</div>`;
+      <div class="ob">${c.delta != null ? `${isBin(r) && c.cand != null ? ev(NC(c.cand * c.n) + " vs " + NC(c.base * c.n), e) + " · " : ""}<b class="${c.state === "pass" ? "pos" : "neg"}">${ev(dl(c.delta, r), e)}</b> ${c.state === "pass" ? '<span class="pos">✓</span>' : '<span class="neg">✗</span>'}${c.noisy ? ' <span class="warn">noisy</span>' : ""}` : `<span class="warn">${esc(stateTxt[c.state] || c.state)}</span>`}</div>${mini(c)}</div>`;
     }).join("") || `<div class="chk"><div class="ob faint">no slice to check</div></div>`;
     const cls = rg.status === "pass" ? "champion" : rg.status === "fail" ? "rejected" : rg.status === "pending" ? "candidate" : "historical";
     return `<div class="rung"><div class="rh"><b>${i + 1} · ${esc(rg.rung)}</b><span class="st ${cls}">${esc(rg.status)}</span></div>${checks}</div>`;
   }).join("");
+  const vsL = D.promotion ? D.promotion.replaced : PV;
   return `<div class="ladder" style="--cols:${Math.min(4, L.length)}">${rungs}</div>
-  <div class="leg"><span><i style="background:var(--positive)"></i>observed Δ and 90% CI</span><span><i style="background:var(--negative);opacity:.35"></i>fails below the dashed threshold</span><span>vs ${(PV ? mn(PV) : "—")}</span></div>
+  <div class="leg"><span><i style="background:var(--positive)"></i>observed Δ and 90% CI</span><span><i style="background:var(--negative);opacity:.35"></i>fails below the dashed threshold</span><span>vs ${(vsL ? mn(vsL) : "—")}</span>${D.promotion ? `<span>as promoted ${dt(D.promotion.t)}</span>` : ""}</div>
   ${D.baseline.need.length ? `<div class="after"><div class="stp"><div class="k">baseline</div>${D.baseline.have.length} slices have runs of ${mn(CH)} · missing ${D.baseline.need.map(x => `<code>${esc(short(x))}</code>`).join(", ")}</div></div>` : ""}`;
 });
 
