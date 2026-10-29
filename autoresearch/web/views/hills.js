@@ -283,17 +283,33 @@ function hExpect(x){
   (bits.length?`<p class="hfound">${bits.join(' · ')}</p>`:'');
  return panel('Expected before running',body,{cls:'hexp'});
 }
-// what to run next: candidates on this hill with a rung still to run, each with its gate command
+// what to run next: every candidate on this hill with where its gate stands. Ready to promote, failed a rung,
+// waiting on a champion run, or the runs it still needs, each with the one command that moves it on
+function hState(m,o,g){
+ if(o.status==='planned')return {k:'planned',say:'planned, not on the ladder yet',cmd:`arx model add ${m}`};
+ if(!g||g.error)return {k:'none',say:g?.error?esc(g.error):'gate not read',cmd:`arx gate ${m}`};
+ if(g.promotable)return {k:'ready',say:'<span class="pos">ready to promote</span>',cmd:`arx promote ${m}`};
+ const fail=g.rungs.find(r=>r.status==='fail');
+ if(fail)return {k:'fail',say:`<span class="neg">failed ${esc(fail.rung)}</span>`,cmd:`arx reject ${m} --reason "failed ${fail.rung}"`};
+ if(!g.champion)return {k:'nochamp',say:'needs a champion first',cmd:`arx model add <name> --champion`};
+ const nx=g.next||[],ch=nx.filter(n=>n.model!==m),me=nx.filter(n=>n.model===m);
+ const sl=a=>a.map(n=>`<span class="mono" title="${esc(n.slice)}">${esc(short(n.slice))}</span>`).join(', ');
+ if(ch.length)return {k:'base',say:`waiting on a champion run on ${sl(ch)}`,cmd:`arx gate ${m}`};
+ if(me.length)return {k:'run',say:`needs ${sl(me)}`,cmd:`arx gate ${m}`};
+ return {k:'run',say:'nothing to run',cmd:`arx gate ${m}`};
+}
+const H_RANK={ready:0,run:1,base:2,nochamp:3,fail:4,planned:5,none:6};
 function hNext(x,key){
  const L=S.state,ch=L.champion;
  const cands=Object.entries(L.models).filter(([m,o])=>o.hill===key&&m!==ch&&(o.status==='candidate'||o.status==='planned'))
-  .map(([m,o])=>({m,o,next:L.gates?.[m]?.next||[]})).filter(c=>c.next.length).sort((a,b)=>(b.o.created||0)-(a.o.created||0));
+  .map(([m,o])=>({m,o,st:hState(m,o,L.gates?.[m])})).sort((a,b)=>H_RANK[a.st.k]-H_RANK[b.st.k]||(b.o.created||0)-(a.o.created||0));
  const now=(L.leaderboard[x.target]||{})[ch];
- const pre=ch&&!now?`<p class="hn-none">The champion has no run on <span class="mono">${esc(short(x.target))}</span> yet; every candidate’s dev rung is paired against one.</p>`:'';
+ const pre=ch&&!now?`<p class="hn-none">The champion has no run on <span class="mono">${esc(short(x.target))}</span> yet; every candidate’s dev rung is paired against one.</p>`
+  :!ch?`<p class="hn-none">No champion yet, so no candidate can be gated. Register a baseline as champion first.</p>`:'';
  let body;
  if(cands.length){
-  const cap=3,shown=cands.slice(0,cap);
-  body=pre+`<ul class="hnext">${shown.map(c=>`<li><div class="hn-top">${mLink(c.m)}<span class="sub">${c.o.status==='planned'?'planned, ':''}needs ${c.next.map(n=>`<span class="mono" title="${esc(n.slice)}">${esc(short(n.slice))}</span>`).join(', ')}</span></div>${cmd('arx gate '+c.m)}</li>`).join('')}</ul>${cands.length>cap?`<p class="hn-more">${plural(cands.length-cap,'more candidate')} with runs to do: see <a class="ln" href="#models">Models</a>.</p>`:''}`;
+  const cap=4,shown=cands.slice(0,cap);
+  body=pre+`<ul class="hnext">${shown.map(c=>`<li><div class="hn-top">${mLink(c.m)}<span class="sub">${c.st.say}</span></div>${cmd(c.st.cmd)}</li>`).join('')}</ul>${cands.length>cap?`<p class="hn-more">${plural(cands.length-cap,'more candidate')}: see <a class="ln" href="#models">Models</a>.</p>`:''}`;
  }else{
   body=pre+`<p class="hn-none">${x.status==='climbed'?'Nothing left to run on this hill.':'No candidate is climbing this hill. Register one from the champion:'}</p>${x.status==='climbed'?'':cmd(`arx model add <name> --parent ${ch||'<champion>'} --hill ${key} --change "…"`)}`;
  }
