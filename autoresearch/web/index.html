@@ -6,7 +6,9 @@
 <title>arx</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%231b6c80'/%3E%3Cpath d='M7 18V6M17 18V6M7 14h10M7 10h10' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>/* start the ledger reads before the stylesheets and scripts below; boot.js picks them up */try{window.ARX_PRE={state:fetch('api/state',{cache:'no-store'}),projects:fetch('/api/projects',{cache:'no-store'})}}catch(e){}</script>
+<!-- the web font never blocks the first paint: it swaps in when it lands -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'">
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="views/overview.css">
 <link rel="stylesheet" href="views/workbench.css">
