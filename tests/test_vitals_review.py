@@ -30,3 +30,12 @@ class Silence(unittest.TestCase):
         later = vitals.eta_track(b, 1000, now=270)
         self.assertGreater(later["finish_at"], quiet["finish_at"])
         self.assertAlmostEqual(later["silent_s"], 240)
+
+
+class Dead(unittest.TestCase):
+    def test_silent_over_a_day_is_dead_not_long(self):
+        n = time.time()
+        t = dict(status="stalled", heartbeat=n - 3 * 86400, created=n - 4 * 86400, kind="eval")
+        self.assertTrue(vitals.is_dead(t, n))
+        self.assertFalse(vitals.is_long(t, None, n, 3))
+        self.assertTrue(vitals.is_long(t | dict(heartbeat=n - 900), None, n, 3))

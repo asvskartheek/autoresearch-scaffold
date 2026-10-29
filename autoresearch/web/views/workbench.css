@@ -55,6 +55,14 @@
 .wb-pn .xc{margin-top:auto}
 .wb-mem{margin-top:6px}.wb-mem .meter{height:4px;background:var(--active)}.wb-mem .meter i{background:var(--chart-2)}
 
+/* abandoned jobs (stalled over a day): one line, opens to the list and one close command */
+.wb-dead summary{cursor:pointer;list-style:none;padding:11px 16px}.wb-dead summary::-webkit-details-marker{display:none}
+.wb-dn{flex:1 1 auto;min-width:0;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wb-dead .wb-fix{padding:0 16px 10px}
+.wb-dl{list-style:none;margin:0;padding:0 16px 12px;font-size:13px}
+.wb-dl li{display:flex;justify-content:space-between;gap:12px;padding:3px 0;border-top:1px solid var(--rule)}
+.wb-dl li span{color:var(--faint);white-space:nowrap}
+
 /* short job: one compact row */
 .wb-job.short .wb-hl{padding:11px 16px}
 .wb-job.short.stalled .wb-fix{padding:0 16px 12px}

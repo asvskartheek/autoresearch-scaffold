@@ -15,6 +15,7 @@ from . import features
 WIN_S = 300      # rate window for the ETA
 QUIET_S = 60     # silent this long: "quiet"
 LONG_S = 240     # a job expected to run this long gets a card with panels (trains and evals always); shorter ones are rows
+DEAD_S = 86400   # stalled longer than this: abandoned, one line in a group, no panels
 CAP = 160        # points per panel series
 Z = 1.645        # 90% intervals
 
@@ -249,7 +250,14 @@ def _eval_panels(p, t, st, ml, total):
     return out
 
 
+def is_dead(t: dict, now: float) -> bool:
+    """Stalled with no heartbeat for over a day: abandoned, not live work."""
+    return t.get("status") == "stalled" and now - (t.get("heartbeat") or t.get("updated") or now) > DEAD_S
+
+
 def is_long(t: dict, eta: dict | None, now: float, n_panels: int) -> bool:
+    if is_dead(t, now):
+        return False
     if t.get("status") == "stalled":
         return True
     el = now - t.get("created", now)
@@ -271,6 +279,9 @@ def _vitals(p, st):
             elif t.get("status") == "stalled":
                 t["eta"] = None
             t["health"] = health(t, t.get("eta") if e else None, now)
+            if is_dead(t, now):
+                t["dead"], t["long"], t["vitals"] = True, False, []
+                continue
             ps = panels(p, t, st, t.get("eta"))
             t["long"] = is_long(t, t.get("eta"), now, len(ps))
             t["vitals"] = ps

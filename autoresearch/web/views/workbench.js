@@ -110,8 +110,18 @@ function strip(){
   return `<a class="wb-chip" href="#task/${enc(t.id)}" title="${esc(t.title)}"><span class="${ok?'pos':'neg'}">${ok?'✓':'✕'}</span><span class="nm">${t.kind==='eval'&&t.model?mn(t.model):esc(t.title)}</span><span class="res">${esc(res)}</span><span class="at">${ago(t.ended)}</span></a>`}).join('')}</div>`;
 }
 
+// stalled for over a day: abandoned. One line for all of them, with one command that closes them all
+const isDead=t=>t.status==='stalled'&&(t.dead||now()-(t.heartbeat||t.created)>86400);
+function deadGroup(ds){
+ if(!ds.length)return '';
+ const sil=ds.map(t=>now()-(t.heartbeat||t.created)),lo=Math.min(...sil),hi=Math.max(...sil);
+ const c=`for t in ${ds.map(t=>t.id).join(' ')}; do arx task finish $t --status failed; done`;
+ return `<details class="wb-job short wb-dead"><summary class="wb-hl"><span class="wb-hp bad">${ds.length} abandoned</span><span class="wb-dn">${ds.map(t=>title(t)).join(', ')}</span><span class="wb-eta"><small>silent</small>${span(lo)}${hi-lo>3600?' – '+span(hi):''}</span></summary>
+ <div class="wb-fix">${cmd(c)}</div><ul class="wb-dl">${ds.map(t=>`<li><a href="#task/${enc(t.id)}">${title(t)}</a><span>${span(now()-(t.heartbeat||t.created))}</span></li>`).join('')}</ul></details>`;
+}
+
 VIEWS.workbench=()=>{
- const all=jobs();
+ const every=jobs(),dead=every.filter(isDead),all=every.filter(t=>!isDead(t));
  const stalled=all.filter(t=>t.status==='stalled').sort((a,b)=>a.heartbeat-b.heartbeat);
  const run=all.filter(t=>t.status==='running').sort((a,b)=>a.created-b.created);  // arrival order: calm, no reshuffling
  const long=run.filter(t=>t.long),shortJ=run.filter(t=>!t.long);
@@ -120,7 +130,8 @@ VIEWS.workbench=()=>{
  if(stalled.length)parts.push(`<b class="neg">${stalled.length} stalled</b>`);
  if(run.length)parts.push(`<b>${run.length} running</b>`+(last?`, ${ends.length<run.length?`${ends.length} with an estimate `:'all '}done by <b>${wbClock(last)}</b>`:''));
  const h=page({title:'Workbench',crumbs:[['Workbench','#workbench']],finding:parts.length?parts.join(' · '):'Nothing running.'});
- const list=[...stalled.map(t=>t.long?card(t):row(t)),...long.map(card),...shortJ.map(row)];
+ if(dead.length)parts.push(`${dead.length} abandoned`);
+ const list=[...stalled.map(t=>t.long?card(t):row(t)),...long.map(card),...shortJ.map(row),deadGroup(dead)].filter(Boolean);
  return h+strip()+(list.length?`<div class="wb-jobs section">${list.join('')}</div>`:`<section class="section">${panel('',empty('Nothing running','Start one with <code>arx task start --title …</code> or <code>arx.task(...)</code> in Python.'))}</section>`);
 };
 }
