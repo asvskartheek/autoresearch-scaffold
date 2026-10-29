@@ -14,6 +14,7 @@ from __future__ import annotations
 import importlib
 import json
 import os
+import shlex
 import time
 import uuid
 
@@ -97,4 +98,4 @@ def model_label(p, name: str | None) -> str:
 
 def agent_cmd() -> list[str]:
     """The headless agent each inbox item gets. Override with ARX_AGENT_CMD, e.g. "claude -p --model claude-sonnet-5-5"."""
-    return (os.environ.get("ARX_AGENT_CMD") or "claude -p --permission-mode acceptEdits").split()
+    return shlex.split(os.environ.get("ARX_AGENT_CMD") or "claude -p --permission-mode acceptEdits")

@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import shlex
+import shutil
 import signal
 import subprocess
 import sys
@@ -288,6 +289,7 @@ def main(p: Project, jobs: int = 4, budget_s: float = 900, once: bool = False, i
     finally:
         for th, _ in running.values():
             th.join(timeout=1)
+        shutil.rmtree(shim, ignore_errors=True)
         if (_read(_lock(p), {}) or {}).get("pid") == os.getpid():
             _lock(p).unlink(missing_ok=True)
 
