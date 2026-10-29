@@ -111,6 +111,7 @@ def cmd_up(a):
     root = Project().root
     key = register(root)
     url = _up(root, a.port, a.restart)
+    from .answer import spawn; spawn(root)  # agents answer comments and inbox items
     print(f"{url}\n{url}/p/{key}/  (this project; every registered project is listed in the sidebar)")
 
 
