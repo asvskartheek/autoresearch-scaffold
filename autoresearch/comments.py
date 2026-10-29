@@ -341,15 +341,17 @@ def _where(rx, ry) -> str:
 
 
 def describe_anchor(a: dict) -> list[str]:
-    """What the comment points at, in words an agent can act on: the element under an arrow's tip or inside a box,
-    the highlighted text, and the card it sits in."""
+    """What the comment points at, in words an agent can act on: the picked element (its kind and text), the element
+    under an arrow's tip or inside a box, the highlighted text, and the card it sits in."""
     out = [f"View: #{a.get('route') or 'overview'} (the dashboard route; e.g. #model/v3 is model v3's page)"]
     s = a.get("shape") if isinstance(a.get("shape"), dict) else {}
     tool, text, what = s.get("tool"), a.get("text"), a.get("what")
     if what and text == what.split(".")[0]:
         text = None  # an element with no text of its own (a bar, a tick): its tag and the card it sits in say more
     el = f"\"{text}\"" + (f" (element {what})" if what else "") if text else (f"element {what}" if what else "the page")
-    if tool == "arrow" and s.get("mode") == "tip":
+    if not tool and what and "." not in what and not a.get("quote"):  # picked with the element picker: what = its kind
+        out.append(f"Picked element: the {what} " + (f"\"{text}\"" if text else "(no text of its own; the card around it is below)"))
+    elif tool == "arrow" and s.get("mode") == "tip":
         out.append(f"Drawn: an arrow pointing at {el}{_where(a.get('rx'), a.get('ry'))}")
         if a.get("from"):
             out.append(f"The arrow starts at: \"{a['from']}\"")
