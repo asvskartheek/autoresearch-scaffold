@@ -125,7 +125,7 @@ function ARXPICK(o){
   off(){on=false;cancelAnimationFrame(raf);cur=null;trail=[];box.remove();tag.remove()},
   active:()=>on,cur:()=>cur&&cur.isConnected?cur:null,
   point(x,y){if(!on)return;last={x,y};const el=leaf(x,y);if(!el){if(via==='pointer')set(null,'pointer');return}
-   if(cur&&cur.isConnected&&(cur===el||cur.contains(el)))return;  // still inside the grown pick: keep it
+   if(trail.length&&cur&&cur.isConnected&&(cur===el||cur.contains(el)))return;  // still inside a pick grown with ] or Alt+wheel: keep it
    trail=[];set(el,'pointer')},
   hide(){set(null,'pointer')},
   tap(x,y,touch){last={x,y};const el=leaf(x,y);if(!el)return;
@@ -233,8 +233,10 @@ const isPage=el=>!el||el===document.documentElement||el===document.body||el.id==
 
 /* ---------- mode, tools, keys */
 // the picker (ARXPICK above): a click or Enter anchors a comment to exactly the element it outlines
+// never the page itself: #main and everything around it (the sheet, the app frame) are panels, not things on the page
+const panel=el=>{const m=document.getElementById('main');return !!m&&el.contains(m)};
 const picker=ARXPICK({doc:()=>document,root:()=>document.body,exit:()=>setMode(false),pick:el=>pickEl(el),
- skip:el=>host.contains(el)||isPage(el)||el.id==='main'||el.closest?.('.pk-box,.pk-tag,.kh-ov,.kh-l')});
+ skip:el=>host.contains(el)||isPage(el)||panel(el)||el.closest?.('.pk-box,.pk-tag,.kh-ov,.kh-l')});
 function setTool(t,el){tool=t;tools.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.tool===t));
  layer.classList.toggle('pick',t==='pick');if(mode&&t==='pick')picker.on(el);else picker.off()}
 function setMode(on,el){mode=on;$c('.cm-mode').classList.toggle('on',on);tools.classList.toggle('on',on);layer.classList.toggle('on',on);
