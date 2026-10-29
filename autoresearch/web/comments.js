@@ -162,7 +162,9 @@ function finish(e){if(!draw||e.pointerId!==draw.id)return;e.preventDefault();e.s
   setMode(false);return}
  const B=bbox(d.pts,d.tool),at={x:(B.right+B.left)/2,y:Math.min(B.bottom,innerHeight-20)};
  let an,shape;
- if(d.tool==='arrow'){const el=under(b.x,b.y)[0]||null,tail=under(a.x,a.y)[0];
+ if(d.tool==='arrow'){  // the tip names the smallest element within 3 px of it (a tick, a bar end), not the card behind
+  const area=e=>{const q=e.getBoundingClientRect();return q.width*q.height};
+  const el=[[0,0],[0,-3],[0,3],[-3,0],[3,0]].map(([dx,dy])=>under(b.x+dx,b.y+dy)[0]).filter(Boolean).sort((x,y)=>area(x)-area(y))[0]||null,tail=under(a.x,a.y)[0];
   const r=el?el.getBoundingClientRect():{left:0,top:0,width:innerWidth,height:innerHeight};
   const tx=(b.x-r.left)/Math.max(1,r.width),ty=(b.y-r.top)/Math.max(1,r.height);
   shape={tool:'arrow',mode:'tip',d:shapePath('arrow',d.pts.map(p=>({x:p.x-b.x,y:p.y-b.y}))),tx:r1(tx*1e4)/1e4,ty:r1(ty*1e4)/1e4,
