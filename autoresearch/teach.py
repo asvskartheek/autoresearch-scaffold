@@ -60,6 +60,8 @@ def methods_for(c: dict) -> list[str]:
         return out  # a run that has not landed: only a prediction can wait for it
     if v.get("kind") == "ci":
         out.append("sketch")
+        if c.get("gate"):
+            return out  # the question is pass or fail: predict it, or sketch the result against the bar
         if v.get("unit") == "pts" and v.get("n"):
             # spot and code teach delta = (fixed - broken) / n: only where that is how this card's delta was made (one
             # 0/1 run per example). Pooled or fractional scores make it the mean difference, which the counts miss.
@@ -146,7 +148,7 @@ def task(c: dict, method: str) -> dict:
     v = c.get("viz") or {}
     if method == "sketch":
         if v.get("kind") == "ci":
-            return dict(kind="ci", **_ci_axis(c))
+            return dict(kind="ci", **_ci_axis(c), bar=v.get("bar") if c.get("gate") else None)
         rows = [dict(label=r.get("label"), tag=r.get("tag"), n=r.get("n"), unit=r.get("unit")) for r in _sketch_rows(v)]
         return dict(kind="bars", rows=rows, max=_bars_max(v))
     if method == "spot":
@@ -217,21 +219,23 @@ def grade(c: dict, method: str, ans) -> dict:
     """{hit, err, show}: show is what the reveal adds for this method (the right part, the needed n, the right line)."""
     v = c.get("viz") or {}
     if method == "sketch" and v.get("kind") == "ci":
-        d = _f((ans or {}).get("delta")) if isinstance(ans, dict) else None
-        if d is None:
-            return dict(hit=False, err=None, show={})
-        sides = (_f(ans.get("lo"), d) <= 0 <= _f(ans.get("hi"), d)) == (v["lo"] <= 0 <= v["hi"])
-        err = abs(d - v["delta"])
-        return dict(hit=err <= max(c.get("tol") or 1, (v["hi"] - v["lo"]) / 2) and sides, err=round(err, 3), show=dict(noise_right=sides))
+        return _grade_sketch_ci(c, v, ans)
     if method == "sketch":
         rows = _sketch_rows(v)
         got = ans.get("rows") if isinstance(ans, dict) else None
-        if not isinstance(got, list) or len(got) != len(rows):
+        if not isinstance(got, list) or len(got) != len(rows) or any(_f(g) is None for g in got):
             return dict(hit=False, err=None, show={})
+        got = [_f(g) for g in got]
         scale = max(abs(r["v"]) for r in rows) if any(r.get("unit") for r in rows) else 1
-        errs = [abs((_f(g, 0) - r["v"]) / (scale or 1)) for g, r in zip(got, rows)]
-        err = sum(errs) / len(errs)
-        return dict(hit=err <= 0.1, err=round(err, 3), show={})
+        err = sum(abs((g - r["v"]) / (scale or 1)) for g, r in zip(got, rows)) / len(rows)
+        if c.get("type") == "choice":  # which is highest: the sketch's tallest bar, alone at the top
+            top = max(got)
+            hit = got.count(top) == 1 and rows[got.index(top)].get("label") == c.get("truth")
+        else:  # how many does the champion get right: its own bar, within the card's band
+            i = next((k for k, r in enumerate(rows) if r.get("hl") == 2), 0)
+            n = rows[i].get("n")
+            hit = abs((got[i] * n if n and c.get("int") else got[i] * (100 if c.get("unit") == "%" else 1)) - c["truth"]) <= (c.get("tol") or 0) + 1e-9
+        return dict(hit=hit, err=round(err, 3), show={})
     if method == "spot":
         wrong = _spot_ci(c)[1]
         return dict(hit=str(ans) == wrong, err=None, show=dict(wrong=wrong))
@@ -251,6 +255,33 @@ def grade(c: dict, method: str, ans) -> dict:
         got = [name for name, rx in _ideas(c) if re.search(rx, text)]
         return dict(hit=len(got) >= 2, err=None, show=dict(named=got))
     return dict(hit=None, err=None, show={})
+
+
+def _grade_sketch_ci(c: dict, v: dict, ans) -> dict:
+    """A sketched delta and interval, graded on the card's own question: a number card on the delta (inside its band)
+    and the interval's side of zero; a gate on pass or fail against its bar; "better, worse or can't tell" on where
+    the interval sits; "will it beat" on the delta's sign."""
+    d = _f((ans or {}).get("delta")) if isinstance(ans, dict) else None
+    if d is None:
+        return dict(hit=False, err=None, show={})
+    lo, hi = sorted((_f(ans.get("lo"), d), _f(ans.get("hi"), d)))
+    lo, hi = min(lo, d), max(hi, d)
+    err = round(abs(d - v["delta"]), 3)
+    noisy = (lo <= 0 <= hi) == (v["lo"] <= 0 <= v["hi"])
+    if c.get("gate"):
+        k = 100 if v.get("unit") == "pts" else (v.get("better") or 1)
+        raw, g = d / k, c["gate"]
+        ok = raw > g["thr"] if g.get("rule") == "better" else raw >= g["thr"]
+        verdict = "Pass" if ok else "Fail"
+        return dict(hit=verdict == c.get("truth"), err=err, show=dict(verdict=verdict))
+    if c.get("type") == "choice" and set(c.get("opts") or []) == {"Better", "Worse", "Can't tell yet"}:
+        b = v.get("better") or 1
+        cls = "Better" if (lo > 0 if b > 0 else hi < 0) else "Worse" if (hi < 0 if b > 0 else lo > 0) else "Can't tell yet"
+        return dict(hit=cls == c.get("truth"), err=err, show=dict(verdict=cls))
+    if c.get("type") == "choice":  # will it beat: the sign of the sketched delta, in the ledger's direction
+        yes = "Yes" if d / (100 if v.get("unit") == "pts" else (v.get("better") or 1)) > 0 else "No"
+        return dict(hit=yes == c.get("truth"), err=err, show=dict(verdict=yes))
+    return dict(hit=err <= max(c.get("tol") or 1, (v["hi"] - v["lo"]) / 2) and noisy, err=err, show=dict(noise_right=noisy))
 
 
 def _code_ok(got, want) -> bool:

@@ -147,7 +147,7 @@ function card(c){
  const s=st(c);const n=L.b.cards.length,i=L.cur,p=c.pred,rv=c.reveal;
  const t=c.task||s.tk,ex=t&&(t.example||t.viz?.example)?`Example at n = ${(t.n||t.viz?.n||t.vars?.n||0).toLocaleString()}: `:'';
  const q=c.method==='spot'?ex+'one number is wrong.':c.method==='prototype'?ex+'drag n to where its interval just clears zero.':c.method==='code'?ex+'the paired gain, in points.':c.q;
- const ready=c.method==='spot'?s.pick!=null:c.method==='code'?codeVal(c.task||s.tk,s.code)!=null:c.method==='explain'?(s.ex||'').trim().length>8:true;
+ const ready=c.method==='sketch'?!!(s.sk?.moved||s.sbm):c.method==='spot'?s.pick!=null:c.method==='code'?codeVal(c.task||s.tk,s.code)!=null:c.method==='explain'?(s.ex||'').trim().length>8:true;
  let reveal='';
  if(p&&rv){const verdict=p.hit==null?'<span class="vd open">Open</span>':p.hit?'<span class="vd ok">✓ Right</span>':'<span class="vd no">✗ Not quite</span>';
   const own=q!==c.q?`<p class="ctx t-own">${esc(c.q)}</p>`:'';  // the method asked about an example: the card's own question and answer follow

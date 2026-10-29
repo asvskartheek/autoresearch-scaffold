@@ -312,7 +312,8 @@ def _card_gate(p: Project, model: str, sl: str) -> dict | None:
                             q=f"{_title(p, model)} on {_short(sl)}: it {_rule_text(p, c)}. Pass or fail?",
                             ctx=f"n = {c['n']:,} · against {_title(p, g.get('champion'))}", ev=c.get("cand_task") or sl,
                             why=why, w=85 if r["rung"] != (g["rungs"][0]["rung"] if g["rungs"] else "") else 80,
-                            viz=(vz := _ci_viz(c, p, sl, c.get("threshold"))), axis=_room(c, vz, _sign(p)))
+                            viz=(vz := _ci_viz(c, p, sl, c.get("threshold"))), axis=_room(c, vz, _sign(p)),
+                            gate=dict(rule=c.get("rule"), thr=c.get("threshold") or 0))
     return None
 
 
