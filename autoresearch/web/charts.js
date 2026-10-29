@@ -22,11 +22,11 @@ function niceDomain(lo,hi,n=5){if(hi===lo){const d=Math.abs(hi)*.1||1;lo-=d;hi+=
 function logTicks(lo,hi){const a=Math.floor(Math.log10(lo)),b=Math.ceil(Math.log10(hi)),out=[],mult=(b-a)<=2?[1,2,5]:[1];
  for(let e=a;e<=b;e++)for(const m of mult){const v=m*Math.pow(10,e);if(v>=lo*.999&&v<=hi*1.001)out.push(v)}return out}
 // numbers: ticks at the step's precision, values at 3 significant figures, tiny and huge as 1.2e-5
-function fmt(v,step){if(v==null||!isFinite(v))return '–';const a=Math.abs(v);if(v===0||(step!=null&&a<step/2))return '0';
+function fmt(v,step){if(v==null||!isFinite(v))return '–';const a=Math.abs(v);if(v===0||(step!=null&&a<step*1e-6))return '0';
  return fmt0(v,a,step).replace(/^-(0(?:[.,]0+)?)$/,'$1')}  // a tick that rounds to zero never reads -0
 function fmt0(v,a,step){
  if(a<1e-3||a>=1e6){const e=Math.floor(Math.log10(a)),m=v/Math.pow(10,e);return (Math.abs(m-Math.round(m))<1e-9?Math.round(m):m.toFixed(1))+'e'+e}
- if(step!=null&&step>=1e-3){const d=Math.max(0,-Math.floor(Math.log10(step)+1e-9));return v.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d})}
+ if(step!=null&&step>=1e-3){const d=Math.min(6,(String(+step.toPrecision(6)).split('.')[1]||'').length);return v.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d})}
  return a>=1000?Math.round(v).toLocaleString():a>=100?v.toFixed(0):a>=10?v.toFixed(1):a>=1?v.toFixed(2):v.toPrecision(3)}
 const logLbl=v=>{const e=Math.floor(Math.log10(v)+1e-9),m=Math.round(v/Math.pow(10,e));return e<-2||e>4?(m===1?'':m+'×')+'1e'+e:String(+v.toPrecision(2))};
 const sgn=v=>(v>0?'+':v<0?'−':'±')+Math.abs(Math.round(v)).toLocaleString();
@@ -111,7 +111,8 @@ class Chart{
   let yt;
   if(log){lo=Math.pow(10,Math.floor(Math.log10(lo)*4)/4);hi=Math.pow(10,Math.ceil(Math.log10(hi)*4)/4);if(hi<=lo)hi=lo*10;yt=logTicks(lo,hi);this.ystep=null}
   else{[lo,hi]=niceDomain(lo,hi,compact?3:5);if(s.ymin!=null)lo=s.yfix?s.ymin:Math.max(lo,s.ymin);if(s.ymax!=null)hi=s.yfix?s.ymax:Math.min(hi,s.ymax);if(hi<=lo)hi=lo+1;
-   const t=linTicks(lo,hi,mini?1:compact?3:5);yt=mini?[lo,hi]:t.ticks;this.ystep=t.step}
+   // a mini chart labels its two ends, so they read at the grid the domain was rounded to, not a whole-range step
+   const t=linTicks(lo,hi,mini?1:compact?3:5);yt=mini?[lo,hi]:t.ticks;this.ystep=mini?Math.min(t.step,niceStep(hi-lo,3)/2):t.step}
   const X=this.X=x=>L+(x-x0)/(x1-x0)*(W-L-R);this.inv=px=>x0+(px-L)/(W-L-R)*(x1-x0);
   const Y=this.Y=log?y=>T+(1-(Math.log10(y)-Math.log10(lo))/(Math.log10(hi)-Math.log10(lo)))*(H-T-B):y=>T+(1-(y-lo)/(hi-lo))*(H-T-B);
   const cy=y=>Math.max(T-6,Math.min(H-B+6,Y(log?Math.max(y,lo):y)));
