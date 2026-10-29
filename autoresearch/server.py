@@ -188,7 +188,7 @@ def task_detail(p: Project, tid: str) -> dict:
         base = p.latest_eval(champ, t["slice"]) if champ and champ != t.get("model") else None
         if base:
             out["vs_champion"] = dict(model=champ, task=base["id"], runs=len(p.slice_evals(champ, t["slice"])),
-                                      **paired(per_id(rows), p.pooled_scores(champ, t["slice"]), 1 if p.config.get("higher_is_better", True) else -1))
+                                      **paired(per_id(rows, p.is_continuous(t["slice"])), p.pooled_scores(champ, t["slice"]), 1 if p.config.get("higher_is_better", True) else -1))
     return out
 
 
