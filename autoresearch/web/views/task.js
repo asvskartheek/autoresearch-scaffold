@@ -21,8 +21,8 @@ const cDelta=(d,sl)=>timedSl(sl)?`${cNum(Math.abs(d))}&nbsp;s ${d>0?'faster':'sl
 const scoreOf=(v,sl)=>v==null?DASH:isCont(sl)?cVal(v,sl):pct(v);
 const deltaOf=(d,sl)=>isCont(sl)?cDelta(d,sl):pts(d)+' pts';
 // seconds with a space, as every other unit: "5.61 s"
-const secs=x=>x==null?'—':(x<10?x.toFixed(2):x.toFixed(1))+'&nbsp;s';
-const mval=(k,v)=>v==null?DASH:isScoreKey(k)?scoreOf(v,CUR):/_runtime$/.test(k)?wbSpan(v):/_per_second$/.test(k)?XC.fmt(v)+' a second':/_s$/.test(k)?secs(v):fmtv(v);
+const secs=x=>x==null?'—':(Number.isInteger(x)?String(x):x<10?x.toFixed(2):x.toFixed(1))+'&nbsp;s';
+const mval=(k,v)=>v==null?DASH:isScoreKey(k)?scoreOf(v,CUR):/_runtime$/.test(k)?wbSpan(v):/_per_second$/.test(k)?XC.fmt(v)+' a second':wbTimeKey(k)?secs(v):wbCountKey(k)?Math.round(v).toLocaleString():fmtv(v);
 // a task's last logged numbers, the headline ones first (reward, score, loss…), bookkeeping (train_runtime…) last
 // (t.last is the last metrics row; a trainer's closing row holds only its summary, so merge every row when we have them)
 const lastOf_=(t,d)=>d?.metrics?.length?Object.assign({},...d.metrics.filter(m=>!m.sys)):t.last||{};
@@ -119,7 +119,7 @@ const PRIO=['reward','running_score','score','accuracy','mean_token_accuracy','l
 const MINOR=/(^|\/|_)(min|max|std)(_|\/|$)|clip_ratio|^epoch$|^total_flos$|^train_|_per_second$|^num_tokens$|terminated/;
 const SYS=new Set(['gpu_util','gpu_mem_gb','gpu_mem_total_gb','gpus']);
 S.tkMetric=S.tkMetric||{};S.xcRuns=S.xcRuns||{};
-const yfOf=k=>isScoreKey(k)&&!isCont(CUR)?'pct':/latency|_s$/.test(k)?'s':'num';
+const yfOf=k=>isScoreKey(k)&&!isCont(CUR)?'pct':wbFmt(k);
 function keysOf(rows){
  const n={},first={};
  rows.forEach((m,i)=>{for(const [k,v] of Object.entries(m))if(k!=='t'&&k!=='step'&&k!=='sys'&&typeof v==='number'&&isFinite(v)){n[k]=(n[k]||0)+1;if(!(k in first))first[k]=i}});

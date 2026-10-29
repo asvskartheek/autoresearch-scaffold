@@ -155,11 +155,23 @@ def _throughput(t, b, rows):
     return None
 
 
+TIME_KEY = re.compile(r"(^|_)latency(_|$)|(^|_)(p50|p95|wall)(_s)?$|_s$|_sec(onds)?$|_time$|_runtime$")
+COUNT_KEY = re.compile(r"^(errors?|missing|n|count|observed|done|total|steps?|examples|retries|timeouts?)$|_count$|^num_(?!tokens)|_errors$")
+
+
+def fmt_of(key: str) -> str:
+    """A logged metric's format from its name: seconds for latencies and *_s, a whole count for errors and other
+    counts, else a plain number. The Workbench and the task view read the same rule (workbench.js wbFmt)."""
+    if TIME_KEY.search(key) and "_per_" not in key:
+        return "s"
+    return "int" if COUNT_KEY.search(key) else "num"
+
+
 def _metric(rows, key, total, pid="m"):
     pts = _series(rows, key)
     if len(pts) < 2:
         return None
-    return dict(id=pid, key=key, title=key, fmt="num", value=pts[-1][1],
+    return dict(id=pid, key=key, title=key, fmt=fmt_of(key), value=pts[-1][1],
                 series=[dict(name=key, pts=thin(pts, 240))], smooth=True)
 
 

@@ -37,9 +37,14 @@ const SEEN_K='arx-seen-failed:'+location.pathname;
 const wbSeen=()=>{try{return new Set(JSON.parse(localStorage.getItem(SEEN_K)||'[]'))}catch(e){return new Set()}};
 const wbMarkSeen=id=>{try{const s=wbSeen();if(s.has(id))return;s.add(id);localStorage.setItem(SEEN_K,JSON.stringify([...s].slice(-300)))}catch(e){}};
 // metric keys as words: running_score → Score so far, latency_s → Latency (s), rewards/correctness/mean → Correctness
-const wbMetric=k=>({running_score:'Score so far',score:'Score',latency_s:'Latency (s)',loss:'Loss',reward:'Reward',acc:'Accuracy',accuracy:'Accuracy',lr:'Learning rate',learning_rate:'Learning rate',grad_norm:'Gradient norm',kl:'KL to reference',entropy:'Entropy',mean_token_accuracy:'Token accuracy',reward_std:'Reward spread',gpu_util:'GPU utilisation',gpu_mem_gb:'GPU memory (GB)'})[k]
- ||(/^rewards\/([^/]+)\/mean$/.test(k)?wbKind(k.split('/')[1]):wbKind(String(k).replace(/_per_(s|sec|second)$/,' per second').replace(/_per_(min|minute)$/,' per minute').replace(/_s$/,' (s)').replace(/\//g,' · ')));
+const wbMetric=k=>({running_score:'Score so far',score:'Score',latency_s:'Latency',latency_p50:'Latency, median',latency_p95:'Latency, 95th percentile',latency_mean:'Latency, mean',errors:'Errors',missing:'Missing',loss:'Loss',reward:'Reward',acc:'Accuracy',accuracy:'Accuracy',lr:'Learning rate',learning_rate:'Learning rate',grad_norm:'Gradient norm',kl:'KL to reference',entropy:'Entropy',mean_token_accuracy:'Token accuracy',reward_std:'Reward spread',gpu_util:'GPU utilisation',gpu_mem_gb:'GPU memory (GB)'})[k]
+ ||(/^rewards\/([^/]+)\/mean$/.test(k)?wbKind(k.split('/')[1]):wbKind(String(k).replace(/_per_(s|sec|second)$/,' per second').replace(/_per_(min|minute)$/,' per minute').replace(/_s$/,'').replace(/\//g,' · ')));
 
+// a logged metric's format, from its name: seconds for latencies and *_s, a whole count for errors and other counts,
+// else a plain number (scores are read in the task view against the slice's own scale)
+const wbTimeKey=k=>/(^|_)latency(_|$)|(^|_)(p50|p95|wall)(_s)?$|_s$|_sec(onds)?$|_time$|_runtime$/.test(k)&&!/_per_/.test(k);
+const wbCountKey=k=>/^(errors?|missing|n|count|observed|done|total|steps?|examples|retries|timeouts?)$|_count$|^num_(?!tokens)|_errors$/.test(k);
+const wbFmt=k=>wbTimeKey(k)?'s':wbCountKey(k)?'int':'num';
 {
 const UNIT={eval:'examples',train:'steps',data:'items',experiment:'repeats'};
 // a harness sub-task that only counts for its eval (server marks it detail_of) is part of that eval's card, never its own
@@ -100,7 +105,7 @@ function head(t,short){
 function rowValue(t){
  const l=t.last||{},bits=[];
  if(typeof l.running_score==='number')bits.push(pct(l.running_score));
- else{const k=Object.keys(l).find(k=>typeof l[k]==='number'&&!/^(t|step|epoch)$/.test(k));if(k)bits.push(`${esc(wbMetric(k).toLowerCase())} ${XC.fmt(l[k])}`)}
+ else{const k=Object.keys(l).find(k=>typeof l[k]==='number'&&!/^(t|step|epoch)$/.test(k));if(k)bits.push(`${esc(wbMetric(k).toLowerCase())} ${XC.yv(wbFmt(k),l[k])}`)}
  if((t.health?.silent_s||0)>=60&&t.progress?.total)bits.push(`no progress for ${span(t.health.silent_s)}`);
  else if(t.eta)bits.push(`${t.eta.per_min>=60?n0(t.eta.per_min/60)+' a second':t.eta.per_min>=10?n0(t.eta.per_min)+' a minute':t.eta.per_min.toFixed(1)+' a minute'}`);
  return bits.join(' · ');
@@ -111,7 +116,7 @@ function pn(t,p,lead){
  const grp=`wb-${t.id}`+(p.x?'-'+p.x:''),ser=p.series?.[0]?.pts||[];
  const sm=p.smooth===true,w=XC.g(grp,{w:.6}).w;
  let big='',sub='',lb=p.title,extra='';
- const f=p.fmt,quiet=Math.max(t.health?.silent_s??0,t.status==='stalled'?now()-t.heartbeat:0);
+ const f=p.fmt==='num'&&p.key?wbFmt(p.key):p.fmt,quiet=Math.max(t.health?.silent_s??0,t.status==='stalled'?now()-t.heartbeat:0);
  if(p.id==='eta'){lb='Done by';const left=p.value-now(),d=p.drift_s||0;
   big=t.status==='stalled'?`<span class="neg">none</span><small>last said ${wbClock(p.value)}</small>`:`${wbClock(p.value)}<small>${left>0?`in ${span(left)}`:'any moment'}</small>`;
   sub=Math.abs(d)<60?'steady':`${span(Math.abs(d))} ${d<0?'sooner':'later'} than 5 min ago`}
