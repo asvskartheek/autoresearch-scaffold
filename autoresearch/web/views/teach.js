@@ -134,7 +134,7 @@ function codeBody(c,s){
 function explainBody(c,s){
  const ideas=(c.task||s.tk)?.ideas||[],named=c.reveal?.show?.named;
  return `<textarea class="t-ex" id="tex" rows="3" placeholder="In one sentence" ${c.pred?'disabled':''}>${esc(s.ex||'')}</textarea>
-  <div class="t-ideas">${ideas.map(i=>`<span class="chip${named?named.includes(i)?' ok':' no':''}">${esc(i)}</span>`).join('')}</div>`;
+  <div class="t-ideas">${ideas.map(i=>`<span class="tchip${named?named.includes(i)?' ok':' no':''}">${named?named.includes(i)?'✓ ':'✗ ':''}${esc(i)}</span>`).join('')}</div>`;
 }
 
 // the task stays with the card's state, so the reveal can still draw it (the server sends it only before an answer)

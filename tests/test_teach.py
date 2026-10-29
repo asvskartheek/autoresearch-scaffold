@@ -122,7 +122,23 @@ class Teach(unittest.TestCase):
         need = teach._n_needed(teach._example(self.ci))
         self.assertTrue(teach.grade(self.ci, "prototype", need * 1.2)["hit"])
         self.assertFalse(teach.grade(self.ci, "prototype", need * 3)["hit"])
-        self.assertTrue(teach.grade(self.ci, "explain", "It fixed 6, broke none, and the interval clears zero")["hit"])
+
+    def test_explain_checks_meaning_not_keywords(self):
+        loss = dict(id="rej|l", truth=-0.46, viz=dict(kind="ci", unit="pts", delta=-0.46, lo=-1.5, hi=0.6, better=1, n=1319, wins=6, losses=12))
+        g = lambda c, s: teach.grade(c, "explain", s)["hit"]
+        self.assertFalse(g(loss, "blah blah so yes"))
+        self.assertFalse(g(loss, "It improved a lot, a clearly significant win, close to perfect."))
+        self.assertFalse(g(loss, "Worse, and clearly significant."))  # the way is right, the noise claim is not
+        self.assertTrue(g(loss, "Slightly worse, but the interval crosses zero, so it could be noise."))
+        self.assertTrue(g(loss, "It fixed 6 and broke 12, within the noise."))
+        gain = dict(loss, viz=dict(loss["viz"], delta=5.2, lo=3.8, hi=6.7))
+        self.assertTrue(g(gain, "A real gain: the interval clears zero."))
+        self.assertFalse(g(gain, "Better, but not significant."))
+        self.assertEqual(teach.task(loss, "explain")["ideas"], list(teach.IDEAS))
+        # writing is never preferred over doing at equal results
+        prof = teach.profile([], [])
+        self.assertLess(teach.score(prof, "explain"), min(teach.score(prof, m) for m in ("sketch", "spot", "prototype", "code")))
+        self.assertNotIn("explain", teach.methods_for(self.gate))
 
     def test_answer_reveals_and_counts(self):
         code, d = self.post(method="code", answer="100*(fixed-broken)/n", ms=4000)

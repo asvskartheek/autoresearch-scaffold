@@ -33,6 +33,7 @@ METHODS = ("predict", "sketch", "spot", "prototype", "code", "explain")
 HARDER = {m: i for i, m in enumerate(METHODS)}  # predict is the easiest to finish, explain the hardest
 # before a person has tried a method: the hands-on, visual ones first (people asked for less text), explain last
 PRIOR = dict(predict=0.30, sketch=0.42, spot=0.40, prototype=0.42, code=0.36, explain=0.22)
+TEXT = {"explain"}  # the one method that is writing, not doing
 LABEL = dict(predict="Predict", sketch="Sketch", spot="Spot the error", prototype="Prototype", code="Code", explain="Explain back")
 
 
@@ -66,10 +67,9 @@ def methods_for(c: dict) -> list[str]:
             # spot and code teach delta = (fixed - broken) / n: only where that is how this card's delta was made (one
             # 0/1 run per example). Pooled or fractional scores make it the mean difference, which the counts miss.
             out += ["spot", "prototype", "code"] if counts_give_delta(v) else ["prototype"]
+        out.append("explain")  # which way it went and whether it is noise: two claims a sentence can get right
     elif v.get("kind") == "bars" and _sketch_rows(v) and _bars_max(v):
         out.append("sketch")
-    if c.get("why") or v:
-        out.append("explain")
     return out
 
 
@@ -159,7 +159,7 @@ def task(c: dict, method: str) -> dict:
         e = _example(c)
         return dict(vars=dict(fixed=e["wins"], broken=e["losses"], n=e["n"]), target="delta_pts", example=True)
     if method == "explain":
-        return dict(ideas=[i[0] for i in _ideas(c)])
+        return dict(ideas=_ideas(c))
     return {}
 
 
@@ -183,16 +183,68 @@ def _nice_up(x: float) -> float:
     return next(k * m for k in (1, 2, 2.5, 5, 10) if k * m >= x)
 
 
-def _ideas(c: dict) -> list[tuple[str, str]]:
-    """What a good explanation names, as (idea, words that count) pairs."""
+IDEAS = ("which way", "real or noise")
+_NOT = r"(?:not|no|n't|never|without|hardly)\W+(?:\w+\W+){0,2}?"
+_GOOD = (r"improv\w*|better|gain\w*|helped|helps|\bwin\b|a win|beat\w*|more (?:right|correct)|increas\w*|up by|went up"
+         r"|fixe?d? more than (?:it )?br\w*")
+_BAD = (r"worse|regress\w*|drop\w*|hurt\w*|declin\w*|degrad\w*|decreas\w*|went down|down by|fewer (?:right|correct)|\blost\b"
+        r"|\bloses\b|a loss|br\w* more than (?:it )?fix\w*")
+_HIGH, _LOW = r"\bhigher\b|\bfaster\b", r"\blower\b|\bslower\b"
+_NOT_NOISE = r"not (?:just |only )?(?:noise|chance|luck)"
+_NOISE = (r"nois\w*|chance|luck\w*|random\w*|can'?t tell|cannot tell|unclear|uncertain|inconclusive|not (?:yet )?(?:shown|clear|sure|certain|real|reliabl\w*)"
+          r"|not (?:statistically )?significant\w*|insignificant|cross\w* (?:over )?zero|includes? zero|straddl\w*|touch\w* zero|span\w* zero"
+          r"|could be zero|might be zero|either way|too (?:small|few|close)|within (?:the )?(?:noise|interval)")
+_REAL = (r"significant\w*|clears? zero|cleared zero|above zero|below zero|excludes? zero|\breal(?= (?:gain|drop|effect|improvement|regression|change|win|loss))"
+         r"|clearly|definite\w*|confident\w*|reliabl\w*|shown|proven|for sure|certain\w*")
+
+
+def _ideas(c: dict) -> list[str]:
+    """What a good explanation of a paired result says: which way it went, and whether the interval rules out noise."""
+    return list(IDEAS) if (c.get("viz") or {}).get("kind") == "ci" else []
+
+
+def _claims(text: str, better: int = 1) -> dict:
+    """The claims a sentence makes: way (+1 better, -1 worse, 0 no change, None unsaid; 'not better' is -0.5, 'not
+    worse' +0.5) and noise (True it may be noise, False it is real, None unsaid). Contradicting claims cancel out."""
+    t = " " + re.sub(r"\s+", " ", text.lower().replace("’", "'")) + " "
+    real = bool(re.search(_NOT_NOISE, t))
+    t = re.sub(_NOT_NOISE, " ", t)
+    noisy = bool(re.search(_NOISE, t))
+    t = re.sub(_NOISE, " ", t)
+    real = real or bool(re.search(_REAL, t))
+    t = re.sub(_REAL, " ", t)
+    noise = None if noisy == real else noisy  # both said, or neither: no claim
+    ways = set()
+    for rx, w in ((_GOOD, 1), (_BAD, -1), (_HIGH, better), (_LOW, -better)):
+        for m in re.finditer(rx, t):
+            negated = re.search(_NOT + r"$", t[max(0, m.start() - 30):m.start()])
+            ways.add(-w * 0.5 if negated else w)  # "not better" says it did not help; it does not say it hurt
+    fx = re.search(r"fix\w*\D{0,12}?(\d+|none|nothing|no)\b", t)
+    br = re.search(r"brok\w*\D{0,12}?(\d+|none|nothing|no)\b|(\d+|none|nothing|no) brok", t)
+    if fx and br:  # "fixed 23 and broke 11": the counts say which way
+        num = lambda m: next((int(g) if g.isdigit() else 0 for g in m.groups() if g), 0)
+        f, b = num(fx), num(br)
+        ways.add((f > b) - (f < b))
+    if re.search(r"no (?:real )?change|unchanged|the same|flat|no difference|tie\b|even\b", t):
+        ways.add(0)
+    way = None if not ways or (any(w > 0 for w in ways) and any(w < 0 for w in ways)) else max(ways, key=abs)
+    return dict(way=way, noise=noise)
+
+
+def _grade_explain(c: dict, text: str) -> dict:
+    """Right when the sentence says which way it went and whether it could be noise, and both match the result.
+    Keywords alone do not count: "it improved, clearly significant" on a loss that crosses zero is two wrong claims."""
     v = c.get("viz") or {}
-    if v.get("kind") == "ci":
-        return [("what it fixed", r"fix|win|right|gain|more correct|improv"), ("what it broke", r"brok|los|wrong|regress|worse"),
-                ("whether it is noise", r"nois|interval|ci\b|zero|confiden|chance|luck|significan")]
-    if v.get("kind") == "bars":
-        return [("the score", r"\d|score|right|correct|count"), ("compared with what", r"than|vs|versus|compar|champion|control|other"),
-                ("what it means", r"so|means|because|hill|weak|fix|need")]
-    return [("the answer", r"\w{3,}"), ("why", r"because|since|so\b|means|due")]
+    b = v.get("better") or 1
+    good = v["delta"] * b
+    crosses = min(v["lo"], v["hi"]) <= 0 <= max(v["lo"], v["hi"])
+    cl = _claims(text, b)
+    w = cl["way"]
+    way_ok = w is not None and ((good > 0 and w > 0) or (good < 0 and w < 0) or (good == 0 and w == 0)
+                                or (w == -0.5 and good <= 0) or (w == 0.5 and good >= 0))
+    noise_ok = cl["noise"] is not None and cl["noise"] == crosses
+    named = [i for i, ok in zip(IDEAS, (way_ok, noise_ok)) if ok]
+    return dict(hit=way_ok and noise_ok, err=None, show=dict(named=named, said=cl))
 
 
 # ---------------------------------------------------------------- grading (server side)
@@ -251,9 +303,7 @@ def grade(c: dict, method: str, ans) -> dict:
         g["show"]["card"] = round(100 * (v["wins"] - v["losses"]) / v["n"], 2)  # the same line on the card's own counts
         return g
     if method == "explain":
-        text = str(ans or "")[:1000].lower()
-        got = [name for name, rx in _ideas(c) if re.search(rx, text)]
-        return dict(hit=len(got) >= 2, err=None, show=dict(named=got))
+        return _grade_explain(c, str(ans or "")[:1000])
     return dict(hit=None, err=None, show={})
 
 
@@ -338,6 +388,8 @@ def score(prof: dict, m: str) -> float:
         works *= 0.6  # easy for them now: step up
     if prof["recent"].count(m) == 2:
         works *= 0.3  # never three in a row
+    if m in TEXT:
+        works *= 0.7  # people learn here by doing: at equal results a hands-on method comes first
     return works
 
 

@@ -115,8 +115,9 @@
 .lrn .t-code input:focus{outline:2px solid var(--accent);outline-offset:1px}
 .lrn .t-ex{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--control);background:var(--surface);color:var(--text);font:inherit;resize:vertical}
 .lrn .t-ideas{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
-.lrn .t-ideas .chip.ok{background:color-mix(in srgb,var(--positive) 18%,transparent);color:var(--positive)}
-.lrn .t-ideas .chip.no{opacity:.55;text-decoration:line-through}
+.lrn .t-ideas .tchip{font-size:12px;padding:2px 8px;border-radius:var(--radius-chip);background:var(--active);color:var(--muted)}
+.lrn .t-ideas .tchip.ok{background:var(--pill-positive-bg);color:var(--pill-positive-ink)}
+.lrn .t-ideas .tchip.no{background:var(--pill-negative-bg);color:var(--pill-negative-ink)}
 .t-prof{display:flex;flex-direction:column;gap:6px;margin:12px 0 4px}
 .t-pr{display:grid;grid-template-columns:18px 1fr 40px;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
 .t-bar{display:flex;height:8px;border-radius:4px;background:var(--active);overflow:hidden}
