@@ -263,7 +263,7 @@ document.addEventListener('pointerdown',e=>{
 document.addEventListener('keydown',e=>{
  if(route().r!=='learn'||!L.b||e.metaKey||e.ctrlKey||e.altKey)return;
  if(L.dlg){const n=+e.key;if(n>=1&&n<=4){answerConcept(n-1);e.preventDefault()}else if((e.key===' '||e.key==='Enter')&&L.dlg.ans!=null){advConcept();e.preventDefault()}return}
- const tg=e.target;if(tg&&(tg.isContentEditable||/^(TEXTAREA|SELECT)$/.test(tg.tagName)||(tg.tagName==='INPUT'&&tg.type!=='range')))return;
+ const tg=e.target;if(tg&&(tg.isContentEditable||/^(TEXTAREA|SELECT)$/.test(tg.tagName)||tg.tagName==='INPUT'&&(tg.type!=='range'||/^Arrow|^(Home|End|PageUp|PageDown)$/.test(e.key))))return;  // the slider keeps its own arrow keys
  if(e.key==='['){go(L.cur-1);e.preventDefault();return}
  if(e.key===']'){go(L.cur+1);e.preventDefault();return}
  const c=L.b.cards[L.cur];
