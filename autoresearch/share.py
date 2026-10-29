@@ -126,6 +126,22 @@ def redact(text: str) -> str:
     return PATH_RX.sub(lambda m: "…/" + "/".join(m.group(0).rstrip("/").split("/")[-2:]), text)
 
 
+def scrub(v):
+    """redact() over every string in a JSON value (keys included): what goes into a file someone else opens."""
+    if isinstance(v, str):
+        return redact(v)
+    if isinstance(v, dict):
+        return {scrub(k) if isinstance(k, str) else k: scrub(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [scrub(x) for x in v]
+    return v
+
+
+def _js(v) -> str:
+    """JSON safe inside a <script> element: no "<" at all, so no </script> and no <!-- in it."""
+    return json.dumps(v, default=str, separators=(",", ":"), ensure_ascii=False).replace("<", "\\u003c")
+
+
 def link(key: str, port: int, target: str = "", token: str | None = None) -> str:
     """The URL someone else opens: the project's view, a paper, or one comment thread."""
     token = token or token_for(key)
@@ -187,7 +203,7 @@ def snapshot_data(p, key: str | None = None, tasks: int = 40) -> dict:
             pass
     data["api/projects"] = [dict(key=key or "", name=(st.get("config") or {}).get("name") or "", root="")]
     data["api/people"] = dict(people={}, here=[])
-    return data
+    return scrub(json.loads(json.dumps(data, default=str)))
 
 
 SHIM = r"""(()=>{const S=window.ARX_SNAP;const _f=window.fetch;
@@ -217,7 +233,7 @@ def export_dashboard(p, key: str | None = None) -> str:
                   lambda m: f"<script>{_inline((WEB / m.group(1)).read_text())}</script>", page)
     snap = dict(taken=time.time(), project=key or "", data=snapshot_data(p, key),
                 papers={n: export_paper(p, n) for n in papers.names(p)})
-    head = (f"<script>window.ARX_SNAP={_inline(json.dumps(snap, default=str))};</script>"
+    head = (f"<script>window.ARX_SNAP={_js(snap)};</script>"
             f"<script>{_inline(SHIM)}</script><style>{SNAP_CSS}</style>")
     return page.replace("<head>", "<head>\n" + head, 1)
 
@@ -232,7 +248,7 @@ FIG = re.compile(r"<svg[\s\S]*?</svg>", re.I)
 def export_paper(p, name: str) -> str:
     """The paper as one file: base tokens inlined, attachments as data: URLs, its threads appended as notes."""
     d = papers.pdir(p, name)
-    text = (d / "paper.html").read_text()
+    text = redact((d / "paper.html").read_text())  # before the data: URLs, whose base64 may hold "/Users"
 
     def data_url(m):
         f = d / "files" / m.group(2)
@@ -306,7 +322,7 @@ def cmd_share(a):
         print(link(key, port, a.target or ""))
     elif a.verb == "export":
         out = Path(a.out or (f"{a.paper}.html" if a.paper else f"{key}-snapshot.html"))
-        out.write_text(export_paper(p, a.paper) if a.paper else export_dashboard(p, key))
+        out.write_text(export_paper(p, a.paper) if a.paper else export_dashboard(p, key), encoding="utf-8")
         print(f"{out}  ({out.stat().st_size / 1e6:.1f} MB, opens anywhere, read-only)")
 
 

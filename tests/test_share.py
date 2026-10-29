@@ -98,6 +98,14 @@ class Export(unittest.TestCase):
         self.assertIn("demo", snap["papers"]); self.assertIn("api/state", snap["data"]); self.assertEqual(snap["data"]["api/projects"][0]["key"], "gamma")
         self.assertNotIn("</script>", json.dumps(snap).replace("<\\/script", ""))
 
+    def test_snapshot_redacts_paths(self):
+        p = ledger("delta")
+        p.add_model("base", status="champion", change=f"see {p.root}/scratch/gate.json")
+        html = share.export_dashboard(p, "delta")
+        self.assertNotIn(str(p.root), html)
+        self.assertIn("…/scratch/gate.json", html)
+        self.assertNotIn("<!--", html.split("window.ARX_SNAP=", 1)[1].split(";</script>", 1)[0])
+
 
 if __name__ == "__main__":
     unittest.main()
