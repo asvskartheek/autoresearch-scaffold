@@ -157,7 +157,7 @@ VIEWS.model=(name)=>{
    return `<tr><td>${i?'':esc(r.rung)}</td><td><a class="mono md-sl ln" href="#slices/${enc(c.slice)}">${esc(short(c.slice))}</a></td><td class="num">${n!=null?n.toLocaleString():DASH}</td><td class="num">${s?(s.task?`<a href="#task/${enc(s.task)}">${score(s.score,c.slice,s.n)}</a>`:score(s.score,c.slice,s.n)):DASH}</td></tr>`}))),{meta:'the scores candidates are paired against',cls:'section'}));
  }
 
- const tasks=L.tasks.filter(t=>t.model===name).sort((a,b)=>(isLive(b)-isLive(a))||(b.updated-a.updated));
+ const tasks=L.tasks.filter(t=>t.model===name&&!t.detail_of).sort((a,b)=>(isLive(b)-isLive(a))||(b.updated-a.updated));
  h.push(panel('Tasks',tasks.length?`<div class="md-tasks">${tasks.slice(0,30).map(t=>kidRow([t,0])).join('')}</div>${tasks.length>30?`<a class="more" href="#archive">${tasks.length-30} more in the archive</a>`:''}`:empty('No tasks for this model',`Evals recorded with <code>arx eval record --model ${esc(name)}</code> show here`),{meta:tasks.length?plural(tasks.length,'task'):'',cls:'section'}));
  return h.join('');
 };
