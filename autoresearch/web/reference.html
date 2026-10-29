@@ -83,7 +83,7 @@ svg .t-m{fill:var(--muted)}svg .t-f{fill:var(--faint);font-family:var(--mono);fo
 svg .t-b{font-weight:600}svg .t-big{font-size:15px;font-weight:600}
 svg .grid{stroke:var(--grid)}svg .axis{stroke:var(--control)}
 svg .f-pos{fill:var(--positive)}svg .f-neg{fill:var(--negative)}svg .f-acc{fill:var(--accent)}svg .f-mut{fill:var(--control)}svg .f-rr{fill:var(--cell-rr)}svg .f-ww{fill:var(--cell-ww)}
-svg .f-warn{fill:var(--warning)}svg .f-raised{fill:var(--raised)}svg .f-track{fill:var(--pill-neutral-bg)}
+svg .f-warn{fill:var(--warning)}svg .f-faint{fill:var(--faint)}svg .f-raised{fill:var(--raised)}svg .f-track{fill:var(--pill-neutral-bg)}
 svg .s-pos{stroke:var(--positive)}svg .s-acc{stroke:var(--accent)}svg .s-neg{stroke:var(--negative)}svg .s-text{stroke:var(--text)}svg .s-mut{stroke:var(--faint)}
 /* tables */
 .tw{overflow-x:auto;margin:0 -4px}
@@ -405,8 +405,9 @@ section("claim", () => {
       s += `<path d="M${X(now)} ${yEnd + 10} H${xt}" class="s-neg" stroke-width="2"/><text x="${cx}" y="${yEnd + 22}" text-anchor="middle" class="t-f" style="fill:var(--negative)">${N0(tgt - now)} short</text>`; }
   }
   s += `<text class="t-f" x="${X(lo)}" y="${H - 4}">${bin ? "right of " + N0(r.n) : esc(r.metric || "mean score")} on ${esc(short(r.slice))}${bin && lo > 0 ? " · axis from " + N0(lo) : ""}</text></svg>`;
-  const lat = r.latency_p50 != null ? `p50 ${ev(secs(r.latency_p50), { ...evRes(r, "p50 latency on " + r.slice), note: "latest run summary" })}${r.base?.latency_p50 != null ? " vs " + secs(r.base.latency_p50) : ""}` : "";
-  const cost = r.cost != null ? `${ev("$" + num(r.cost, 3), evRes(r, "Cost per example on " + r.slice))} per example${r.base?.cost != null ? " vs $" + num(r.base.cost, 3) : ""}` : "";
+  const ratio = (a, b, slow, fast) => { if (a == null || b == null || !(b > 0) || !(a > 0)) return ""; const x = a / b; return Math.abs(x - 1) < .05 ? ' <span class="faint">(same)</span>' : x > 1 ? ` <span class="neg">(${x.toFixed(1)}× ${slow})</span>` : ` <span class="pos">(${(1 / x).toFixed(1)}× ${fast})</span>`; };
+  const lat = r.latency_p50 != null ? `p50 ${ev(secs(r.latency_p50), { ...evRes(r, "p50 latency on " + r.slice), note: "latest run summary" })}${r.base?.latency_p50 != null ? " vs " + secs(r.base.latency_p50) + ratio(r.latency_p50, r.base.latency_p50, "slower", "faster") : ""}` : "";
+  const cost = r.cost != null ? `${ev("$" + num(r.cost, 3), evRes(r, "Cost per example on " + r.slice))} per example${r.base?.cost != null ? " vs $" + num(r.base.cost, 3) + ratio(r.cost, r.base.cost, "the cost", "cheaper") : ""}` : "";
   return `<div class="fig">${s}</div>
   <dl class="f">
     <dt>result</dt><dd>${bin ? ev(N0(r.right) + " / " + N0(r.n), evRes(r)) + ` right (${pct(r.score)})` : ev(sc(r.score, r), evRes(r))} on ${esc(r.slice)} · ${runsTxt(r)}</dd>
@@ -570,7 +571,7 @@ section("flips", () => {
     const out = all.map((c, i) => `<rect data-i="${i}" x="${(i % cols) * (cs + gap)}" y="${Math.floor(i / cols) * (cs + gap)}" width="${cs}" height="${cs}" rx="2" class="${COL[c.o]}" style="${hide.has(c.o) ? "opacity:.12" : ""}"/>${c.c > 0 && c.c < 1 && isBin(r) ? `<circle cx="${(i % cols) * (cs + gap) + cs / 2}" cy="${Math.floor(i / cols) * (cs + gap) + cs / 2}" r="2" style="fill:var(--surface)" pointer-events="none"/>` : ""}`).join("");
     $("#grid").innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="max-width:${W}px" role="img" aria-label="Every id on ${esc(cur)}: fixed, broken, both right, both wrong">${out}</svg>`;
     const tot = {}; all.forEach(c => tot[c.o] = (tot[c.o] || 0) + 1); const L2 = labs(r);
-    $("#fleg").innerHTML = Object.keys(ORD).filter(o => tot[o]).map(o => `<button data-o="${o}" class="${hide.has(o) ? "dim" : ""}"><i style="background:${{ fix: "var(--positive)", brk: "var(--negative)", ww: "var(--cell-ww)", rr: "var(--cell-rr)", na: "var(--pill-neutral-bg)" }[o]}"></i>${L2[o]} · <b>${N0(tot[o])}</b></button>`).join("") + (isBin(r) && r.runs > 1 ? `<span><i style="background:var(--surface);border:1px solid var(--control);border-radius:50%"></i>differs across runs</span>` : "");
+    $("#fleg").innerHTML = Object.keys(ORD).filter(o => tot[o]).map(o => `<button data-o="${o}" class="${hide.has(o) ? "dim" : ""}"><i style="background:${{ fix: "var(--positive)", brk: "var(--negative)", ww: "var(--cell-ww)", rr: "var(--cell-rr)", na: "var(--pill-neutral-bg)" }[o]}"></i>${L2[o]} · <b>${N0(tot[o])}</b></button>`).join("") + (isBin(r) && r.runs > 1 && all.some(c => c.c > 0 && c.c < 1) ? `<span><i style="background:var(--surface);border:1px solid var(--control);border-radius:50%"></i>differs across runs</span>` : "");
     $("#fsum").innerHTML = `<dt>net</dt><dd>${ev((tot.fix || 0) + " − " + (tot.brk || 0) + " = " + sgn((tot.fix || 0) - (tot.brk || 0), 0), evPair(r, r.vs))} ids on ${esc(r.slice)}</dd><dt>flaky</dt><dd>${all.filter(c => c.c > 0 && c.c < 1).length} ids where ${mn(CH)} differs across its ${r.runs} runs</dd>`;
   };
   setTimeout(() => {
@@ -601,7 +602,7 @@ section("failures", () => {
     const W = 800, cs = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--accent)", "var(--warning)"]; let x = 0;
     const other = Math.max(0, of - shared.reduce((a, h) => a + h.share.count, 0));
     bar = `<div class="fig"><svg viewBox="0 0 ${W} 62" role="img" aria-label="Errors split by hill"><text class="t-f" x="0" y="11">${N0(of)} ${esc((shared[0].share.of_what || "errors").split(";")[0].slice(0, 90))}</text>`;
-    [...shared.map((h, i) => [h.name, h.share.count, cs[i % cs.length]]), ["other", other, "var(--control)"]].forEach(([k, n, c]) => { const w = n / of * W; if (w <= 0) return; bar += `<rect x="${x}" y="20" width="${Math.max(1, w - 1)}" height="28" rx="3" style="fill:${c}"/><text x="${x + 6}" y="38" style="fill:#fff;font-size:11.5px" class="t-b">${w > 110 ? esc(k) + " " + n : w > 26 ? n : ""}</text>`; x += w; });
+    [...shared.map((h, i) => [h.name, h.share.count, cs[i % cs.length]]), ["other", other, "var(--control)"]].forEach(([k, n, c]) => { const w = n / of * W; if (w <= 0) return; bar += `<rect x="${x}" y="20" width="${Math.max(1, w - 1)}" height="28" rx="3" style="fill:${c}"><title>${esc(k)}: ${n} of ${of}</title></rect><text x="${x + 6}" y="38" style="fill:${k === "other" ? "var(--text)" : "#fff"};font-size:11.5px" class="t-b">${w > 7.5 * (k.length + String(n).length + 2) ? esc(k) + " " + n : w > 26 ? n : ""}</text>`; x += w; });
     bar += `</svg></div>`;
   }
   const card = h => {
@@ -618,7 +619,7 @@ section("failures", () => {
   setTimeout(() => { const ic = $("#still"); if (ic) ic.onclick = e => { const b = e.target.closest("button"); if (!b) return; const x = still[+b.dataset.i]; openPop(b, { v: "wrong", label: "Example " + x.id, slice: MAIN.slice, hash: MAIN.hash, n: MAIN.n, runs: MAIN.run_ids || [MAIN.task], src: "rows.jsonl, mean per id", note: `this right in ${Math.round(x.c * MAIN.runs)} of ${MAIN.runs} runs · before ${x.b == null ? "—" : x.b >= .5 ? "right" : "wrong"}` }); }; });
   const first = G.slice(0, 9), rest = G.slice(9);
   return `${bar}<div class="hills">${first.map(card).join("")}</div>${rest.length ? `<details class="print-open"><summary class="more-btn" style="display:inline-block;cursor:pointer">${rest.length} more hills</summary><div class="hills" style="margin-top:12px">${rest.map(card).join("")}</div></details>` : ""}
-  ${still.length ? `<h3>still wrong on ${esc(short(MAIN.slice))} · ${N0(still.length)} of ${N0(MAIN.n)}${MAIN.runs > 1 ? ` · right in k of ${MAIN.runs} runs` : ""}</h3><div class="idchips" id="still">${still.slice(0, 240).map((x, i) => `<button data-i="${i}">${esc(String(x.id).slice(0, 10))}${MAIN.runs > 1 ? " · " + Math.round(x.c * MAIN.runs) + "/" + MAIN.runs : ""}${x.b >= .5 ? " · was right" : ""}</button>`).join("")}${still.length > 240 ? `<span class="faint">+${still.length - 240}</span>` : ""}</div>` : ""}`;
+  ${still.length ? `<h3>still wrong on ${esc(short(MAIN.slice))} · ${N0(still.length)} of ${N0(MAIN.n)}${MAIN.runs > 1 ? ` · wrong in every run unless marked` : ""}</h3><div class="idchips" id="still">${still.slice(0, 240).map((x, i) => `<button data-i="${i}">${esc(String(x.id).slice(0, 10))}${MAIN.runs > 1 && Math.round(x.c * MAIN.runs) > 0 ? " · right " + Math.round(x.c * MAIN.runs) + "/" + MAIN.runs : ""}${x.b >= .5 ? " · was right" : ""}</button>`).join("")}${still.length > 240 ? `<span class="faint">+${still.length - 240}</span>` : ""}</div>` : ""}`;
 });
 
 /* ================= 08 lineage ================= */
@@ -672,16 +673,23 @@ section("cost", () => {
     s += `<text class="t-f" x="${W - 30}" y="${ls.length * rh + 30}" text-anchor="end">s per example · dot p50, bar end p95</text>`;
     ls.forEach((r, i) => {
       const y = 12 + i * rh; s += `<text x="${L - 10}" y="${y + 10}" text-anchor="end">${esc(short(r.slice).slice(0, nar ? 12 : 28))}</text>`;
-      [[r.base, 0, "s-mut", "f-mut"], [r, 14, "s-acc", "f-acc"]].forEach(([x, dy, sc2, fc]) => { if (!x || x.latency_p50 == null) return; const p95 = x.latency_p95 ?? x.latency_p50;
+      [[r.base, 0, "s-mut", "f-faint"], [r, 14, "s-acc", "f-acc"]].forEach(([x, dy, sc2, fc]) => { if (!x || x.latency_p50 == null) return; const p95 = x.latency_p95 ?? x.latency_p50;
         s += `<line class="${sc2}" stroke-width="4" stroke-linecap="round" x1="${X(x.latency_p50)}" x2="${X(p95)}" y1="${y + dy}" y2="${y + dy}" opacity=".55"/><circle class="${fc}" cx="${X(x.latency_p50)}" cy="${y + dy}" r="4.5"/><text class="t-f" x="${X(p95) + 6}" y="${y + dy + 4}">${x.latency_p50.toFixed(1)} / ${p95.toFixed(1)}</text>`; });
     });
     s += `</svg>`;
   }
-  return `${s ? `<div class="fig">${s}<div class="leg"><span><i style="background:var(--control)"></i>${(PV ? mn(PV) : "before")}</span><span><i style="background:var(--accent)"></i>${mn(CH)}</span></div></div>` : ""}
-  <div class="tw"><table><thead><tr><th>slice</th><th class="n">p50</th><th class="n">p95</th><th class="n">before p50</th><th class="n">$ / example</th><th class="n">before $</th><th class="n">$ total</th></tr></thead><tbody>
-  ${R.map(r => `<tr><td class="id">${esc(short(r.slice))}</td><td class="n">${secs(r.latency_p50)}</td><td class="n">${secs(r.latency_p95)}</td><td class="n">${secs(r.base?.latency_p50)}</td><td class="n">${r.cost == null ? "—" : "$" + num(r.cost, 3)}</td><td class="n">${r.base?.cost == null ? "—" : "$" + num(r.base.cost, 3)}</td><td class="n">${r.cost_total == null ? "—" : "$" + num(r.cost_total, 4)}</td></tr>`).join("")}
-  </tbody></table></div>`;
+  return `${s ? `<div class="fig">${s}<div class="leg"><span><i style="background:var(--faint)"></i>${(PV ? mn(PV) : "before")}</span><span><i style="background:var(--accent)"></i>${mn(CH)}</span></div></div>` : ""}
+  ${costTable()}`;
 });
+
+function costTable() {
+  // only the columns some run filled in
+  const cols = [["p50", r => r.latency_p50, secs], ["p95", r => r.latency_p95, secs], ["before p50", r => r.base?.latency_p50, secs],
+    ["$ / example", r => r.cost, v => "$" + num(v, 3)], ["before $", r => r.base?.cost, v => "$" + num(v, 3)], ["$ total", r => r.cost_total, v => "$" + num(v, 4)]].filter(([, g]) => R.some(r => g(r) != null));
+  return `<div class="tw"><table><thead><tr><th>slice</th>${cols.map(([h]) => `<th class="n">${h}</th>`).join("")}</tr></thead><tbody>
+  ${R.map(r => `<tr><td class="id">${esc(short(r.slice))}</td>${cols.map(([, g, f]) => `<td class="n">${g(r) == null ? "—" : f(g(r))}</td>`).join("")}</tr>`).join("")}
+  </tbody></table></div>`;
+}
 
 /* ================= 10 not known ================= */
 section("unknown", () => {
