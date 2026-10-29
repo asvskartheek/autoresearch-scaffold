@@ -126,8 +126,8 @@ function mapBlock(){
   goals:String(o(st.goals).filter(g=>g.status==='open').length),questions:nq!=null?String(nq):st.questions?.needs_human?String(st.questions.needs_human):'',
   models:String(o(st.models).length),hills:String(o(st.hills).filter(h=>h.status==='open').length),papers:String(o(st.papers).length),
   slices:String(Object.keys(st.slices||{}).length),archive:String(Math.max(0,(st.tasks_total||st.tasks.length)-active().length))};
- const L={overview:'Champion and ladder',learn:'Catch up, by doing',workbench:'Jobs running',goals:'Targets, in units',questions:'Open questions',
-  models:'Every candidate',hills:'Problems being climbed',papers:'Write-ups',slices:'Frozen eval sets',archive:'Finished jobs'};
+ const L={overview:'Champion, ladder',learn:'Catch up, by doing',workbench:'Jobs running',goals:'Targets, in units',questions:'Open questions',
+  models:'Every candidate',hills:'Problems to climb',papers:'Write-ups',slices:'Frozen eval sets',archive:'Finished jobs'};
  return panel('Map',`<div class="sx-map">${ROUTES.filter(([k])=>k!=='start').map(([k,l])=>`<a class="sx-pg" href="#${k}">${ICON[k]||''}<b>${l}</b><span class="sx-pc num ell">${C[k]||''}</span><span class="sx-pl">${L[k]||''}</span></a>`).join('')}</div>`);
 }
 

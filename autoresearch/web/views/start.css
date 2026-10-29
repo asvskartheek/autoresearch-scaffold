@@ -81,7 +81,7 @@ a.sx-brief:hover{filter:brightness(1.08)}
 
 /* (5) the map */
 .sx-map{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
-a.sx-pg{display:grid;grid-template-columns:16px minmax(0,1fr) auto;grid-template-areas:"i l c" ". s s";column-gap:8px;row-gap:2px;align-items:center;padding:12px;border:1px solid var(--border);border-radius:var(--radius-card);color:var(--text);min-width:0}
+a.sx-pg{display:grid;grid-template-columns:16px minmax(0,1fr) auto;grid-template-areas:"i l c" ". s s";column-gap:8px;row-gap:2px;align-items:center;align-content:start;padding:12px;border:1px solid var(--border);border-radius:var(--radius-card);color:var(--text);min-width:0}
 a.sx-pg:hover{border-color:var(--accent)}
 a.sx-pg>svg{grid-area:i;color:var(--muted)}
 a.sx-pg b{grid-area:l;font-weight:500}
