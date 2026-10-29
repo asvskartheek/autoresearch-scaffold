@@ -122,5 +122,24 @@ class ReadPane(unittest.TestCase):
         self.assertFalse(any("lesson building" in x for x in texts), texts)
 
 
+class AnswerFromUI(unittest.TestCase):
+    def test_reopen_and_flag_routes(self):
+        from autoresearch import features
+        p = ledger()
+        p.add_model("base", parent="", status="champion")
+        p.open_goal("g1", "Ninety", "full", 0.9)
+        post = dict(features.POST)
+        call = post["/api/questions/"]
+        r = call(p, "/api/questions/add", dict(title="Is it worth it?", parent="g:g1", by="kartheek"))[1]
+        self.assertEqual(call(p, "/api/questions/flag", dict(id=r["id"], on=True, by="kartheek"))[0], 200)
+        self.assertTrue(q.tree(p, full=False)["byid"][r["id"]]["needs_human"])
+        call(p, "/api/questions/answer", dict(id=r["id"], claim="Yes.", by="kartheek"))
+        n = q.tree(p, full=False)["byid"][r["id"]]
+        self.assertEqual((n["status"], n["claim"], n["settled_by"], n["needs_human"]), ("answered", "Yes.", "kartheek", False))
+        self.assertEqual(call(p, "/api/questions/reopen", dict(id=r["id"], by="kartheek"))[0], 200)
+        n = q.tree(p, full=False)["byid"][r["id"]]
+        self.assertEqual((n["status"], n["claim"], n["was"]), ("open", "", "Yes."))
+
+
 if __name__ == "__main__":
     unittest.main()

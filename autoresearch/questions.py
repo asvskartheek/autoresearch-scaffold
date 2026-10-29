@@ -8,7 +8,7 @@ each promoted, rejected or candidate model is a child of its hill (ids g:<goal>,
 record with the same id wins, so editing a seeded node (answer, dead) writes it; asking under one does not.
 
 CLI: arx q add | ask | answer | dead | list. Dashboard: GET /api/questions, GET /api/questions/notes?id=,
-POST /api/questions/{ask,add,answer,dead}. Asking enqueues inbox kind="question" for `arx answer`.
+POST /api/questions/{ask,add,answer,dead,reopen,flag}. Asking enqueues inbox kind="question" for `arx answer`.
 """
 from __future__ import annotations
 
@@ -119,6 +119,29 @@ def settle(p, qid, status, claim, evidence=None, by="agent") -> dict:
     for it in features.inbox(p):  # a queued ask nobody started is no longer needed
         if it.get("kind") == "question" and it.get("ref") == qid and it.get("status") == "queued":
             features.update(p, it["id"], status="done", result=f"{status} by {by}")
+    return rec | {"id": qid}
+
+
+def _base(p, qid) -> dict:
+    node = tree(p, full=False)["byid"].get(qid)
+    if not node:
+        raise SystemExit(f"unknown question {qid}")
+    return stored(p).get(qid) or {k: node[k] for k in ("title", "parent", "evidence", "created", "by") if node.get(k) is not None}
+
+
+def reopen(p, qid, by="agent") -> dict:
+    """An answered or dead question goes back to open; its old claim is kept as `was`."""
+    base = _base(p, qid)
+    node = tree(p, full=False)["byid"][qid]
+    rec = base | dict(status="open", claim="", was=node.get("claim") or None, reopened=time.time(), reopened_by=by)
+    _save(p, qid, {k: v for k, v in rec.items() if v is not None})
+    return rec | {"id": qid}
+
+
+def flag(p, qid, on=True, by="agent") -> dict:
+    """Mark a question as waiting on a person (or not)."""
+    rec = _base(p, qid) | dict(needs_human=bool(on), flagged_by=by)
+    _save(p, qid, rec)
     return rec | {"id": qid}
 
 
@@ -673,6 +696,10 @@ def _post(p, path, d):
         if verb in ("answer", "dead"):
             return 200, settle(p, str(d.get("id") or ""), "answered" if verb == "answer" else "dead", d.get("claim"),
                                by=_who(d))
+        if verb == "reopen":
+            return 200, reopen(p, str(d.get("id") or ""), by=_who(d))
+        if verb == "flag":
+            return 200, flag(p, str(d.get("id") or ""), on=bool(d.get("on", True)), by=_who(d))
     except SystemExit as e:
         return 400, dict(error=str(e))
     return 404, dict(error="unknown action")
