@@ -7,20 +7,26 @@
 {
 // ---------- figures. A slice scores 0/1 per example (read as solved / n) unless it says `scale: continuous`
 // (optional `unit`); a continuous slice whose measure is seconds (score = minus seconds) reads as time.
-const hNum=v=>{const t=Math.abs(v)>=10?Math.abs(v).toFixed(1):num(Math.abs(v),3);return (v<0?'−':'')+t};
 const SL=k=>k?S.state.slices[k]||null:null;
 // true / false from the slice's scale; null for an old slice the server could not read a scale off
 const binSl=sl=>sl?.scale?sl.scale!=='continuous':null;
 const isRate=(r,sl)=>{if(!r)return false;const b=binSl(sl);return b!=null?b:r.score>=0&&r.score<=1};
-const unitOf=sl=>sl?.unit?'&nbsp;'+esc(sl.unit):'';
+// continuous figures read as the plain amount in the slice's unit: a "minus ms" metric (stored negated so higher is
+// better) or a timed hill shows "387 ms", and a change reads "1,071 ms faster", never a negative score
+const flip=(sl,U)=>!!U||/^\s*minus\b/i.test(sl?.metric||'');
+const uOf=(sl,U)=>(sl?.name?unitOf(sl.name):sl?.unit||'')||(U?'s':'');
+const isTime=(sl,U)=>/^(ms|s|secs?|seconds?|min|µs|us)$/i.test(uOf(sl,U));
+const cTxt=(v,sl,U)=>{const x=flip(sl,U)?-v:v,u=uOf(sl,U);return grp(x)+(u?' '+u:'')};
+const cAmt=(v,sl,U)=>esc(cTxt(v,sl,U)).replace(/ (?=\S+$)/,'&nbsp;');
+const cDelta=(d,sl,U)=>{const x=flip(sl,U)?-d:d,u=uOf(sl,U);return (x>0?'+':'−')+esc(grp(Math.abs(x)))+(u?'&nbsp;'+esc(u):'')};
+const cWords=(d,sl,U)=>{const x=flip(sl,U)?-d:d,u=uOf(sl,U),t=esc(grp(Math.abs(x)))+(u?'&nbsp;'+esc(u):'');return `${t} ${isTime(sl,U)?(x<0?'faster':'slower'):(x<0?'less':'more')}`};
 // a hill is timed when its measure (or its slice's metric) says the score is seconds
 const timed=x=>/\bseconds?\b/i.test(x.measure||S.state.slices[x.target]?.metric||'');
-const secsOf=v=>`${hNum(Math.abs(v))}&nbsp;s`;
 function hFig(r,U,sl){
  if(!r)return DASH;
  if(isRate(r,sl))return `<b>${solved(r)}</b><span class="of">&nbsp;/&nbsp;${r.n}</span>`;
- if(U)return `<b>${hNum(Math.abs(r.score))}</b><span class="of">&nbsp;s</span>`;
- return `<b>${hNum(r.score)}</b><span class="of">${sl?.unit?unitOf(sl):' mean'}</span>`;
+ const x=flip(sl,U)?-r.score:r.score,u=uOf(sl,U);
+ return `<b>${esc(grp(x))}</b><span class="of">${u?'&nbsp;'+esc(u):' mean'}</span>`;
 }
 // a continuous score against the champion's on one example: 1 better, -1 worse, 0 level (within 10%)
 const cmpC=(v,c)=>Math.abs(v-c)<=Math.max(1e-9,.1*Math.abs(c))?0:better(v,c)?1:-1;
@@ -48,8 +54,7 @@ function hDelta(r,base,U,sl){
  if(!r||!base)return DASH;
  if(isRate(r,sl)&&isRate(base,sl)){const k=solved(r)-solved(base);return k===0?'<span class="faint">0</span>':`<span class="${better(k,0)?'pos':'neg'}">${k>0?'+':'−'}${Math.abs(k)}</span>`}
  const d=r.score-base.score;if(Math.abs(d)<1e-9)return '<span class="faint">0</span>';
- const shown=U?-d:d;
- return `<span class="${better(d,0)?'pos':'neg'}">${shown>0?'+':'−'}${hNum(Math.abs(d))}${U?'&nbsp;s':unitOf(sl)}</span>`;
+ return `<span class="${better(d,0)?'pos':'neg'}">${cDelta(d,sl,U)}</span>`;
 }
 // per-example flips vs a reference. Pass/fail: f fixed (reference wrong, this right), k broke.
 // Continuous: f better than the reference on that example, k worse (level within 10% counts as neither).
@@ -135,7 +140,7 @@ function hFinding(x,runs,D,U){
  const ch=S.state.champion,now=runs.find(o=>o.m===ch),sl=SL(x.target),ctl=SL(x.control);
  if(!runs.length)return `No runs on the dev set yet.`;
  const {sub,ref,refFound}=hPair(x,runs),refName=refFound?`<b>${mn(ref.m)}</b>, where the hill was found`:'the champion';
- const say=r=>isRate(r,sl)?`solves ${solved(r)} of ${r.n}`:U?`takes ${secsOf(r.score)} a question on average`:`scores ${hNum(r.score)}${unitOf(sl)}`;
+ const say=r=>isRate(r,sl)?`solves ${solved(r)} of ${r.n}`:isTime(sl,U)?`takes ${cAmt(r.score,sl,U)} on average`:`averages ${cAmt(r.score,sl,U)}`;
  if(!sub)return now?`No attempt yet. The champion ${say(now.r)} on the dev set.`:'No attempt yet.';
  const m=`<b>${mn(sub.m)}</b>`;
  if(!ref)return `${m} ${say(sub.r)} on the dev set; the champion has no run to compare.`;
@@ -143,14 +148,13 @@ function hFinding(x,runs,D,U){
  const bin=binary(D?.target,sl),fl=D?hFlips(D.target.runs[sub.m],D.target.runs[ref.m],bin):null;
  if(fl&&bin)s=`${m} fixes ${fl.f} of ${sub.r.n} dev examples and breaks ${fl.k}, against ${refName}`;
  else if(isRate(sub.r,sl)&&isRate(ref.r,sl))s=`${m} solves ${solved(sub.r)} of ${sub.r.n} on the dev set, ${(k=>k===0?'level with':`${Math.abs(k)} ${k>0?'more':'fewer'} than`)(solved(sub.r)-solved(ref.r))} ${refName}`;
- else if(U){const d=Math.abs(sub.r.score)-Math.abs(ref.r.score);s=`${m} takes ${secsOf(sub.r.score)} a dev question on average, ${Math.abs(d)<1e-9?'level with':`${hNum(Math.abs(d))}&nbsp;s ${d<0?'faster':'slower'} than`} ${refName}`}
- else{const d=sub.r.score-ref.r.score;s=`${m} scores ${hNum(sub.r.score)}${unitOf(sl)} on the dev set against ${refName}’s ${hNum(ref.r.score)} (${d>0?'+':'−'}${hNum(Math.abs(d))})`}
+ else{const d=sub.r.score-ref.r.score;s=`${m} ${say(sub.r)} on the dev set against ${cAmt(ref.r.score,sl,U)} for ${refName}, ${Math.abs(d)<1e-9?'level':cWords(d,sl,U)}`}
  // continuous: how many examples moved, beyond the 10% the matrix calls level
- if(fl&&!bin)s+=`; ${U?'faster':'better'} on ${fl.f} of ${sub.r.n} examples, ${U?'slower':'worse'} on ${fl.k}`;
+ if(fl&&!bin)s+=`; ${isTime(sl,U)?'faster':'better'} on ${fl.f} of ${sub.r.n} examples, ${isTime(sl,U)?'slower':'worse'} on ${fl.k}`;
  if(x.control){
   if(!sub.c||!ref.c)s+='. Control not run';
   else if(isRate(sub.c,ctl)&&isRate(ref.c,ctl)){const k=solved(sub.c)-solved(ref.c);s+=k===0?`. Control level, ${solved(sub.c)} of ${sub.c.n}`:`. Control ${k>0?'+':'−'}${Math.abs(k)}, ${solved(sub.c)} of ${sub.c.n}`}
-  else s+=`. Control ${hNum(sub.c.score)}${unitOf(ctl)} against ${hNum(ref.c.score)}${unitOf(ctl)}`;
+  else{const d=sub.c.score-ref.c.score;s+=`. Control ${cAmt(sub.c.score,ctl)} against ${cAmt(ref.c.score,ctl)}, ${Math.abs(d)<1e-9?'level':cWords(d,ctl)}`}
  }
  return s+'.';
 }
@@ -208,10 +212,10 @@ function hAttempts(x,runs,U){
    ${now?`<td class="num fig">${me?DASH:hDelta(o.r,now.r,U,sl)}</td>`:''}
    ${cr?`<td class="num fig hfl">${fl?`<span class="${fl.f?'pos':'faint'}">+${fl.f}</span><span class="faint"> / </span><span class="${fl.k?'neg':'faint'}">−${fl.k}</span>`:DASH}</td>`:''}
    ${ctl?`<td class="num fig">${o.c?run(o.c,hFig(o.c,false,ctl)):'<span class="faint">not run</span>'}</td>${now?`<td class="num fig hdc">${me||!o.c?DASH:hDelta(o.c,now.c,false,ctl)}</td>`:''}`:''}</tr>`});
- const head=[['Model'],[''],[U?'Mean time':isRate(runs[0].r,sl)?'Solved':'Mean score','num'],['']];
+ const head=[['Model'],[''],[isRate(runs[0].r,sl)?'Solved':isTime(sl,U)?'Mean time':'Mean','num'],['']];
  if(now)head.push(['<span title="Change against the champion on the dev set">Δ vs champion</span>','num']);
  if(cr)head.push(bin?['<span title="Examples the champion got wrong and this got right / right and this got wrong">Fixed / broke</span>','num hfl']
-  :[`<span title="Examples where this scored more than 10% ${U?'faster':'better'} / ${U?'slower':'worse'} than the champion">${U?'Faster / slower':'Better / worse'}</span>`,'num hfl']);
+  :[`<span title="Examples where this scored more than 10% ${isTime(sl,U)?'faster':'better'} / ${isTime(sl,U)?'slower':'worse'} than the champion">${isTime(sl,U)?'Faster / slower':'Better / worse'}</span>`,'num hfl']);
  if(ctl){head.push(['Control','num']);if(now)head.push(['<span title="Change against the champion on the control">Δ control</span>','num hdc'])}
  const foot=ctl?`<p class="hctl"><span>Control</span>${sLink(x.control)}${ctl.n!=null?` · ${plural(ctl.n,'example')}`:''}${ctl.description?` · ${esc(ctl.description)}`:''}</p>`:'';
  return panel('Attempts on the dev set',body+table(head,rows)+foot,{meta,right:`<span class="hright">${right}</span>`,cls:'hdev'});
@@ -233,7 +237,7 @@ function hMatrix(title,M,runs,U,isCtl){
  const ease=id=>{const v=ms.map(m=>M.runs[m][id]).filter(v=>v!=null);return v.length?v.reduce((a,b)=>a+(bin?(b>=.5):b),0)/v.length:-Infinity};
  const E=Object.fromEntries(M.ids.map(id=>[id,ease(id)]));
  const ids=[...M.ids].sort((a,b)=>E[a]-E[b]);
- const val=v=>U?secsOf(v).replace('&nbsp;',' '):hNum(v)+(sl?.unit?' '+sl.unit:'');
+ const val=v=>cTxt(v,sl,U);
  const cls=(m,id)=>{
   const v=M.runs[m][id];if(v==null)return ['na','not run'];
   const c=cr?.[id];
@@ -248,7 +252,7 @@ function hMatrix(title,M,runs,U,isCtl){
  const sel=S.hsel&&S.hsel.slice===M.slice&&M.ids.includes(S.hsel.id)?S.hsel.id:null;
  const rows=ms.map(m=>{
   const r=M.runs[m],me=m===ch,vals=ids.map(id=>r[id]).filter(v=>v!=null);
-  const tot=bin?`<b>${vals.filter(v=>v>=.5).length}</b><span class="of">&nbsp;/&nbsp;${ids.length}</span>`:vals.length?`<b>${U?hNum(Math.abs(vals.reduce((a,b)=>a+b,0)/vals.length)):hNum(vals.reduce((a,b)=>a+b,0)/vals.length)}</b>${U?'<span class="of">&nbsp;s</span>':`<span class="of">${unitOf(sl)}</span>`}`:DASH;
+  const tot=bin?`<b>${vals.filter(v=>v>=.5).length}</b><span class="of">&nbsp;/&nbsp;${ids.length}</span>`:vals.length?(v=>`<b>${esc(grp(flip(sl,U)?-v:v))}</b><span class="of">${uOf(sl,U)?'&nbsp;'+esc(uOf(sl,U)):' mean'}</span>`)(vals.reduce((a,b)=>a+b,0)/vals.length):DASH;
   return `<div class="hmx-row${me?' champ':''}"><a class="hmx-m" href="#model/${enc(m)}" title="${esc(m)}">${mn(m)}</a><div class="hmx-cells">${ids.map(id=>{const [c,l]=cls(m,id);return `<i class="c ${c}${id===sel?' sel':''}" data-id="${esc(id)}" title="${mnt(m)}: ${esc(l)}"></i>`}).join('')}</div><span class="hmx-t fig">${tot}</span></div>`;
  }).join('');
  const detail=sel?hCellDetail(M,ms,sel,cls,bin,U):`<p class="hmx-hint">Hardest examples on the left. Click a column to see one example across every model.</p>`;
@@ -266,7 +270,7 @@ function hCellDetail(M,ms,id,cls,bin,U){
   const ok=ms.filter(m=>M.runs[m][id]!=null&&M.runs[m][id]>=.5).length;
   bits.push(`Solved by <b>${ok} of ${ran}</b> models`);
   if(cv!=null)bits.push(`the champion got it <b>${cv>=.5?'right':'wrong'}</b>`);
- }else if(cv!=null)bits.push(`Champion ${U?secsOf(cv):hNum(cv)+unitOf(SL(M.slice))}`);
+ }else if(cv!=null)bits.push(`Champion ${cAmt(cv,SL(M.slice),U)}`);
  if(by.fx?.length)bits.push(`<span class="pos">${bin?'fixed':'better'}</span> by ${names(by.fx)}`);
  if(by.bk?.length)bits.push(`<span class="neg">${bin?'broken':'worse'}</span> by ${names(by.bk)}`);
  return `<div class="hmx-sel"><span class="hsel-id"><span class="id">${esc(id)}</span>${copyBtn(id)}</span><p>${bits.join('; ')}.</p><button class="iconbtn" type="button" onclick="hillCellClear()" aria-label="Clear the selected example" title="Clear">${I('<path d="M6 6l12 12M18 6L6 18"/>',14)}</button></div>`;
