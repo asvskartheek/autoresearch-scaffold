@@ -6,7 +6,7 @@
    .grid row lands on the sheet's content edges: n columns × w + (n−1) × 24 = content width. */
 :root{
  --ground:#f2f5f8;--surface:#fff;--raised:#f5f7f9;--active:#e4e9ee;--border:#e3e7eb;--rule:#eef1f4;--control:#cdd3d9;
- --text:#131416;--muted:#5b6168;--faint:#6f767d;
+ --text:#131416;--muted:#5b6168;--faint:#646b72;
  --accent:#1b6c80;--accent-soft:#e3f0f3;--primary:#16181a;--on-primary:#fff;
  --positive:#1e7b4f;--negative:#c4242a;--warning:#92400e;
  --chart-1:#1b6c80;--chart-2:#2f70bb;--chart-3:#a86f0c;--grid:#e9edf0;
