@@ -418,7 +418,7 @@ def clean_shape(s: dict) -> dict:
     if "tool" not in out:
         return {}
     d = str(s.get("d") or "")[:4000]
-    out["d"] = d if re.fullmatch(r"[MLQCZmlqcz0-9.,\s-]*", d) else ""
+    out["d"] = d if re.fullmatch(r"[MLHVQCZmlhvqcz0-9.,\s-]*", d) else ""
     for k in ("bw", "bh", "x", "y", "w", "h"):
         try:
             out[k] = round(float(s[k]), 1)

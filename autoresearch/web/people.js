@@ -8,6 +8,7 @@
 //   ARXP.face(id|name, name)  a round initials chip in the person's colour
 //   ARXP.at(html)             @mentions of known people, wrapped in <b class="at">
 //   ARXP.complete(textarea)   @ + letters offers matching names
+//   ARXP.figs(body)           an agent's answer split into [sanitised inline SVG figures (HTML), the rest as text]
 (()=>{
 if(window.ARXP)return;
 const K='arx-me',get=k=>{try{return localStorage.getItem(k)}catch(e){return null}},put=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
@@ -51,8 +52,18 @@ const ARXP=window.ARXP={
   ta.addEventListener('blur',()=>setTimeout(close,150));ta.addEventListener('keydown',e=>{if(e.key==='Escape')close()})},
  // who read a thread: faces of everyone in seen (id -> t) except the authors' own last message
  seenFaces(seen,skip){return Object.keys(seen||{}).filter(k=>k!==skip).map(k=>ARXP.face(k,null,'sm')).join('')},
+ figs(body){const parts=String(body||'').split(/(<svg[\s\S]*?<\/svg>)/i);
+  return [parts.filter((x,i)=>i%2).map(cleanSvg).join(''),parts.filter((x,i)=>!(i%2)).join('').replace(/\n{3,}/g,'\n\n').trim()]},
  beat
 };
+// figures from an answer: only drawing elements and plain attributes survive; the page fits them to its width
+const SVG_OK=new Set(['svg','g','path','rect','circle','line','text','polyline','tspan']);
+const ATTR_OK=/^(viewbox|width|height|x|y|x1|y1|x2|y2|cx|cy|r|rx|ry|d|points|fill|stroke|stroke-width|stroke-dasharray|stroke-linecap|stroke-linejoin|opacity|fill-opacity|stroke-opacity|transform|font-size|font-weight|font-family|text-anchor|dominant-baseline|xmlns|preserveaspectratio)$/i;
+function cleanSvg(src){const t=document.createElement('template');t.innerHTML=src;const svg=t.content.querySelector('svg');if(!svg)return '';
+ const walk=el=>{for(const a of [...el.attributes])if(!ATTR_OK.test(a.name)||/url\s*\(|javascript:|expression|&#|\\/i.test(a.value))el.removeAttribute(a.name);
+  for(const c of [...el.childNodes]){if(c.nodeType===3)continue;if(c.nodeType!==1||!SVG_OK.has(c.localName)){c.remove();continue}walk(c)}};
+ walk(svg);if(!svg.getAttribute('viewBox')){const w=parseFloat(svg.getAttribute('width')),ht=parseFloat(svg.getAttribute('height'));if(w&&ht)svg.setAttribute('viewBox',`0 0 ${w} ${ht}`)}
+ svg.removeAttribute('width');svg.removeAttribute('height');return `<div class="px-fig">${svg.outerHTML}</div>`}
 const css=document.createElement('style');
 css.textContent=`.px-face{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;flex:none;font:600 10px/1 var(--sans,system-ui);
  background:color-mix(in srgb,var(--pc) 18%,var(--page,#fff));color:var(--pc);box-shadow:0 0 0 2px var(--page,#fff)}
@@ -62,6 +73,7 @@ css.textContent=`.px-face{display:inline-grid;place-items:center;width:24px;heig
 .px-pick{position:fixed;z-index:2147483600;display:flex;flex-direction:column;min-width:180px;padding:4px;border-radius:10px;background:var(--surface,#fff);color:var(--text,#111);box-shadow:0 8px 28px rgba(0,0,0,.18),0 0 0 1px var(--border,#ddd)}
 .px-pick button{all:unset;display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;font:13px var(--sans,system-ui)}
 .px-pick button:hover{background:var(--hover,rgba(0,0,0,.05))}
-b.at{font-weight:600;color:var(--accent,#2563eb)}`;
+b.at{font-weight:600;color:var(--accent,#2563eb)}
+.px-fig{margin:6px 0 8px;color:var(--text,inherit)}.px-fig svg{display:block;width:100%;height:auto;max-height:260px}`;
 document.head.append(css);
 })();

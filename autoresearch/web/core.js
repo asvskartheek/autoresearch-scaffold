@@ -132,7 +132,7 @@ function renderTop(){
 // who else has this project open: their faces, ringed when they are on this same view
 function hereFaces(){
  if(!window.ARXP)return '';const cur=location.hash.slice(1)||'overview',hs=ARXP.here();if(!hs.length)return '';
- return `<span class="px-here" aria-label="${hs.length} more here">${hs.slice(0,5).map(x=>`<a href="#${esc(x.route||'overview')}" title="${esc(x.name)} · ${esc(routeLabel((x.route||'overview').split('/')[0]))}">${ARXP.face(x.id,x.name,x.route===cur?'on':'')}</a>`).join('')}${hs.length>5?`<span class="sub">+${hs.length-5}</span>`:''}</span>`;
+ return `<span class="px-here" aria-label="${hs.length} more here">${hs.slice(0,5).map(x=>{const pp=(x.route||'').startsWith('papers/');return `<a href="${pp?esc(x.route):'#'+esc(x.route||'overview')}" title="${esc(x.name)} · ${pp?'reading the paper '+esc(x.route.slice(7)):esc(routeLabel((x.route||'overview').split('/')[0]))}">${ARXP.face(x.id,x.name,x.route===cur?'on':'')}</a>`}).join('')}${hs.length>5?`<span class="sub">+${hs.length-5}</span>`:''}</span>`;
 }
 // light -> dark -> system (follow the OS) -> light
 function toggleTheme(){
