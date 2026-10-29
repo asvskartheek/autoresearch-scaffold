@@ -31,6 +31,15 @@ function pGroup(title,ps){
  return `<section class="pgroup"><div class="pgh"><h2>${title}</h2><span class="meta">${ps.length}${w?` · ${w} waiting`:''}</span></div>
   ${panel('',table([['Paper'],['Comments','num'],['Agent','num'],['Updated','num']],ps.map(pRow)),{flush:true,cls:'ptbl'})}</section>`;
 }
+// one public paper per goal and one living paper per open or climbed hill: list the ones still missing, with the command
+function pMissing(ps){
+ const L=S.state,has=new Set(ps.flatMap(p=>[p.name,p.goal,p.hill].filter(Boolean)));
+ const gs=Object.entries(L.goals||{}).filter(([k])=>!has.has(k)),hs=Object.entries(L.hills||{}).filter(([k,h])=>!has.has(k)&&(h.status==='open'||h.status==='climbed'));
+ if(!gs.length&&!hs.length)return '';
+ const row=(kind,k,o,c)=>`<div class="pm-r"><a class="ln ell" href="#${kind}/${enc(k)}"><b>${esc(o.title||k)}</b></a>${kind==='goal'?st(G_ST[o.status]||o.status,G_LABEL[o.status]||o.status):st(o.status,'Hill '+o.status)}${cmd(c)}</div>`;
+ return `<section class="pgroup"><div class="pgh"><h2>No paper yet</h2><span class="meta">${gs.length+hs.length}</span></div>
+  ${panel('',`<div class="pm">${gs.map(([k,g])=>row('goal',k,g,`arx paper new --goal ${k}`)).join('')}${hs.map(([k,h])=>row('hill',k,h,`arx paper new ${k}`)).join('')}</div>`)}</section>`;
+}
 VIEWS.papers=()=>{
  const ps=Object.values(S.state.papers||{}).sort((a,b)=>(b.waiting||0)-(a.waiting||0)||(b.updated||0)-(a.updated||0));
  if(!ps.length)return page({title:'Papers',crumbs:[['Papers']]})+panel('',empty('No papers yet','Start one from the worked example, then publish it; people comment here and the agent replies.')+
@@ -43,6 +52,6 @@ VIEWS.papers=()=>{
  const pub=ps.filter(p=>p.goal),int=ps.filter(p=>!p.goal);
  return page({title:'Papers',crumbs:[['Papers']],finding,acts})+
   (pub.length?pGroup('Goal papers',pub):'')+
-  (int.length?pGroup('Internal notes',int):'');
+  (int.length?pGroup('Internal notes',int):'')+pMissing(ps);
 };
 }
