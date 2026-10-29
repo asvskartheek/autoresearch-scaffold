@@ -340,10 +340,131 @@ def _base_css() -> str:
 
 
 FIG = re.compile(r"<svg[\s\S]*?</svg>", re.I)
+SVG_OK = {"svg", "g", "path", "rect", "circle", "line", "text", "polyline"}  # as comments.js cleanSvg
+ATTR_OK = re.compile(r"^(viewbox|width|height|x|y|x1|y1|x2|y2|cx|cy|r|rx|ry|d|points|fill|stroke|stroke-width|stroke-dasharray|"
+                     r"stroke-linecap|stroke-linejoin|opacity|fill-opacity|stroke-opacity|transform|font-size|font-weight|"
+                     r"font-family|text-anchor|dominant-baseline|xmlns|preserveaspectratio)$", re.I)
+ATTR_BAD = re.compile(r"url\s*\(|javascript:|expression|&#|\\", re.I)
+
+
+def clean_svg(src: str) -> str:
+    """An agent's figure, safe to put in a file someone else opens: allowed SVG elements and attributes only."""
+    from html.parser import HTMLParser
+    out, skip = [], [0]
+
+    class P(HTMLParser):
+        def handle_starttag(self, tag, attrs, end=False):
+            if skip[0] or tag not in SVG_OK:
+                skip[0] += 0 if end else 1
+                return
+            a = "".join(f' {k}="{_html.escape(v or "")}"' for k, v in attrs if ATTR_OK.match(k) and not ATTR_BAD.search(v or ""))
+            out.append(f"<{tag}{a}{'/' if end else ''}>")
+
+        def handle_startendtag(self, tag, attrs):
+            self.handle_starttag(tag, attrs, end=True)
+
+        def handle_endtag(self, tag):
+            if skip[0]:
+                skip[0] -= 1
+            elif tag in SVG_OK:
+                out.append(f"</{tag}>")
+
+        def handle_data(self, data):
+            if not skip[0]:
+                out.append(_html.escape(data))
+    P(convert_charrefs=True).feed(src)
+    return "".join(out)
+
+
+PATH_D = re.compile(r"^[MLHVZmlhvz\d.\s,-]{1,20000}$")
+TOOLS = ("box", "arrow", "pen", "highlight")
+DARK = re.compile(r"""data-theme=["']dark|prefers-color-scheme""")
+THEME = ("<script>(()=>{const r=document.documentElement,m=matchMedia('(prefers-color-scheme: dark)');let t=null;"
+         "try{t=localStorage.getItem('arx-theme')}catch(e){}const set=()=>{r.dataset.theme=t||(m.matches?'dark':'light')};set();"
+         "m.addEventListener&&m.addEventListener('change',set)})()</script>")
+NOTES_CSS = """.arx-notes{max-width:760px;margin:48px auto;padding:0 24px;font-size:14px}.arx-notes ol{padding:0;list-style:none}
+.arx-notes li{margin:0 0 18px;padding:8px 10px;border-radius:8px;scroll-margin-top:40vh}.arx-notes li:target{box-shadow:0 0 0 2px #e8590c}
+.arx-notes li.res{opacity:.7}.arx-nh{display:flex;gap:8px;align-items:baseline}.arx-notes q{color:var(--muted-fg,#666)}
+.arx-m{margin:6px 0 0 28px}.arx-m time{color:var(--muted-fg,#888);font-size:12px;margin-left:6px}.arx-fig svg{max-width:100%;height:auto}
+.arx-notes summary{cursor:pointer;margin:0 0 12px}.arx-gone{color:var(--muted-fg,#888)}
+.arx-pin{display:inline-block;min-width:20px;height:20px;padding:0 4px;box-sizing:border-box;border-radius:10px;background:#e8590c;color:#fff;
+font:600 11px/20px system-ui,sans-serif;text-align:center;text-decoration:none;flex:none}.res .arx-pin,.arx-pin.res{opacity:.55}
+.arx-ink{position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;z-index:40}
+.arx-ink svg{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible}
+.arx-ink path{fill:none;stroke:#e8590c;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.arx-ink .highlight path{stroke:#facc15;stroke-width:16;stroke-opacity:.38}.arx-ink .res path{stroke-opacity:.35}
+.arx-ink .arx-pin{position:absolute;pointer-events:auto;box-shadow:0 0 0 2px #fff}"""
+# drawn marks on their blocks, as the reader places them (paper.html shapeXf): follow the reference word when it is
+# still there, else the block scaled by its width; a numbered pin on each links to its note (#c-<id>)
+INK_JS = r"""(()=>{const M=__MARKS__;const L=document.createElement('div');L.className='arx-ink';
+L.innerHTML='<svg xmlns="http://www.w3.org/2000/svg"></svg>';document.body.append(L);const svg=L.firstChild;
+const blk=b=>[...document.querySelectorAll('[data-block]')].find(x=>x.dataset.block===b)||null;
+const texts=b=>{const w=document.createTreeWalker(b,NodeFilter.SHOW_TEXT),o=[];let n,i=0;while((n=w.nextNode())){o.push([n,i]);i+=n.data.length}return o};
+const rangeAt=(ns,s,e)=>{const r=document.createRange();let a=0;for(const [n,i] of ns){const j=i+n.data.length;if(!a&&s<=j){r.setStart(n,s-i);a=1}if(a&&e<=j){r.setEnd(n,e-i);return r}}return null};
+const word=(b,m)=>{if(!m.suffix)return null;const ns=texts(b);if(!ns.length)return null;const full=ns.map(x=>x[0].data).join('');
+ let i=m.prefix?full.indexOf(m.prefix+m.suffix):-1;if(i>=0)i+=m.prefix.length;else i=full.indexOf(m.suffix);return i<0?null:rangeAt(ns,i,i+m.suffix.length)};
+const REF=/^M(-?[\d.]+) (-?[\d.]+)M(-?[\d.]+) (-?[\d.]+)(?=M)/;
+function draw(){const o=L.getBoundingClientRect();let g='',pins='';
+ for(const m of M){const b=m.block?blk(m.block):m.d?document.body:null;if(!b)continue;const br=b.getBoundingClientRect();
+  let tx=br.left-o.left,ty=br.top-o.top,k=1,px=tx-24,py=ty;
+  if(m.d){const r=REF.exec(m.d),w=r&&word(b,m),wr=w&&w.getClientRects()[0];
+   if(wr&&wr.height){k=wr.height/Math.max(1,r[4]-r[2]);tx=wr.left-o.left-r[1]*k;ty=wr.top-o.top-r[2]*k}else k=br.width/Math.max(1,m.bw||br.width);
+   g+=`<g class="${m.tool}${m.res?' res':''}" transform="translate(${tx} ${ty}) scale(${k})"><path d="${m.d}"/></g>`;px=tx+m.x*k-10;py=ty+m.y*k-10}
+  pins+=`<a class="arx-pin${m.res?' res':''}" id="m-${m.id}" href="#c-${m.id}" style="left:${Math.max(0,px)}px;top:${py}px">${m.n}</a>`}
+ svg.innerHTML=g;L.querySelectorAll('.arx-pin').forEach(a=>a.remove());L.insertAdjacentHTML('beforeend',pins)}
+const show=()=>{const h=decodeURIComponent(location.hash.slice(1));if(!/^c-/.test(h))return;const el=document.getElementById(h);
+ if(!el){const n=document.querySelector('.arx-gone');if(n)n.hidden=false;return}const d=el.closest('details');if(d&&!d.open){d.open=true;el.scrollIntoView({block:'center'})}};
+draw();addEventListener('load',draw);addEventListener('resize',draw);document.fonts&&document.fonts.ready.then(draw);
+new ResizeObserver(draw).observe(document.body);addEventListener('hashchange',show);show()})()"""
+
+
+def _when(t) -> str:
+    try:
+        return time.strftime("%d %b %H:%M", time.localtime(float(t)))
+    except (TypeError, ValueError):
+        return ""
+
+
+def _msg_html(m: dict) -> str:
+    body = redact(m.get("body") or "")
+    figs = "".join(f'<div class="arx-fig">{clean_svg(x)}</div>' for x in FIG.findall(body))
+    text = _html.escape(FIG.sub("", body).strip())
+    text = re.sub(r"(https?://[^\s<]+[^\s<.,;:)])", r'<a href="\1" target="_blank" rel="noopener">\1</a>', text).replace("\n", "<br>")
+    who = "Agent" if m.get("agent") else (m.get("author") or "")
+    return f'<div class="arx-m"><b>{_html.escape(who)}</b><time>{_when(m.get("t"))}</time><div>{figs}{text}</div></div>'
+
+
+def _notes(ths: list[dict]) -> tuple[str, list[dict]]:
+    """The threads as notes (open, then resolved folded), each with id c-<thread id> so #c- links land; and the marks."""
+    marks, li = [], {False: [], True: []}
+    for n, t in enumerate(ths, 1):
+        if not re.fullmatch(r"[\w-]{1,80}", str(t.get("id") or "")):
+            continue
+        a, res = t.get("anchor") or {}, bool(t.get("resolved"))
+        sh = a.get("shape") if isinstance(a.get("shape"), dict) else {}
+        d = sh.get("d") if isinstance(sh.get("d"), str) and PATH_D.match(sh.get("d")) and sh.get("tool") in TOOLS else None
+        block = a.get("block") if isinstance(a.get("block"), str) else ""
+        if d or block:
+            num = lambda v: float(v) if isinstance(v, (int, float)) else 0
+            marks.append(dict(id=t["id"], n=n, block=block, d=d, tool=sh.get("tool") if d else "", bw=num(sh.get("bw")), x=num(sh.get("x")),
+                              y=num(sh.get("y")), prefix=str(a.get("prefix") or ""), suffix=str(a.get("suffix") or ""), res=res))
+        pin = f'<a class="arx-pin" href="#m-{t["id"]}">{n}</a>' if d or block else f'<span class="arx-pin">{n}</span>'
+        quote = _html.escape(redact((a.get("quote") or "").strip())[:160])
+        li[res].append(f'<li id="c-{t["id"]}"{" class=res" if res else ""}><div class="arx-nh">{pin}{f"<q>{quote}</q>" if quote else ""}</div>'
+                       + "".join(_msg_html(m) for m in t.get("messages") or []) + "</li>")
+    if not li[False] and not li[True]:
+        return "", []
+    html = (f'<aside class="arx-notes"><h2>Comments</h2><p class="arx-gone" hidden>That comment is not in this file.</p>'
+            + (f"<ol>{''.join(li[False])}</ol>" if li[False] else "")
+            + (f"<details><summary>Resolved · {len(li[True])}</summary><ol>{''.join(li[True])}</ol></details>" if li[True] else "")
+            + "</aside>")
+    return html, marks
 
 
 def export_paper(p, name: str) -> str:
-    """The paper as one file: base tokens inlined, attachments as data: URLs, its threads appended as notes."""
+    """The paper as one file: base tokens inlined, attachments as data: URLs, links to sibling papers as <name>.html
+    (the file `arx share export --paper <name>` writes), the reader's theme, every comment thread as a note with its
+    drawn mark on the paper."""
     d = papers.pdir(p, name)
     text = redact((d / "paper.html").read_text())  # before the data: URLs, whose base64 may hold "/Users"
 
@@ -354,19 +475,15 @@ def export_paper(p, name: str) -> str:
         mt = mimetypes.guess_type(f.name)[0] or "application/octet-stream"
         return f'{m.group(1)}data:{mt};base64,{base64.b64encode(f.read_bytes()).decode()}'
     text = re.sub(r'((?:src|href)=["\'])(?:\./)?files/([\w.+-]+)', data_url, text)
-    ths = [t for t in papers.threads(papers.thread(p, name)) if not t.get("resolved")]
-    notes = ""
-    if ths:
-        items = "".join(
-            f"<li><q>{_html.escape((t.get('anchor') or {}).get('quote') or '')[:160]}</q>"
-            + "".join(f"<p><b>{_html.escape(m['author'])}</b> {_html.escape(FIG.sub('[figure]', m['body']))}</p>" for m in t["messages"])
-            + "</li>" for t in ths)
-        notes = (f'<aside class="arx-notes"><h2>Open comments</h2><ol>{items}</ol></aside>'
-                 "<style>.arx-notes{max-width:760px;margin:48px auto;padding:0 24px;font-size:14px}"
-                 ".arx-notes li{margin:0 0 16px}.arx-notes q{color:var(--muted-fg,#666)}.arx-notes p{margin:4px 0}</style>")
-    style = f"<style>@layer arx{{{_base_css()}}}</style>"
-    text = re.sub(r"<head[^>]*>", lambda m: m.group(0) + style, text, count=1) if re.search(r"<head", text, re.I) else style + text
-    return re.sub(r"</body>", notes + "</body>", text, count=1, flags=re.I) if notes else text + notes
+    known = set(papers.names(p))
+    text = re.sub(r'(href=["\'])\.\./([\w.+-]+)/?(?=[#"\'])',
+                  lambda m: f"{m.group(1)}{m.group(2)}.html" if m.group(2) in known else m.group(0), text)
+    notes, marks = _notes(papers.threads(papers.thread(p, name)))
+    if notes:
+        notes += f"<style>{NOTES_CSS}</style><script>{_inline(INK_JS.replace('__MARKS__', _js(marks)))}</script>"
+    head = f"<style>@layer arx{{{_base_css()}}}</style>" + (THEME if DARK.search(text) else "")
+    text = re.sub(r"<head[^>]*>", lambda m: m.group(0) + head, text, count=1) if re.search(r"<head", text, re.I) else head + text
+    return re.sub(r"</body>", lambda m: notes + m.group(0), text, count=1, flags=re.I) if re.search(r"</body>", text, re.I) else text + notes
 
 
 # ---------- HTTP

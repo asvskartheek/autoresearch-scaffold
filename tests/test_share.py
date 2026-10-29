@@ -91,7 +91,7 @@ class Export(unittest.TestCase):
         papers.add(p, "demo", src)
         papers.post(p, "demo", "comment", body="why <svg><rect/></svg>?", author="Ann", anchor=dict(block="a", quote="some"))
         one = share.export_paper(p, "demo")
-        self.assertIn("@layer arx{", one); self.assertIn("Open comments", one); self.assertIn("[figure]", one)
+        self.assertIn("@layer arx{", one); self.assertIn('<div class="arx-fig"><svg><rect/></svg></div>', one)
         html = share.export_dashboard(p, "gamma")
         self.assertIn("window.ARX_SNAP=", html); self.assertNotIn('<script src="', html); self.assertNotIn('<link rel="stylesheet"', html)
         snap = json.loads(html.split("window.ARX_SNAP=", 1)[1].split(";</script>", 1)[0])
@@ -135,6 +135,27 @@ class Export(unittest.TestCase):
         tight = share.snapshot_data(p, "zeta", budget=1)  # past the budget a task still comes, cut
         self.assertTrue(all(tight[f"api/task/{i}"]["snapshot_cut"] for i in ids))
         self.assertLessEqual(len(tight[f"api/task/{ids[0]}"]["metrics"]), 150)
+
+    def test_paper_export_keeps_marks_ids_links_theme(self):
+        p = ledger("eta")
+        for n, body in (("other", "<html><head></head><body><p>x</p></body></html>"),
+                        ("main", "<html data-theme='light'><head></head><body><section data-block='a'><p>see "
+                                 "<a href='../other'>other</a> and <a href='../nope'>gone</a></p></section>"
+                                 "<style>:root[data-theme='dark']{}</style></body></html>")):
+            (p.root / f"{n}.html").write_text(body); papers.add(p, n, p.root / f"{n}.html")
+        shape = dict(tool="box", d="M1 2M1 14M0 0H40V20H0Z", bw=600, x=0, y=0)
+        c = papers.post(p, "main", "comment", body="look", author="Ann", anchor=dict(block="a", quote="see", shape=shape))
+        r = papers.post(p, "main", "comment", body="old <svg onload='x()'><path d='M0 0'/></svg>", author="Bo", anchor=dict(block="a", quote="see"))
+        papers.post(p, "main", "resolve", parent=r["id"], author="Bo")
+        bad = dict(tool="box", d="M0 0\"/><script>x()</script>", bw=1)
+        papers.post(p, "main", "comment", body="evil", author="Cy", anchor=dict(block="a", quote="see", shape=bad))
+        one = share.export_paper(p, "main")
+        self.assertIn(f'id="c-{c["id"]}"', one); self.assertIn(f'id="c-{r["id"]}" class=res', one)  # #c- links land
+        self.assertIn("Resolved · 1", one)
+        self.assertIn('"d":"M1 2M1 14M0 0H40V20H0Z"', one)  # the drawn mark goes on the page
+        self.assertNotIn("<script>x()", one); self.assertNotIn("onload", one)
+        self.assertIn("href='other.html'", one); self.assertIn("href='../nope'", one)
+        self.assertIn("prefers-color-scheme: dark", one)  # follows the reader's theme
 
 
 if __name__ == "__main__":
