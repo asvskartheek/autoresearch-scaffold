@@ -13,9 +13,12 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import random
+import threading
 import time
 from pathlib import Path
+from urllib.parse import unquote
 
 from . import features
 from .core import per_id
@@ -90,12 +93,25 @@ def fast_paired(cand: dict, base: dict, sign: int = 1, iters: int = 2000) -> dic
                 cand=math.fsum(cand[i] for i in ids) / n, base=math.fsum(base[i] for i in ids) / n)
 
 
+_PAIRS: dict = {}  # (root, slice, sign, run ids of each side) -> fast_paired; the same pairs recur across papers
+
+
+def _pair(ix, m, b, sl, sign):
+    key = (str(ix.p.root), sl, sign, tuple(t["id"] for t in ix.runs[(m, sl)]), tuple(t["id"] for t in ix.runs[(b, sl)]))
+    hit = _PAIRS.get(key)
+    if hit is None:
+        if len(_PAIRS) > 4096:
+            _PAIRS.clear()
+        hit = _PAIRS[key] = fast_paired(ix.pooled(m, sl), ix.pooled(b, sl), sign)
+    return dict(hit)
+
+
 def _paired(ix, m, b, sl, sign):
     if not (ix.has(m, sl) and ix.has(b, sl)) or m == b:
         return None
     key = (m, b, sl, sign)
     if key not in ix.pairs:
-        d = fast_paired(ix.pooled(m, sl), ix.pooled(b, sl), sign)
+        d = _pair(ix, m, b, sl, sign)
         if d.get("delta") is None:
             ix.pairs[key] = None
         else:
@@ -186,9 +202,87 @@ def _flat(d, pre="", out=None, depth=0):
     return out
 
 
-def build(p, model: str | None = None, vs: str | None = None) -> dict:
-    with p.snapshot():
-        return _build(p, model, vs)
+def _goal_status(p, ix, name, g, champ):
+    """core.goal_status from the index, with fast_paired: the same fields, a fraction of the time."""
+    sl, kpi, sign = g["slice"], g.get("kpi", "score"), 1 if g.get("higher_is_better", True) else -1
+    model = (g.get("evidence") or {}).get("model") if g.get("status") == "achieved" else champ
+    ev = ix.latest(model, sl) if model else None
+    value = None
+    if ev:
+        if kpi == "score":
+            sc = ix.pooled(model, sl)
+            value = sum(sc.values()) / len(sc) if sc else None
+        else:
+            value = (ev.get("summary") or {}).get(kpi)
+    vs = None
+    if kpi == "score" and model and g.get("baseline") and g["baseline"] != model and ix.has(g["baseline"], sl):
+        vs = _pair(ix, model, g["baseline"], sl, sign)
+    cur = (ix.slices.get(sl) or {}).get("hash")
+    return dict(g, name=name, model=model, value=value, task=ev["id"] if ev else None,
+                runs=len(ix.runs.get((model, sl), [])) if model else 0,
+                met=value is not None and sign * (value - g["target"]) >= 0,
+                gap=None if value is None else sign * (g["target"] - value), vs_baseline=vs,
+                hills={k: h.get("status") for k, h in p.hills().items() if h.get("goal") == name},
+                slice_changed=bool(cur and g.get("slice_hash") and cur != g["slice_hash"]))
+
+
+def _signature(p) -> tuple:
+    """What the paper depends on: the ledger files and every task's task.json, by mtime and size."""
+    out = []
+    for f in [p.root / "research.json", *sorted(p.dir.glob("*.json")), p.dir / "decisions.jsonl"]:
+        try:
+            st = f.stat()
+            out.append((f.name, st.st_mtime_ns, st.st_size))
+        except OSError:
+            pass
+    try:
+        with os.scandir(p.dir / "tasks") as it:
+            for d in it:
+                try:
+                    st = os.stat(os.path.join(d.path, "task.json"))
+                    out.append((d.name, st.st_mtime_ns, st.st_size))
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    return tuple(sorted(out))
+
+
+_CACHE: dict = {}  # (root, model, vs) -> (signature, paper); the page and its pickers ask for the same papers again
+_LOCK = threading.Lock()
+_BUSY: dict = {}
+
+
+def build(p, model: str | None = None, vs: str | None = None, cache: bool = True) -> dict:
+    """The paper's data. Cached per (project, model, vs) until a ledger file or a task changes; do not mutate it."""
+    if not cache:
+        with p.snapshot():
+            return _build(p, model, vs)
+    key = (str(p.root), model or "", vs or "")
+    with _LOCK:
+        lock = _BUSY.setdefault(key, threading.Lock())
+    with lock:  # a second request for the same paper waits for the first build instead of repeating it
+        sig = _signature(p)
+        hit = _CACHE.get(key)
+        if hit and hit[0] == sig:
+            return hit[1]
+        with p.snapshot():
+            d = _build(p, model, vs)
+        with _LOCK:
+            if len(_CACHE) > 64:
+                _CACHE.clear()
+            _CACHE[key] = (sig, d)
+    return d
+
+
+def prewarm(p, model=None, vs=None):
+    """Start building a paper in the background, so the page's data request finds it ready or half done."""
+    def run():
+        try:
+            build(type(p)(p.root), model, vs)  # its own Project: snapshot() state is per instance
+        except Exception:  # noqa: BLE001 - the data route reports the real error
+            pass
+    threading.Thread(target=run, daemon=True).start()
 
 
 def _build(p, model, vs):
@@ -203,11 +297,11 @@ def _build(p, model, vs):
     me = models[model]
     sign = 1 if cfg.get("higher_is_better", True) else -1
     goals = {}
-    for g in p.goals():
+    for g, rec in p.goals().items():
         try:
-            goals[g] = p.goal_status(g)
-        except SystemExit:
-            goals[g] = dict(p.goals()[g], name=g)
+            goals[g] = _goal_status(p, ix, g, rec, champ)
+        except (KeyError, TypeError):
+            goals[g] = dict(rec, name=g)
     # comparator: what this model had to beat, i.e. the nearest ancestor measured on the main slice
     par = me.get("parent") if me.get("parent") != model else None
     main = _main_slice(p, ix, model, goals)
@@ -390,6 +484,7 @@ def _mean(d):
 @features.get("/reference")
 def _page(p, path, q):
     if path.rstrip("/") == "/reference" or path.startswith("/reference/"):
+        prewarm(p, unquote(path[len("/reference"):].strip("/")) or None, q.get("vs") or None)
         return 200, (WEB / "reference.html").read_bytes(), HTML
     raise KeyError(path)
 
