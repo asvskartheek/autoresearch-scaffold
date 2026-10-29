@@ -19,9 +19,10 @@ const $c=s=>host.querySelector(s),hl=$c('.cm-hl'),pinsEl=$c('.cm-pins'),pops=$c(
 const h=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let mode=false,tool='pin',all=[],open=null,hot=null,draw=null,pending=null,agentOn=true;
 const here=()=>location.hash.slice(1)||'overview';
-// the person (people.js): one id per browser, a name they can change; every event carries both
+// the person (people.js): one id per browser, a name they can change; every event carries both. at(html, thread): the
+// thread's author names count as mentionable too, so a mention made before a rename still reads as one
 const P=window.ARXP,me=()=>P?P.me().name:'',myId=()=>P?P.me().id:'',setMe=n=>P&&P.setName(n);
-const at=html=>P?P.at(html):html,face=(m)=>m.agent?'<span class="px-face sm" style="--pc:var(--accent,#3b82f6)">AI</span>':P?P.face(m.by||m.author,m.author,'sm'):'';
+const at=(html,c)=>P?P.at(html,c?c.messages.map(m=>m.author).filter(Boolean):undefined):html,face=(m)=>m.agent?'<span class="px-face sm" style="--pc:var(--accent,#3b82f6)">AI</span>':P?P.face(m.by||m.author,m.author,'sm'):'';
 // a thread is for you when it @mentions you or you are in it, and someone else wrote since you last read it: reading it at
 // its latest message takes it out of For you until someone writes again
 // read here: the thread version (last_t) this browser has already marked seen, kept even when the POST failed (a snapshot,
@@ -340,7 +341,7 @@ function thread(id){const c=all.find(t=>t.id===id);if(!c)return;
  if(c.route!==here()){location.hash='#'+c.route;setTimeout(()=>thread(id),400);return}
  const ta0=pops.querySelector('textarea'),draft=open===id&&ta0?ta0.value:'';
  closePop();open=id;const p=document.createElement('div');p.className='cm-pop';
- const msg=m=>`<div class="cm-m"><div class="cm-who">${face(m)}${h(m.agent?'Agent':m.author)} · ${when(m.t)}</div><div class="cm-msg ${m.agent?'agent':''}${m.error?' err':''}">${m.agent?rich(m.body):at(linky(m.body))}</div></div>`;
+ const msg=m=>`<div class="cm-m"><div class="cm-who">${face(m)}${h(m.agent?'Agent':m.author)} · ${when(m.t)}</div><div class="cm-msg ${m.agent?'agent':''}${m.error?' err':''}">${m.agent?rich(m.body):at(linky(m.body),c)}</div></div>`;
  const seenBy=P?P.seenFaces(Object.fromEntries(Object.entries(c.seen||{}).filter(([k,t])=>t>=c.last_t)),myId()):'';
  const ag=stranded(c)?`<div class="cm-m"><div class="cm-who">Agent</div><div class="cm-msg cm-idle">No agent running · <code>arx answer</code></div></div>`:working(c)?`<div class="cm-m"><div class="cm-who">Agent</div><div class="cm-msg agent cm-busy"><span class="cm-dot"></span>${h(c.agent.note||(c.agent.status==='queued'?'Queued':'Working'))}${c.agent.task?` <a href="#task/${encodeURIComponent(c.agent.task)}">task</a>`:''}</div></div>`:'';
  p.innerHTML=`<div class="cm-anchor">${mine().indexOf(c)+1} · ${h(anchorText(c.anchor||{}))}</div><div class="cm-msgs">${c.messages.map(msg).join('')}${ag}</div>${seenBy?`<div class="cm-seen" title="Read the latest message">Seen ${seenBy}</div>`:''}
@@ -361,7 +362,7 @@ function thread(id){const c=all.find(t=>t.id===id);if(!c)return;
  p.querySelectorAll('textarea,input').forEach(f=>f.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))send();if(e.key==='Escape')closePop()})}
 function drawList(){const you=all.filter(forMe);$c('.cm-lst').classList.toggle('you',!!you.length);$c('.cm-lst').dataset.you=you.length||'';
  if(!list.classList.contains('on'))return;const ts=[...you,...mine().filter(c=>!forMe(c)),...all.filter(t=>t.route!==here()&&!forMe(t))];
- const item=c=>{const i=mine().indexOf(c);return `<div class="cm-it ${klass(c)}${forMe(c)?' you':''}" data-id="${c.id}" ${forMe(c)?'title="For you: unread, and it mentions you or you are in it"':''}><span class="cm-n">${i>=0?i+1:'#'+h(c.route)}</span>${face(c.messages[0])}${at(h(c.messages[0].body.slice(0,140)))}<div class="cm-who">${h(anchorText(c.anchor||{}))} · ${c.messages.length-1} ${c.messages.length===2?'reply':'replies'}${c.resolved?' · resolved':stranded(c)?' · no agent running':!working(c)?'':c.agent.status==='running'?' · agent working':' · queued'}</div></div>`};
+ const item=c=>{const i=mine().indexOf(c);return `<div class="cm-it ${klass(c)}${forMe(c)?' you':''}" data-id="${c.id}" ${forMe(c)?'title="For you: unread, and it mentions you or you are in it"':''}><span class="cm-n">${i>=0?i+1:'#'+h(c.route)}</span>${face(c.messages[0])}${at(h(c.messages[0].body.slice(0,140)),c)}<div class="cm-who">${h(anchorText(c.anchor||{}))} · ${c.messages.length-1} ${c.messages.length===2?'reply':'replies'}${c.resolved?' · resolved':stranded(c)?' · no agent running':!working(c)?'':c.agent.status==='running'?' · agent working':' · queued'}</div></div>`};
  list.innerHTML=`<div class="cm-me">${P?P.face(myId(),me()||'?'):''}<input class="cm-name" placeholder="Your name" maxlength="60" value="${h(me())}"></div>`+(you.length?`<div class="cm-sec">For you · ${you.length}</div>`:'')+(ts.length?ts.map(item).join(''):'<div class="cm-it">Press C</div>');
  const nf=list.querySelector('.cm-name');nf.onchange=()=>setMe(nf.value.trim());nf.onkeydown=e=>e.stopPropagation();
  list.querySelectorAll('.cm-it[data-id]').forEach(el=>el.onclick=()=>{const c=all.find(t=>t.id===el.dataset.id);
