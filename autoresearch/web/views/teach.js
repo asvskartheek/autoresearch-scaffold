@@ -22,7 +22,7 @@ function ciWin(t,s){const z=s.z??t.view??zFull(t);let a=Math.max(t.min,-z),b=Mat
  if(s.tv){const v=s.tv,k=s.sk||{},xs=[v.lo,v.hi,v.delta,k.lo,k.hi,t.bar].filter(q=>q!=null&&isFinite(q));const lo=Math.min(a,...xs),hi=Math.max(b,...xs),pad=(hi-lo)*.06;
   if(lo<a)a=lo-pad;if(hi>b)b=hi+pad}
  return [a,b]}
-function zoom(c,dir){const s=st(c),t=c.task||s.tk,f=zFull(t),z=s.z??t.view??f;s.z=dir>0?Math.max(f/20,niceD(z/2)):Math.min(f,niceU(z*2));render(true)}
+function zoom(c,dir){const s=st(c),t=c.task||s.tk,f=zFull(t),z=s.z??t.view??f;s.z=dir>0?Math.max(f/20,niceD(z/2)):Math.min(f,niceU(z*2));const fo=document.activeElement?.id==='tsk';render(true);if(fo)document.getElementById('tsk')?.focus()}
 function sketchCI(c,s){
  const t=c.task||s.tk;s.tv=c.reveal?.viz||null;if(!s.sk){const [a0,b0]=ciWin(t,s);s.sk={delta:0,lo:-(b0-a0)*.08,hi:(b0-a0)*.08}}const k=s.sk;
  const W=LW(),H=92,Lx=16,R=W-16,[a,b]=ciWin(t,s),x=q=>Lx+(Math.max(a,Math.min(b,q))-a)/(b-a)*(R-Lx),span=b-a;
@@ -36,8 +36,11 @@ function sketchCI(c,s){
   <line x1="${x(0)}" x2="${x(0)}" y1="24" y2="64" stroke="var(--text)" stroke-width="1.5"/>${bar}
   <line x1="${x(k.lo)}" x2="${x(k.hi)}" y1="44" y2="44" stroke="var(--accent)" stroke-width="10" stroke-linecap="round" opacity=".3"/>
   <rect x="${x(k.lo)-4}" y="34" width="8" height="20" rx="3" fill="var(--accent)"/><rect x="${x(k.hi)-4}" y="34" width="8" height="20" rx="3" fill="var(--accent)"/>
-  <circle cx="${x(k.delta)}" cy="44" r="8" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>${truth}</svg>
-  ${c.pred?'':`<div class="t-zoom"><button class="btn" data-t="zout" aria-label="Zoom out" title="Zoom out (−)" ${b-a>=zFull(t)*1.99?'disabled':''}>−</button><button class="btn" data-t="zin" aria-label="Zoom in" title="Zoom in (+)" ${(s.z??t.view??zFull(t))<=zFull(t)/20+1e-9?'disabled':''}>+</button></div>`}`;
+  <circle cx="${x(k.delta)}" cy="44" r="8" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>${truth}</svg>`;
+}
+// the zoom buttons sit under the sketch (outside the svg, so a redraw while dragging leaves them alone)
+function zoomBtns(c,s){const t=c.task||s.tk;if(c.pred||t.kind==='bars')return '';const [a,b]=ciWin(t,s);
+ return `<div class="t-zoom"><button class="btn" data-t="zout" aria-label="Zoom out" title="Zoom out (−)" ${b-a>=zFull(t)*1.99?'disabled':''}>−</button><button class="btn" data-t="zin" aria-label="Zoom in" title="Zoom in (+)" ${(s.z??t.view??zFull(t))<=zFull(t)/20+1e-9?'disabled':''}>+</button></div>`;
 }
 function sketchBars(c,s){
  const t=c.task||s.tk,W=LW(),rh=44,H=t.rows.length*rh+4,R=W-(W<420?96:120);
@@ -140,7 +143,7 @@ function explainBody(c,s){
 
 // the task stays with the card's state, so the reveal can still draw it (the server sends it only before an answer)
 function body(c){const s=st(c);if(c.task&&(!s.tk||s.m!==c.method)){s.tk=c.task;s.m=c.method}const t=c.task||s.tk;if(!t||s.m!==c.method)return '';
- return c.method==='sketch'?(t.kind==='bars'?sketchBars(c,s):sketchCI(c,s)):c.method==='spot'?spotBody(c,s):
+ return c.method==='sketch'?(t.kind==='bars'?sketchBars(c,s):sketchCI(c,s)+zoomBtns(c,s)):c.method==='spot'?spotBody(c,s):
   c.method==='prototype'?protoBody(c,s):c.method==='code'?codeBody(c,s):c.method==='explain'?explainBody(c,s):''}
 function strip(c){const ms=c.methods||[];return `<div class="t-strip">${ms.map(m=>`<span class="t-m${m===c.method?' on':''}" title="${esc(NAMES[m])}">${ico(m)}</span>`).join('')}<b>${esc(NAMES[c.method]||'')}</b></div>`}
 
