@@ -32,7 +32,7 @@
 .cm-pin.wait{background:var(--cm-rep);color:var(--on-primary);animation:cm-pulse 1.4s ease-in-out infinite}
 .cm-pin.hot{transform:scale(1.2);opacity:1}
 @keyframes cm-pulse{50%{box-shadow:0 0 0 5px color-mix(in srgb,var(--cm-rep) 30%,transparent)}}
-.cm-pop{position:fixed;width:320px;max-width:calc(100vw - 24px);background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-card);
+.cm-pop{position:fixed;z-index:2;width:320px;max-width:calc(100vw - 24px);background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-card);
  box-shadow:0 8px 28px rgba(0,0,0,.18);pointer-events:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
 .cm-anchor{font-size:var(--fs-small);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-left:2px solid var(--cm-open);padding-left:6px}
 .cm-msgs{display:flex;flex-direction:column;gap:8px;max-height:52vh;overflow:auto}
@@ -59,7 +59,7 @@
 .cm-dot{flex:none;width:8px;height:8px;border-radius:4px;background:var(--cm-rep);animation:cm-blink 1.2s ease-in-out infinite}
 @keyframes cm-blink{50%{opacity:.25}}
 .cm-who{font-size:var(--fs-small);color:var(--faint);margin-bottom:2px}
-.cm-list{position:fixed;right:16px;bottom:56px;width:330px;max-width:calc(100vw - 32px);max-height:60vh;overflow:auto;pointer-events:auto;background:var(--surface);color:var(--text);
+.cm-list{position:fixed;z-index:1;right:16px;bottom:56px;width:330px;max-width:calc(100vw - 32px);max-height:60vh;overflow:auto;pointer-events:auto;background:var(--surface);color:var(--text);
  border:1px solid var(--border);border-radius:var(--radius-card);box-shadow:0 8px 28px rgba(0,0,0,.18);display:none}
 .cm-list.on{display:block}
 .cm-me{padding:8px 10px;border-bottom:1px solid var(--rule)}

@@ -234,7 +234,10 @@ function fitFigs(root){root.querySelectorAll('.cm-fig svg').forEach(svg=>{
  for(const t of svg.querySelectorAll('text')){const fs=parseFloat(t.getAttribute('font-size')||getComputedStyle(t).fontSize)||12;if(fs*sc<11)t.setAttribute('font-size',r1(11/sc))}})}
 
 /* ---------- compose and threads */
-function place(p,x,y){p.style.left=Math.max(12,Math.min(innerWidth-p.offsetWidth-12,x+14))+'px';p.style.top=Math.max(12,Math.min(innerHeight-p.offsetHeight-60,y+14))+'px'}  // clear of the buttons
+// clear of the buttons, and left of the open comment list when there is room (on a phone it sits on top of the list)
+function place(p,x,y){let mx=innerWidth-p.offsetWidth-12;
+ if(list.classList.contains('on')){const L=list.getBoundingClientRect().left-p.offsetWidth-12;if(L>=12)mx=Math.min(mx,L)}
+ p.style.left=Math.max(12,Math.min(mx,x+14))+'px';p.style.top=Math.max(12,Math.min(innerHeight-p.offsetHeight-60,y+14))+'px'}
 function closePop(){pops.innerHTML='';open=null;if(pending){pending=null;drawPins()}}
 const focusLater=ta=>{ta.focus({preventScroll:true});setTimeout(()=>{ta.focus({preventScroll:true});requestAnimationFrame(()=>{if(document.activeElement!==ta)ta.focus({preventScroll:true})})},0)};
 const nameField=()=>me()?'<span class="cm-sp"></span>':'<input class="cm-name cm-sp" placeholder="Your name" maxlength="60">';
