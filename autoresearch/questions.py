@@ -698,6 +698,12 @@ def _get_tree(p, path, q):
 
 
 def _who(d):
+    """Who acts: from the dashboard, the person's roster name when the page sends their id; a share-link guest is
+    always "guest: <their name>" and can never write as someone else."""
+    if d.get("_remote"):
+        from . import people
+        pid, name = people.who(dict(by=d.get("person"), _remote=True))
+        return "guest: " + re.sub(r"[^\w .@-]", "", name or "guest")[:32]
     return re.sub(r"[^\w .@-]", "", str(d.get("by") or "you"))[:40] or "you"
 
 
