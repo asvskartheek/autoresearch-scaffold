@@ -349,11 +349,13 @@ def project_list(default: Project) -> list[dict]:
     return out
 
 
-_CHECK = ("slice", "rule", "state", "threshold", "noisy", "n", "delta", "lo", "hi", "wins", "losses", "cand", "base")
+_CHECK = ("slice", "rule", "state", "threshold", "noisy", "n", "delta", "lo", "hi", "wins", "losses", "cand", "base",
+          "cand_runs", "base_runs", "cand_task", "base_task")
 
 
 def _slim_gate(g) -> dict | None:
-    """A promote record's gate, without the task ids: each rung's checks with their paired numbers."""
+    """A promote record's gate: each rung's checks with their paired numbers, how many runs were pooled on each side
+    and the run tasks, so the model page can mark pooled runs and link the evidence."""
     if not isinstance(g, dict):
         return None
     return dict(rungs=[dict(rung=r.get("rung"), status=r.get("status"),
