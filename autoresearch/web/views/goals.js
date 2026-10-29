@@ -9,13 +9,17 @@
 // ---------- figures: a score KPI reads as a percentage and its gaps in points; latency in seconds; cost in dollars
 const kpiOf=g=>g.kpi||'score';
 const isScore=g=>kpiOf(g)==='score';
+// a score on a binary slice is a share (%, pts); on a continuous slice it is a number in the slice's unit
+const isPct=g=>isScore(g)&&g.scale!=='continuous';
+const cv=(g,v)=>(Math.abs(v)>=10?v.toFixed(1):num(v,3))+(g.unit?'&nbsp;'+esc(g.unit):'');
 const isTime=g=>/^latency/.test(kpiOf(g));
 const sgn=g=>g.higher_is_better===false?-1:1;
 const KPI_NAME={score:'score',cost:'cost per question',latency_p50:'median latency',latency_p95:'p95 latency',latency_mean:'mean latency'};
 const kpiName=g=>KPI_NAME[kpiOf(g)]||kpiOf(g);
 const gv=function(g,v){
  if(v==null||!isFinite(v))return '—';
- if(isScore(g))return pct(v);
+ if(isPct(g))return pct(v);
+ if(isScore(g))return cv(g,v);
  if(isTime(g))return v.toFixed(1)+'&nbsp;s';
  if(kpiOf(g)==='cost')return money(v);
  return num(v);
@@ -23,7 +27,8 @@ const gv=function(g,v){
 // an unsigned amount of the KPI: points for a score, seconds, dollars
 const gamt=function(g,d){
  d=Math.abs(d);
- if(isScore(g))return (100*d).toFixed(1)+'&nbsp;pts';
+ if(isPct(g))return (100*d).toFixed(1)+'&nbsp;pts';
+ if(isScore(g))return cv(g,d);
  if(isTime(g))return d.toFixed(1)+'&nbsp;s';
  if(kpiOf(g)==='cost')return money(d);
  return num(d);
@@ -33,10 +38,12 @@ const gchg=function(g,d,signedGood=true){
  if(d==null)return DASH;
  const good=signedGood?d:sgn(g)*d;
  if(Math.abs(d)<1e-12)return '<span class="faint">0</span>';
- const shown=isScore(g)?pts(good)+'&nbsp;pts':(good>0?'+':'−')+gamt(g,d);
+ const shown=isPct(g)?pts(good)+'&nbsp;pts':(good>0?'+':'−')+gamt(g,d);
  return `<span class="${good>0?'pos':'neg'}">${shown}</span>`;
 }
 const cmpSym=g=>sgn(g)>0?'≥':'≤';
+// one end of a paired delta's interval, signed
+const ci=(g,d)=>isPct(g)?pts(d):(d>0?'+':d<0?'−':'')+gamt(g,d);
 const mLink=k=>k?(S.state.models[k]?`<a class="ln" href="#model/${enc(k)}">${mn(k)}</a>`:mn(k)):'—';
 const sLink=s=>`<a class="ln mono" href="#slices/${enc(s)}">${esc(s)}</a>`;
 const hLink=k=>{const x=S.state.hills[k];return `<a class="ln" href="#hill/${enc(k)}">${esc(x?.title||k)}</a>`};
@@ -68,7 +75,7 @@ const HORD={open:0,climbed:1,closed:2};
 const goalHills=g=>Object.entries(g.hills||{}).sort((a,b)=>(HORD[a[1]]??3)-(HORD[b[1]]??3));
 const hillCounts=g=>{const c={};for(const [,s] of goalHills(g))c[s]=(c[s]||0)+1;return c};
 const hillSum=g=>{const c=hillCounts(g),n=goalHills(g).length;if(!n)return 'no hills';return ['open','climbed','closed'].filter(s=>c[s]).map(s=>`${c[s]} ${s}`).concat(Object.keys(c).filter(s=>!['open','climbed','closed'].includes(s)).map(s=>`${c[s]} ${s}`)).join(' · ')};
-const answers=g=>isScore(g)&&g.gap>0&&g.n?Math.ceil(g.gap*g.n-1e-9):null;
+const answers=g=>isPct(g)&&g.gap>0&&g.n?Math.ceil(g.gap*g.n-1e-9):null;
 const ST_LABEL={open:'Open',achieved:'Achieved',abandoned:'Abandoned'};
 const gst=g=>st(g.status,ST_LABEL[g.status]||g.status);
 const ORDER={open:0,achieved:1,abandoned:2};
@@ -86,12 +93,13 @@ const track=function(g,{big=false}={}){
    <div class="gl-ends"><span>Baseline <b>${gv(g,P.b)}</b>${big?`<span class="gl-bn"> · ${mLink(g.baseline)}</span>`:''}</span><span>Target <b>${cmpSym(g)}&nbsp;${gv(g,P.t)}</b></span></div></div>`;
  }
  // abs: the KPI's own scale from 0, the target as a tick; lower-is-better fills to the value and passes left of the tick
- const top=isScore(g)?1:Math.max(P.v,P.t,P.b??0)*1.15||1,f=P.v/top,m=P.t/top;
+ // a continuous score can be negative (minus ms): draw magnitudes, so a smaller |score| fills less, like a latency
+ const a=x=>isPct(g)?x:Math.abs(x),top=isPct(g)?1:Math.max(a(P.v),a(P.t),a(P.b??0))*1.15||1,f=a(P.v)/top,m=a(P.t)/top;
  const mp=(100*Math.max(0,Math.min(1,m))).toFixed(1);
  return `<div class="gl-trk abs ${big?'big':''}">
   <div class="gl-tgt"><span style="--m:${mp}">Target <b>${cmpSym(g)}&nbsp;${gv(g,P.t)}</b></span></div>
   <div class="gl-bar ${g.met?'met':''}"><i style="width:${pc(f)}"></i><b class="tgt" style="left:${pc(m)}"></b></div>
-  <div class="gl-ends"><span>${P.b!=null?`Baseline <b>${gv(g,P.b)}</b>${big&&g.baseline?`<span class="gl-bn"> · ${mLink(g.baseline)}</span>`:''}${sgn(g)*(P.b-P.t)>=0?', already past the target':''}`:'Baseline not run on this slice'}</span><span>${isScore(g)?'100%':''}</span></div></div>`;
+  <div class="gl-ends"><span>${P.b!=null?`Baseline <b>${gv(g,P.b)}</b>${big&&g.baseline?`<span class="gl-bn"> · ${mLink(g.baseline)}</span>`:''}${sgn(g)*(P.b-P.t)>=0?', already past the target':''}`:'Baseline not run on this slice'}</span><span>${isPct(g)?'100%':''}</span></div></div>`;
 }
 // "62% of the way", "met", "behind the baseline"
 const wayText=function(g){
@@ -111,7 +119,7 @@ const gapFig=function(g){
 }
 const vsFig=function(g){
  const v=g.vs_baseline,P=prog(g);
- if(v&&v.delta!=null)return {v:gchg(g,v.delta),s:`90% CI ${pts(v.lo)} to ${pts(v.hi)}`,wl:`better on ${v.wins}, worse on ${v.losses}`};
+ if(v&&v.delta!=null)return {v:gchg(g,v.delta),s:`90% CI ${ci(g,v.lo)} to ${ci(g,v.hi)}`,wl:`better on ${v.wins}, worse on ${v.losses}`};
  if(g.baseline&&g.model&&g.baseline===g.model)return {v:'<span class="faint">0</span>',s:'the champion is still the baseline'};
  if(P.b!=null&&g.value!=null)return {v:gchg(g,g.value-P.b,false),s:'latest runs, unpaired'};
  return {v:DASH,s:g.baseline?'baseline not run on this slice':'no baseline'};
@@ -215,11 +223,11 @@ const chart=function(g){
  const ys=runs.map(r=>r.summary[k]).concat([g.target]);if(P.b!=null)ys.push(P.b);
  let lo=Math.min(...ys),hi=Math.max(...ys);if(hi===lo){hi+=Math.abs(hi)*.05||.01;lo-=Math.abs(lo)*.05||.01}
  const stp=niceStep(hi-lo,4);lo=Math.floor(lo/stp)*stp;hi=Math.ceil(hi/stp)*stp;if(hi<=Math.max(...ys)+1e-12)hi+=stp;
- if(isScore(g)){lo=Math.max(0,lo);hi=Math.min(1,hi)}else lo=Math.max(0,lo);
+ if(isPct(g)){lo=Math.max(0,lo);hi=Math.min(1,hi)}else if(!isScore(g))lo=Math.max(0,lo);
  let x0=runs[0].ended,x1=Math.max(runs.at(-1).ended,g.created||0,g.achieved||0,g.abandoned||0);if(x1-x0<3600){x0-=1800;x1+=1800}
  const pad=(x1-x0)*.03;x0-=pad;x1+=pad;
  const X=x=>Lm+(x-x0)/(x1-x0)*(W-Lm-R),Y=y=>T+(1-(y-lo)/(hi-lo))*(H-T-B);
- const yl=v=>isScore(g)?(100*v).toFixed(Math.abs(Math.round(stp*1000)%10)?1:0)+'%':isTime(g)?(stp<1?v.toFixed(1):Math.round(v))+' s':kpiOf(g)==='cost'?'$'+v.toFixed(stp<.01?3:2):num(v,2);
+ const yl=v=>isScore(g)&&!isPct(g)?num(v,2):isScore(g)?(100*v).toFixed(Math.abs(Math.round(stp*1000)%10)?1:0)+'%':isTime(g)?(stp<1?v.toFixed(1):Math.round(v))+' s':kpiOf(g)==='cost'?'$'+v.toFixed(stp<.01?3:2):num(v,2);
  let o='';
  for(let v=lo;v<=hi+stp*1e-6;v+=stp)o+=`<line class="ax" x1="${Lm}" x2="${W-R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"/><text x="${Lm-8}" y="${(Y(v)+3.5).toFixed(1)}" text-anchor="end">${yl(v)}</text>`;
  // x ticks on one round step that lands on local hours or days
@@ -286,7 +294,7 @@ const record=function(g){
  const ev=g.evidence;
  if(g.status==='achieved'&&ev){
   const kv=[['Model',mLink(ev.model)],['Run',ev.task?`<a class="ln mono" href="#task/${enc(ev.task)}">${esc(ev.task)}</a>${copyBtn(ev.task)}`:DASH],['Value',`${gv(g,ev.value)}${ev.runs>1?` <span class="sub">pooled over ${ev.runs} runs</span>`:''}`],['Slice',`${sLink(ev.slice||g.slice)} <span class="sub">n ${Number(ev.n||g.n).toLocaleString()}</span>`],
-   ['vs baseline',ev.vs_baseline?.delta!=null?`${gchg(g,ev.vs_baseline.delta)} <span class="sub">90% CI ${pts(ev.vs_baseline.lo)} to ${pts(ev.vs_baseline.hi)}</span>`:DASH],['Achieved',g.achieved?stamp(g.achieved):DASH]];
+   ['vs baseline',ev.vs_baseline?.delta!=null?`${gchg(g,ev.vs_baseline.delta)} <span class="sub">90% CI ${ci(g,ev.vs_baseline.lo)} to ${ci(g,ev.vs_baseline.hi)}</span>`:DASH],['Achieved',g.achieved?stamp(g.achieved):DASH]];
   if(ev.forced)kv.push(['Forced','<span class="neg">target not met</span>']);
   if(ev.note)kv.push(['Note',esc(ev.note)]);
   return panel('Evidence',`<dl class="gl-kv">${kv.map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>${goalPaper(g.name)?'':`<div class="gl-cmd">${cmd('arx paper new --goal '+g.name)}</div>`}`,{cls:'gl-ev'});

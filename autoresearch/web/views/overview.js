@@ -12,8 +12,8 @@ const ovVal=(v,sl)=>v==null?'—':(Math.abs(v)>=10?v.toFixed(1):num(v,3))+(sl?.u
 const ovScore=(v,sl)=>ovBin(sl)?pct(v):esc(ovVal(v,sl));
 const ovDelta=(d,sl)=>d==null?'—':ovBin(sl)?pts(d):(d>0?'+':d<0?'−':'')+esc(ovVal(Math.abs(d),sl));
 const ovRunning=(m,s)=>active().some(t=>t.kind==='eval'&&t.model===m&&t.slice===s);
-// goals: score KPIs read as %, latency in seconds, anything else as a plain number
-const ovG=(g,v)=>v==null?'—':(g.kpi||'score')==='score'?pct(v):/^latency/.test(g.kpi)?secs(v):num(v);
+// goals: score KPIs read as % (or the slice's unit when continuous), latency in seconds, anything else as a plain number
+const ovG=(g,v)=>v==null?'—':(g.kpi||'score')==='score'?ovScore(v,g):/^latency/.test(g.kpi)?secs(v):num(v);
 // a baseline role: "hill <key> target|control" names the hill; a dataset slice says which kind it is
 const ovRole=r=>{const m=/^hill (\S+) (target|control)$/.exec(r);if(m){const h=S.state.hills[m[1]];return `<a class="ov-ln" href="#hill/${enc(m[1])}" onclick="event.stopPropagation()">${esc(h?.title||m[1])}</a> <span class="faint">${m[2]}</span>`}return esc(({full:'Full set',random:'Random sample'})[r]||r)};
 const ovRungs=()=>{const st=S.state;return (st.config.ladder||[]).map(r=>r.rung).filter(Boolean).length?st.config.ladder.map(r=>r.rung):(Object.values(st.gates).find(g=>g.rungs?.length)?.rungs||[]).map(r=>r.rung)};
@@ -75,14 +75,14 @@ VIEWS.overview=()=>{
  if(gs.length){
   const gst=g=>g.error?pill('Error','neg'):g.status==='open'?(g.met?pill('Target met','pass'):pill('Open','ghost')):pill(g.status[0].toUpperCase()+g.status.slice(1),g.status==='achieved'?'pass':'ghost');
   const grows=gs.map(g=>{
-   const v=g.vs_baseline,p=goalPaper(g.name),sc=(g.kpi||'score')==='score';
-   const vs=v&&v.delta!=null?`<span title="vs ${esc(g.baseline||'')}, 90% CI" class="${v.lo>0?'pos':v.hi<0?'neg':'sub'}">${pts(v.delta)}</span><span class="sub ov-hide-s"> · ${pts(v.lo)} to ${pts(v.hi)}</span>`:DASH;
+   const v=g.vs_baseline,p=goalPaper(g.name),sc=(g.kpi||'score')==='score'&&ovBin(g);
+   const vs=v&&v.delta!=null?`<span title="vs ${esc(g.baseline||'')}, 90% CI" class="${v.lo>0?'pos':v.hi<0?'neg':'sub'}">${ovDelta(v.delta,g)}</span><span class="sub ov-hide-s"> · ${ovDelta(v.lo,g)} to ${ovDelta(v.hi,g)}</span>`:DASH;
    return `<tr class="click" onclick="if(!event.target.closest('a,button'))location.hash='goal/${enc(g.name)}'"><td class="ov-id"><div class="two"><a class="ell ov-nm" href="#goal/${enc(g.name)}" title="${esc(g.problem||g.title)}">${esc(g.title||g.name)}</a><span class="sub ell">${esc(short(g.slice))} · n ${ovN(g.n)}${g.model?` · <span title="${esc(g.model)}">${mn(g.model)}</span>`:''}</span></div></td>
     <td class="ov-gst ov-hide-s">${gst(g)}</td>
     <td class="ov-gv"><div class="ov-gvw"><span class="ov-gn"><b>${ovG(g,g.value)}</b><span class="faint"> of ${ovG(g,g.target)}</span></span>${sc&&g.value!=null?meter(Math.min(g.value,1),{mark:g.target,cls:g.met?'pos':''}):''}</div></td>
     <td class="num ov-gd ov-hide-m">${vs}</td>
     <td class="num ov-gp">${p?`<a class="ov-ln" href="${paperUrl(p)}">${g.status==='open'?'<span class="ov-hide-s">Draft p</span><span class="ov-show-s">P</span>aper':'Paper'}</a>${p.waiting?` ${pill(p.waiting,'warn')}`:''}`:DASH}</td></tr>`});
-  h+=panel('Goals',table(['Goal',['Status','ov-gst ov-hide-s'],['Champion vs target','ov-gv'],['vs start, pts','num ov-gd ov-hide-m'],['Paper','num ov-gp']],grows),
+  h+=panel('Goals',table(['Goal',['Status','ov-gst ov-hide-s'],['Champion vs target','ov-gv'],['vs start','num ov-gd ov-hide-m'],['Paper','num ov-gp']],grows),
    {meta:plural(gs.length,'goal'),cls:'section ov-goals',right:'<a class="more" href="#goals">View goals</a>'});
  }
 

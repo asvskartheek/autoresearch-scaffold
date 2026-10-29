@@ -249,7 +249,8 @@ class Project:
         if not g:
             raise SystemExit(f"unknown goal {name}")
         sl, kpi, sign = g["slice"], g.get("kpi", "score"), 1 if g.get("higher_is_better", True) else -1
-        cur = (self.slices().get(sl) or {}).get("hash")
+        slr = self.slices().get(sl) or {}
+        cur = slr.get("hash")
         model = (g.get("evidence") or {}).get("model") if g.get("status") == "achieved" else self.champion()
         value, ev = self._kpi(model, sl, kpi)
         vs = None
@@ -260,7 +261,8 @@ class Project:
                     runs=len(self.slice_evals(model, sl)) if model else 0,
                     met=value is not None and sign * (value - g["target"]) >= 0,
                     gap=None if value is None else sign * (g["target"] - value), vs_baseline=vs, hills=hills,
-                    slice_changed=bool(cur and g.get("slice_hash") and cur != g["slice_hash"]))
+                    slice_changed=bool(cur and g.get("slice_hash") and cur != g["slice_hash"]),
+                    scale=slr.get("scale", "binary"), unit=slr.get("unit"))
 
     def achieve_goal(self, name, force=False, note=None) -> dict:
         st = self.goal_status(name)

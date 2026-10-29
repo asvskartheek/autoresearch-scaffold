@@ -182,7 +182,9 @@ def cmd_hill(a):
 def _kpi_fmt(g, v):
     if v is None:
         return "—"
-    return f"{100 * v:.1f}%" if g.get("kpi", "score") == "score" else f"{v:.4g}"
+    if g.get("kpi", "score") == "score" and g.get("scale") != "continuous":
+        return f"{100 * v:.1f}%"
+    return f"{v:.4g}" + (f" {g['unit']}" if g.get("unit") else "")
 
 
 def cmd_goal(a):
