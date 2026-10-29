@@ -237,9 +237,11 @@ def agent_state(p: Project) -> dict:
     return dict(running=bool(pid), pid=pid)
 
 
-@features.STATE.append
 def _state(p, st):
     st["answer_agent"] = agent_state(p)
+
+
+features.STATE.append(_state)
 
 
 def recover(p: Project) -> None:
