@@ -12,15 +12,17 @@ const ICO={predict:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"
 const ico=m=>`<svg viewBox="0 0 24 24" class="t-ico">${ICO[m]||''}</svg>`;
 const amt=(u,x)=>lamt(u||'pts',x);
 
-// ---------- sketch: drag the delta and the ends of its interval, or each bar
+// ---------- sketch: drag the delta and the ends of its interval, or each bar (pointer or arrow keys)
+const ciWin=(t,s)=>[t.min,t.max];
 function sketchCI(c,s){
- const t=c.task||s.tk,W=LW(),H=92,Lx=16,R=W-16,a=t.min,b=t.max,x=q=>Lx+(q-a)/(b-a)*(R-Lx),span=b-a;
+ const t=c.task||s.tk,W=LW(),H=92,Lx=16,R=W-16,[a,b]=ciWin(t,s),x=q=>Lx+(Math.max(a,Math.min(b,q))-a)/(b-a)*(R-Lx),span=b-a;
  if(!s.sk)s.sk={delta:0,lo:-span*.08,hi:span*.08};const k=s.sk;
  const stp=nstep(span,W<420?5:9);let g='';
  for(let q=Math.ceil(a/stp)*stp;q<=b+1e-9;q+=stp){const qq=+q.toPrecision(6);g+=`<line x1="${x(qq)}" x2="${x(qq)}" y1="30" y2="60" stroke="var(--grid)"/><text x="${x(qq)}" y="76" text-anchor="middle">${qq>0?'+':qq<0?'−':''}${grp(Math.abs(qq))}</text>`}
  const tr=c.reveal?.viz;const truth=tr?`<line x1="${x(tr.lo)}" x2="${x(tr.hi)}" y1="56" y2="56" stroke="var(--text)" stroke-width="4" stroke-linecap="round" opacity=".5"/><circle cx="${x(tr.delta)}" cy="56" r="5" fill="var(--text)"/>`:'';
- return `<svg class="lv t-sk" id="tsk" data-kind="ci" viewBox="0 0 ${W} ${H}" role="slider" aria-label="your sketch: delta ${amt(t.unit,k.delta)}, interval ${amt(t.unit,k.lo)} to ${amt(t.unit,k.hi)}">
-  <text x="${Lx}" y="14" class="mono strong" style="fill:var(--accent)">${amt(t.unit,k.delta)} [${amt(t.unit,k.lo)}, ${amt(t.unit,k.hi)}]</text>${g}
+ const lab=`${amt(t.unit,k.delta)} [${amt(t.unit,k.lo)}, ${amt(t.unit,k.hi)}]`;
+ return `<svg class="lv t-sk" id="tsk" data-kind="ci" viewBox="0 0 ${W} ${H}" role="slider" tabindex="${c.pred?-1:0}" aria-label="your sketch: arrow keys move it, up and down widen the interval" aria-valuetext="${lab}">
+  <text x="${Lx}" y="14" class="mono strong" style="fill:var(--accent)">${lab}</text>${g}
   <line x1="${x(0)}" x2="${x(0)}" y1="24" y2="64" stroke="var(--text)" stroke-width="1.5"/>
   <line x1="${x(k.lo)}" x2="${x(k.hi)}" y1="44" y2="44" stroke="var(--accent)" stroke-width="10" stroke-linecap="round" opacity=".3"/>
   <rect x="${x(k.lo)-4}" y="34" width="8" height="20" rx="3" fill="var(--accent)"/><rect x="${x(k.hi)-4}" y="34" width="8" height="20" rx="3" fill="var(--accent)"/>
@@ -28,27 +30,55 @@ function sketchCI(c,s){
 }
 function sketchBars(c,s){
  const t=c.task||s.tk,W=LW(),rh=44,H=t.rows.length*rh+4,R=W-(W<420?96:120);
- if(!s.sb)s.sb=t.rows.map(()=>t.max/2);const tr=c.reveal?.viz?.rows?.filter(r=>r.v!=null);
+ if(!s.sb)s.sb=t.rows.map(()=>t.max/2);const tr=c.reveal?.viz?.rows?.filter(r=>r.v!=null),row=s.row||0;
  const fmt=(r,v)=>r.unit?(grp(v)+' '+r.unit):r.n?`${Math.round(v*r.n).toLocaleString()} of ${r.n.toLocaleString()}`:pct(v);
- return `<svg class="lv t-sk" id="tsk" data-kind="bars" viewBox="0 0 ${W} ${H}" role="group" aria-label="drag each bar">${t.rows.map((r,i)=>{const y=i*rh,v=s.sb[i],w=v/t.max*R;
+ return `<svg class="lv t-sk" id="tsk" data-kind="bars" viewBox="0 0 ${W} ${H}" role="slider" tabindex="${c.pred?-1:0}" aria-label="drag each bar: up and down pick a bar, left and right set it" aria-valuetext="${esc(t.rows[row]?.label||'')}: ${fmt(t.rows[row]||{},s.sb[row])}">${t.rows.map((r,i)=>{const y=i*rh,v=s.sb[i],w=v/t.max*R;
   const tv=tr&&tr[i]?tr[i].v/t.max*R:null;
-  return `<text x="0" y="${y+12}">${esc(r.label)}${r.tag?' · '+esc(r.tag):''}</text><rect x="0" y="${y+18}" width="${R}" height="16" rx="3" fill="var(--active)" data-row="${i}"/>
+  return `<text x="0" y="${y+12}" ${i===row&&!c.pred?'class="strong"':''}>${esc(r.label)}${r.tag?' · '+esc(r.tag):''}</text><rect x="0" y="${y+18}" width="${R}" height="16" rx="3" fill="var(--active)" data-row="${i}"/>
    <rect x="0" y="${y+18}" width="${Math.max(2,w)}" height="16" rx="3" fill="var(--accent)" opacity=".75" data-row="${i}" pointer-events="none"/>
    ${tv!=null?`<line x1="${tv}" x2="${tv}" y1="${y+14}" y2="${y+38}" stroke="var(--text)" stroke-width="3"/>`:''}
    <text x="${Math.min(R,w)+6}" y="${y+31}" class="mono strong">${fmt(r,v)}</text>`}).join('')}</svg>`;
 }
+// redraw the sketch in place; keep keyboard focus on it
+function redrawSketch(c,s){const g=document.getElementById('tsk');if(!g)return;const f=document.activeElement===g;
+ g.outerHTML=(c.task||s.tk).kind==='bars'?sketchBars(c,s):sketchCI(c,s);if(f)document.getElementById('tsk')?.focus()}
+// move one part of the CI sketch to v: the delta carries its interval, the ends stay on their side of the delta;
+// everything stays on the axis
+function setCI(t,s,which,v){const [a,b]=ciWin(t,s),k=s.sk;v=Math.max(a,Math.min(b,v));
+ if(which==='delta'){const dl=k.delta-k.lo,dh=k.hi-k.delta;v=Math.max(a+dl,Math.min(b-dh,v));k.delta=v;k.lo=v-dl;k.hi=v+dh}
+ else if(which==='lo')k.lo=Math.min(v,k.delta);else k.hi=Math.max(v,k.delta);k.moved=true}
 function dragSketch(e,c){
- const svg=e.target.closest('#tsk');if(!svg||c.pred)return;const s=st(c),t=c.task||s.tk;
- const vb=svg.viewBox.baseVal,toX=ev=>{const r=svg.getBoundingClientRect();return (ev.clientX-r.left)/r.width*vb.width},toY=ev=>{const r=svg.getBoundingClientRect();return (ev.clientY-r.top)/r.height*vb.height};
- let move;
- if(svg.dataset.kind==='ci'){const Lx=16,R=vb.width-16,val=px=>t.min+(px-Lx)/(R-Lx)*(t.max-t.min),k=s.sk,v0=val(toX(e));
-  const which=['delta','lo','hi'].sort((p,q)=>Math.abs(k[p]-v0)-Math.abs(k[q]-v0))[0],step=(t.max-t.min)/200;
-  move=ev=>{let v=Math.round(val(toX(ev))/step)*step;v=Math.max(t.min,Math.min(t.max,v));
-   if(which==='delta'){const dl=k.delta-k.lo,dh=k.hi-k.delta;k.delta=v;k.lo=v-dl;k.hi=v+dh}else if(which==='lo')k.lo=Math.min(v,k.delta);else k.hi=Math.max(v,k.delta);
-   svg.outerHTML=sketchCI(c,s)}}
- else{const R=vb.width-(vb.width<420?96:120),i=Math.max(0,Math.min(t.rows.length-1,Math.floor(toY(e)/44)));
-  move=ev=>{s.sb[i]=Math.max(0,Math.min(t.max,toX(ev)/R*t.max));if(!t.rows[i].unit&&t.rows[i].n)s.sb[i]=Math.round(s.sb[i]*t.rows[i].n)/t.rows[i].n;$('#tsk').outerHTML=sketchBars(c,s)}}
- move(e);const up=()=>{removeEventListener('pointermove',move);removeEventListener('pointerup',up)};addEventListener('pointermove',move);addEventListener('pointerup',up);e.preventDefault();
+ const svg0=e.target.closest('#tsk');if(!svg0||c.pred||e.button>0)return;const s=st(c),t=c.task||s.tk;
+ // measure against the svg on the page now: each redraw replaces the element, and a detached one has no size
+ const live=()=>document.getElementById('tsk')||svg0,vw=svg0.viewBox.baseVal.width;
+ const toX=ev=>{const r=live().getBoundingClientRect();return r.width?(ev.clientX-r.left)/r.width*vw:null},toY=ev=>{const g=live(),r=g.getBoundingClientRect();return r.height?(ev.clientY-r.top)/r.height*g.viewBox.baseVal.height:null};
+ const px0=toX(e);if(px0==null)return;let move;
+ if(svg0.dataset.kind==='ci'){const Lx=16,R=vw-16,[a,b]=ciWin(t,s),val=px=>a+(px-Lx)/(R-Lx)*(b-a),pxOf=v=>Lx+(v-a)/(b-a)*(R-Lx),k=s.sk,step=nstep(b-a,200);
+  const dist=p=>Math.abs(pxOf(k[p])-px0),near=['delta','lo','hi'].filter(p=>dist(p)<=12),dpx=pxOf(k.delta);
+  // on a collapsed interval the side of the press picks the end, so lo and hi can always be pulled out again
+  const which=near.includes('lo')&&px0<dpx-2?'lo':near.includes('hi')&&px0>dpx+2?'hi':near.includes('delta')?'delta':near[0]||['delta','lo','hi'].sort((p,q)=>dist(p)-dist(q))[0];
+  const off=near.length?k[which]-val(px0):0;  // a grabbed handle keeps its offset from the pointer: it never jumps
+  move=ev=>{const px=toX(ev);if(px==null)return;setCI(t,s,which,Math.round((val(px)+off)/step)*step);redrawSketch(c,s)};
+  if(!near.length)move(e)}
+ else{const R=vw-(vw<420?96:120),y0=toY(e);if(y0==null)return;const i=Math.max(0,Math.min(t.rows.length-1,Math.floor(y0/44)));s.row=i;
+  const off=Math.abs(px0-s.sb[i]/t.max*R)<=12?s.sb[i]-px0/R*t.max:0;
+  move=ev=>{const px=toX(ev);if(px==null)return;s.sb[i]=Math.max(0,Math.min(t.max,px/R*t.max+off));if(!t.rows[i].unit&&t.rows[i].n)s.sb[i]=Math.round(s.sb[i]*t.rows[i].n)/t.rows[i].n;s.sbm=true;redrawSketch(c,s)};
+  if(!off)move(e)}
+ const up=()=>{removeEventListener('pointermove',move);removeEventListener('pointerup',up);removeEventListener('pointercancel',up);render(true)};
+ addEventListener('pointermove',move);addEventListener('pointerup',up);addEventListener('pointercancel',up);e.preventDefault();
+}
+// arrow keys: left and right move the delta (or the picked bar), up and down widen the interval (or pick a bar); shift ×10
+function keySketch(e,c){
+ const s=st(c),t=c.task||s.tk,big=e.shiftKey?10:1,k=e.key;
+ if(t.kind==='bars'){if(!s.sb)return false;const i=s.row||0;
+  if(k==='ArrowUp'||k==='ArrowDown'){s.row=Math.max(0,Math.min(t.rows.length-1,i+(k==='ArrowDown'?1:-1)))}
+  else if(k==='ArrowLeft'||k==='ArrowRight'){const r=t.rows[i],stp=!r.unit&&r.n?Math.max(1/r.n,t.max/200):t.max/100;s.sb[i]=Math.max(0,Math.min(t.max,s.sb[i]+(k==='ArrowRight'?1:-1)*stp*big));s.sbm=true}
+  else return false}
+ else{if(!s.sk)return false;const [a,b]=ciWin(t,s),stp=nstep(b-a,100)*big,kk=s.sk;
+  if(k==='ArrowLeft'||k==='ArrowRight')setCI(t,s,'delta',kk.delta+(k==='ArrowRight'?1:-1)*stp);
+  else if(k==='ArrowUp'||k==='ArrowDown'){const w=Math.max(0,Math.min(kk.delta-kk.lo,kk.hi-kk.delta)+(k==='ArrowUp'?1:-1)*stp);kk.lo=Math.max(a,kk.delta-w);kk.hi=Math.min(b,kk.delta+w);kk.moved=true}
+  else return false}
+ redrawSketch(c,s);return true;
 }
 
 // ---------- spot: an example at the card's n with one number made inconsistent (the card's own figure is its answer)
@@ -152,8 +182,10 @@ document.addEventListener('input',e=>{
  else if(e.target.id==='tex'){s.ex=e.target.value;const go=$('#main [data-t=go]');if(go)go.disabled=s.ex.trim().length<=8}
 });
 document.addEventListener('keydown',e=>{
- if(route().r!=='learn'||!L.b||e.metaKey||e.ctrlKey||e.altKey)return;const c=L.b.cards[L.cur];if(!c||c.pred||c.method!=='spot')return;
- const tg=e.target;if(tg&&/^(TEXTAREA|INPUT)$/.test(tg.tagName))return;const n=+e.key,k=(c.task||st(c).tk)?.parts;if(k&&n>=1&&n<=k.length){st(c).pick=k[n-1];render(true);e.preventDefault()}
+ if(route().r!=='learn'||!L.b||e.metaKey||e.ctrlKey||e.altKey)return;const c=L.b.cards[L.cur];if(!c||c.pred)return;
+ const tg=e.target;if(tg&&/^(TEXTAREA|INPUT|SELECT)$/.test(tg.tagName))return;
+ if(c.method==='sketch'&&(c.task||st(c).tk)){if(/^Arrow/.test(e.key)&&keySketch(e,c))e.preventDefault();return}
+ if(c.method!=='spot')return;const n=+e.key,k=(c.task||st(c).tk)?.parts;if(k&&n>=1&&n<=k.length){st(c).pick=k[n-1];render(true);e.preventDefault()}
 },true);
 return {card,submit,profile,active:c=>!!(c&&c.method&&c.method!=='predict'&&(c.task||c.pred&&c.pred.method&&c.pred.method!=='predict'))};
 })();

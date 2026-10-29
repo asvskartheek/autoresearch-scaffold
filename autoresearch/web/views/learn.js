@@ -279,7 +279,7 @@ document.addEventListener('keydown',e=>{
  if(!c){const k=L.b.cards.findIndex(x=>!x.pred);if(k>=0&&(e.key===' '||e.key==='Enter')){go(k);e.preventDefault()}return}
  const u=uiOf(c);
  if(e.key===' '||e.key==='Enter'){if(tg&&tg.tagName==='BUTTON'&&e.key==='Enter')return;e.preventDefault();c.pred?go(L.cur+1):commitCard();return}
- if(c.pred)return;
+ if(c.pred||typeof TEACH!=='undefined'&&TEACH.active(c))return;  // a method card takes its own keys (teach.js)
  const n=+e.key;
  if(c.type==='choice'&&n>=1&&n<=c.opts.length){u.choice=shuf(c.id,c.opts)[n-1];render(true);return}
  if(e.key==='ArrowUp'||e.key==='ArrowDown'){u.conf=Math.min(100,Math.max(Math.round(100*(c.cmin??.5)),u.conf+(e.key==='ArrowUp'?5:-5)));render(true);e.preventDefault();return}
