@@ -24,8 +24,8 @@ const vsWords=(k,d)=>{const t=diff(Math.abs(d),k).replace(/^[+−]/,'');if(!isCo
 // the verdict in one or two plain sentences: ready, blocked (where and by how much), or what to run next
 function verdict(name,m,g){
  if(m.status==='champion')return {text:`This is the champion${m.promoted?`, promoted ${stamp(m.promoted)}`:''}. Every candidate is paired against it on the same examples.`};
- if(m.status==='rejected')return {text:`Rejected. ${m.reason?esc(m.reason):'No reason was recorded.'}`,cls:'neg'};
- if(!g)return {text:m.status==='planned'?`Planned, not on the ladder yet. Register it as a candidate with <code>arx model add ${esc(name)}</code> when it is ready to run.`:`${esc(m.status[0].toUpperCase()+m.status.slice(1))} model, kept for the record and not on the ladder.${m.reason?' '+esc(m.reason):''}`};
+ if(m.status==='rejected')return {text:`Rejected. ${m.reason?reasonHTML(m.reason):'No reason was recorded.'}`,cls:'neg'};
+ if(!g)return {text:m.status==='planned'?`Planned, not on the ladder yet. Register it as a candidate with <code>arx model add ${esc(name)}</code> when it is ready to run.`:`${esc(m.status[0].toUpperCase()+m.status.slice(1))} model, kept for the record and not on the ladder.${m.reason?' '+reasonHTML(m.reason):''}`};
  if(g.error)return {text:`The gate could not be read: ${esc(g.error)}`,cls:'neg'};
  const passed=g.rungs.filter(r=>r.status==='pass').map(r=>esc(r.rung));
  const noisy=g.rungs.flatMap(r=>r.checks.filter(c=>c.state==='pass'&&c.noisy).map(c=>esc(short(c.slice))));
@@ -119,8 +119,8 @@ VIEWS.model=(name)=>{
  const lad=g&&!g.error?ladder(g):'';
  h.push(`<section class="card md-obj"><div class="md-top"><div class="md-meta">${meta}</div>${lad?`<div class="md-lad">${lad}</div>`:''}</div>
   <dl class="md-dl">
-   <div><dt>Expected change</dt><dd>${m.change?esc(m.change):'<span class="dash">Not declared. State what this should move before running it, with <code>arx model add '+esc(name)+' --change "…"</code>.</span>'}</dd></div>
-   ${m.reason&&m.status!=="rejected"&&g?`<div><dt>Note</dt><dd>${esc(m.reason)}</dd></div>`:""}
+   <div><dt>Expected change</dt><dd>${m.change?reasonHTML(m.change):'<span class="dash">Not declared. State what this should move before running it, with <code>arx model add '+esc(name)+' --change "…"</code>.</span>'}</dd></div>
+   ${m.reason&&m.status!=="rejected"&&g?`<div><dt>Note</dt><dd>${reasonHTML(m.reason)}</dd></div>`:""}
    ${m.links&&Object.keys(m.links).length?`<div><dt>Links</dt><dd class="md-links">${extLinks(m.links)}</dd></div>`:''}
   </dl></section>`);
 

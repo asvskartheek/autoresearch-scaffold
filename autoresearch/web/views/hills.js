@@ -197,7 +197,7 @@ VIEWS.hill=key=>{
  const g=x.goal&&(L.goals||{})[x.goal];
  if(x.goal)h+=`<p class="hgoal">Serves the goal ${g?`<a class="ln" href="#goal/${enc(x.goal)}">${esc(g.title||x.goal)}</a>`:`<span class="mono">${esc(x.goal)}</span>`}</p>`;
  if(x.symptom)h+=`<p class="hlede">${esc(x.symptom)}</p>`;
- if(x.reason)h+=`<p class="hreason">${esc(x.reason)}${x.superseded_by?.length?` Replaced by ${x.superseded_by.map(s=>L.hills[s]?`<a class="ln" href="#hill/${enc(s)}">${esc(L.hills[s].title)}</a>`:esc(s)).join(', ')}.`:''}</p>`;
+ if(x.reason)h+=`<p class="hreason">${reasonHTML(x.reason)}${x.superseded_by?.length?` Replaced by ${x.superseded_by.map(s=>L.hills[s]?`<a class="ln" href="#hill/${enc(s)}">${esc(L.hills[s].title)}</a>`:esc(s)).join(', ')}.`:''}</p>`;
  const closed=x.status==='closed';
  h+=`<div class="stack"><div class="hgrid">${hExample(x,key)}${hCommon(x)}</div>${hAttempts(x,runs,U)}${hMatrices(x,runs,D,U)}${closed?hExpect(x):`<div class="hgrid">${hExpect(x)}${hNext(x,key)}</div>`}</div>`;
  return h;
@@ -309,7 +309,7 @@ function hExpect(x){
  const L=S.state,bits=[];
   if(x.created)bits.push(`Opened ${stamp(x.created)}`);
  if(x.closed)bits.push(`Closed ${stamp(x.closed)}`);
- const body=(x.problem?`<p class="hprob">${esc(x.problem)}</p>`:empty('Nothing declared before running',`Say what a change should move with <code>arx hill explain ${esc(x._key)} --problem "…"</code> before running it.`))+
+ const body=(x.problem?`<p class="hprob">${reasonHTML(x.problem)}</p>`:empty('Nothing declared before running',`Say what a change should move with <code>arx hill explain ${esc(x._key)} --problem "…"</code> before running it.`))+
   (bits.length?`<p class="hfound">${bits.join(' · ')}</p>`:'');
  return panel('Expected before running',body,{cls:'hexp'});
 }

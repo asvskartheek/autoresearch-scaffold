@@ -1,4 +1,19 @@
 'use strict';
+// a reason or note as people should read it (HTML): an inline Python dict of gate statistics reads as a sentence and
+// an absolute local path as its file name (full path on hover). Shared by the model, models and hill views.
+function reasonHTML(r){
+ const P=/(\{'[a-z_]+':[^{}]*\})|((?:~|\/(?:Users|home|private|tmp|var|mnt|data|workspace))\/[^\s,;)]+)/g;
+ let out='',i=0,m;
+ while((m=P.exec(String(r??'')))){
+  out+=esc(r.slice(i,m.index));i=P.lastIndex;
+  if(m[2]){const f=m[2].replace(/[.:]+$/,''),tail=m[2].slice(f.length);out+=`<span class="mono" title="${esc(f)}">${esc(f.split('/').filter(Boolean).pop()||f)}</span>${esc(tail)}`;continue}
+  let o;try{o=JSON.parse(m[1].replace(/'/g,'"').replace(/\bNone\b/g,'null').replace(/\bTrue\b/g,'true').replace(/\bFalse\b/g,'false'))}catch(e){out+=esc(m[1]);continue}
+  const rate=[o.cand,o.base,o.delta].every(v=>v==null||Math.abs(v)<=1),f=v=>v==null?'—':rate?pts(v):(v>0?'+':v<0?'−':'')+num(Math.abs(v)),u=rate?' pts':'';
+  const bits=[o.delta!=null?`paired Δ ${f(o.delta)}${u}`:'',o.lo!=null&&o.hi!=null?`90% CI ${f(o.lo)} to ${f(o.hi)}${u}`:'',o.wins!=null?`${o.wins} wins, ${o.losses??0} losses`:'',o.n!=null?`n ${o.n}`:''].filter(Boolean);
+  out+=bits.length?`(${bits.join(', ')})`:esc(m[1]);
+ }
+ return out+esc(String(r??'').slice(i));
+}
 // models: champion first, then candidates by how far up the ladder they are, then rejected with their reasons,
 // then planned / historical / retired. A search box and a status filter narrow every group in place (no re-render,
 // so typing keeps focus); lineage (parent -> child) closes the page. Everything sits in one block: no globals leak
@@ -106,9 +121,9 @@ VIEWS.models=()=>{
  h.push(panel('On the ladder',(champRow.length||candRows.length)?table(['Model','Status',...(oneHill!=null?[]:[['Hill','ms-hm']]),['Gate','ms-hm'],['Next step','ms-hs'],[fullHead[0],'num ms-hs'],['Δ vs champion','num']],[...champRow,...candRows]):empty('No models yet','Register one with <code>arx model add &lt;name&gt;</code>'),{meta:(champ?`paired against ${mlink(champ)}`:'')+(oneHill?` · every candidate climbs ${hillCell(oneHill)}`:''),cls:'section ms-ladder" data-grp="ladder'}));
 
  h.push(panel('Rejected',rej.length?table(['Model','Why it was rejected',['Parent','ms-hm'],[fullHead[0],'num ms-hs'],['Δ vs champion','num']],rej.map(([k,m])=>{const f=full(k);
-  return row(k,m,[`<td>${nameCell(k,m,false)}</td>`,`<td class="ms-why">${m.reason?esc(m.reason):'<span class="dash">No reason recorded</span>'}</td>`,`<td class="ms-hm">${parentCell(k,m.parent)}</td>`,`<td class="num ms-hs">${f.v}</td>`,`<td class="num">${f.d}</td>`])})):empty('Nothing rejected','<code>arx reject &lt;name&gt; --reason "…"</code> keeps a failed candidate in the ledger'),{meta:rej.length?plural(rej.length,'model'):'',cls:'section" data-grp="rejected'}));
+  return row(k,m,[`<td>${nameCell(k,m,false)}</td>`,`<td class="ms-why">${m.reason?reasonHTML(m.reason):'<span class="dash">No reason recorded</span>'}</td>`,`<td class="ms-hm">${parentCell(k,m.parent)}</td>`,`<td class="num ms-hs">${f.v}</td>`,`<td class="num">${f.d}</td>`])})):empty('Nothing rejected','<code>arx reject &lt;name&gt; --reason "…"</code> keeps a failed candidate in the ledger'),{meta:rej.length?plural(rej.length,'model'):'',cls:'section" data-grp="rejected'}));
 
- h.push(panel('Planned or archived',other.length?table(['Model','Status',['Parent','ms-hm'],'Note'],other.map(([k,m])=>row(k,m,[`<td>${nameCell(k,m,false)}</td>`,`<td>${st(m.status)}</td>`,`<td class="ms-hm">${parentCell(k,m.parent)}</td>`,`<td class="ms-why sub">${esc(m.reason||firstLine(m.change||''))||DASH}</td>`]))):empty('None','<code>arx model add &lt;name&gt; --status planned</code> records an idea before it runs'),{meta:other.length?plural(other.length,'model'):'',cls:'section" data-grp="other'}));
+ h.push(panel('Planned or archived',other.length?table(['Model','Status',['Parent','ms-hm'],'Note'],other.map(([k,m])=>row(k,m,[`<td>${nameCell(k,m,false)}</td>`,`<td>${st(m.status)}</td>`,`<td class="ms-hm">${parentCell(k,m.parent)}</td>`,`<td class="ms-why sub">${m.reason?reasonHTML(m.reason):esc(firstLine(m.change||''))||DASH}</td>`]))):empty('None','<code>arx model add &lt;name&gt; --status planned</code> records an idea before it runs'),{meta:other.length?plural(other.length,'model'):'',cls:'section" data-grp="other'}));
 
  h.push(`<section class="card section ms-nomatch" id="ms-nomatch" hidden>${empty('No models match','Clear the search or choose another status')}</section>`);
  const lin=lineage(models,gates);
