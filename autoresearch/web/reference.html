@@ -420,10 +420,10 @@ function goalStrips() {
 /* ================= 02 system ================= */
 section("system", () => {
   const chain = D.lineage;
-  const spine = chain.map((s, i) => `${i ? '<div class="arr"><span>→</span></div>' : ""}<div class="stg${s.name === CH ? " chg" : ""}"><div class="k" title="${esc(s.name)}">${esc(mnt(s.name))}</div><div class="v">${esc(s.title || (s.change || "").split(/(?<=\.)\s/)[0] || "—")}</div>${s.delta && s.delta.delta != null ? `<div class="${s.delta.delta > 0 ? "pos" : s.delta.delta < 0 ? "neg" : "faint"}" style="font:600 12px var(--mono);margin-top:4px">${ev(dl(s.delta.delta, RS[s.delta.slice] || { scale: "binary" }), { label: `${mnt(s.name)} vs ${mnt(s.parent)} on ${s.delta.slice}`, slice: s.delta.slice, n: s.delta.n, src: "paired over shared ids", note: `CI ${ciTxt(s.delta, RS[s.delta.slice] || { scale: "binary" })}, ${s.delta.wins} better, ${s.delta.losses} worse` })} <span class="faint" style="font-weight:400">${esc(short(s.delta.slice))}</span></div>` : ""}</div>`).join("");
+  const spine = chain.map((s, i) => `${i ? '<div class="arr"><span>→</span></div>' : ""}<div class="stg${s.name === CH ? " chg" : ""}"><div class="k" title="${esc(s.name)}">${i + 1} · ${esc(s.status || "")}</div><div class="v" title="${esc(s.name)}">${esc(mnt(s.name))}</div>${s.title ? "" : `<div class="faint" style="font-size:12px;margin-top:2px">${esc((s.change || "").split(/(?<=\.)\s/)[0].slice(0, 120))}</div>`}${s.delta && s.delta.delta != null ? `<div class="${s.delta.delta > 0 ? "pos" : s.delta.delta < 0 ? "neg" : "faint"}" style="font:600 12px var(--mono);margin-top:4px">${ev(dl(s.delta.delta, RS[s.delta.slice] || { scale: "binary" }), { label: `${mnt(s.name)} vs ${mnt(s.parent)} on ${s.delta.slice}`, slice: s.delta.slice, n: s.delta.n, src: "paired over shared ids", note: `CI ${ciTxt(s.delta, RS[s.delta.slice] || { scale: "binary" })}, ${s.delta.wins} better, ${s.delta.losses} worse` })} <span class="faint" style="font-weight:400">${esc(short(s.delta.slice))}</span></div>` : ""}</div>`).join("");
   const a = Object.fromEntries(D.base_spec), b = Object.fromEntries(D.spec), keys = [...new Set([...D.base_spec.map(x => x[0]), ...D.spec.map(x => x[0])])];
-  const tbl = keys.length ? `<h3>specification</h3><div class="tw"><table><thead><tr><th>field</th>${PV ? `<th>${mn(PV)}</th>` : ""}<th>${mn(CH)}</th></tr></thead><tbody>
-    ${keys.map(k => { const chg = PV && String(a[k] ?? "") !== String(b[k] ?? ""); return `<tr${chg ? ' class="me"' : ""}><td class="id">${esc(k)}</td>${PV ? `<td class="mono" style="word-break:break-all">${esc(a[k] ?? "—")}</td>` : ""}<td class="mono" style="word-break:break-all">${chg ? "<b>" + esc(b[k] ?? "—") + "</b>" : esc(b[k] ?? "—")}</td></tr>`; }).join("")}</tbody></table></div>` : "";
+  const tbl = keys.length ? `<h3>specification${PV && !D.base_spec.length ? ` <span style="font-weight:400">· ${mn(PV)} has none recorded, so nothing is marked changed</span>` : ""}</h3><div class="tw"><table><thead><tr><th>field</th>${PV && D.base_spec.length ? `<th>${mn(PV)}</th>` : ""}<th>${mn(CH)}</th></tr></thead><tbody>
+    ${keys.map(k => { const chg = PV && D.base_spec.length && String(a[k] ?? "") !== String(b[k] ?? ""); return `<tr${chg ? ' class="me"' : ""}><td class="id">${esc(k)}</td>${PV && D.base_spec.length ? `<td class="mono" style="word-break:break-all">${esc(a[k] ?? "—")}</td>` : ""}<td class="mono" style="word-break:break-all">${chg ? "<b>" + esc(b[k] ?? "—") + "</b>" : esc(b[k] ?? "—")}</td></tr>`; }).join("")}</tbody></table></div>` : "";
   return `<div class="pipe">${spine}</div>
   <h3>change, as registered</h3><dl class="f"><dt>change</dt><dd>${esc(M.change || "—")}</dd>${M.hill ? `<dt>hill</dt><dd>${esc(M.hill)}</dd>` : ""}<dt>registered</dt><dd>${dt(M.created)}</dd>${M.promoted ? `<dt>promoted</dt><dd>${dt(M.promoted)}</dd>` : ""}${M.reason ? `<dt>reason</dt><dd>${esc(M.reason)}</dd>` : ""}
   ${M.links && Object.keys(M.links).length ? `<dt>links</dt><dd>${Object.entries(M.links).map(([k, v]) => /^https?:/.test(v) ? `<a href="${esc(v)}" target="_blank" rel="noopener">${esc(k)}</a>` : `${esc(k)}: <code>${esc(v)}</code>`).join(" · ")}</dd>` : ""}</dl>${tbl}`;
@@ -666,12 +666,11 @@ arx gate ${esc(CH)}${g.map(x => `\narx goal status ${esc(x.name)}`).join("")}
 arx baseline ${esc(CH)} --dry-run`;
   const spec = Object.fromEntries(D.spec);
   return `<div class="cb"><pre id="c1">${cmd}</pre><button class="cp" data-c="c1">Copy</button></div>
-  ${D.spec.length ? `<h3>specification</h3><div class="cb"><pre id="c2">${esc(JSON.stringify(spec, null, 2))}</pre><button class="cp" data-c="c2">Copy</button></div>` : ""}
+  ${D.spec.length ? `<h3>specification, as JSON</h3><div class="cb"><pre id="c2">${esc(JSON.stringify(spec, null, 2))}</pre><button class="cp" data-c="c2">Copy</button></div>` : ""}
   <h3>every run behind this paper</h3>
   <div class="tw"><table><thead><tr><th>slice</th><th>hash</th><th>run id</th><th>command</th><th>ended</th></tr></thead><tbody>
   ${D.runs.map(t => `<tr><td class="id">${esc(short(t.slice))}</td><td class="id">${esc(t.hash)}</td><td class="id">${esc(t.task)}</td><td class="mono" style="word-break:break-all;font-size:12px">${esc(t.command || "—")}</td><td class="id">${dt(t.ended)}</td></tr>`).join("")}
-  </tbody></table></div>
-  <h3>gate ladder, research.json</h3><div class="cb"><pre id="c3">${esc(JSON.stringify(D.project.ladder, null, 2))}</pre><button class="cp" data-c="c3">Copy</button></div>`;
+  </tbody></table></div>`;
 });
 
 /* ---------------- popover ---------------- */
