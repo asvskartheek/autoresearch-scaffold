@@ -97,6 +97,8 @@ class Export(unittest.TestCase):
         snap = json.loads(html.split("window.ARX_SNAP=", 1)[1].split(";</script>", 1)[0])
         self.assertIn("demo", snap["papers"]); self.assertIn("api/state", snap["data"]); self.assertEqual(snap["data"]["api/projects"][0]["key"], "gamma")
         self.assertNotIn("</script>", json.dumps(snap).replace("<\\/script", ""))
+        for write in (".cm-pop textarea", ".cm-pop .go", ".gi,", ".q-form", "[data-t=go]"):  # read-only: no write control shows
+            self.assertIn(write, html)
 
     def test_snapshot_redacts_paths(self):
         p = ledger("delta")

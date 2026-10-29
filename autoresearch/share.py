@@ -211,6 +211,8 @@ const key=u=>{const m=String(u).match(/api\/[^?#]*/);return m?decodeURIComponent
 window.fetch=async(u,o)=>{const k=key(u);if(o&&o.method&&o.method!=='GET')return new Response('{"error":"read-only snapshot"}',{status:403});
  if(k&&k in S.data)return new Response(JSON.stringify(S.data[k]),{status:200,headers:{'Content-Type':'application/json'}});
  if(k)return new Response('{"error":"not in this snapshot"}',{status:404});return _f(u,o)};
+addEventListener('keydown',e=>{const t=e.composedPath()[0]||{};if(/INPUT|TEXTAREA|SELECT/.test(t.tagName)||t.isContentEditable)return;
+ if(!e.metaKey&&!e.ctrlKey&&!e.altKey&&e.key.toLowerCase()==='c')e.stopImmediatePropagation()},true);
 // papers open as embedded pages
 document.addEventListener('click',e=>{const a=e.target.closest&&e.target.closest('a[href]');if(!a)return;
  const m=a.getAttribute('href').match(/papers\/([^/?#]+)/);if(!m||!S.papers[decodeURIComponent(m[1])])return;e.preventDefault();
@@ -220,7 +222,11 @@ addEventListener('DOMContentLoaded',()=>{const b=document.createElement('div');b
 
 SNAP_CSS = """.arx-snap{position:fixed;left:12px;bottom:12px;z-index:50;padding:4px 10px;border-radius:999px;font-size:12px;
 background:var(--surface,#fff);color:var(--muted,#666);box-shadow:0 0 0 1px var(--border,#ddd)}
-.cm-fab .cm-mode,.cm-chip,.top .live,.top [aria-label=Share]{display:none!important}"""
+.cm-fab .cm-mode,.cm-chip,.top .live,.top [aria-label=Share]{display:none!important}
+.cm-pop textarea,.cm-pop .cm-name,.cm-pop .rs,.cm-pop .go,.cm-me .cm-name,.cm-list .cm-it:not([data-id]),
+.gi,.q-form,.q-acts [data-qact]:not([data-qact=read]),.q-askf,
+.lrn [data-l=commit],.lrn [data-t=go],.lrn [data-t=skip]{display:none!important}"""
+# a snapshot is read-only: every control that writes is hidden (above), C (comment mode) does nothing
 
 
 def export_dashboard(p, key: str | None = None) -> str:
