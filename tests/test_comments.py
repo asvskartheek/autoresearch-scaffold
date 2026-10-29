@@ -132,6 +132,21 @@ class Daemon(unittest.TestCase):
         self.assertTrue(answer._answered(p, item, start))
         self.assertFalse(answer._answered(p, item, time.time() + 1))
 
+    def test_silent_intake_retry_cannot_reuse_previous_proposal(self):
+        from autoresearch import intake
+        p = project()
+        p.add_dataset("ds", ["a", "b"])
+        item = features.enqueue(p, "goal", dict(ask="Improve the score"))
+        data = dict(goal=dict(name="better", title="Better score", slice="ds/full", target=0.9))
+        started = time.time()
+        intake.propose(p, item["id"], data)
+        self.assertTrue(answer._answered(p, item, started))
+        features.update(p, item["id"], status="queued", round=1)
+        self.run_daemon(p, fake_agent(p.root, "echo 'No revised proposal was published'"))
+        current = next(i for i in features.inbox(p) if i["id"] == item["id"])
+        self.assertEqual(current["status"], "failed")
+        self.assertIn("without replying", current["error"])
+
     def test_timeout(self):
         p = project()
         a = comments._post(p, "/api/comments", dict(kind="comment", body="slow", anchor=ANCHOR))[1]

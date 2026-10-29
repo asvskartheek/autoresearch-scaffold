@@ -163,7 +163,8 @@ def _answered(p: Project, item: dict, since: float) -> bool:
         return bool(settled or handed_off)
     if k == "goal":  # the intake agent leaves a proposal on its item
         cur = next((i for i in features.inbox(p) if i["id"] == item["id"]), {})
-        return bool(cur.get("proposal"))
+        proposal = cur.get("proposal") or {}
+        return cur.get("status") == "done" and (proposal.get("t") or 0) >= since
     return True  # other kinds report through their own commands; the exit code decides
 
 
