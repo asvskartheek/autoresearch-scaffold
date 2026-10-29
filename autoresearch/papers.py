@@ -97,6 +97,14 @@ def health(p: Project, name: str, meta: dict = None) -> dict:
             pass
     errs = [m for lv, m in found if lv == "error"]
     stale = []
+    if g:
+        try:
+            status = p.goal_status(meta["goal"])
+            if (status.get("baseline") and status.get("model") != status.get("baseline")
+                    and not (status.get("vs_baseline") or {}).get("n")):
+                stale.append("no compatible current baseline comparison; date and link any historical claim")
+        except (SystemExit, KeyError, ValueError):
+            pass
     if g and g.get("status") in ("achieved", "abandoned") and (g.get(g["status"]) or 0) > v:
         stale.append(f"goal {g['status']} after it was published")
     h = hills.get(meta.get("hill")) if meta.get("hill") else None

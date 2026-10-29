@@ -115,7 +115,9 @@ function qEvidence(n){
   return `<${href?'a':'div'} class="q-lr ${e.kind}"${href?` href="${href}"`:''} data-qtip="${esc(qTipOf(e))}"><span class="tag">${esc(tag)}</span><div class="lane">${lane}</div><b class="val">${esc(qVal(e))}</b><span class="cap">${cap}${qSquares(e)}</span></${href?'a':'div'}>`;
  }).join('');
  const axis=ev.some(isPts)?`<div class="q-lr axis"><span></span><div class="ax"><span>−${R}</span><span>0</span><span>+${R} pts</span></div><span></span></div>`:'';
- return `<div class="q-ev">${rows}${axis}</div>`;
+ const ids=[...new Set(ev.flatMap(e=>[...(e.task_ids||[]),...(e.baseline_task_ids||[])]))];
+ const provenance=ids.length?`<details class="q-more"><summary>Supporting runs (${ids.length})</summary>${ids.map(id=>`<p><a href="#task/${enc(id)}">${esc(id)}</a></p>`).join('')}</details>`:'';
+ return `<div class="q-ev">${rows}${axis}${provenance}</div>`;
 }
 
 // ---------- goal distance in units, with the champion succession as a sparkline
@@ -147,10 +149,17 @@ function qPanel(id,ix){
   const line=L.status==='failed'?('Agent failed'+(L.error?': '+L.error:'')):L.note||(L.status==='running'?'Agent working':idle?'No agent running · arx answer':'Queued for an agent');
   h+=`<div class="q-claim agent${idle?' idle':''}">${esc(line)}${L.task?` <a class="q-tl" href="#task/${enc(L.task)}">${esc(L.task)}</a>`:''}${f!=null?`<div class="pb"><i style="width:${(100*f).toFixed(1)}%"></i></div>`:''}</div>`;
  }else if(n.claim)h+=`<div class="q-claim ${cls}">${qLinky(n.claim)}${n.settled_by&&!['agent','you'].includes(n.settled_by)?`<span class="q-by">${esc(n.settled_by)}</span>`:''}</div>`;
+ if(n.error&&n.status!=='agent')h+=`<div class="q-claim human" role="status">Answer attempt failed: ${esc(n.error)} <button class="btn" data-qact="retry">Retry answer</button></div>`;
+ if(w&&(!n.why||!n.choices?.length))h+=`<div class="q-why">This older handoff lacks decision context or choices. Time and cost are not recorded. <button class="btn" data-qact="retry">Request decision context</button></div>`;
  if(n.why&&n.status!=='answered'&&n.status!=='dead')h+=`<div class="q-why">${qLinky(n.why)}</div>`;
  if(n.doc)h+=qDocCard(n.doc,n.fig);
  if(n.quote)h+=`<div class="q-quote"><mark>${esc(n.quote)}</mark></div>`;
- h+=qEvidence(n);
+ if(n.claim&&(!n.seeded||n.edited)){
+  const stamp=n.settled||n.created, snap=n.evidence_snapshot;
+  h+=`<div class="q-why">Authored answer${stamp?' · '+esc(new Date(stamp*1000).toLocaleString()):''}. ${snap?'Evidence saved with this answer.':'No evidence snapshot was saved; numeric claims need verification.'} <button class="btn" data-qact="retry">Refresh answer</button></div>`;
+  if(snap)h+=qEvidence({...n,ev:snap});
+  if(n.ev?.length)h+=`<details class="q-more"><summary>Current ledger evidence${snap&&JSON.stringify(snap)!==JSON.stringify(n.ev)?' · changed since this answer':''}</summary>${qEvidence(n)}</details>`;
+ }else h+=qEvidence(n);
  const thr=n.seed==='comment',live=!thr&&(n.status==='open'||n.status==='agent');
  if(w&&n.choices?.length)h+=`<div class="q-acts">${n.choices.map((c,i)=>`<button class="btn ${i?'':'q-warn'}" data-qpick="${esc(c)}">${esc(c)}</button>`).join('')}</div>`;
  if(live)h+=`<div class="q-form ${w?'on':''}" id="q-af"><input class="q-in" id="q-ans" aria-label="Your answer" placeholder="Your answer"><button class="btn primary" data-qact="answer">Answer</button><button class="btn" data-qact="dead">Close as dead end</button></div>`;
@@ -209,11 +218,23 @@ const qTheme=()=>document.documentElement.dataset.theme||(matchMedia('(prefers-c
 function qDocLoad(id){
  QS.docs[id]=null;
  const u='api/answers/'+enc(id);
- Promise.all([fetch(u+'?meta=1',{cache:'no-store'}),fetch(u,{cache:'no-store'})])
-  .then(async([m,h])=>{QS.docs[id]=m.ok&&h.ok?{...await m.json(),html:await h.text()}:{error:1};render()})
+ Promise.all([qLoad(),fetch(u+'?meta=1',{cache:'no-store'}),fetch(u,{cache:'no-store'})])
+  .then(async([_,m,h])=>{QS.docs[id]=m.ok&&h.ok?{...await m.json(),html:await h.text()}:{error:1};render()})
   .catch(()=>{QS.docs[id]={error:1};render()});
 }
 const qThemed=(html,t)=>/<html\b/i.test(html)?html.replace(/<html\b/i,`<html data-theme="${t}"`):`<html data-theme="${t}">${html}</html>`;
+// Opaque documents can request only a dashboard route; section anchors remain inside the document.
+const qInternalRoute=h=>typeof h==='string'&&/^#(model|hill|goal|task|answer|questions)\/[^\s?#\x00-\x1f]{1,240}$/.test(h);
+function qDocHtml(html,t){
+ const bridge=`<script>document.addEventListener('click',function(e){const a=e.target.closest('a[href]');if(!a)return;const h=a.getAttribute('href');if(!h||h[0]!=='#')return;e.preventDefault();if(/^#(model|hill|goal|task|answer|questions)\\/[^\\s?#\\x00-\\x1f]{1,240}$/.test(h)){parent.postMessage({type:'arx-answer-route',href:h},'*');return}let id;try{id=decodeURIComponent(h.slice(1))}catch(_){return}document.getElementById(id)?.scrollIntoView({block:'start'});},true);<\/script>`;
+ const themed=qThemed(html,t);
+ return /<head\b/i.test(themed)?themed.replace(/<head\b[^>]*>/i,m=>m+bridge):themed.replace(/<html\b[^>]*>/i,m=>m+'<head>'+bridge+'</head>');
+}
+addEventListener('message',e=>{
+ const frame=document.querySelector('iframe.q-reader');
+ if(!frame||e.source!==frame.contentWindow||e.origin!=='null'||e.data?.type!=='arx-answer-route'||!qInternalRoute(e.data.href))return;
+ location.hash=e.data.href;
+});
 // the question or comment thread a document answers: its crumbs lead back there, and a thread's answer opens the thread
 const qThreadHref=n=>n?.thread?`?c=${enc(n.thread)}#${String(n.route||'overview').replace(/^#/,'')}`:'';
 // the frame fills the window below the crumbs, so the document scrolls inside it and the page never does
@@ -233,7 +254,7 @@ VIEWS.answer=arg=>{
  if(d?.error)return page({title,crumbs})+empty('No such answer');
  if(!d)return page({title:'',crumbs,acts})+`<div class="q-rwrap"><div class="q-rload">Reading the answer…</div></div>`;
  setTimeout(qFit,0);
- return page({title:'',crumbs,acts})+`<div class="q-rwrap"><div class="q-rload">Reading the answer…</div><iframe class="q-reader" title="${esc(title)}" sandbox="allow-scripts allow-popups" onload="this.parentNode.classList.add('ok')" srcdoc="${esc(qThemed(d.html,qTheme()))}"></iframe></div>`;
+ return page({title:'',crumbs,acts})+`<div class="q-why">Authored document${d.t?' · '+esc(new Date(d.t*1000).toLocaleString()):''}. Claims describe the saved answer; current ledger evidence may differ.${owner?` <a href="#questions/${enc(owner.id)}">Check evidence and refresh</a>`:''}</div><div class="q-rwrap"><div class="q-rload">Reading the answer…</div><iframe class="q-reader" title="${esc(title)}" sandbox="allow-scripts allow-popups" onload="this.parentNode.classList.add('ok')" srcdoc="${esc(qDocHtml(d.html,qTheme()))}"></iframe></div>`;
 };
 addEventListener('hashchange',()=>{const {r,arg}=route();if(r==='answer'&&QS.docs)delete QS.docs[arg]});  // reopening reads the latest version
 
@@ -297,7 +318,7 @@ document.addEventListener('click',async e=>{
   return}
  if(!a)return;
  if(act==='settle'){$('#q-af').classList.toggle('on');$('#q-ans')?.focus();return}
- if(act==='reopen'||act==='flag'){
+ if(act==='retry'||act==='reopen'||act==='flag'){
   const n=qIndex().by[id()];
   try{await qPost(act,{id:id(),on:act==='flag'?!n?.needs_human:undefined});await qLoad(true)}catch(err){alert(err.message)}
   return}

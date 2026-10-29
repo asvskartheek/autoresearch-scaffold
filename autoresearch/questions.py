@@ -107,6 +107,22 @@ def ask(p, title, parent=None, by="you", quote=None, route=None) -> dict:
     return q | {"inbox": item["id"]}
 
 
+def retry(p, qid, by="you") -> dict:
+    """Queue the same question again, preserving previous claims and failed attempts."""
+    rec = _base(p, qid)
+    if rec.get("status") == "agent":
+        return rec | {"id": qid}
+    if rec.get("error"):
+        rec["attempts"] = list(rec.get("attempts") or []) + [dict(error=rec["error"], t=time.time())]
+    item = features.enqueue(p, "question", dict(title=rec["title"], parent=rec.get("parent"),
+                            quote=rec.get("quote"), route=rec.get("route"), by=by,
+                            instruction="Refresh against current evidence. For a human decision, supply the missing question, context, costs and choices; do not execute the decision."), ref=qid)
+    rec.update(status="agent", needs_human=False, inbox=item["id"], retried=time.time(), retried_by=by)
+    rec.pop("error", None)
+    _save(p, qid, rec)
+    return rec | {"id": qid}
+
+
 def settle(p, qid, status, claim, evidence=None, by="agent", doc=None) -> dict:
     """Answer (status answered) or close (dead) a question. A seeded node is written on its first edit.
     `doc` is a long answer (self-contained HTML), stored as .research/answers/<qid>.html; the claim stays its one line."""
@@ -126,6 +142,11 @@ def settle(p, qid, status, claim, evidence=None, by="agent", doc=None) -> dict:
             rec["doc"] = comments.save_doc(p, doc, qid)
         except ValueError as e:
             raise SystemExit(str(e))
+    rec.pop("error", None)
+    _save(p, qid, rec)
+    # Freeze resolved evidence with the authored claim; repeats cannot rewrite its support.
+    resolved = next(n for n in tree(p)["nodes"] if n["id"] == qid)
+    rec["evidence_snapshot"] = resolved.get("ev", [])
     _save(p, qid, rec)
     for it in features.inbox(p):  # a queued ask nobody started is no longer needed
         if it.get("kind") == "question" and it.get("ref") == qid and it.get("status") == "queued":
@@ -664,6 +685,11 @@ def _tree(p, full: bool) -> dict:
             if n.get("goal") and not n.get("claim"):
                 n["claim"] = _goal_claim(p, ctx["goal_status"].get(n["goal"]) or {})
             n["ev"] = _dedupe([r for r in (resolve(p, e, n, ctx) for e in n.get("evidence") or []) if r], p)
+            for evidence in n["ev"]:
+                if evidence.get("model") and evidence.get("slice"):
+                    evidence["task_ids"] = list(_runs(p, evidence["model"], evidence["slice"]))
+                    if evidence.get("base"):
+                        evidence["baseline_task_ids"] = list(_runs(p, evidence["base"], evidence["slice"], evidence["model"]))
             it = items.get(n["id"])
             if it and n.get("status") == "agent":
                 live = dict(item=it["id"], status=it.get("status"), task=it.get("task"), error=it.get("error"))
@@ -931,6 +957,8 @@ def _post(p, path, d):
         if verb in ("answer", "dead"):
             return 200, settle(p, str(d.get("id") or ""), "answered" if verb == "answer" else "dead", d.get("claim"),
                                by=_who(d))
+        if verb == "retry":
+            return 200, retry(p, str(d.get("id") or ""), by=_who(d))
         if verb == "reopen":
             return 200, reopen(p, str(d.get("id") or ""), by=_who(d))
         if verb == "flag":
@@ -963,6 +991,8 @@ def _prompt(p, item) -> str:
         f"Question {qid}: {n.get('title') or pay.get('title')}",
         f"Asked by: {pay.get('by') or n.get('by') or 'someone'}",
     ]
+    if pay.get("instruction"):
+        lines.append(str(pay["instruction"]))
     if path:
         lines += ["Where it sits in the question tree (root first):", *[f"  {s}" for s in path]]
     if pay.get("quote") or n.get("quote"):
@@ -1011,7 +1041,8 @@ def _prompt(p, item) -> str:
         "At least one small widget the reader drives; ledger numbers only, each naming its slice and n; dark mode under",
         ":root[data-theme=\"dark\"]; sans-serif fonts; a <title> (the page shows it, so no <h1> repeating it); inline",
         "CSS and JS only; no client text, answers or traces (ids and paraphrase). Link a model, hill or goal with its",
-        "title as the text: <a href=\"#model/<id>\">its title</a>.",
+        "title as the text: <a href=\"#model/<id>\">its title</a>. The sandbox host routes these links safely;",
+        "use #section-id for document-local anchors. Date historical comparisons and name the supporting task IDs.",
         "",
         "Handing work to a person: if answering needs a new run or a human decision, still answer what the ledger shows",
         "now, then ask the person ONE question they can answer in one tap:",
