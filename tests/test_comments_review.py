@@ -70,5 +70,17 @@ class Describe(unittest.TestCase):
         self.assertEqual({k: ev["anchor"][k] for k in ("qn", "what", "ctx", "from")}, dict(qn=1, what="b", ctx="c", **{"from": "f"}))
 
 
+class Prompt(unittest.TestCase):
+    def test_figure_first_and_titles(self):
+        p = project()
+        (p.dir / "models.json").write_text('{"thinking4b-numeric32768-v1": {"title": "Thinking4B numeric", "status": "champion"}}')
+        ev = comments.post(p, "comment", body="how far?", author="Ann", anchor=dict(route="goals"))
+        text = comments.prompt(p, dict(kind="comment", ref=ev["id"], payload=dict(thread=ev["id"])))
+        self.assertIn("lead with one figure", text)
+        self.assertIn("one or two short plain sentences", text)
+        self.assertIn("- thinking4b-numeric32768-v1: Thinking4B numeric", text)
+        self.assertNotIn("three plain sentences", text)
+
+
 if __name__ == "__main__":
     unittest.main()

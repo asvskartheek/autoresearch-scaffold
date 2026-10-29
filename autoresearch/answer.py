@@ -52,7 +52,7 @@ How to answer
   should change, say what and why in the reply; do not edit it.
 - While you work: arx task note $ARX_TASK "<what you are checking>".
 - Read-only: read the paper, research.json, PROTOCOL.md and the ledger in .research/; read-only arx commands only.
-- Be short: at most three plain sentences.
+- Be short: at most two short plain sentences. Name models by their titles (models.json), never raw ids.
 
 Reporting rules (PROTOCOL.md):
 {comments._rules(p)}

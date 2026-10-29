@@ -241,15 +241,30 @@ How to answer
 - Read-only: read research.json, PROTOCOL.md and the ledger in .research/ (models.json, hills.json, slices.json,
   goals.json, tasks/*/task.json, decisions), and use read-only commands (arx status, arx gate <model>,
   arx goal status, arx comment show {th['id']}). Never change models, slices, hills, goals, tasks or files.
-- Be short: at most three plain sentences. Answer visually when a picture says it faster: the reply may contain one
-  small inline <svg width="..." height="..."> (at most 320 px wide) built only from svg, g, path, rect, circle, line,
-  polyline and text, with colours as hex or currentColor. No scripts, styles or links inside it.
-- Link views as #route (e.g. #model/v3, #hill/please, #task/<id>); they become links.
+- Visual first. When the answer has two or more numbers, lead with one figure: an inline
+  <svg viewBox="0 0 400 H" width="400"> (H at most 240) built only from svg, g, path, rect, circle, line, polyline and
+  text. Text at font-size 12 or more; text and axes in currentColor; one accent colour (#3b82f6, or #22c55e / #ef4444
+  for better / worse). No scripts, styles or links inside it. The page shows the figure first, at full width.
+- Then at most one or two short plain sentences. No headings, no lists.
+- Name models by their titles (below), never by raw ids. Link views as #route (e.g. #model/v3, #hill/please,
+  #task/<id>); they become links.
 - If the ledger cannot answer it, say what is missing and which run would answer it.
+
+Model titles (id: title):
+{_titles(p)}
 
 Reporting rules (PROTOCOL.md):
 {_rules(p)}
 """
+
+
+def _titles(p: Project, limit: int = 40) -> str:
+    """How models read on the dashboard, so the answer never names a raw id: the champion first, then the newest."""
+    ms = p.models()
+    champ = [k for k, m in ms.items() if (m or {}).get("status") == "champion"]
+    names = champ + [k for k in reversed(list(ms)) if k not in champ]
+    rows = [f"- {k}: {features.model_label(p, k)}" for k in names[:limit]]
+    return "\n".join(rows) or "- (no models yet)"
 
 
 features.PROMPTS["comment"] = prompt
