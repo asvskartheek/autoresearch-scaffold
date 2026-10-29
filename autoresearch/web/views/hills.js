@@ -324,11 +324,14 @@ function hState(m,o,g){
  if(!g.champion)return {k:'nochamp',say:'needs a champion first',cmd:`arx model add <name> --champion`};
  const nx=g.next||[],ch=nx.filter(n=>n.model!==m),me=nx.filter(n=>n.model===m);
  const sl=a=>a.map(n=>`<span class="mono" title="${esc(n.slice)}">${esc(short(n.slice))}</span>`).join(', ');
+ // a next run already in progress: its live chip in place of a command
+ const run=nx.find(runTask);
+ if(run){const rest=nx.filter(n=>!runTask(n));return {k:'live',say:`${run.model!==m?'champion run':'running'} on ${(t=>`<span class="mono" title="${esc(t.slice||run.slice)}">${esc(short(t.slice||run.slice))}</span>`)(runTask(run))}${rest.length?`, then ${sl(rest)}`:''}`,chip:runChip(run)};}
  if(ch.length)return {k:'base',say:`waiting on a champion run on ${sl(ch)}`,cmd:`arx gate ${m}`};
  if(me.length)return {k:'run',say:`needs ${sl(me)}`,cmd:`arx gate ${m}`};
  return {k:'run',say:'nothing to run',cmd:`arx gate ${m}`};
 }
-const H_RANK={ready:0,run:1,base:2,nochamp:3,fail:4,planned:5,none:6};
+const H_RANK={ready:0,live:1,run:1,base:2,nochamp:3,fail:4,planned:5,none:6};
 function hNext(x,key){
  const L=S.state,ch=L.champion;
  const cands=Object.entries(L.models).filter(([m,o])=>o.hill===key&&m!==ch&&(o.status==='candidate'||o.status==='planned'))
@@ -339,7 +342,7 @@ function hNext(x,key){
  let body;
  if(cands.length){
   const cap=4,shown=cands.slice(0,cap);
-  body=pre+`<ul class="hnext">${shown.map(c=>`<li><div class="hn-top">${mLink(c.m)}<span class="sub">${c.st.say}</span></div>${cmd(c.st.cmd)}</li>`).join('')}</ul>${cands.length>cap?`<p class="hn-more">${plural(cands.length-cap,'more candidate')}: see <a class="ln" href="#models">Models</a>.</p>`:''}`;
+  body=pre+`<ul class="hnext">${shown.map(c=>`<li><div class="hn-top">${mLink(c.m)}<span class="sub">${c.st.say}</span></div>${c.st.chip||cmd(c.st.cmd)}</li>`).join('')}</ul>${cands.length>cap?`<p class="hn-more">${plural(cands.length-cap,'more candidate')}: see <a class="ln" href="#models">Models</a>.</p>`:''}`;
  }else{
   body=pre+`<p class="hn-none">${x.status==='climbed'?'Nothing left to run on this hill.':'No candidate is climbing this hill. Register one from the champion:'}</p>${x.status==='climbed'?'':cmd(`arx model add <name> --parent ${ch||'<champion>'} --hill ${key} --change "…"`)}`;
  }
