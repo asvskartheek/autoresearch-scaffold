@@ -71,7 +71,7 @@ code,.mono{font-family:var(--mono);font-size:.92em}
 .iconbtn:hover{background:var(--active);color:var(--text)}
 .sheet{grid-column:2;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sheet);margin:0 var(--sheet-inset) var(--sheet-inset) 0;min-width:0;min-height:calc(100vh - var(--topbar) - var(--sheet-inset))}
 main{padding:var(--pad) var(--pad) 64px;max-width:1440px;min-width:0}
-.menu-btn{display:none}
+.menu-btn{display:none;flex:none}
 
 /* ---------- title row */
 .title{display:flex;align-items:flex-start;gap:16px;margin-bottom:var(--gap);min-width:0}
