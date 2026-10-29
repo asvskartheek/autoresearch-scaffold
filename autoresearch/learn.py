@@ -93,12 +93,12 @@ _PAIR: dict = {}  # (root, cand, base, slice, run ids) -> paired(); bootstraps a
 def _pair(p: Project, cand: str, base: str, sl: str, sign: int) -> dict | None:
     if not cand or not base or cand == base:
         return None
-    ca, ba = p.slice_evals(cand, sl), p.slice_evals(base, sl)
+    ca, ba = p.score_runs(cand, sl), p.score_runs(base, sl, reference_model=cand)
     if not ca or not ba:
         return None
     key = (str(p.root), cand, base, sl, sign, tuple(t["id"] for t in ca), tuple(t["id"] for t in ba))
     if key not in _PAIR:
-        r = paired(p.pooled_scores(cand, sl), p.pooled_scores(base, sl), sign, iters=1000)
+        r = paired(p.pooled_scores(cand, sl), p.pooled_scores(base, sl, reference_model=cand), sign, iters=1000)
         _PAIR[key] = r if r.get("n") else None
     return _PAIR[key]
 

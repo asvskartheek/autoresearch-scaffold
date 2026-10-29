@@ -104,10 +104,16 @@ class _Index:
             self._rows[tid] = self.p.rows(tid)
         return self._rows[tid]
 
-    def pooled(self, m, sl):
-        k = (m, sl)
+    def compatible(self, m, sl, reference_model=None):
+        latest = self.latest(reference_model or m, sl)
+        contract = (latest.get("config") or {}).get("baseline_contract") if latest else None
+        runs = self.runs.get((m, sl), [])
+        return [t for t in runs if (t.get("config") or {}).get("baseline_contract") == contract] if contract is not None else runs
+
+    def pooled(self, m, sl, reference_model=None):
+        k = (m, sl, reference_model)
         if k not in self._pooled:
-            self._pooled[k] = per_id([r for t in self.runs.get(k, []) for r in self.rows(t["id"])])
+            self._pooled[k] = per_id([r for t in self.compatible(m, sl, reference_model) for r in self.rows(t["id"])])
         return self._pooled[k]
 
     def slices_of(self, m):
@@ -137,7 +143,7 @@ def _pair(ix, m, b, sl, sign):
     if hit is None:
         if len(_PAIRS) > 4096:
             _PAIRS.clear()
-        hit = _PAIRS[key] = fast_paired(ix.pooled(m, sl), ix.pooled(b, sl), sign)
+        hit = _PAIRS[key] = fast_paired(ix.pooled(m, sl), ix.pooled(b, sl, m), sign)
     return dict(hit)
 
 
@@ -437,10 +443,12 @@ def _build(p, model, vs):
         last = ix.latest(model, sl)
         summ = last.get("summary") or {}
         pm = ix.pooled(model, sl)
-        bm = ix.pooled(base, sl) if ix.has(base, sl) else {}
+        bm = ix.pooled(base, sl, model) if ix.has(base, sl) else {}
         raw = {0.0 if x.get("error") else float(x.get("score") or 0) for t in ix.runs[(model, sl)] for x in ix.rows(t["id"])}
         scale = meta.get("scale") or ("binary" if raw <= {0.0, 1.0} else "continuous")  # per run, not pooled means
-        bsum = (ix.latest(base, sl) or {}).get("summary") or {}
+        base_runs = ix.compatible(base, sl, model)
+        base_last = base_runs[-1] if base_runs else {}
+        bsum = base_last.get("summary") or {}
         field = []
         for (mm, ss), runs in ix.runs.items():
             if ss == sl:
@@ -455,14 +463,14 @@ def _build(p, model, vs):
         results.append(dict(
             slice=sl, kind=meta.get("kind"), n=meta.get("n"), hash=meta.get("hash"), scale=scale, unit=meta.get("unit"),
             metric=meta.get("metric"), description=_txt(meta.get("description")), url=meta.get("url"), hill=meta.get("hill"),
-            roles=roles.get(sl, []), runs=len(ix.runs[(model, sl)]), task=last["id"], ended=last.get("ended"),
-            run_ids=[t["id"] for t in ix.runs[(model, sl)]],
+            roles=roles.get(sl, []), runs=len(ix.compatible(model, sl)), task=last["id"], ended=last.get("ended"),
+            run_ids=[t["id"] for t in ix.compatible(model, sl)],
             score=_r(sum(pm.values()) / len(pm) if pm else None), scored=len(pm),
             right=round(sum(pm.values()), 1) if scale == "binary" else None,  # 96.6 of 100 when runs are pooled
             errors=summ.get("errors"), cost=_r(summ.get("cost")), cost_total=_r(summ.get("cost_total")),
             latency_p50=_r(summ.get("latency_p50")), latency_p95=_r(summ.get("latency_p95")),
-            base=dict(task=(ix.latest(base, sl) or {}).get("id"), runs=len(ix.runs.get((base, sl), [])),
-                      run_ids=[t["id"] for t in ix.runs.get((base, sl), [])],
+            base=dict(task=base_last.get("id"), runs=len(base_runs),
+                      run_ids=[t["id"] for t in base_runs],
                       cost=_r(bsum.get("cost")), latency_p50=_r(bsum.get("latency_p50")),
                       latency_p95=_r(bsum.get("latency_p95"))) if bm else None,
             vs=_paired(ix, model, base, sl, sign), field=sorted(field, key=lambda f: -(f[1] or -1e18) * sign), ids=ids if cells else None,
@@ -510,7 +518,7 @@ def _build(p, model, vs):
             target=t, control=h.get("control"), climbed_by=h.get("climbed_by"), mine=model == (h.get("climbed_by")) or me.get("hill") == k,
             examples=[{f: _txt(e.get(f)) for f in ("input", "wrong", "right", "why")} for e in (h.get("examples") or []) if isinstance(e, dict)][:6],
             score=_r(_mean(ix.pooled(model, t))) if ix.has(model, t) else None,
-            base_score=_r(_mean(ix.pooled(base, t))) if ix.has(base, t) else None,
+            base_score=_r(_mean(ix.pooled(base, t, model))) if ix.has(base, t) else None,
             vs=_paired(ix, model, base, t, sign) if t else None))
     gallery.sort(key=lambda g: (not g["mine"], g["status"] not in ("climbed", "open"), g["name"]))
 

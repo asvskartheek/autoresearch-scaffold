@@ -285,10 +285,10 @@ class Project:
         value, ev = self._kpi(model, sl, kpi)
         vs = None
         if kpi == "score" and model and g.get("baseline") and g["baseline"] != model and self.latest_eval(g["baseline"], sl):
-            vs = paired(self.pooled_scores(model, sl), self.pooled_scores(g["baseline"], sl), sign)
+            vs = paired(self.pooled_scores(model, sl), self.pooled_scores(g["baseline"], sl, reference_model=model), sign)
         hills = {k: h.get("status") for k, h in self.hills().items() if h.get("goal") == name}
         return dict(g, name=name, model=model, value=value, task=ev["id"] if ev else None,
-                    runs=len(self.slice_evals(model, sl)) if model else 0,
+                    runs=len(self.score_runs(model, sl)) if model else 0,
                     met=value is not None and sign * (value - g["target"]) >= 0,
                     gap=None if value is None else sign * (g["target"] - value), vs_baseline=vs, hills=hills,
                     slice_changed=bool(cur and g.get("slice_hash") and cur != g["slice_hash"]),
@@ -409,9 +409,20 @@ class Project:
         c = self.slice_evals(model, slice_name)
         return c[-1] if c else None
 
-    def pooled_scores(self, model: str, slice_name: str) -> dict[str, float]:
-        """Per-id score averaged over every complete run: repeat runs tighten the estimate, none are dropped."""
-        return per_id([r for t in self.slice_evals(model, slice_name) for r in self.rows(t["id"])])
+    def score_runs(self, model: str, slice_name: str, reference_model: str | None = None) -> list[dict]:
+        """Complete repeats compatible with the latest reference model's declared harness contract.
+
+        With no reference, use this model's latest run. Legacy runs without a declared contract keep
+        their existing pooling behavior. Comparisons pass the candidate on both sides.
+        """
+        runs = self.slice_evals(model, slice_name)
+        latest = self.latest_eval(reference_model or model, slice_name)
+        contract = (latest.get("config") or {}).get("baseline_contract") if latest else None
+        return [t for t in runs if (t.get("config") or {}).get("baseline_contract") == contract] if contract is not None else runs
+
+    def pooled_scores(self, model: str, slice_name: str, reference_model: str | None = None) -> dict[str, float]:
+        """Per-id mean over compatible complete repeats; never pool across a declared harness change."""
+        return per_id([r for t in self.score_runs(model, slice_name, reference_model) for r in self.rows(t["id"])])
 
     # gates -----------------------------------------------------------------------------
     def _resolve(self, ref: str, model: dict) -> list[str]:
@@ -449,14 +460,12 @@ class Project:
                 for sl in self._resolve(chk["slice"], m):
                     c = dict(slice=sl, rule=chk["rule"], threshold=chk.get("margin", 0) if chk["rule"] == "better" else -chk.get("tolerance", 0))
                     ce, be = self.latest_eval(model_name, sl), self.latest_eval(champ, sl) if champ else None
-                    cand_runs = self.slice_evals(model_name, sl)
-                    base_runs = self.slice_evals(champ, sl) if champ else []
+                    cand_runs = self.score_runs(model_name, sl)
+                    base_runs = self.score_runs(champ, sl, reference_model=model_name) if champ else []
                     contract = (ce.get("config") or {}).get("baseline_contract") if ce else None
                     if contract is not None:
                         # A newer run made with another harness is not a comparator. Pool repeats only
                         # within the candidate's declared contract on both sides of the comparison.
-                        cand_runs = [t for t in cand_runs if (t.get("config") or {}).get("baseline_contract") == contract]
-                        base_runs = [t for t in base_runs if (t.get("config") or {}).get("baseline_contract") == contract]
                         be = base_runs[-1] if base_runs else None
                         c["baseline_contract"] = contract
                     if champ == model_name:

@@ -43,6 +43,21 @@ class HarnessMatchedGates(unittest.TestCase):
         self.assertEqual(check["base_runs"], 2)
         self.assertEqual(check["delta"], .375)
 
+    def test_pooled_scores_and_teaching_match_the_gate_contract(self):
+        from autoresearch import learn, reference
+        self.assertEqual(sum(self.p.pooled_scores("base", "d/full").values()), 4)
+        self.assertEqual(sum(self.p.pooled_scores("base", "d/full", reference_model="cand").values()), 2)
+        self.assertEqual(learn._pair(self.p, "cand", "base", "d/full", 1)["delta"], .25)
+        ix = reference._Index(self.p)
+        self.assertEqual(reference._paired(ix, "cand", "base", "d/full", 1)["delta"], .25)
+        self.assertEqual([t["id"] for t in ix.compatible("base", "d/full", "cand")], ["old"])
+
+    def test_teaching_does_not_invent_an_unmatched_comparison(self):
+        from autoresearch import learn, reference
+        self.runs = self.runs[1:]
+        self.assertIsNone(learn._pair(self.p, "cand", "base", "d/full", 1))
+        self.assertIsNone(reference._paired(reference._Index(self.p), "cand", "base", "d/full", 1))
+
     def test_legacy_runs_keep_existing_latest_behavior(self):
         self.runs[-1]['config']={};g=self.p.gate('cand')
         self.assertFalse(g['promotable']);self.assertEqual(g['rungs'][0]['checks'][0]['base_task'],'new')
