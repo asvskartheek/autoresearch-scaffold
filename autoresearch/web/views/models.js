@@ -16,11 +16,15 @@ const nextCell=(name,g)=>{
 // figures in the slice's own units (core sv/sd): a count of n on 0/1 slices, "387 ms" on continuous ones, never a %
 const score=(v,k,n)=>esc(sv(k,v,n));
 const diff=(d,k)=>esc(sd(k,d));
-// a figure on the primary dataset's full set, and its difference to the champion on the same slice and n
+// a figure on the primary dataset's full set, and its change against the champion: the gate's paired Δ with its 90%
+// interval ("Noisy" when it crosses zero) when the gate ran that slice; else the plain difference, marked unpaired
 function full(k){
  const L=S.state,f=fullScore(k),c=L.champion&&k!==L.champion?fullScore(L.champion):null,sl=L.config.primary_dataset+'/full';
  const v=f?(f.task?`<a href="#task/${enc(f.task)}">${score(f.score,sl,f.n)}</a>`:score(f.score,sl,f.n)):DASH;
- return {v,d:f&&c?`<span class="${f.score===c.score?'sub':better(f.score,c.score)?'pos':'neg'}">${diff(f.score-c.score,sl)}</span>`:DASH};
+ const g=L.gates[k],p=g&&!g.error&&g.champion===L.champion?(g.rungs||[]).flatMap(r=>r.checks).find(x=>x.slice===sl&&x.delta!=null):null;
+ if(p){const noisy=p.lo<0&&0<p.hi,[x,y]=negSlice(sl)?[p.hi,p.lo]:[p.lo,p.hi];
+  return {v,d:`<div class="ms-pd"><span class="${noisy?'sub':p.delta>0?'pos':p.delta<0?'neg':'sub'}">${diff(p.delta,sl)}</span>${noisy?pill('Noisy','noisy'):''}</div><div class="sub ms-ci" title="90% interval of the paired difference, n ${p.n}">${diff(x,sl).replace(/ \S+$/,'')} to ${diff(y,sl)}</div>`}}
+ return {v,d:f&&c?`<span class="${f.score===c.score?'sub':better(f.score,c.score)?'pos':'neg'}" title="Difference of the two full-set scores, not paired per example">${diff(f.score-c.score,sl)}</span><div class="faint ms-ci">unpaired</div>`:DASH};
 }
 // a model reads by its title; the id (what every command takes) sits under it in mono, with its phase
 const titled=(k,m)=>!!(m.title&&m.title!==k);

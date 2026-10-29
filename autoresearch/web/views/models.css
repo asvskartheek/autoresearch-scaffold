@@ -41,3 +41,6 @@ a.ms-nm:not(.mono){display:block;white-space:normal;max-width:240px;line-height:
 .kpi .s a.ms-kn{color:var(--text);font-weight:500}
 .kpi .s a.ms-kn:hover{color:var(--accent)}
 .ms-tree .nm:not(.mono){font-size:13px}
+.ms-pd{display:inline-flex;align-items:center;gap:6px;justify-content:flex-end}
+.ms-pd .pill{font-size:11px}
+.ms-ci{font-size:11px;line-height:1.2;white-space:nowrap}

@@ -148,3 +148,7 @@
  .hdev td .two{max-width:40vw}
  .hexc .ph>.r{margin-left:auto}
 }
+.hdl{min-width:120px}
+.hpd{display:inline-flex;align-items:center;gap:6px;justify-content:flex-end}
+.hpd .pill{font-size:11px}
+.hci{font-size:11px;line-height:1.2;white-space:nowrap}

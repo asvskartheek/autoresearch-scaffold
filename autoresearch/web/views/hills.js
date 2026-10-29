@@ -56,6 +56,30 @@ function hDelta(r,base,U,sl){
  const d=r.score-base.score;if(Math.abs(d)<1e-9)return '<span class="faint">0</span>';
  return `<span class="${better(d,0)?'pos':'neg'}">${cDelta(d,sl,U)}</span>`;
 }
+// paired Δ against the champion on one slice, with a 90% bootstrap CI: the gate's own check when the gate ran it,
+// else the same computation (mean per-example difference, 2000 seeded resamples) on the hill's per-example rows
+const PAIR={};
+function hPaired(m,slice,a,b){
+ const g=S.state.gates?.[m],c=g&&!g.error&&g.champion===S.state.champion?g.rungs.flatMap(r=>r.checks).find(c=>c.slice===slice&&c.delta!=null):null;
+ if(c)return {delta:c.delta,lo:c.lo,hi:c.hi,n:c.n};
+ if(!a||!b)return null;
+ const ids=Object.keys(a).filter(id=>a[id]!=null&&b[id]!=null);if(!ids.length)return null;
+ const sign=S.state.config.higher_is_better===false?-1:1,key=m+'\u0000'+slice+'\u0000'+ids.length+'\u0000'+ids.reduce((t,id)=>t+a[id]-b[id],0);
+ if(PAIR[key])return PAIR[key];
+ const d=ids.map(id=>sign*(a[id]-b[id])),n=d.length,mean=d.reduce((x,y)=>x+y,0)/n;
+ let z=0x9e3779b9;const rnd=()=>{z|=0;z=z+0x6D2B79F5|0;let t=Math.imul(z^z>>>15,1|z);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296};
+ const it=2000,bs=new Float64Array(it);
+ for(let i=0;i<it;i++){let t=0;for(let j=0;j<n;j++)t+=d[(rnd()*n)|0];bs[i]=t/n}
+ bs.sort();
+ return PAIR[key]={delta:mean,lo:bs[Math.floor(.05*it)],hi:bs[Math.floor(.95*it)-1],n};
+}
+// the Δ cell: the paired change in the slice's units, its 90% interval under it, "Noisy" when the interval crosses zero
+function pairCell(p,slice){
+ if(!p)return DASH;
+ const k=slice,neg=negSlice(k),noisy=p.lo<0&&0<p.hi,cls=noisy?'sub':p.delta>0?'pos':p.delta<0?'neg':'sub';
+ const [x,y]=neg?[p.hi,p.lo]:[p.lo,p.hi],ci=`${esc(sd(k,x).replace(/ \S+$/,''))} to ${esc(sd(k,y))}`;
+ return `<div class="hpd"><span class="${cls}">${esc(sd(k,p.delta))}</span>${noisy?pill('Noisy','noisy'):''}</div><div class="sub hci" title="90% interval of the paired difference, n ${p.n}">${ci}</div>`;
+}
 // per-example flips vs a reference. Pass/fail: f fixed (reference wrong, this right), k broke.
 // Continuous: f better than the reference on that example, k worse (level within 10% counts as neither).
 function hFlips(a,b,bin=true){
@@ -209,11 +233,11 @@ function hAttempts(x,runs,U){
   return `<tr class="click${mod.status==='rejected'?' rej':''}" onclick="location.hash='#model/${enc(o.m)}'"><td class="hm"><div class="two"><a href="#model/${enc(o.m)}" title="${esc(o.m)}"><b>${mn(o.m)}</b></a>${mod.change?`<span class="sub ell" title="${esc(mod.change)}">${esc(mod.change)}</span>`:''}</div></td>
    <td class="htg">${tag}</td>
    <td class="num fig">${run(o.r,hFig(o.r,U,sl))}</td><td class="hbar">${isRate(o.r,sl)?meter(o.r.score,{mark:!me&&now&&isRate(now.r,sl)?now.r.score:null,cls:me?'muted':''}):''}</td>
-   ${now?`<td class="num fig">${me?DASH:hDelta(o.r,now.r,U,sl)}</td>`:''}
+   ${now?`<td class="num fig hdl">${me?DASH:(p=>p?pairCell(p,x.target):hDelta(o.r,now.r,U,sl))(hPaired(o.m,x.target,T?.runs?.[o.m],cr))}</td>`:''}
    ${cr?`<td class="num fig hfl">${fl?`<span class="${fl.f?'pos':'faint'}">+${fl.f}</span><span class="faint"> / </span><span class="${fl.k?'neg':'faint'}">−${fl.k}</span>`:DASH}</td>`:''}
-   ${ctl?`<td class="num fig">${o.c?run(o.c,hFig(o.c,false,ctl)):'<span class="faint">not run</span>'}</td>${now?`<td class="num fig hdc">${me||!o.c?DASH:hDelta(o.c,now.c,false,ctl)}</td>`:''}`:''}</tr>`});
+   ${ctl?`<td class="num fig">${o.c?run(o.c,hFig(o.c,false,ctl)):'<span class="faint">not run</span>'}</td>${now?`<td class="num fig hdc">${me||!o.c?DASH:(p=>p?pairCell(p,x.control):hDelta(o.c,now.c,false,ctl))(hPaired(o.m,x.control,D?.control?.runs?.[o.m],D?.control?.runs?.[ch]))}</td>`:''}`:''}</tr>`});
  const head=[['Model'],[''],[isRate(runs[0].r,sl)?'Solved':isTime(sl,U)?'Mean time':'Mean','num'],['']];
- if(now)head.push(['<span title="Change against the champion on the dev set">Δ vs champion</span>','num']);
+ if(now)head.push(['<span title="Paired change against the champion on the same dev examples, with its 90% interval">Δ vs champion</span>','num hdl']);
  if(cr)head.push(bin?['<span title="Examples the champion got wrong and this got right / right and this got wrong">Fixed / broke</span>','num hfl']
   :[`<span title="Examples where this scored more than 10% ${isTime(sl,U)?'faster':'better'} / ${isTime(sl,U)?'slower':'worse'} than the champion">${isTime(sl,U)?'Faster / slower':'Better / worse'}</span>`,'num hfl']);
  if(ctl){head.push(['Control','num']);if(now)head.push(['<span title="Change against the champion on the control">Δ control</span>','num hdc'])}

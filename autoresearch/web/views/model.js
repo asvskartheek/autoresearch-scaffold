@@ -17,7 +17,7 @@ const bin=k=>!isCont(k);
 const score=(v,k,n)=>v==null?'—':esc(sv(k,v,n));
 const diff=(d,k)=>d==null?'—':esc(sd(k,d));
 // a paired CI low to high, read in the direction the numbers are shown (negated slices flip it)
-const ciText=(c,k)=>negSlice(k)?`${diff(c.hi,k)} to ${diff(c.lo,k)}`:`${diff(c.lo,k)} to ${diff(c.hi,k)}`;
+const ciText=(c,k)=>{const [x,y]=negSlice(k)?[c.hi,c.lo]:[c.lo,c.hi];return `${diff(x,k).replace(/ \S+$/,'')} to ${diff(y,k)}`};
 // a delta in words: "5.2 pts below" on 0/1 slices, "1,071 ms less" on continuous ones
 const vsWords=(k,d)=>{const t=diff(Math.abs(d),k).replace(/^[+−]/,'');if(!isCont(k))return `${t} ${d<0?'below':'above'}`;const x=negSlice(k)?-d:d;return `${t} ${x<0?'less':'more'}`};
 
