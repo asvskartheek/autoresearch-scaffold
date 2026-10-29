@@ -36,7 +36,7 @@ function finding(t,d){
  if(t.status==='stalled')return `<b class="neg">Stalled: silent for ${silent(t)}</b>${prog?`, stopped at ${prog} (${(100*pr.done/pr.total).toFixed(0)}%)`:''}.`;
  if(t.status==='running'){
   const run=t.last?.running_score;
-  const bits=[prog&&`<b>${prog}</b> done (${(100*pr.done/pr.total).toFixed(0)}%)`,run!=null&&`scoring ${scoreOf(run,slOf(t))} so far${sl?' on '+sl:''}`,t.eta&&`finishes in about ${wbSpan(t.eta.eta_s)}, at ${wbClock(t.eta.finish_at)}`].filter(Boolean);
+  const bits=[prog&&`<b>${prog}</b> done (${(100*pr.done/pr.total).toFixed(0)}%)`,run!=null&&`scoring ${scoreOf(run,slOf(t))} so far${sl?' on '+sl:''}`,t.eta&&(t.health?.state==='over'?`<b class="warn">will not finish in its budget</b>: the estimate is ${wbClock(t.eta.finish_at)}, the budget ends at ${wbClock(t.created+t.budget_s)}`:`finishes in about ${wbSpan(t.eta.eta_s)}, at ${wbClock(t.eta.finish_at)}`)].filter(Boolean);
   return (bits.length?bits.join(', ')+'. ':'')+`Running for ${wbSpan(now()-t.created)}${budget}${subTxt}.`;
  }
  const took=t.ended?wbSpan(t.ended-t.created):null;
@@ -75,7 +75,7 @@ function kpiStrip(t,d){
   for(const [k,v] of last)items.push([wbMetric(k),mval(k,v),live?'latest':'final']);
   if(!items.length)return '';
  }
- if(t.status==='running')items.push(['Finishes',t.eta?'in '+wbSpan(t.eta.eta_s):DASH,t.eta?`at ${wbClock(t.eta.finish_at)}, ${t.eta.per_min<10?t.eta.per_min.toFixed(1):Math.round(t.eta.per_min)} a minute`:'no rate yet']);
+ if(t.status==='running')items.push(['Finishes',t.eta?`<span class="${t.health?.state==='over'?'warn':''}">in ${wbSpan(t.eta.eta_s)}</span>`:DASH,t.eta?`at ${wbClock(t.eta.finish_at)}, ${t.eta.per_min<10?t.eta.per_min.toFixed(1):Math.round(t.eta.per_min)} a minute`:'no rate yet']);
  items.push([live?'Elapsed':'Took',`<span class="${bc}">${wbSpan((t.ended||now())-t.created)}</span>`,t.budget_s?`of a ${wbSpan(t.budget_s)} budget`:'no budget set']);
  return `<div class="section">${kpis(items.slice(0,6))}</div>`;
 }

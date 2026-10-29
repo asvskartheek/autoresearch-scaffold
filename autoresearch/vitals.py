@@ -72,12 +72,16 @@ def eta_track(b: list[tuple[float, float]], total: float, now: float, win: float
 
 
 def health(t: dict, eta: dict | None, now: float) -> dict:
-    """ok, quiet (no heartbeat for a minute), slipping (the ETA moved out by > max(2 min, 15% of what is left)), stalled."""
+    """ok, quiet (no heartbeat for a minute), over (the predicted finish is past the time budget, `by_s` past it),
+    slipping (the ETA moved out by > max(2 min, 15% of what is left)), stalled."""
     silent = now - (t.get("heartbeat") or t.get("updated") or now)
     if t.get("status") == "stalled":
         return dict(state="stalled", silent_s=silent)
     if silent >= QUIET_S:
         return dict(state="quiet", silent_s=silent)
+    end = (t.get("created") or now) + t["budget_s"] if _num(t.get("budget_s")) and t["budget_s"] > 0 else None
+    if eta and end and eta["finish_at"] > end:
+        return dict(state="over", silent_s=silent, by_s=eta["finish_at"] - end, budget_end=end)
     if eta and eta["drift_s"] > max(120, 0.15 * eta["eta_s"]):
         return dict(state="slipping", silent_s=silent, by_s=eta["drift_s"])
     return dict(state="ok", silent_s=silent)

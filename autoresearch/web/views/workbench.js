@@ -23,7 +23,9 @@ function budgetLine(t){
  return [`${wbSpan(el)} of ${wbSpan(t.budget_s)}`,f>=1?'neg':f>=.8?'warn':''];
 }
 const silent=t=>wbSpan(now()-t.heartbeat);
-const fin=t=>t.eta&&t.status==='running'?t.eta.finish_at:null;
+// when a job stops: its predicted finish, or the end of its time budget if that comes first
+const bEnd=t=>t.budget_s?t.created+t.budget_s:null;
+const fin=t=>t.eta&&t.status==='running'?Math.min(t.eta.finish_at,bEnd(t)??Infinity):null;
 const wbFixCmd=t=>`arx task finish ${t.id} --status failed`;
 // metric keys as words: running_score → Score so far, latency_s → Latency (s), rewards/correctness/mean → Correctness
 const wbMetric=k=>({running_score:'Score so far',score:'Score',latency_s:'Latency (s)',loss:'Loss',reward:'Reward',acc:'Accuracy',accuracy:'Accuracy',lr:'Learning rate',learning_rate:'Learning rate',grad_norm:'Gradient norm',kl:'KL to reference',entropy:'Entropy',mean_token_accuracy:'Token accuracy',reward_std:'Reward spread',gpu_util:'GPU utilisation',gpu_mem_gb:'GPU memory (GB)'})[k]
@@ -37,10 +39,11 @@ const sgn=d=>(d>0?'+':d<0?'−':'±')+n0(Math.abs(d));
 const val=(f,v)=>XC.yv(f,v);
 function hp(t){
  const h=t.health||{state:t.status==='stalled'?'stalled':'ok'};
- return ({ok:['Healthy','ok'],quiet:[`Quiet ${span(h.silent_s)}`,'warn'],slipping:[`Slipping ${span(h.by_s)}`,'warn'],stalled:[`Silent ${span(h.silent_s??now()-t.heartbeat)}`,'bad']})[h.state]||['Healthy','ok'];
+ return ({ok:['Healthy','ok'],quiet:[`Quiet ${span(h.silent_s)}`,'warn'],slipping:[`Slipping ${span(h.by_s)}`,'warn'],over:[`Over budget by ${span(h.by_s)}`,'warn'],stalled:[`Silent ${span(h.silent_s??now()-t.heartbeat)}`,'bad']})[h.state]||['Healthy','ok'];
 }
 function etaTxt(t){
  if(t.status==='stalled')return `<small>no estimate</small>—`;
+ if(t.eta&&bEnd(t)&&t.eta.finish_at>bEnd(t))return `<small>budget ends</small><span class="warn">${wbClock(bEnd(t))}</span>`;
  if(t.eta)return `<small>${span(t.eta.eta_s)} left</small>${wbClock(t.eta.finish_at)}`;
  return `<small>estimating</small>—`;
 }
