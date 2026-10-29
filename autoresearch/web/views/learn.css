@@ -23,10 +23,11 @@
 .lrn .opt.truth,.ldlg .opt.truth{border-color:var(--positive);box-shadow:inset 0 0 0 1px var(--positive);background:var(--pill-positive-bg)}
 .lrn .opt.wrong,.ldlg .opt.wrong{border-color:var(--negative);box-shadow:inset 0 0 0 1px var(--negative);background:var(--pill-negative-bg)}
 .lrn .opt[disabled],.ldlg .opt[disabled]{cursor:default}
-.lrn .conf{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.lrn .conf label{font-size:13px;color:var(--muted);flex:none}
-.lrn .conf input{flex:1;min-width:140px;accent-color:var(--text)}
-.lrn .conf output{font:500 15px var(--mono);width:44px;text-align:right}
+.lrn .conf{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px}
+.lrn .conf label{font-size:13px;color:var(--muted)}
+.lrn .conf input{min-width:0;width:100%;margin:0;accent-color:var(--text)}
+.lrn .conf output{font:500 15px var(--mono);min-width:48px;text-align:right;white-space:nowrap}
+@media (max-width:560px){.lrn .conf{grid-template-columns:minmax(0,1fr) auto;row-gap:4px}.lrn .conf label{grid-column:1/-1}}
 .lrn .actions,.ldlg .actions{display:flex;gap:8px;align-items:center;margin-top:auto;flex-wrap:wrap}
 .lrn .actions .ev{margin-left:auto;font-size:12px;color:var(--faint);max-width:50%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lrn .actions .ev:hover{color:var(--accent)}
@@ -46,7 +47,7 @@
 .lrn svg text.strong,.ldlg svg text.strong{fill:var(--text);font-weight:500}
 .lrn .lv{width:100%;height:auto;display:block}
 .lrn .nl{width:100%;height:auto;touch-action:none;cursor:pointer;display:block}
-@media (max-width:560px){.lrn .nl text{font-size:17px}.lrn .lv text{font-size:14px}}
+.lrn .nl text,.lrn .lv text{font-size:12px}
 
 .lrn .lside{display:flex;flex-direction:column;gap:16px;min-width:0}
 .lrn .lside .card h2{font-size:14px}

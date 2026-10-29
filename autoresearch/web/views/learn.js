@@ -56,7 +56,7 @@ function vizCI(v){
  const u=v.unit==null?'pts':v.unit,k=v.unit==null?100:1;  // older payloads carry fractions
  const d=k*v.delta,lo=k*v.lo,hi=k*v.hi,bar=v.bar!=null?k*v.bar:null,W=LW(),H=136,Lx=16,R=W-16;
  const ext=Math.max(Math.abs(lo),Math.abs(hi),Math.abs(bar||0)),pad=u==='pts'?1:ext*.12||1;
- const a=Math.min(u==='pts'?-2:-pad,lo-pad,bar??0),b=Math.max(u==='pts'?2:pad,hi+pad,bar??0),x=q=>Lx+(q-a)/(b-a)*(R-Lx),stp=nstep(b-a,W<420?4:7);
+ const a=Math.min(u==='pts'?-2:-pad,lo-pad,bar??0),b=Math.max(u==='pts'?2:pad,hi+pad,bar??0),x=q=>Lx+(q-a)/(b-a)*(R-Lx),stp=nstep(b-a,W<420?5:9);
  let t='';for(let q=Math.ceil(a/stp)*stp;q<=b+1e-9;q+=stp){const qq=+q.toPrecision(6);t+=`<line x1="${x(qq)}" x2="${x(qq)}" y1="26" y2="62" stroke="var(--grid)"/><text x="${x(qq)}" y="78" text-anchor="middle">${qq>0?'+':qq<0?'−':''}${grp(Math.abs(qq))}</text>`}
  const good=v.better<0?hi<0:lo>0,bad=v.better<0?lo>0:hi<0,col=good?'var(--positive)':bad?'var(--negative)':'var(--muted)',cap=Math.floor((R-Lx-90)/7);
  const sq=(n,c,y)=>Array.from({length:Math.min(n,cap)},(_,i)=>`<rect x="${Lx+i*7}" y="${y}" width="5" height="9" rx="1" fill="${c}"/>`).join('');
@@ -69,7 +69,7 @@ function vizCI(v){
  <circle cx="${x(d)}" cy="44" r="6" fill="${col}"/>
  ${row(v.wins,'var(--positive)',100,'fixed')}${row(v.losses,'var(--negative)',118,'broken')}</svg>`;
 }
-const LW=()=>Math.round(Math.max(300,Math.min(560,(document.querySelector('.lrn .stage')?.clientWidth||innerWidth)-48)));
+const LW=()=>Math.round(Math.max(300,Math.min(560,(document.querySelector('.lrn .stage')?.clientWidth||innerWidth)-(innerWidth<=900?32:48))));
 // bars: a 0/1 row reads as a count ("166 of 185") and its length is the share; a continuous row reads in its unit
 function vizBars(v){
  const rows=v.rows.filter(r=>r.v!=null);if(!rows.length)return '';
@@ -84,7 +84,7 @@ function vizBars(v){
  return `<svg class="lv" viewBox="0 0 ${W} ${H}" role="img" aria-label="scores">${s}</svg>`;
 }
 function vizGoal(v){
- const W=560,H=108,Lx=16,R=W-16,a=v.lo,N=v.N,x=q=>Lx+(Math.max(a,q)-a)/(N-a)*(R-Lx),ch=v.have;
+ const W=LW(),H=108,Lx=16,R=W-16,a=v.lo,N=v.N,x=q=>Lx+(Math.max(a,q)-a)/(N-a)*(R-Lx),ch=v.have;
  let s=`<rect x="${Lx}" y="40" width="${R-Lx}" height="10" rx="2" fill="var(--active)"/><rect x="${Lx}" y="40" width="${x(ch)-Lx}" height="10" rx="2" fill="var(--accent)"/>`;
  if(v.need>ch)s+=`<rect x="${x(ch)}" y="40" width="${x(v.need)-x(ch)}" height="10" fill="var(--warning)" opacity=".35"/><text x="${(x(ch)+x(v.need))/2}" y="74" text-anchor="middle" style="fill:var(--warning);font-weight:500">${(v.need-ch).toLocaleString()} more</text>`;
  s+=`<line x1="${x(v.need)}" x2="${x(v.need)}" y1="30" y2="60" stroke="var(--text)" stroke-width="1.5"/><text x="${Math.min(R-30,x(v.need))}" y="${Math.abs(x(v.need)-x(ch))<70?90:24}" text-anchor="middle" class="strong">${v.need.toLocaleString()} goal</text>`;
@@ -97,8 +97,8 @@ function vizGoal(v){
 }
 const viz=v=>!v?'':v.kind==='ci'?vizCI(v):v.kind==='bars'?vizBars(v):v.kind==='goal'?vizGoal(v):'';
 function numberLine(c,guess,truth){
- const W=560,H=76,Lx=16,R=W-16,x=v=>Lx+(v-c.min)/(c.max-c.min)*(R-Lx),span=c.max-c.min;
- const raw=span/8,mag=10**Math.floor(Math.log10(raw)),stp=[1,2,5,10].map(m=>m*mag).find(m=>m>=raw);
+ const W=LW(),H=76,Lx=16,R=W-16,x=v=>Lx+(v-c.min)/(c.max-c.min)*(R-Lx),span=c.max-c.min;
+ const raw=span/(W<420?7:12),mag=10**Math.floor(Math.log10(raw)),stp=[1,2,5,10].map(m=>m*mag).find(m=>m>=raw);
  let s=`<line x1="${Lx}" x2="${R}" y1="36" y2="36" stroke="var(--control)" stroke-width="2"/>`;
  for(let v=Math.ceil(c.min/stp)*stp;v<=c.max+1e-9;v+=stp)s+=`<line x1="${x(v)}" x2="${x(v)}" y1="31" y2="41" stroke="var(--control)"/><text x="${x(v)}" y="58" text-anchor="middle">${c.unit==='pts'&&v>0?'+':''}${(+v.toFixed(2)).toLocaleString()}</text>`;
  if(c.unit==='pts')s+=`<line x1="${x(0)}" x2="${x(0)}" y1="24" y2="48" stroke="var(--text)"/>`;
@@ -259,7 +259,7 @@ document.addEventListener('input',e=>{if(e.target.id!=='lcf'||!L.b)return;const 
 // the number line: drag to guess; only the svg is redrawn while dragging
 document.addEventListener('pointerdown',e=>{
  const nl=e.target.closest&&e.target.closest('#lnl');if(!nl||route().r!=='learn')return;const c=L.b?.cards[L.cur];if(!c||c.pred)return;
- const set=ev=>{const r=nl.getBoundingClientRect(),f=(ev.clientX-r.left)/r.width,a=16/560,b=1-a;uiOf(c).guess=snap(c,c.min+Math.min(1,Math.max(0,(f-a)/(b-a)))*(c.max-c.min));
+ const set=ev=>{const r=nl.getBoundingClientRect(),f=(ev.clientX-r.left)/r.width,a=16/(nl.viewBox.baseVal.width||560),b=1-a;uiOf(c).guess=snap(c,c.min+Math.min(1,Math.max(0,(f-a)/(b-a)))*(c.max-c.min));
   const cur=$('#lnl');if(cur){cur.outerHTML=numberLine(c,uiOf(c).guess,null)}};
  set(e);const mv=ev=>set(ev),up=()=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',up);render(true)};
  addEventListener('pointermove',mv);addEventListener('pointerup',up);e.preventDefault();
@@ -284,4 +284,6 @@ document.addEventListener('keydown',e=>{
   else{const o=shuf(c.id,c.opts),j=o.indexOf(u.choice);u.choice=o[(j<0?0:j+dir+o.length)%o.length]}
   render(true);e.preventDefault()}
 });
+// charts are drawn in CSS pixels (viewBox = stage width), so redraw when the width changes
+let lw0=0;addEventListener('resize',()=>{if(route().r!=='learn'||!L.b)return;const w=LW();if(Math.abs(w-lw0)>24){lw0=w;render(true)}});
 addEventListener('hashchange',()=>{if(route().r!=='learn'&&L.timer.id){leaveCard();L.timer.id=null}});
