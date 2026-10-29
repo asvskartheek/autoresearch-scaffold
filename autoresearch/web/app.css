@@ -268,3 +268,4 @@ svg .ax{stroke:var(--grid)}
 .sh-url{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;background:var(--subtle,var(--hover))}
 .sh-url code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
 .sh-dl{align-self:flex-start;display:inline-flex;align-items:center;gap:6px}.sh-dl svg{width:16px;height:16px}
+.nf{display:flex;flex-wrap:wrap;gap:8px}

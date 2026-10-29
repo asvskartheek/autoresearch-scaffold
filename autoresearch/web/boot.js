@@ -20,7 +20,7 @@ function render(force){
  if(force!==true&&busy()){pending=true;return}
  pending=false;
  const {r,arg}=route();
- const v=VIEWS[r]||VIEWS.overview;
+ const v=VIEWS[r]||notFound;
  S.crumbs=[];
  let html;try{html=v(arg)}catch(e){console.error(e);html=`<div class="banner">This view failed to draw: ${esc(e.message)}</div>`}
  const y=scrollY;
@@ -28,6 +28,17 @@ function render(force){
  renderNav();renderTop();
  document.title=(S.crumbs.at(-1)?.[0]||'arx')+' · '+(S.state.config?.name||'arx');
  S.afterRender?.forEach(f=>{try{f()}catch(e){console.error(e)}});
+}
+// a hash no view answers: say so, and offer the pages there are
+function notFound(){
+ const h=location.hash.slice(1);
+ return page({title:'No page here',crumbs:[['Not found']],finding:`Nothing answers <code>#${esc(h)}</code>.`})+
+  `<div class="nf">${ROUTES.map(([k,l])=>`<a class="btn" href="#${k}">${ICON[k]||''}${l}</a>`).join('')}</div>`;
+}
+// another name for a view (#brief) becomes the view's own hash, so comments and links made there land on one route
+function canon(){
+ const h=location.hash.slice(1),r0=h.split(/[/?]/)[0];
+ if(ALIAS[r0])history.replaceState(null,'',location.pathname+location.search+'#'+ALIAS[r0]+h.slice(r0.length));
 }
 async function loadDetail(){
  const {r,arg}=route();
@@ -75,7 +86,7 @@ function tick(){
 }
 // route change: paint at once from cached state; fetch only the detail the new route needs
 addEventListener('hashchange',async()=>{
- const {r,arg}=route();
+ canon();const {r,arg}=route();
  S.detail=null;$('#app').classList.remove('nav-open');scrollTo(0,0);
  const p=(r==='hill'||r==='task')&&arg?loadDetail().catch(()=>{}):null;
  render(true);if(p){await p;render(true)}
@@ -83,5 +94,5 @@ addEventListener('hashchange',async()=>{
 addEventListener('keydown',e=>{if(e.key==='Escape')$('#app').classList.remove('nav-open')});
 // a person's first visit to a project lands on Start (views/start.js keeps the visits); after that a bare URL is the Overview
 if(!location.hash&&window.START?.first)history.replaceState(null,'','#start');
-placeholder();tick();setInterval(()=>{if(!document.hidden)tick()},4000);
+canon();placeholder();tick();setInterval(()=>{if(!document.hidden)tick()},4000);
 if(window.ARXP){ARXP.on(()=>{if(S.state)renderTop()});ARXP.start('api/people',()=>location.hash.slice(1)||'overview')}

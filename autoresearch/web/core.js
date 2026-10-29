@@ -50,7 +50,11 @@ const sd=(s,d)=>{if(d==null||!isFinite(d))return '—';if(isCont(s)){const x=neg
 const firstLine=t=>String(t||'').split(/(?<=\.)\s/)[0];
 
 // ---------- ledger queries
-function route(){const h=location.hash.slice(1)||'overview';const [r,...rest]=h.split('/');return {r,arg:decodeURIComponent(rest.join('/'))}}
+// #view/arg?k=v: the view, its argument and its query (#learn?catchup=1). Another name for a view (#brief) reads as it
+const ALIAS={brief:'learn'};
+function route(){const h=location.hash.slice(1)||'overview',qi=h.indexOf('?'),p=qi<0?h:h.slice(0,qi);
+ const [r0,...rest]=p.split('/'),r=ALIAS[r0]||r0||'overview';
+ return {r,arg:decodeURIComponent(rest.join('/')),q:Object.fromEntries(new URLSearchParams(qi<0?'':h.slice(qi+1)))}}
 const isLive=t=>t&&(t.status==='running'||t.status==='stalled');
 const active=()=>S.state.tasks.filter(isLive);
 const archived=()=>S.state.tasks.filter(t=>!isLive(t));
@@ -92,7 +96,7 @@ const ICON={
  copy:I('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',13)};
 // the product's mark: a ladder (two rails, three rungs) in the accent
 const MARK='<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="6" fill="var(--accent)"/><path d="M8 18.5V5.5M16 18.5V5.5M8 15h8M8 11.5h8M8 8h8" stroke="var(--surface)" stroke-width="1.8" stroke-linecap="round"/></svg>';
-const routeLabel=r=>({task:'Task',hill:'Hill',model:'Model',goal:'Goal'})[r]||(ROUTES.find(([k])=>k===r)||ROUTES.find(([k])=>k==='overview'))[1];
+const routeLabel=r=>({task:'Task',hill:'Hill',model:'Model',goal:'Goal'})[r]||ROUTES.find(([k])=>k===r)?.[1]||(VIEWS[r]?r[0].toUpperCase()+r.slice(1):'Not found');
 const ROUTES=[['start','Start'],['overview','Overview'],['learn','Brief'],['workbench','Workbench'],['goals','Goals'],['questions','Questions'],['models','Models'],['hills','Hills'],['papers','Papers'],['slices','Slices'],['archive','Archive']];
 // the project this page serves: /p/<key>/ for a registered project, the server's own at /
 const PKEY=(location.pathname.match(/^\/p\/([^/]+)/)||[])[1]&&decodeURIComponent(location.pathname.split('/')[2]);
@@ -106,7 +110,7 @@ const goalPaper=g=>Object.values(S.state.papers||{}).find(p=>p.goal===g);
 // ---------- shell
 function renderNav(){
  const {r,arg}=route(),st=S.state;
- const navOn={task:st&&isLive(byId(arg))?'workbench':'archive',model:'models',hill:'hills',goal:'goals'}[r]||(VIEWS[r]?r:'overview');
+ const navOn={task:st&&isLive(byId(arg))?'workbench':'archive',model:'models',hill:'hills',goal:'goals'}[r]||(VIEWS[r]?r:'');
  const jobs=st?liveJobs():[],stalled=jobs.filter(t=>t.status==='stalled').length,running=jobs.length-stalled;
  const waiting=st?Object.values(st.papers||{}).reduce((a,p)=>a+(p.waiting||0),0):0,asks=st?.questions?.needs_human||0;
  const counts=st?{workbench:jobs.length,goals:Object.values(st.goals||{}).filter(g=>g.status==='open').length,hills:Object.values(st.hills).filter(h=>h.status==='open').length,papers:waiting,questions:asks}:{};
