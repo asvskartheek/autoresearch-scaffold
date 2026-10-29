@@ -40,6 +40,11 @@ def paper_prompt(p: Project, item: dict) -> str:
     th = next(t for t in papers.threads(papers.thread(p, name)) if t["id"] == tid)
     convo = "\n".join(f"[{m['author']}{' (agent)' if m['agent'] else ''}] {m['body']}" for m in th["messages"])
     a = th.get("anchor") or {}
+    # a long answer is stored first (`arx comment doc` prints #answer/<id>), then the reply links it
+    rules = comments.answer_rules(
+        th["messages"][-1]["body"], f'arx paper reply {name} {tid} "<answer>"',
+        comments._heredoc("arx comment doc --doc -") + "\n  then, with the #answer/<id> it printed:\n"
+        f'    arx paper reply {name} {tid} "<the summary figure svg> <one line>" --link "Full answer=/#answer/<id>"')
     return f"""You answer a comment on the paper {name!r} (.research/papers/{name}/paper.html) of the arx research project in
 the current directory.
 
@@ -49,15 +54,13 @@ Thread {tid} (oldest first; answer the newest message):
 Where: {_paper_where(a)}
 
 How to answer
-- Post your answer with: arx paper reply {name} {tid} "<answer>"   (exactly once, at the end). If the paper itself
-  should change, say what and why in the reply; do not edit it.
+- Post your answer exactly once, at the end (short or long, below). If the paper itself should change, say what and
+  why in the reply; do not edit it.
 - While you work: arx task note $ARX_TASK "<what you are checking>".
 - Read-only: read the paper, research.json, PROTOCOL.md and the ledger in .research/; read-only arx commands only.
-- Visual first. When the answer has two or more numbers, or explains how something works, lead with one figure: an
-  inline <svg viewBox="0 0 400 H" width="400"> (H at most 240) built only from svg, g, path, rect, circle, line,
-  polyline and text. Text at font-size 12 or more; text and axes in currentColor; one accent colour (#3b82f6, or
-  #22c55e / #ef4444 for better / worse). No scripts, styles or links inside it. The reader shows the figure first.
-- Then at most two short plain sentences. Name models by their titles (models.json), never raw ids.
+- Name models by their titles (models.json), never raw ids.
+
+{rules}
 
 Reporting rules (PROTOCOL.md):
 {comments._rules(p)}

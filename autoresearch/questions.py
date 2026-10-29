@@ -14,10 +14,12 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 import time
 import uuid
+from pathlib import Path
 
-from . import features
+from . import comments, features
 from .core import _read, _write, locked, paired
 from .readable import readable
 
@@ -102,8 +104,9 @@ def ask(p, title, parent=None, by="you", quote=None, route=None) -> dict:
     return q | {"inbox": item["id"]}
 
 
-def settle(p, qid, status, claim, evidence=None, by="agent") -> dict:
-    """Answer (status answered) or close (dead) a question. A seeded node is written on its first edit."""
+def settle(p, qid, status, claim, evidence=None, by="agent", doc=None) -> dict:
+    """Answer (status answered) or close (dead) a question. A seeded node is written on its first edit.
+    `doc` is a long answer (self-contained HTML), stored as .research/answers/<qid>.html; the claim stays its one line."""
     if status not in ("answered", "dead"):
         raise SystemExit("status must be answered or dead")
     claim = re.sub(r"\s+", " ", str(claim or "")).strip()
@@ -115,6 +118,11 @@ def settle(p, qid, status, claim, evidence=None, by="agent") -> dict:
     base = stored(p).get(qid) or {k: node[k] for k in ("title", "parent", "evidence", "created", "by") if node.get(k) is not None}
     ev = list(evidence) if evidence else base.get("evidence") or []
     rec = base | dict(status=status, claim=claim[:300], evidence=ev, needs_human=False, settled=time.time(), settled_by=by)
+    if doc:
+        try:
+            rec["doc"] = comments.save_doc(p, doc, qid)
+        except ValueError as e:
+            raise SystemExit(str(e))
     _save(p, qid, rec)
     for it in features.inbox(p):  # a queued ask nobody started is no longer needed
         if it.get("kind") == "question" and it.get("ref") == qid and it.get("status") == "queued":
@@ -486,6 +494,11 @@ def _tree(p, full: bool) -> dict:
                 n["live"] = live
             elif it and it.get("task"):
                 n["answer_task"] = it["task"]  # the agent task that answered it: its notes are the working
+            if n.get("doc"):  # a long answer: its first figure shows under the claim, Open reads it at #answer/<doc>
+                try:
+                    n["fig"] = comments.first_figure(comments.doc_path(p, n["doc"]).read_text())
+                except (KeyError, OSError):
+                    n.pop("doc")
         return dict(nodes=sorted(nodes.values(), key=lambda n: (n.get("seed") == "group", n.get("created") or 0)), goals=_trajectories(p, ctx),
                     champion=ctx["champion"], needs_human=sum(1 for n in nodes.values() if _waiting(n)), now=time.time())
 
@@ -757,6 +770,22 @@ def _prompt(p, item) -> str:
         "The claim is one plain sentence of at most 25 words that answers the question, with its numbers,",
         "e.g. \"No. 150 vs 157 of 185 on the target slice, paired delta -3.8 pts (90% CI -6.5 to -1.1).\"",
         "Evidence: every model:slice run the claim rests on (the dashboard draws each as a paired-delta dot with its CI).",
+        "",
+        "Short or long: judge what the person asked. A question that wants a fact, a number or a yes/no gets the claim",
+        "above and nothing more (most do). A question that asks to explain, introduce or walk through something",
+        "(\"give me an intro to the data\", \"how does the agent work\") also gets a LONG answer: one self-contained HTML",
+        "document, passed with --doc - on stdin (you cannot write files); the claim stays its one-line summary:",
+        f"  arx q answer {qid} \"<claim>\" [--evidence ...] --doc - <<'HTML'",
+        "    <!doctype html><html>...the document...</html>",
+        "    HTML",
+        *(["This ask reads like a request for an explanation: a long answer is probably right."]
+          if comments.wants_long(f"{n.get('title') or pay.get('title') or ''} {pay.get('quote') or ''}") else []),
+        "The document, following PROTOCOL.md's paper non-negotiables where they apply: sections",
+        "(<section data-block=\"<id>\">) each with a heading and at most 100 words of prose; an inline SVG figure for every",
+        "section that states a number (the FIRST <svg> is the summary figure shown under the question: make it stand",
+        "alone, viewBox about 400 wide, text in currentColor at font-size 12 or more); at least one small widget the",
+        "reader drives; ledger numbers only, each naming its slice and n; dark mode under :root[data-theme=\"dark\"];",
+        "sans-serif fonts; a <title>; inline CSS and JS only; no client text, answers or traces (ids and paraphrase).",
         "If answering needs new runs or a human decision, still answer what the ledger shows now, and add the follow-up as",
         f"  arx q add \"<title, at most 6 words>\" --parent {qid} --needs-human",
     ]
@@ -784,7 +813,11 @@ def _cmd(a):
         if len(a.args) < 2:
             raise SystemExit(f"arx q {a.verb} <id> \"<claim>\"")
         ev = parse_evidence(p, a.evidence)
-        r = settle(p, a.args[0], "answered" if a.verb == "answer" else "dead", " ".join(a.args[1:]), ev, by=a.by or "agent")
+        doc = None
+        if a.doc:
+            doc = sys.stdin.read() if a.doc == "-" else Path(a.doc).read_text()
+        r = settle(p, a.args[0], "answered" if a.verb == "answer" else "dead", " ".join(a.args[1:]), ev, by=a.by or "agent",
+                   doc=doc)
         return print(f"{a.args[0]} {r['status']}: {r['claim']}")
     if a.verb == "list":
         t = tree(p, full=False)["byid"]
@@ -813,6 +846,7 @@ def _register(sp):
   add "<title>" [--parent id] [--needs-human]     an open question (title: 6 words or fewer)
   ask "<title>" [--parent id]                     a question for an agent (inbox kind=question)
   answer <id> "<claim>" --evidence model:slice    answered, with the runs it rests on (task:<id> also works)
+                       [--doc answer.html | -]    plus a long answer: an HTML document read at #answer/<id>
   dead <id> "<claim>"                             a dead end
   list [--claims] [--json]                        the tree (seeded from goals, hills and models)""")
     s.add_argument("verb", choices=["add", "ask", "answer", "dead", "list"])
@@ -821,6 +855,7 @@ def _register(sp):
     s.add_argument("--needs-human", action="store_true")
     s.add_argument("--choice", action="append", help="add: a one-tap answer for the person (repeat, up to 4)")
     s.add_argument("--evidence", action="append", default=[], help="model:slice or task:<id> (repeat)")
+    s.add_argument("--doc", help="answer: a long answer, a self-contained HTML file (- reads stdin), read at #answer/<id>")
     s.add_argument("--by", help="who is writing (default: agent)")
     s.add_argument("--claims", action="store_true")
     s.add_argument("--json", action="store_true")

@@ -15,6 +15,10 @@ Every event a person makes carries `author` (their name then) and `by` (their pe
 `shape` is a drawn comment: {tool: box|arrow|pen|highlight, d (SVG path in px from the anchor's top-left), bw, bh,
 fit, ox, oy}. Every person's comment or reply enqueues an inbox item kind="comment" (ref = thread id); `arx answer`
 hands it to an agent, which posts back with `arx comment reply <thread> "..."`.
+
+A question that asks to explain or introduce something gets a long answer: a self-contained HTML document stored at
+`.research/answers/<id>.html` (save_doc), served sandboxed at GET /api/answers/<id> and read full width at
+#answer/<id> (web/views/questions.js). The thread reply carries the document's first figure and that link.
 """
 from __future__ import annotations
 
@@ -197,6 +201,126 @@ def _state(p, st):
     st["comments"] = dict(open=sum(1 for t in ts if not t["resolved"]), waiting=sum(1 for t in ts if t["waiting"]))
 
 
+# ---------- long answers: one HTML document per answer, .research/answers/<id>.html
+DOC_MAX = 2_000_000
+FIG_MAX = 12_000
+_DOC_ID = re.compile(r"^[a-z0-9][a-z0-9-]{1,47}$")
+# a question that asks to explain, introduce or walk through something, rather than for one fact or number
+_LONG = re.compile(r"\b(explain|explanation|intro|introduce|introduction|overview|walk (me )?through|walkthrough|"
+                   r"how (does|do|did|is|are) .{2,}\b(work|works|built|made|set up|run)|teach|tour|deep dive|in detail|"
+                   r"describe|primer|guide|onboard)\b", re.I)
+
+
+def wants_long(text: str) -> bool:
+    """A hint for the agent, never a rule: does this ask read like a request for an explanation?"""
+    return bool(_LONG.search(str(text or "")))
+
+
+def doc_id(raw: str) -> str:
+    """A safe file name from a question or thread id (`g:goal` -> `g-goal`)."""
+    d = re.sub(r"[^a-z0-9-]+", "-", str(raw or "").lower()).strip("-")[:48]
+    if not _DOC_ID.match(d):
+        raise ValueError(f"bad answer id {raw!r}")
+    return d
+
+
+def doc_path(p: Project, did: str) -> Path:
+    if not _DOC_ID.match(str(did or "")):
+        raise KeyError(did)
+    f = p.dir / "answers" / f"{did}.html"
+    if not f.is_file():
+        raise KeyError(did)
+    return f
+
+
+def save_doc(p: Project, html: str, did: str | None = None) -> str:
+    """Store a long answer; returns its id (a fresh `a-<hex>` unless one is given, e.g. the question's id)."""
+    html = str(html or "")
+    if not html.strip() or "<" not in html:
+        raise ValueError("the answer document is empty or not HTML")
+    if len(html.encode()) > DOC_MAX:
+        raise ValueError(f"the answer document is over {DOC_MAX // 1_000_000} MB")
+    did = doc_id(did) if did else "a-" + secrets.token_hex(4)
+    d = p.dir / "answers"
+    d.mkdir(parents=True, exist_ok=True)
+    tmp = d / f".{did}.tmp"
+    tmp.write_text(html)
+    tmp.replace(d / f"{did}.html")
+    return did
+
+
+def first_figure(html: str) -> str | None:
+    """The document's first inline <svg>, to show in the thread; None when there is none or it is too big."""
+    m = re.search(r"<svg\b.*?</svg>", str(html or ""), re.S | re.I)
+    return m.group(0) if m and len(m.group(0)) <= FIG_MAX else None
+
+
+def doc_title(html: str) -> str | None:
+    m = re.search(r"<title[^>]*>(.*?)</title>", str(html or ""), re.S | re.I) or re.search(r"<h1[^>]*>(.*?)</h1>", str(html or ""), re.S | re.I)
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", m.group(1))).strip()[:120] if m else None
+
+
+def _themed(html: str, theme: str) -> str:
+    """The dashboard's theme on the document's <html>, so its `:root[data-theme="dark"]` rules apply."""
+    if theme not in ("light", "dark"):
+        return html
+    if re.search(r"<html\b", html, re.I):
+        return re.sub(r"<html\b", f'<html data-theme="{theme}"', html, count=1, flags=re.I)
+    return f'<html data-theme="{theme}">{html}</html>'
+
+
+@features.get("/api/answers/")
+def _get_doc(p, path, q):
+    try:
+        f = doc_path(p, path.rstrip("/").rsplit("/", 1)[-1])
+    except KeyError:
+        return 404, dict(error="no such answer")
+    html = f.read_text()
+    if q.get("meta"):
+        return 200, dict(id=f.stem, title=doc_title(html), figure=first_figure(html), t=f.stat().st_mtime)
+    # sandboxed (opaque origin): the document's widgets run, but cannot read the ledger or post as the viewer
+    return 200, _themed(html, q.get("theme") or "").encode(), "text/html; charset=utf-8", {
+        "Content-Security-Policy": "sandbox allow-scripts allow-popups"}
+
+
+def _heredoc(cmd: str) -> str:
+    return f"{cmd} <<'HTML'\n    <!doctype html><html>...the document...</html>\n    HTML"
+
+
+def answer_rules(ask: str, short: str, long: str) -> str:
+    """How to choose between a short answer and a long document, shared by every answering prompt.
+    `short` and `long` are the exact commands that post each kind."""
+    hint = ("\n- This ask reads like a request for an explanation: a long answer is probably right." if wants_long(ask)
+            else "")
+    return f"""Short or long: judge what the person asked.
+- A question that wants a fact, a number or a yes/no gets a SHORT answer (most do).
+- A question that asks to explain, introduce or walk through something ("give me an intro to the data", "how does
+  the agent work", "walk me through the ladder") gets a LONG answer: one HTML document.{hint}
+
+Short answer
+- Visual first. When the answer has two or more numbers, lead with one figure: an inline
+  <svg viewBox="0 0 400 H" width="400"> (H at most 240) built only from svg, g, path, rect, circle, line, polyline and
+  text. Text at font-size 12 or more; text and axes in currentColor; one accent colour (#3b82f6, or #22c55e / #ef4444
+  for better / worse). No scripts, styles or links inside it. The page shows the figure first, at full width.
+- Then at most one or two short plain sentences. No headings, no lists.
+- Post it with: {short}
+
+Long answer
+- One self-contained HTML document (inline CSS and JS, no external files except Google Fonts), read full width
+  beside the dashboard. Follow PROTOCOL.md's paper non-negotiables where they apply:
+  - sections (<section data-block="<id>">), each with a heading and at most 100 words of prose; prose captions,
+    the figures carry the argument. A long document is fine; a wall of text is not.
+  - a figure (inline SVG) for every section that states a number. The FIRST <svg> in the document is the summary
+    figure shown in the thread, so make it stand alone and build it like the short answer's figure above.
+  - at least one small widget the reader drives (a slider, a select, buttons that step through an example).
+  - ledger numbers only, each naming its slice and n; paired deltas vs the champion with the 90% interval.
+  - dark mode under :root[data-theme="dark"] (the dashboard sets it); sans-serif fonts; a <title>.
+  - no client text, answers or traces: ids, categories and paraphrase only.
+- You cannot write files: pass the document on stdin with a heredoc, exactly once:
+    {long}
+- The one line in quotes is the short version of the answer, shown with the figure."""
+
+
 # ---------- the prompt an agent gets for one comment
 def _rules(p: Project) -> str:
     """PROTOCOL.md's rules of evidence, so the answer reports numbers the way the dashboard does."""
@@ -250,6 +374,9 @@ def prompt(p: Project, item: dict) -> str:
     tid = (item.get("payload") or {}).get("thread") or item.get("ref")
     th = find(p, tid)
     convo = "\n".join(f"[{m['author']}{' (agent)' if m['agent'] else ''}] {m['body']}" for m in th["messages"])
+    tid = th["id"]
+    rules = answer_rules(th["messages"][-1]["body"], f'arx comment reply {tid} "<answer>"',
+                         _heredoc(f'arx comment reply {tid} --doc - "<one line>"'))
     return f"""You answer a comment someone left on the arx research dashboard for the project in the current directory.
 
 Thread {th['id']} (oldest first; answer the newest message):
@@ -259,20 +386,17 @@ Where it was left:
 {chr(10).join('- ' + x for x in describe_anchor(th['anchor']))}
 
 How to answer
-- Post your answer with: arx comment reply {th['id']} "<answer>"   (exactly once, at the end).
+- Post your answer exactly once, at the end (short or long, below).
 - While you work, post short progress notes with: arx task note $ARX_TASK "<what you are checking>". The person sees
   the latest note live in the thread.
 - Read-only: read research.json, PROTOCOL.md and the ledger in .research/ (models.json, hills.json, slices.json,
   goals.json, tasks/*/task.json, decisions), and use read-only commands (arx status, arx gate <model>,
   arx goal status, arx comment show {th['id']}). Never change models, slices, hills, goals, tasks or files.
-- Visual first. When the answer has two or more numbers, lead with one figure: an inline
-  <svg viewBox="0 0 400 H" width="400"> (H at most 240) built only from svg, g, path, rect, circle, line, polyline and
-  text. Text at font-size 12 or more; text and axes in currentColor; one accent colour (#3b82f6, or #22c55e / #ef4444
-  for better / worse). No scripts, styles or links inside it. The page shows the figure first, at full width.
-- Then at most one or two short plain sentences. No headings, no lists.
 - Name models by their titles (below), never by raw ids. Link views as #route (e.g. #model/v3, #hill/please,
   #task/<id>); they become links.
 - If the ledger cannot answer it, say what is missing and which run would answer it.
+
+{rules}
 
 Model titles (id: title):
 {_titles(p)}
@@ -301,6 +425,20 @@ def _fmt(th: dict) -> str:
     return f"{th['id']}  #{th['route']}  {flag}  {len(th['messages'])} msg  {first['author']}: {first['body'][:70]}"
 
 
+def _read_doc(src) -> str:
+    if not src:
+        raise ValueError("give the document: --doc answer.html, or --doc - with the HTML on stdin")
+    return sys.stdin.read() if src == "-" else Path(src).read_text()
+
+
+def doc_reply(p: Project, tid: str, html: str, text: str = "") -> str:
+    """Store a long answer for a thread; the reply body is its first figure, the one-line answer and the link."""
+    find(p, tid)  # an unknown thread fails before anything is stored
+    did = save_doc(p, html)
+    fig = first_figure(html)
+    return "\n".join(x for x in (fig, text.strip(), f"#answer/{did}") if x)
+
+
 def cmd_comment(a):
     p = Project()
     if a.verb == "ls":
@@ -316,6 +454,12 @@ def cmd_comment(a):
         if not ts:
             print("no comments")
         return
+    if a.verb == "doc":  # store a long answer on its own (a paper reply links it); prints the link
+        try:
+            did = save_doc(p, _read_doc(a.doc or a.id or a.file))
+        except (ValueError, OSError) as e:
+            sys.exit(str(e))
+        return print(f"#answer/{did}")
     if not a.id:
         sys.exit(f"arx comment {a.verb} needs a comment id")
     try:
@@ -332,6 +476,8 @@ def cmd_comment(a):
             text = " ".join(a.text)
             if a.file:
                 text = (text + "\n" if text else "") + Path(a.file).read_text()
+            if a.doc:
+                text = doc_reply(p, a.id, _read_doc(a.doc), text)
             if not text.strip():
                 sys.exit("nothing to reply: give the text or --file")
             ev = reply(p, a.id, text, author=a.author)
@@ -341,7 +487,7 @@ def cmd_comment(a):
             if a.text:
                 post(p, "reply", parent=th["id"], body=" ".join(a.text), author=a.author, agent=True)
             post(p, "resolve", parent=th["id"], author=a.author)
-    except KeyError as e:
+    except (KeyError, ValueError, OSError) as e:
         sys.exit(str(e).strip("'\""))
 
 
@@ -353,8 +499,10 @@ def cmd_answer(a):
 @features.CLI.append
 def _cli(sp):
     s = sp.add_parser("comment", help="comments left on dashboard views: list, show, reply (the agent answers here)")
-    s.add_argument("verb", choices=["ls", "show", "reply", "resolve"]); s.add_argument("id", nargs="?")
+    s.add_argument("verb", choices=["ls", "show", "reply", "resolve", "doc"]); s.add_argument("id", nargs="?")
     s.add_argument("text", nargs="*"); s.add_argument("--file", help="reply: append this file (e.g. an inline SVG)")
+    s.add_argument("--doc", help="reply / doc: a long answer, a self-contained HTML file (- reads stdin); "
+                                 "stored in .research/answers/, the reply shows its first figure and an Open link")
     s.add_argument("--author", default="agent"); s.add_argument("--route", help="ls: only this view, e.g. model/v3")
     s.add_argument("--waiting", action="store_true", help="ls: only threads waiting for the agent")
     s.add_argument("--json", action="store_true"); s.set_defaults(fn=cmd_comment)
