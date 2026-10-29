@@ -82,3 +82,4 @@ addEventListener('hashchange',async()=>{
 });
 addEventListener('keydown',e=>{if(e.key==='Escape')$('#app').classList.remove('nav-open')});
 placeholder();tick();setInterval(()=>{if(!document.hidden)tick()},4000);
+if(window.ARXP){ARXP.on(()=>{if(S.state)renderTop()});ARXP.start('api/people',()=>location.hash.slice(1)||'overview')}

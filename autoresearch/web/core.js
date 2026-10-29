@@ -126,8 +126,13 @@ function renderTop(){
  const c=S.crumbs.length?S.crumbs:[[routeLabel(route().r)]];
  setHTML($('#top'),`<button class="iconbtn menu-btn" aria-label="Menu" onclick="$('#app').classList.toggle('nav-open')">${ICON.menu}</button>
  <nav class="crumbs" aria-label="Breadcrumb">${c.map(([l,h],i)=>i===c.length-1?`<b>${esc(l)}</b>`:`<a href="${h}">${esc(l)}</a><span class="sep">/</span>`).join('')}</nav>
- <div class="right"><span class="live" title="${S.ok?'Polling the ledger every 4s':'The dashboard server is not answering'}"><span class="dot ${S.ok?'':'off'}"></span>${S.ok?'Live':'Offline'}<span class="clk">${S.state&&S.ok?' · '+clock(S.state.now):''}</span></span>
+ <div class="right">${hereFaces()}<span class="live" title="${S.ok?'Polling the ledger every 4s':'The dashboard server is not answering'}"><span class="dot ${S.ok?'':'off'}"></span>${S.ok?'Live':'Offline'}<span class="clk">${S.state&&S.ok?' · '+clock(S.state.now):''}</span></span>
  <button class="iconbtn" aria-label="Theme: ${THEMES[t]}. Switch to ${THEMES[next]}" title="Theme: ${THEMES[t]} (click for ${THEMES[next]})" onclick="toggleTheme()">${t==='light'?ICON.sun:t==='dark'?ICON.moon:ICON.auto}</button></div>`);
+}
+// who else has this project open: their faces, ringed when they are on this same view
+function hereFaces(){
+ if(!window.ARXP)return '';const cur=location.hash.slice(1)||'overview',hs=ARXP.here();if(!hs.length)return '';
+ return `<span class="px-here" aria-label="${hs.length} more here">${hs.slice(0,5).map(x=>`<a href="#${esc(x.route||'overview')}" title="${esc(x.name)} · ${esc(routeLabel((x.route||'overview').split('/')[0]))}">${ARXP.face(x.id,x.name,x.route===cur?'on':'')}</a>`).join('')}${hs.length>5?`<span class="sub">+${hs.length-5}</span>`:''}</span>`;
 }
 // light -> dark -> system (follow the OS) -> light
 function toggleTheme(){
