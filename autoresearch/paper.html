@@ -589,6 +589,7 @@ page.appendChild(ink);
 let pen = null, stroke = null;
 function setPen(t) {
   pen = pen === t ? null : t; ink.classList.toggle("on", !!pen);
+  if (!pen && stroke) { try { ink.releasePointerCapture(stroke.id); } catch {} stroke = null; drawInk(); }  // Esc mid-stroke: drop it
   document.querySelectorAll("#tools button").forEach(b => b.classList.toggle("on", b.dataset.tool === pen));
   if (pen && !me) needName();
 }
