@@ -26,7 +26,7 @@ const pooled=vc=>vc.runs>1?`, champion pooled over ${vc.runs} runs`:'';
 // a long local path shows its last three parts; the full path is in the tooltip and on the copy button
 const tail=p=>{const a=String(p).split('/');return a.length>4?'…/'+a.slice(-3).join('/'):String(p)};
 
-// ---------- the finding: what happened, in numbers. Never the last note (that lives in the Log).
+// ---------- the finding: what happened, in numbers. Never the last note (that lives in the Log), except a failure's error.
 function finding(t,d){
  const pr=t.progress||{},sm=t.summary||{},vc=d?.vs_champion,sl=t.slice?esc(short(t.slice)):'';
  const prog=pr.total?`${pr.done.toLocaleString()} of ${pr.total.toLocaleString()}${t.kind==='eval'?' examples':''}`:'';
@@ -52,7 +52,9 @@ function finding(t,d){
  const nums=Object.entries(t.last||{}).filter(([,v])=>typeof v==='number').slice(0,2).map(([k,v])=>`${wbMetric(k).toLowerCase()} ${isScoreKey(k)?pct(v):fmtv(v)}`);
  const sc=sm.score!=null?`scored ${scoreOf(sm.score,slOf(t))}${sm.n?` on ${sm.n.toLocaleString()}`:''}`:'';
  const extra=[sc,...(sc?[]:nums.map(x=>'final '+x))].filter(Boolean);
- return `${lead}${took?(t.status==='failed'?' after ':' in ')+took:''}${t.status==='budget'?'':inside}${extra.length?'; '+extra.join(', '):''}${subTxt}.`;
+ const errE=t.status==='failed'?([...(d?.events||[])].reverse().find(e=>e.level==='error')||(t.note?.level==='error'?t.note:null)):null;
+ const err=errE?`: <span class="tk-err">${esc(errE.text??errE.msg)}</span>`:'';
+ return `${lead}${took?(t.status==='failed'?' after ':' in ')+took:''}${t.status==='budget'?'':inside}${extra.length?'; '+extra.join(', '):''}${subTxt}${err||'.'}`;
 }
 
 // ---------- KPIs only when there are figures to show; a task with only a duration gets no strip

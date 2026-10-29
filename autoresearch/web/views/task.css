@@ -118,3 +118,5 @@
 .tk-flat>span:first-child{color:var(--faint)}
 .tk-flat b{font:400 11px var(--mono);color:var(--text)}
 .tk-sys{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+
+.tk-err{font-family:var(--mono);font-size:.92em;color:var(--negative);word-break:break-word}
