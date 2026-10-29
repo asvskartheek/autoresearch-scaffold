@@ -42,7 +42,36 @@ const wbMetric=k=>({running_score:'Score so far',score:'Score',latency_s:'Latenc
 
 {
 const UNIT={eval:'examples',train:'steps',data:'items',experiment:'repeats'};
-const jobs=()=>active().filter(t=>!S.state.tasks.some(k=>k.parent===t.id&&isLive(k)));
+// a harness sub-task that only counts for its eval (server marks it detail_of) is part of that eval's card, never its own
+const detail=t=>t.detail_of&&isLive(byId(t.detail_of));
+const jobs=()=>active().filter(t=>!detail(t)&&!S.state.tasks.some(k=>k.parent===t.id&&isLive(k)&&!detail(k)));
+// the live sub-task an eval's numbers come from, if any
+const kidOf=t=>t.kind==='eval'?(byId(t.progress_from)||S.state.tasks.find(k=>k.detail_of===t.id&&isLive(k))):null;
+const binary=t=>S.state.slices?.[t.slice]?.scale!=='continuous';
+// the champion's score on this eval's slice, when it has one: the line the running score is read against
+function champRef(t){
+ const c=S.state.champion;if(!c||c===t.model)return null;
+ const r=S.state.leaderboard?.[t.slice]?.[c];
+ return typeof r?.score==='number'?{y:r.score,label:'champion'}:null;
+}
+// an eval's panels, completed from its harness sub-task: the sub-task's score becomes the eval's "Score so far"
+function evVitals(t){
+ const own=t.vitals||[],k=kidOf(t);
+ if(t.kind!=='eval')return own;
+ const fix=p=>p.id!=='main'?p:{...p,ref:p.ref||champRef(t)};
+ if(!k?.vitals?.length)return own.map(fix);
+ const kv=k.vitals,out=[];
+ let m=own.find(p=>p.id==='main');
+ const km=kv.find(p=>p.id==='main');
+ if(!m&&km){
+  const pts=km.series?.[0]?.pts||[],ys=pts.map(q=>q[1]),unit=binary(t)&&ys.length&&ys.every(y=>y>=0&&y<=1);
+  m={...km,title:'Score so far',smooth:false,fmt:unit?'pct':km.fmt,yfmt:unit?'pct':km.yfmt,n:t.progress?.done||km.n,
+   ymin:unit?0:km.ymin,ymax:unit?1:km.ymax,series:(km.series||[]).map(s=>({...s,name:'Score'}))};
+ }
+ if(m)out.push(fix(m));
+ for(const p of [...own,...kv])if(p.id!=='main'&&!out.some(q=>q.id===p.id))out.push(p);
+ return out.slice(0,4);
+}
 const n0=x=>Math.round(x).toLocaleString();
 const sgn=d=>(d>0?'+':d<0?'−':'±')+n0(Math.abs(d));
 const val=(f,v)=>XC.yv(f,v);
@@ -83,7 +112,9 @@ function pn(t,p,lead){
  const sm=p.smooth===true,w=XC.g(grp,{w:.6}).w;
  let big='',sub='',lb=p.title,extra='';
  const f=p.fmt,quiet=Math.max(t.health?.silent_s??0,t.status==='stalled'?now()-t.heartbeat:0);
- if(p.id==='eta'){big=t.status==='stalled'?`<span class="neg">none</span><small>last said ${wbClock(p.value)}</small>`:`${wbClock(p.value)}<small>${p.drift_s>=0?'+':'−'}${span(Math.abs(p.drift_s))} in 5 min</small>`;sub=plural(p.n,'re-estimate')}
+ if(p.id==='eta'){lb='Done by';const left=p.value-now(),d=p.drift_s||0;
+  big=t.status==='stalled'?`<span class="neg">none</span><small>last said ${wbClock(p.value)}</small>`:`${wbClock(p.value)}<small>${left>0?`in ${span(left)}`:'any moment'}</small>`;
+  sub=Math.abs(d)<60?'steady':`${span(Math.abs(d))} ${d<0?'sooner':'later'} than 5 min ago`}
  else if(p.id==='gpu'){big=`${Math.round(p.value)}%${p.mem?.[0]!=null?`<small>${p.mem[0].toFixed(1)} of ${p.mem[1]?.toFixed(0)} GB</small>`:''}`;sub=p.gpus>1?`${p.gpus} GPUs`:'';
   if(p.mem?.[1])extra=`<div class="wb-mem">${meter(p.mem[0]/p.mem[1],{cls:'mem'})}</div>`}
  else if(p.id==='pair'){const dl=p.delta??p.value/(p.n||1);big=`<span class="${dl>0?'pos':dl<0?'neg':''}">${sd(t.slice,dl)}</span><small>90% CI ${pts(p.ci[0])} to ${pts(p.ci[1])}</small>`;sub=`${p.won} won · ${p.lost} lost`}
@@ -94,13 +125,15 @@ function pn(t,p,lead){
  else if(t.kind==='eval'&&p.id==='main'){const b=p.band?.at(-1),n=p.n;
   big=f==='pct'?`${n0(p.value*n)} of ${n0(n)}<small>${pct(p.value)}${b?` · 90% CI ${(100*b[1]).toFixed(1)}–${(100*b[2]).toFixed(1)}`:''}</small>`:`${val(f,p.value)}<small>over ${n0(n)}</small>`}
  else{lb=wbMetric(p.key||p.title);const v=sm?smoothLast(ser,w):p.value;big=`${val(f,v)}${sm&&ser.length?`<small>raw ${val(f,p.value)}</small>`:''}`;sub=ser.length?`step ${n0(ser.at(-1)[0])}`:''}
+ const eh=p.id==='eta'&&(t.eta||kidOf(t)?.eta)?.hist;
+ if(eh?.length>1)p={...p,yfmt:'num',ymin:0,series:[{name:'Minutes left',pts:eh.map(([x,f])=>[x,Math.max(0,(f-x)/60)])}]};
  const ch=XC.box(`wb-${t.id}-${p.id}`,{group:grp,mode:'mini',h:lead?150:52,yfmt:p.yfmt||f,xfmt:p.x==='clock'?'clock':p.x==='time'?'time':'num',
   domain:p.domain||null,ymin:p.ymin,ymax:p.ymax,yfix:p.yfix,zero:p.zero,band:p.band,ref:p.ref,smooth:sm,logOk:false,
   series:(p.series||[]).map((s,i)=>({name:s.name,pts:s.pts,faint:s.faint,color:p.id==='gpu'||p.id==='sec'?'var(--chart-2)':s.faint?'var(--chart-3)':'var(--chart-1)'}))});
  return `<div class="wb-pn ${lead?'lead':''}"><div class="wb-lb"><span>${esc(lb)}</span><span>${esc(sub)}</span></div><div class="wb-big">${big}</div>${ch}${extra}</div>`;
 }
 function card(t){
- const stalled=t.status==='stalled',pr=t.progress||{},ps=t.vitals||[];
+ const stalled=t.status==='stalled',pr=t.progress||{},ps=evVitals(t);
  const note=t.note?`<div class="note ${esc(t.note.level)}"><span class="msg" title="${esc(t.note.text??t.note.msg)}">${esc(t.note.text??t.note.msg)}</span><span class="when">${wbAgo(t.note.t)}</span></div>`:'';
  const lay=ps.length<=1?'n1':ps.length===2?'n2':ps.length===3?'n3':'n4';
  return `<article class="wb-job long ${stalled?'stalled':''}">${head(t,false)}
@@ -140,7 +173,7 @@ VIEWS.workbench=()=>{
  const every=jobs(),dead=every.filter(isDead),all=every.filter(t=>!isDead(t));
  const stalled=all.filter(t=>t.status==='stalled').sort((a,b)=>a.heartbeat-b.heartbeat);
  const run=all.filter(t=>t.status==='running').sort((a,b)=>a.created-b.created);  // arrival order: calm, no reshuffling
- const long=run.filter(t=>t.long),shortJ=run.filter(t=>!t.long);
+ const isLong=t=>t.long||kidOf(t)?.long,long=run.filter(isLong),shortJ=run.filter(t=>!isLong(t));
  const ends=run.map(fin).filter(Boolean),last=ends.length?Math.max(...ends):null;
  const parts=[];
  if(stalled.length)parts.push(`<b class="neg">${stalled.length} stalled</b>`);
@@ -149,7 +182,7 @@ VIEWS.workbench=()=>{
  if(failed.length)parts.unshift(`<b class="neg">${failed.length} failed</b>`);
  if(dead.length)parts.push(`${dead.length} abandoned`);
  const h=page({title:'Workbench',crumbs:[['Workbench','#workbench']],finding:parts.length?parts.join(' · '):'Nothing running.'});
- const list=[...failed.map(failRow),...stalled.map(t=>t.long?card(t):row(t)),...long.map(card),...shortJ.map(row),deadGroup(dead)].filter(Boolean);
+ const list=[...failed.map(failRow),...stalled.map(t=>isLong(t)?card(t):row(t)),...long.map(card),...shortJ.map(row),deadGroup(dead)].filter(Boolean);
  return h+strip(new Set(failed.map(t=>t.id)))+(list.length?`<div class="wb-jobs section">${list.join('')}</div>`:`<section class="section">${panel('',empty('Nothing running','Start one with <code>arx task start --title …</code> or <code>arx.task(...)</code> in Python.'))}</section>`);
 };
 }
