@@ -94,7 +94,13 @@ kbd{font:11px var(--mono);border:1px solid var(--input);border-bottom-width:2px;
 .ink-svg g.res .v{stroke-opacity:.35}.ink-svg g.on .v{stroke:var(--ring);stroke-width:3.5}.ink-svg g.on .v.highlight{stroke:#facc15;stroke-opacity:.6;stroke-width:18}
 .ink-svg g.draft .v{stroke-dasharray:5 4}.ink-svg g.hover .v{stroke:var(--ring);stroke-width:3.5}.ink-svg g.hover .v.highlight{stroke:#facc15;stroke-opacity:.6;stroke-width:18}
 .card.hover{border-color:var(--ring)}
-@media (max-width:900px){.tools{display:none}}
+@media (max-width:900px){.tools .dr,.tools .sep{display:none}}  /* a phone picks; drawing needs a pointer */
+.tools .dr,.tools .sep{display:none}.tools.open .dr{display:grid}.tools.open .sep{display:block}
+.tools .sep{width:1px;margin:5px 2px;background:var(--input)}
+.tools button.pk{width:auto;padding:0 10px 0 8px;gap:6px;grid-auto-flow:column;font-size:12.5px;color:var(--foreground)}.tools button.pk.on{color:var(--primary-fg,#fff)}
+@media (max-width:520px){.tools button.pk span{display:none}.tools button.pk{padding:0 6px}}
+.ink.pick{cursor:default}
+.ink-svg .v.pk{stroke:var(--ring);stroke-width:2;stroke-opacity:0}.ink-svg g.on .v.pk,.ink-svg g.hover .v.pk,.ink-svg g.draft .v.pk{stroke-opacity:1}
 .shp{width:300px}.shp-u{padding:6px 10px 8px;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted-fg)}
 .shp-u b{font-weight:600;color:var(--foreground)}.shp .shp-x{margin-left:auto;font-size:11.5px;color:var(--muted-fg)}.shp code{font:12px var(--mono)}
 .shp a{display:block;padding:7px 10px;border-radius:6px;color:inherit;text-decoration:none;font-size:13px}.shp a:hover{background:var(--muted)}
@@ -179,11 +185,12 @@ kbd{font:11px var(--mono);border:1px solid var(--input);border-bottom-width:2px;
     <span class="count" id="count"></span><span class="count m" id="countM" hidden></span>
     <button class="btn icon ghost" id="next" title="Next comment"><svg class="i" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
   </div>
-  <div class="tools" id="tools" hidden role="toolbar" aria-label="Draw a comment">
-    <button data-tool="box" title="Box (B)"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="1.5"/></svg></button>
-    <button data-tool="arrow" title="Arrow (A)"><svg class="i" viewBox="0 0 24 24"><path d="M5 19 19 5M10 5h9v9"/></svg></button>
-    <button data-tool="pen" title="Pen (D)"><svg class="i" viewBox="0 0 24 24"><path d="M4 18c3-6 6 2 9-4s4-6 7-8"/></svg></button>
-    <button data-tool="highlight" title="Highlight (H)"><svg class="i" viewBox="0 0 24 24"><path d="M4 16h16" stroke-width="7" stroke-opacity=".35"/></svg></button>
+  <div class="tools" id="tools" hidden role="toolbar" aria-label="Comment">
+    <button data-tool="pick" class="pk" title="Comment on an element (C)"><svg class="i" viewBox="0 0 24 24"><path d="M4 4l6 16 2.5-6.5L19 11z"/></svg><span>Comment</span></button><i class="sep"></i>
+    <button data-tool="box" class="dr" title="Box (B)"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="1.5"/></svg></button>
+    <button data-tool="arrow" class="dr" title="Arrow (A)"><svg class="i" viewBox="0 0 24 24"><path d="M5 19 19 5M10 5h9v9"/></svg></button>
+    <button data-tool="pen" class="dr" title="Pen (D)"><svg class="i" viewBox="0 0 24 24"><path d="M4 18c3-6 6 2 9-4s4-6 7-8"/></svg></button>
+    <button data-tool="highlight" class="dr" title="Highlight (H)"><svg class="i" viewBox="0 0 24 24"><path d="M4 16h16" stroke-width="7" stroke-opacity=".35"/></svg></button>
   </div>
   <span class="switch" id="showRes" role="switch" aria-checked="false" tabindex="0" hidden><i></i>Resolved</span>
   <button class="btn icon outline" id="share" title="Share"><svg class="i" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="M8.2 10.8l7.6-4M8.2 13.2l7.6 4"/></svg></button>
@@ -199,6 +206,7 @@ kbd{font:11px var(--mono);border:1px solid var(--input);border-bottom-width:2px;
   <button class="btn icon sm ghost" id="ovX" title="Close"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button></header><iframe id="ovF"></iframe></div></div>
 <script src="../people.js"></script>
 <script src="../keys.js"></script>
+<script src="../comments.js"></script>
 <script>
 (() => {
 const $ = s => document.querySelector(s);
@@ -319,7 +327,7 @@ function prepare(f, ready) {
   d.addEventListener("selectionchange", () => f === frame && onSelect());
   d.addEventListener("mouseup", () => f === frame && setTimeout(onSelect, 0));
   d.addEventListener("click", e => f === frame && onPaperClick(e), true);
-  d.addEventListener("keydown", e => { window.ARXK && ARXK.key(e); if (!e.defaultPrevented) onKey(e); });  // keys pressed while the paper has focus
+  d.addEventListener("keydown", e => { if (picking && picker.key(e)) return; window.ARXK && ARXK.key(e); if (!e.defaultPrevented) onKey(e); });  // keys pressed while the paper has focus
   d.addEventListener("pointerover", () => hoverId && setHover(null));  // on the paper itself: no mark or card is under the pointer
 }
 function syncHlVars(d) {
@@ -367,6 +375,7 @@ function rangeAt(nodes, s, e) {
 }
 function resolve(a) {
   const d = paperDoc(); if (!d || !a) return null;
+  if (a.pick && window.ARXPICK) return resolvePick(a);
   if (a.shape) { const b = [...d.querySelectorAll("[data-block]")].find(x => x.dataset.block === a.block) || (a.block ? null : d.body); return { range: null, block: b, exact: !!b, shape: true, word: b && refWord(b, a) }; }
   if (!a.quote) return null;
   const b = a.block ? [...d.querySelectorAll("[data-block]")].find(x => x.dataset.block === a.block) : null;
@@ -470,7 +479,8 @@ function cardFor(t) {
     const r = ranges.get(t.id), msgs = t.messages, hidden = msgs.length - 2;
     c.querySelector(".content").innerHTML =
       (r && !r.exact ? `<span class="tag">${r.block ? "Text changed since this comment" : "Original text was removed"}</span>` : "") +
-      (t.anchor && t.anchor.shape ? `<div class="quote"><span style="white-space:nowrap">${TOOLN[t.anchor.shape.tool] || "Drawing"}${t.anchor.quote ? " on" : ""}</span>${t.anchor.quote ? `<q>${esc(t.anchor.quote.slice(0, 80))}</q>` : ""}</div>`
+      (t.anchor && t.anchor.pick ? `<div class="quote"><span style="white-space:nowrap">${esc(t.anchor.pick.kind || "element")}</span>${t.anchor.pick.text ? `<q>${esc(t.anchor.pick.text.slice(0, 80))}</q>` : ""}</div>`
+        : t.anchor && t.anchor.shape ? `<div class="quote"><span style="white-space:nowrap">${TOOLN[t.anchor.shape.tool] || "Drawing"}${t.anchor.quote ? " on" : ""}</span>${t.anchor.quote ? `<q>${esc(t.anchor.quote.slice(0, 80))}</q>` : ""}</div>`
         : t.anchor && t.anchor.quote ? `<div class="quote"><q>${esc(t.anchor.quote)}</q></div>` : "") +
       msgs.map((m, i) => msgHtml(m, i, t)).join("") +
       (hidden > 0 ? `<div class="collapsed">${hidden} more ${hidden === 1 ? "reply" : "replies"}</div>` : "") +
@@ -504,7 +514,7 @@ function topOf(t) {
   const r = ranges.get(t.id), fr = frame;
   if (!fr) return 0;
   if (r && r.shape && r.block) { const x = shapeXf(t.anchor, r); return page.offsetTop + x.ty + (t.anchor.shape.y || 0) * x.k; }
-  const rect = r && r.range ? r.range.getClientRects()[0] || r.range.getBoundingClientRect() : r && r.block ? r.block.getBoundingClientRect() : null;
+  const rect = r && r.el ? r.el.getBoundingClientRect() : r && r.range ? r.range.getClientRects()[0] || r.range.getBoundingClientRect() : r && r.block ? r.block.getBoundingClientRect() : null;
   return rect ? fr.offsetTop + page.offsetTop + rect.top : 0;
 }
 const ordered = () => visible().map(t => ({ t, y: topOf(t) })).sort((a, b) => a.y - b.y || a.t.t - b.t.t).map(x => x.t);
@@ -551,7 +561,8 @@ function startDraft(given) {
   const anchor = given ? given.anchor : anchorFrom(selRange); if (!anchor) return;
   cancelDraft(); setActive(null);
   const el = h("div", "card on draft");
-  el.innerHTML = `<div class="msg"><div class="who">${avatar({ author: me || "?" })}<div class="meta"><div class="nm">${esc(me || "New comment")}</div></div></div>
+  const pk = anchor.pick;  // a picked element: what it is, as the tag named it
+  el.innerHTML = (pk ? `<div class="quote"><span style="white-space:nowrap">${esc(pk.kind)}</span>${pk.text ? `<q>${esc(pk.text.slice(0, 80))}</q>` : ""}</div>` : "") + `<div class="msg"><div class="who">${avatar({ author: me || "?" })}<div class="meta"><div class="nm">${esc(me || "New comment")}</div></div></div>
     ${me ? "" : '<input class="in name-in" placeholder="Your name" maxlength="40" style="margin-top:8px">'}
     <textarea class="ta" rows="2" placeholder="Comment" style="margin-top:8px"></textarea>
     <div class="row"><button class="btn sm ghost" data-act="x">Cancel</button><button class="btn sm primary" data-act="post" disabled>Comment</button></div></div>`;
@@ -591,12 +602,56 @@ const ink = h("div", "ink", '<svg class="ink-svg" xmlns="http://www.w3.org/2000/
 page.appendChild(ink);
 let pen = null, stroke = null;
 function setPen(t) {
-  pen = pen === t ? null : t; ink.classList.toggle("on", !!pen);
+  pen = pen === t ? null : t; if (pen && picking) setPick(false, true);
+  ink.classList.toggle("on", !!pen || picking); $("#tools").classList.toggle("open", !!pen || picking);
   if (!pen && stroke) { try { ink.releasePointerCapture(stroke.id); } catch {} stroke = null; drawInk(); }  // Esc mid-stroke: drop it
   document.querySelectorAll("#tools button").forEach(b => b.classList.toggle("on", b.dataset.tool === pen));
   if (pen && !me) needName();
 }
-document.querySelectorAll("#tools button").forEach(b => b.onclick = () => setPen(b.dataset.tool));
+document.querySelectorAll("#tools button").forEach(b => b.onclick = () => b.dataset.tool === "pick" ? setPick(!picking) : setPen(b.dataset.tool));
+
+// ---------- picking an element to comment on (ARXPICK in comments.js, as on the dashboard): c or Comment outlines the
+// element under the pointer in the paper (a bar, a tick, a paragraph ...), a click or Enter anchors the comment to it:
+// anchor.pick = {kind, text, path (from its block), ctx (the block's words), x y w h (its box in block px), bw}. The
+// element is found again by its path, else by its kind and words anywhere in the block, else the block holds it.
+let picking = false, lastPt = null;
+const picker = window.ARXPICK && ARXPICK({ doc: paperDoc, root: () => paperDoc().body, exit: () => setPick(false), pick: el => pickEl(el),
+  off: () => { const r = frame.getBoundingClientRect(); return { x: r.left, y: r.top }; } });
+function setPick(on, keepTools) {
+  if (!picker || !frame) return; picking = on;
+  if (on && pen) setPen(pen);
+  ink.classList.toggle("on", on || !!pen); ink.classList.toggle("pick", on); $("#tools").classList.toggle("open", on || !!pen || !!keepTools);
+  document.querySelector('#tools [data-tool="pick"]').classList.toggle("on", on);
+  if (on) { picker.on(); if (!me) needName(); } else picker.off();
+}
+function pickEl(el) {
+  const d = paperDoc(), b = blockOf(el) || d.body, br = b.getBoundingClientRect(), r = el.getBoundingClientRect(), fo = fOff();
+  const kind = ARXPICK.kind(el), text = ARXPICK.text(el, 300);
+  const pick = { kind, text, path: ARXPICK.path(b, el) || "", ctx: b === el ? "" : ARXPICK.text(b, 160),
+    x: r1(r.left - br.left), y: r1(r.top - br.top), w: r1(r.width), h: r1(r.height), bw: r1(br.width) };
+  const anchor = { block: b === d.body ? "" : b.dataset.block, quote: text || ARXPICK.around(el, 120) || kind, pick };
+  setPick(false); startDraft({ anchor, y: page.offsetTop + fo.y + r.top }); drawInk();
+}
+function resolvePick(a) {
+  const d = paperDoc(), p = a.pick, b = a.block ? [...d.querySelectorAll("[data-block]")].find(x => x.dataset.block === a.block) : d.body;
+  if (!b) return { range: null, exact: false };
+  const sq = t => String(t || "").replace(/\s+/g, ""), fits = x => !!x && ARXPICK.kind(x) === p.kind && sq(ARXPICK.text(x, 300)) === sq(p.text);
+  let el = null; try { el = p.path ? b.querySelector(":scope>" + p.path) : b; } catch {}
+  if (!fits(el)) { const alt = [...b.querySelectorAll("*")].find(fits); if (alt) el = alt; }
+  return { range: null, block: b, el: el || b, pick: true, exact: fits(el) };
+}
+ink.addEventListener("pointermove", e => { if (picking && !pen) { lastPt = { x: e.clientX, y: e.clientY }; picker.point(e.clientX, e.clientY); } });
+ink.addEventListener("pointerleave", () => { if (picking) picker.hide(); });
+ink.addEventListener("click", e => { if (picking && !pen) { e.preventDefault(); picker.tap(e.clientX, e.clientY, e.pointerType && e.pointerType !== "mouse"); } });
+ink.addEventListener("wheel", e => { if (picking && e.altKey) { e.preventDefault(); picker.wheel(e.deltaY); } }, { passive: false });
+addEventListener("scroll", () => { if (picking && lastPt) picker.point(lastPt.x, lastPt.y); }, { passive: true });
+// keys while picking (j k [ ] arrows Enter Esc) go to the picker before keys.js and the reader
+addEventListener("keydown", e => { if (picking && !(e.target.closest && e.target.closest("input,textarea,[contenteditable]")) && picker.key(e)) return; }, true);
+// keys.js: c toggles picking, n / N step through the comments, r / x reply in or resolve the open one
+window.ARXC = { comment: () => setPick(!picking), mode: () => picking, open: () => active, count: () => ordered().length, has: () => !!active,
+  step: dir => { (dir > 0 ? $("#next") : $("#prev")).click(); return true; },
+  reply: () => { const c = active && cards.get(active), ta = c && c.querySelector(".reply textarea"); if (!ta) return false; ta.focus(); return true; },
+  resolve: () => { if (!active || !needName()) return false; const id = active; api("resolve", { parent: id }).then(() => { setActive(null); refresh(); }); return true; } };
 const r1 = x => Math.round(x * 10) / 10;
 function shapeD(tool, pts) {
   const a = pts[0], b = pts.at(-1);
@@ -627,7 +682,7 @@ function shapeXf(a, r) {
   return { tx: fo.x + br.left, ty: fo.y + br.top, k };
 }
 ink.addEventListener("pointerdown", e => {
-  if (!pen || e.button) return; e.preventDefault(); ink.setPointerCapture(e.pointerId);
+  if (!pen || e.button) return;  // picking: the click handler e.preventDefault(); ink.setPointerCapture(e.pointerId);
   stroke = { id: e.pointerId, tool: pen, pts: [local(e)] };
 });
 ink.addEventListener("pointermove", e => { if (!stroke || e.pointerId !== stroke.id) return; stroke.pts.push(local(e)); drawInk(); });
@@ -700,14 +755,18 @@ function wordAt(b, node, off) {
 // the two bare moves that carry the reference word's first box, in block px (see the note above)
 const refD = (ref, br) => ref ? `M${r1(ref.rect.left - br.left)} ${r1(ref.rect.top - br.top)}M${r1(ref.rect.left - br.left)} ${r1(ref.rect.bottom - br.top)}` : "";
 function inkG(a, cls, id) {
-  const r = id === "_draft" ? resolve(a) : ranges.get(id); if (!r || !r.block || !a.shape) return "";
+  const r = id === "_draft" ? resolve(a) : ranges.get(id);
+  if (a.pick) { if (!r || !r.el) return ""; const q = r.el.getBoundingClientRect(), fo = fOff(), L = r1(fo.x + q.left - 2), T = r1(fo.y + q.top - 2), R = r1(fo.x + q.right + 2), B = r1(fo.y + q.bottom + 2);
+    const d = `M${L} ${T}H${R}V${B}H${L}Z`;  // the picked element's outline: a box, so a click inside it opens its comment
+    return `<g class="${cls} pk" data-id="${esc(id)}"><path class="hit" d="${d}"/><path class="v box pk" d="${d}"/></g>`; }
+  if (!r || !r.block || !a.shape) return "";
   const x = shapeXf(a, r);
   return `<g class="${cls}" data-id="${esc(id)}" transform="translate(${r1(x.tx)} ${r1(x.ty)}) scale(${r1(x.k * 1000) / 1000})"><path class="hit" d="${esc(a.shape.d)}"/><path class="v ${esc(a.shape.tool)}" d="${esc(a.shape.d)}"/></g>`;
 }
 function drawInk() {
   if (!frame) return;
-  let out = visible().filter(t => t.anchor && t.anchor.shape).map(t => inkG(t.anchor, (t.id === active ? "on " : "") + (t.id === hoverId ? "hover " : "") + (t.resolved ? "res" : ""), t.id)).join("");
-  if (draft && draft.anchor.shape) out += inkG(draft.anchor, "draft", "_draft");
+  let out = visible().filter(t => t.anchor && (t.anchor.shape || t.anchor.pick)).map(t => inkG(t.anchor, (t.id === active ? "on " : "") + (t.id === hoverId ? "hover " : "") + (t.resolved ? "res" : ""), t.id)).join("");
+  if (draft && (draft.anchor.shape || draft.anchor.pick)) out += inkG(draft.anchor, "draft", "_draft");
   if (stroke) out += `<g class="draft"><path class="v ${stroke.tool}" d="${shapeD(stroke.tool, stroke.pts)}"/></g>`;
   if (inkSvg._html !== out) inkSvg.innerHTML = inkSvg._html = out;  // the 1.5 s refresh leaves the marks under the pointer alone
 }
