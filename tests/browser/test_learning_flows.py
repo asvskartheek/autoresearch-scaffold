@@ -138,15 +138,14 @@ class LearningFlows(unittest.TestCase):
         self.assertIn('not a new measurement', self.page.locator('.t-after').inner_text())
         self.assertIn('projection', self.page.locator('.t-after').inner_text())
 
-    def test_lesson_recall_and_wrong_review(self):
+    def test_lesson_reasoning_and_wrong_review(self):
         self.page.goto(self.url + '#course/goal')
-        self.page.wait_for_selector('[data-study-check]')
-        self.assertEqual(self.page.locator('[data-cq]').count(), 0)
-        self.page.locator('[data-study-check]').click()
-        self.assertEqual(self.page.locator('.crs-fig').count(), 0)
+        self.page.wait_for_selector('[data-cq]')
+        self.assertEqual(self.page.locator('[data-study-check]').count(), 0)
+        self.assertEqual(self.page.locator('.crs-fig').count(), 1)
         correct = self.page.evaluate("COURSE.lesson('goal').checks[0].a")
         for opt in self.page.locator('[data-cq]').all():
-            if opt.inner_text().split('\n')[-1].strip() != str(correct):
+            if opt.locator('.opt-label').inner_text().strip() != str(correct):
                 opt.click()
                 break
         self.page.wait_for_selector('.crs-res')
@@ -159,6 +158,29 @@ class LearningFlows(unittest.TestCase):
         self.page.locator('[data-next]').click()
         self.assertNotIn('failed to draw', self.page.locator('#main').inner_text())
 
+    def test_numeric_answer_is_separate_from_keyboard_shortcut(self):
+        # Render the numeric answer "3" through the real component. A shortcut
+        # badge must not turn it into a visually or audibly different answer.
+        course = self.page.request.get(self.url + 'api/course').json()
+        lesson = next(x for x in course['lessons'] if x['id'] == 'goal')
+        lesson['checks'] = [{'q': 'Synthetic numeric choice', 'o': ['3', '2', '1'],
+                             'a': '3', 'why': 'Three is the synthetic answer.'}]
+        self.page.route('**/api/course?*', lambda route: route.fulfill(json=course))
+        for width in (1200, 375):
+            self.page.set_viewport_size({'width': width, 'height': 850})
+            self.page.goto(self.url + '#course/goal')
+            answer = self.page.get_by_role('button', name='3', exact=True)
+            answer.wait_for()
+            label = answer.locator('.opt-label').bounding_box()
+            badge = answer.locator('kbd')
+            self.assertEqual(badge.get_attribute('aria-hidden'), 'true')
+            if width > 560:
+                box = badge.bounding_box()
+                self.assertGreaterEqual(label['x'] - box['x'] - box['width'], 8)
+            else:
+                self.assertFalse(badge.is_visible())
+            self.assertLessEqual(label['x'] + label['width'], width)
+
     def test_interval_projection_crosses_and_clears(self):
         self.page.goto(self.url + '#course/interval')
         self.page.wait_for_selector('input[data-w="interval:nf"]')
@@ -168,12 +190,11 @@ class LearningFlows(unittest.TestCase):
         self.assertIn('Clears zero', self.page.locator('.crs-fig').inner_text())
         self.assertIn('Projection at fixed effect', self.page.locator('.crs-fig').inner_text())
 
-    def test_catchup_primer_separates_study_and_check(self):
+    def test_catchup_primer_keeps_visual_reasoning_context(self):
         self.page.goto(self.url + '#learn?catchup=1')
-        self.page.wait_for_selector('[data-primer] [data-study-check]')
-        self.assertEqual(self.page.locator('[data-primer] [data-cq]').count(), 0)
-        self.page.locator('[data-primer] [data-study-check]').click()
-        self.assertEqual(self.page.locator('[data-primer] .crs-fig').count(), 0)
+        self.page.wait_for_selector('[data-primer] [data-cq]')
+        self.assertEqual(self.page.locator('[data-primer] [data-study-check]').count(), 0)
+        self.assertEqual(self.page.locator('[data-primer] .crs-fig').count(), 1)
         self.page.locator('[data-primer] [data-cq]').first.click()
         self.page.wait_for_selector('[data-l=primer-next]')
         self.page.locator('[data-l=primer-next]').click()
@@ -189,7 +210,7 @@ class LearningFlows(unittest.TestCase):
         self.assertTrue(self.page.evaluate('document.activeElement.matches(".term-pop a")'))
         self.page.keyboard.press('Enter')
         self.page.wait_for_url('**/#course/**')
-        self.page.wait_for_selector('[data-study-check]')
+        self.page.wait_for_selector('[data-cq]')
 
 
 if __name__ == '__main__':
