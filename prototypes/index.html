@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>arx prototypes</title>
+<style>
+:root{--ground:#f2f5f8;--surface:#fff;--raised:#f5f7f9;--border:#e3e7eb;--control:#cdd3d9;--text:#131416;--muted:#5b6168;--faint:#6f767d;
+ --accent:#1b6c80;--accent-soft:#e3f0f3;--positive:#1e7b4f;--negative:#c4242a;--warning:#92400e;
+ --font:"IBM Plex Sans",Inter,system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--ground:#0c0f12;--surface:#13171b;--raised:#1a1f24;--border:#232a30;--control:#3a434b;
+ --text:#eef1f3;--muted:#a3abb3;--faint:#8c959d;--accent:#5cb8cc;--accent-soft:#163038;--positive:#4cc38a;--negative:#f07575;--warning:#e3a84f;color-scheme:dark}}
+*{box-sizing:border-box}body{margin:0;background:var(--ground);color:var(--text);font:400 14px/1.45 var(--font);-webkit-font-smoothing:antialiased}
+main{max-width:1080px;margin:0 auto;padding:40px 16px 80px}
+h1{font-size:22px;font-weight:600;margin:0 0 24px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;display:flex;flex-direction:column;gap:12px}
+.card h2{font-size:16px;font-weight:600;margin:0;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.card h2 a{color:var(--accent)}.card h2 a:hover{text-decoration:underline}
+.n{font:500 12px var(--mono);color:var(--faint)}
+.tests{color:var(--muted);margin:0}
+.rate{display:flex;gap:6px}
+.rate button{flex:1;height:32px;border-radius:6px;border:1px solid var(--control);background:var(--raised);color:var(--text);font:inherit;cursor:pointer}
+.rate button[aria-pressed=true][data-v=keep]{background:var(--positive);border-color:var(--positive);color:#fff}
+.rate button[aria-pressed=true][data-v=fix]{background:var(--warning);border-color:var(--warning);color:#fff}
+.rate button[aria-pressed=true][data-v=kill]{background:var(--negative);border-color:var(--negative);color:#fff}
+textarea{width:100%;min-height:64px;resize:vertical;border:1px solid var(--control);border-radius:6px;background:var(--surface);color:var(--text);font:inherit;padding:8px}
+.send{align-self:flex-end;height:32px;padding:0 14px;border-radius:6px;border:0;background:var(--text);color:var(--ground);font:inherit;font-weight:500;cursor:pointer}
+.log{font-size:12px;color:var(--faint);display:flex;flex-direction:column;gap:4px}
+.log div{border-left:2px solid var(--border);padding-left:8px;color:var(--muted)}
+</style></head><body><main>
+<h1>arx prototypes · round 1</h1>
+<div class="grid" id="g"></div>
+</main>
+<script>
+const P=[
+ ['questions','Question tree','Research as a tree of questions you branch while reading, not a list of hills.'],
+ ['story','Explainer','Any medium that explains fastest (widgets, animation, charts), and it measures how fast you understood.'],
+ ['learn','Learning brief','Since you last looked: predict each result before it is revealed, track your calibration.'],
+ ['workbench','Live workbench','Each long job shows its own vital signs: loss, GPU, throughput, a drifting ETA.'],
+ ['charts','Loss curves','Smoothed, overlaid, log-y, crosshair, synced small multiples.'],
+ ['goals','Goal intake','Type the ask as you got it; arx turns it into a goal, guards and sub-goals.'],
+ ['discuss','Comments and sharing','Every question spawns its own agent; share a story by link.'],
+];
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let fb=[];
+function draw(){
+ g.innerHTML=P.map(([k,t,d],i)=>{const mine=fb.filter(r=>r.proto===k),last=[...mine].reverse().find(r=>r.verdict)?.verdict;
+ return `<section class="card" data-k="${k}">
+  <h2><a href="${k}/" target="_blank">${t}</a><span class="n">${i+1}</span></h2>
+  <p class="tests">${d}</p>
+  <div class="rate">${[['keep','Keep'],['fix','Fix'],['kill','Kill']].map(([v,l])=>`<button data-v="${v}" aria-pressed="${last===v}">${l}</button>`).join('')}</div>
+  <textarea placeholder="What works, what doesn't"></textarea>
+  <button class="send">Send</button>
+  ${mine.filter(r=>r.text).length?`<div class="log">${mine.filter(r=>r.text).map(r=>`<div>${esc(r.text)}</div>`).join('')}</div>`:''}
+ </section>`}).join('');
+}
+async function post(row){await fetch('/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(row)});await load()}
+async function load(){try{fb=await (await fetch('/feedback')).json()}catch{fb=[]}draw()}
+g.addEventListener('click',e=>{const c=e.target.closest('.card');if(!c)return;const k=c.dataset.k;
+ if(e.target.dataset.v)post({proto:k,verdict:e.target.dataset.v});
+ if(e.target.classList.contains('send')){const v=c.querySelector('textarea').value.trim();if(v)post({proto:k,text:v})}});
+load();
+</script></body></html>

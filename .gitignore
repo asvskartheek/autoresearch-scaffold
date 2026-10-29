@@ -5,3 +5,5 @@ scratch/
 .research/
 site/
 .taste-skill/
+prototypes/data/
+prototypes/feedback.jsonl

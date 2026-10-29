@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Goal intake</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* tokens copied from autoresearch/web/app.css */
+:root{
+ --ground:#f2f5f8;--surface:#fff;--raised:#f5f7f9;--active:#e4e9ee;--border:#e3e7eb;--rule:#eef1f4;--control:#cdd3d9;
+ --text:#131416;--muted:#5b6168;--faint:#6f767d;
+ --accent:#1b6c80;--accent-soft:#e3f0f3;--primary:#16181a;--on-primary:#fff;
+ --positive:#1e7b4f;--negative:#c4242a;--warning:#92400e;
+ --chart-1:#1b6c80;--chart-2:#2f70bb;--chart-3:#a86f0c;--grid:#e9edf0;
+ --pill-positive-bg:#dcfae5;--pill-positive-ink:#04250e;--pill-negative-bg:#ffedea;--pill-negative-ink:#831c1e;
+ --pill-warning-bg:#fff5db;--pill-warning-ink:#7a3a0b;--pill-neutral-bg:#ebeef1;--pill-neutral-ink:#353736;
+ --pill-accent-bg:#ddeef2;--pill-accent-ink:#0f4a59;
+ --radius-card:8px;--radius-control:6px;--radius-chip:4px;--radius-sheet:16px;
+ --font:"IBM Plex Sans",Inter,system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+ color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+ --ground:#0c0f12;--surface:#13171b;--raised:#1a1f24;--active:#232a31;--border:#232a30;--rule:#1c2227;--control:#3a434b;
+ --text:#eef1f3;--muted:#a3abb3;--faint:#8c959d;--accent:#5cb8cc;--accent-soft:#163038;--primary:#eef1f3;--on-primary:#0c0f12;
+ --positive:#4cc38a;--negative:#f07575;--warning:#e3a84f;--chart-1:#5cb8cc;--chart-2:#6aa1e6;--chart-3:#d9a441;--grid:#222930;
+ --pill-positive-bg:#14291e;--pill-positive-ink:#6fd6a1;--pill-negative-bg:#2e1a1d;--pill-negative-ink:#f59a9a;
+ --pill-warning-bg:#2b2215;--pill-warning-ink:#e8b765;--pill-neutral-bg:#222930;--pill-neutral-ink:#c3cad1;
+ --pill-accent-bg:#14303a;--pill-accent-ink:#8fd3e2;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--ground);color:var(--text);font:14px/1.45 var(--font);-webkit-font-smoothing:antialiased}
+.sheet{max-width:880px;margin:8px auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sheet);padding:24px 28px 48px;min-height:calc(100vh - 16px)}
+@media (max-width:600px){.sheet{margin:0;border-radius:0;border-left:0;border-right:0;padding:18px 16px 40px}}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+h1{font-size:22px;font-weight:600;margin:0 0 16px;letter-spacing:-.01em}
+h2{font-size:16px;font-weight:600;margin:32px 0 12px}
+button{font:inherit;color:inherit;cursor:pointer}
+.pill{display:inline-block;font-size:12px;padding:1px 7px;border-radius:999px;background:var(--pill-neutral-bg);color:var(--pill-neutral-ink);white-space:nowrap}
+.pill.acc{background:var(--pill-accent-bg);color:var(--pill-accent-ink)}
+.pill.warn{background:var(--pill-warning-bg);color:var(--pill-warning-ink)}
+.pill.pos{background:var(--pill-positive-bg);color:var(--pill-positive-ink)}
+.pill.neg{background:var(--pill-negative-bg);color:var(--pill-negative-ink)}
+
+/* 1. raw words */
+.ask{display:flex;gap:8px}
+.ask textarea{flex:1;min-height:52px;resize:vertical;font:16px/1.4 var(--font);color:var(--text);background:var(--raised);border:1px solid var(--control);border-radius:var(--radius-control);padding:12px 14px}
+.ask textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.btn{height:32px;padding:0 14px;border-radius:var(--radius-control);border:1px solid var(--control);background:var(--surface);font-weight:500;white-space:nowrap}
+.btn:hover{background:var(--raised)}
+.btn.primary{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+.btn.primary:hover{opacity:.9}
+.ask .btn{height:auto;align-self:stretch}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{border:1px solid var(--border);background:var(--raised);border-radius:999px;padding:4px 12px;font-size:13px;color:var(--muted)}
+.chip:hover,.chip.on{border-color:var(--accent);color:var(--text);background:var(--accent-soft)}
+
+/* 2. conversation */
+.thread{margin-top:22px;display:flex;flex-direction:column;gap:14px}
+.said{align-self:flex-end;max-width:85%;background:var(--accent-soft);border-radius:12px 12px 2px 12px;padding:8px 12px;font-size:15px}
+.q{display:flex;flex-direction:column;gap:8px;animation:in .25s ease}
+.q .who{font-size:12px;color:var(--faint)}
+.q .text{font-size:15px;font-weight:500}
+.q .text .read{font-weight:400;color:var(--muted);font-size:13px;margin-left:6px}
+.opts{display:flex;flex-wrap:wrap;gap:6px}
+.opt{border:1px solid var(--control);background:var(--surface);border-radius:var(--radius-control);padding:6px 12px;font-size:14px;text-align:left}
+.opt:hover{border-color:var(--accent)}
+.opt.on{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+.opt small{display:block;font-size:12px;opacity:.7;font-family:var(--mono)}
+@keyframes in{from{transform:translateY(4px)}to{transform:none}}
+
+/* goal card */
+.card{border:1px solid var(--border);border-radius:var(--radius-card);margin-top:22px;animation:in .25s ease}
+.card .head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 18px;border-bottom:1px solid var(--rule)}
+.card .head .title{font-size:16px;font-weight:600;flex:1;min-width:200px}
+.fields{display:grid;grid-template-columns:120px 1fr;}
+.fields>div{padding:11px 18px;border-bottom:1px solid var(--rule);min-width:0}
+.fields>.k{color:var(--muted);font-size:13px;padding-right:0;display:flex;align-items:center}
+.fields>.v{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+@media (max-width:600px){.fields{grid-template-columns:1fr}.fields>.k{border-bottom:0;padding-bottom:0}}
+.ed{border:1px dashed transparent;border-radius:var(--radius-chip);padding:1px 4px;margin:-2px -5px;cursor:text}
+.ed:hover{border-color:var(--control);background:var(--raised)}
+.ed:focus{outline:2px solid var(--accent);border-color:transparent;background:var(--surface)}
+.big{font-size:18px;font-weight:600}
+.short{font-weight:600;color:var(--negative)}
+.met{font-weight:600;color:var(--positive)}
+.why{position:relative;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;border:1px solid var(--control);font-size:11px;color:var(--faint);cursor:help;flex:none}
+.why:hover,.why:focus{color:var(--text);border-color:var(--accent);outline:0}
+.why .tip{display:none;position:absolute;z-index:5;left:50%;top:24px;transform:translateX(-50%);width:300px;max-width:80vw;background:var(--primary);color:var(--on-primary);font-size:13px;line-height:1.45;border-radius:var(--radius-control);padding:10px 12px;text-align:left;font-weight:400;box-shadow:0 6px 24px rgba(0,0,0,.18)}
+.why:hover .tip,.why:focus .tip{display:block}
+.why .tip b{font-family:var(--mono);font-weight:500}
+@media (max-width:600px){.why .tip{left:auto;right:-8px;transform:none}}
+.con{display:inline-flex;align-items:center;gap:4px;font-size:13px;border:1px solid var(--border);background:var(--raised);border-radius:var(--radius-chip);padding:2px 4px 2px 8px}
+.con button{border:0;background:none;color:var(--faint);padding:0 4px;font-size:14px;line-height:1}
+.con button:hover{color:var(--negative)}
+.addcon{border:1px dashed var(--control);background:none;border-radius:var(--radius-chip);font-size:13px;padding:2px 8px;color:var(--faint);min-width:70px}
+input.addcon{font:13px var(--font);color:var(--text)}
+select.ed{font:inherit;color:inherit;background:transparent;border:1px dashed var(--control);padding:2px 4px;margin:0;max-width:100%}
+.spark{display:block}
+.card .foot{display:flex;gap:8px;align-items:center;padding:12px 18px;flex-wrap:wrap}
+.card .foot .note{font-size:13px;color:var(--muted);flex:1;min-width:180px}
+
+/* 3. related */
+.sugs{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.sug{border:1px solid var(--border);border-radius:var(--radius-card);padding:12px 14px;display:flex;flex-direction:column;gap:6px;animation:in .25s ease}
+.sug .t{font-weight:500;display:flex;gap:8px;align-items:flex-start}
+.sug .t>span:first-child{flex:1}
+.sug .d{font-size:13px;color:var(--muted)}
+.sug .row{display:flex;align-items:center;gap:8px;margin-top:auto;padding-top:4px}
+.sug .row .btn{margin-left:auto;height:28px}
+.sug.added{background:var(--raised)}
+.sug.added .btn{background:none;border-color:transparent;color:var(--positive)}
+
+/* map */
+.map{display:flex;flex-direction:column;gap:20px}
+.tree{border:1px solid var(--border);border-radius:var(--radius-card);padding:16px}
+.tree .proj{font-size:12px;color:var(--faint);margin-bottom:10px}
+.node{border:1px solid var(--border);border-radius:var(--radius-control);padding:10px 12px;background:var(--surface);min-width:0}
+.node.main{border-color:var(--text);border-width:1.5px}
+.node.new{animation:in .3s ease}
+.node .nt{font-size:13px;font-weight:500;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.node .nd{font-size:13px;margin-top:4px}
+.node .nm{font-size:11px;color:var(--faint);margin-top:2px;font-family:var(--mono);overflow-wrap:anywhere}
+.bar{position:relative;height:6px;border-radius:3px;background:var(--grid);margin-top:8px;overflow:hidden}
+.bar i{position:absolute;left:0;top:0;bottom:0;background:var(--chart-1);border-radius:3px}
+.bar.lat i{background:var(--chart-2)}
+.bar.none{background:repeating-linear-gradient(90deg,var(--grid) 0 6px,transparent 6px 10px)}
+.lvl{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-top:8px;position:relative;padding-top:14px}
+.lvl:before{content:"";position:absolute;left:20px;top:0;height:10px;border-left:1px solid var(--control)}
+.lvl .lab{grid-column:1/-1;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin-bottom:-2px}
+.empty{color:var(--faint);font-size:13px}
+
+/* commands */
+details{margin-top:28px;border:1px solid var(--border);border-radius:var(--radius-card)}
+summary{padding:10px 14px;cursor:pointer;font-weight:500;font-size:14px;list-style:none;display:flex;gap:8px;align-items:center}
+summary::-webkit-details-marker{display:none}
+summary:before{content:"›";display:inline-block;transition:transform .15s;color:var(--faint)}
+details[open] summary:before{transform:rotate(90deg)}
+pre{margin:0;padding:14px;border-top:1px solid var(--rule);background:var(--raised);font:12.5px/1.6 var(--mono);overflow-x:auto;white-space:pre;border-radius:0 0 var(--radius-card) var(--radius-card)}
+pre .c{color:var(--faint)}
+pre mark{background:var(--pill-warning-bg);color:var(--pill-warning-ink);border-radius:3px;padding:0 2px}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<main class="sheet">
+ <h1>New goal</h1>
+
+ <section>
+  <form class="ask" id="ask">
+   <textarea id="raw" rows="2" placeholder="Paste the ask, word for word"></textarea>
+   <button class="btn primary" type="submit">Go</button>
+  </form>
+  <div class="chips" id="chips"></div>
+ </section>
+
+ <section class="thread" id="thread"></section>
+ <section id="cardwrap"></section>
+
+ <section id="relwrap" class="hide">
+  <h2>Related goals</h2>
+  <div class="sugs" id="sugs"></div>
+ </section>
+
+ <section id="mapwrap">
+  <h2>Goals</h2>
+  <div class="map" id="map"></div>
+ </section>
+
+ <details id="cmds"><summary>Commands <span class="pill num" id="ncmd">0</span></summary><pre id="pre"></pre></details>
+</main>
+
+<script>
+/* data-proto: gsm8k numbers come from ../data/gsm8k-ft-state.json (goals, leaderboard, champion, hills, config.goal).
+   The P&ID project is simulated generically (pid-agent, pid-qa/full, n = 400); no client content.
+   Parent/child goals, roles and constraints do not exist in the ledger yet: flags --parent, --role, --constraint, --hill
+   on `arx goal open` are proposed and highlighted in the command block. Held-out slice gsm-heldout/500 is proposed. */
+const $ = s => document.querySelector(s);
+const fmt = n => n == null ? "–" : Number(n).toLocaleString("en-US");
+const sec = s => s == null ? "–" : (Math.round(s * 10) / 10).toFixed(1) + " s";
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const why = html => `<span class="why" tabindex="0">?<span class="tip">${html}</span></span>`;
+
+const CHIPS = [
+ "open-source model that performs well on P&ID questions",
+ "make GSM8K 4B model hit 96%",
+ "faster answers",
+];
+
+let P = {};          // projects, built from data
+let S = null;        // intake state
+let LEDGER = {};     // project -> [goal nodes]
+
+/* ---------- projects ---------- */
+function buildGsm(D){
+ const full = D.leaderboard["gsm8k-test/full"], champ = D.champion, n = D.slices["gsm8k-test/full"].n;
+ const g = D.goals["gsm8k-96"], base = g.baseline;
+ const cnt = r => Math.round(r.score * r.n);
+ // champion trajectory on full: best-so-far over time
+ const runs = Object.entries(full).map(([m, r]) => ({m, t: r.ended, c: cnt(r)})).sort((a, b) => a.t - b.t);
+ let best = 0; const traj = runs.map(r => (best = Math.max(best, r.c), {t: r.t, c: best, m: r.m}));
+ const dev = s => D.leaderboard[s] || {};
+ const hills = Object.entries(D.hills).map(([name, h]) => {
+  const sl = D.slices[h.target], lb = dev(h.target);
+  const c = lb[champ] ? cnt(lb[champ]) : null, b = lb[base] ? cnt(lb[base]) : null;
+  const arch = lb["qwen3-4b-rl-archived"] ? cnt(lb["qwen3-4b-rl-archived"]) : null;
+  return {name, title: h.title.replace(/\s*\[.*\]$/, ""), status: h.status, slice: h.target, n: sl.n, champ: c, base: b, arch,
+          share: h.share, gain: h.expected_gain || 0.1, climbed_by: h.climbed_by};
+ });
+ return {
+  key: "gsm8k-ft", label: "problems", dataset: "gsm8k-test", slice: "gsm8k-test/full", n,
+  slices: Object.values(D.slices).map(s => ({name: s.name, n: s.n})),
+  champ: {name: champ, correct: cnt(full[champ]), p50: full[champ].latency_p50, p95: full[champ].latency_p95, cost: full[champ].cost},
+  base: {name: base, correct: cnt(full[base]), p50: full[base].latency_p50},
+  closed: null, traj, hills, cfg: D.config.goal, ledgerGoal: g,
+  constraints: ["open weights", "Qwen3 4B or a LoRA of it"],
+  wrong: n - cnt(full[champ]),
+ };
+}
+function buildPid(){
+ // simulated, generic: an open champion and a closed API model on a 400-question diagram QA slice
+ const t0 = Date.now() / 1000 - 6 * 86400;
+ return {
+  key: "pid-agent", sim: true, label: "questions", dataset: "pid-qa", slice: "pid-qa/full", n: 400,
+  slices: [{name: "pid-qa/full", n: 400}, {name: "pid-qa/random100", n: 100}],
+  champ: {name: "open-v3", correct: 251, p50: 19.4, cost: null},
+  base: {name: "open-v1", correct: 214, p50: 16.0},
+  closed: {name: "closed API model", correct: 312, p50: 11.2},
+  traj: [{t: t0, c: 214}, {t: t0 + 2 * 86400, c: 233}, {t: t0 + 4 * 86400, c: 240}, {t: t0 + 5 * 86400, c: 251}],
+  hills: [], constraints: ["open weights", "fits one 80 GB GPU"], wrong: 149,
+ };
+}
+
+/* ---------- reading the raw words ---------- */
+function read(raw){
+ const t = raw.toLowerCase();
+ const proj = /p&id|p&amp;id|pid|diagram/.test(t) ? P.pid : P.gsm;
+ const pct = (t.match(/(\d{2}(?:\.\d+)?)\s*%/) || [])[1];
+ let kpi = null, kpiWhy = null;
+ if (pct || /accura|correct|score/.test(t)) { kpi = "acc"; kpiWhy = pct ? `"${pct}%"` : "accuracy"; }
+ else if (/fast|slow|latenc|speed|quick/.test(t)) { kpi = "lat"; kpiWhy = (t.match(/fast\w*|slow\w*|latenc\w*|speed|quick\w*/) || [""])[0]; }
+ else if (/cheap|cost|price/.test(t)) { kpi = "cost"; kpiWhy = "cost"; }
+ const open = /open[- ]?(source|weight)/.test(t);
+ const size = (t.match(/(\d+(?:\.\d+)?)\s*b\b/) || [])[1];
+ return {raw, proj, pct: pct ? +pct : null, kpi, kpiWhy, open, size};
+}
+
+/* ---------- the three questions ---------- */
+function questions(){
+ const r = S.read, p = r.proj, a = S.ans;
+ const qs = [];
+ qs.push({id: "kpi", text: r.kpi ? "Measured as" : `"${short(r.raw)}" measured as`, read: r.kpi ? `read from ${r.kpiWhy}` : null,
+  opts: [{v: "acc", l: "Accuracy", s: `correct of ${fmt(p.n)}`}, {v: "lat", l: "Speed", s: "median seconds"}, {v: "cost", l: "Cost", s: "per answer"}]});
+ const vs = [{v: "champ", l: "The champion now", s: p.champ.name}];
+ vs.push({v: "closed", l: "A closed model", s: p.closed ? p.closed.name : "not run here yet"});
+ qs.push({id: "vs", text: "Compared to", opts: vs});
+ qs.push({id: "done", text: "Done when", opts: doneOpts(p, a.kpi, a.vs, r)});
+ return qs;
+}
+function short(s){ s = s.trim(); return s.length > 40 ? s.slice(0, 38) + "…" : s; }
+function doneOpts(p, kpi, vs, r){
+ const n = p.n, c = p.champ.correct;
+ if (kpi === "lat") {
+  const ref = vs === "closed" && p.closed ? p.closed.p50 : null;
+  const o = [];
+  if (ref) o.push({v: "lat:" + ref, l: "As fast as the closed model", s: `≤ ${sec(ref)} median`});
+  o.push({v: "lat:" + (Math.floor(p.champ.p50 / 2 * 10) / 10), l: "Twice as fast", s: `≤ ${sec(Math.floor(p.champ.p50 / 2 * 10) / 10)} median`});
+  if (!ref) o.push({v: "lat:" + p.base.p50.toFixed(1), l: `As fast as ${p.base.name}`, s: `≤ ${sec(p.base.p50)} median`});
+  return o;
+ }
+ if (kpi === "cost") return [{v: "cost:half", l: "Half today's cost", s: "≤ 0.5 × champion"}, {v: "cost:match", l: "No more than today", s: "≤ 1.0 × champion"}];
+ const o = [];
+ if (vs === "closed" && p.closed) {
+  o.push({v: "acc:" + p.closed.correct, l: "Match the closed model", s: `≥ ${fmt(p.closed.correct)} of ${fmt(n)}`});
+  const w = Math.ceil(p.closed.correct - 0.02 * n);
+  o.push({v: "acc:" + w, l: "Within 2 points of it", s: `≥ ${fmt(w)} of ${fmt(n)}`});
+ }
+ if (r.pct) { const t = Math.ceil(r.pct / 100 * n - 1e-9); o.push({v: "acc:" + t, l: `${r.pct}% of ${p.dataset}`, s: `≥ ${fmt(t)} of ${fmt(n)}`}); }
+ if (o.length < 3) { const t = Math.min(n, c + Math.ceil(0.03 * n)); o.push({v: "acc:" + t, l: "3 points over the champion", s: `≥ ${fmt(t)} of ${fmt(n)}`}); }
+ if (o.length < 3) o.push({v: "acc:" + (c + 1), l: "Any real gain", s: `≥ ${fmt(c + 1)}, CI above 0`});
+ return o;
+}
+
+/* ---------- the goal the answers imply ---------- */
+function propose(){
+ const r = S.read, p = r.proj, a = S.ans;
+ const [kind, val] = a.done.split(":");
+ const G = {proj: p.key, kpi: a.kpi, slice: p.slice, n: p.n, vs: a.vs, raw: r.raw, why: {}, constraints: []};
+ const con = new Set();
+ if (r.open || p.key === "gsm8k-ft") con.add("open weights");
+ p.constraints.forEach(c => (c !== "open weights" || r.open || p.key === "gsm8k-ft") && con.add(c));
+ if (r.size && ![...con].some(c => c.includes(r.size + "B"))) con.add(`≤ ${r.size}B parameters`);
+ if (a.kpi === "acc") {
+  G.target = +val; G.now = p.champ.correct; G.dir = "ge";
+  con.add(`≤ ${Math.max(45, Math.ceil(p.champ.p50 * 1.5 / 5) * 5)} s median`);
+  G.name = p.key === "gsm8k-ft" ? `gsm8k-${Math.round(G.target / p.n * 100)}` : `pid-${a.vs === "closed" ? "match-closed" : "acc"}`;
+  G.title = p.key === "gsm8k-ft" ? `GSM8K at ${Math.round(G.target / p.n * 100)}%` : (a.vs === "closed" ? "Open model matches the closed one" : "Open model, more correct answers");
+  const pctExact = (G.target / p.n * 100).toFixed(2);
+  G.why.target = a.done.startsWith("acc") && r.pct && G.target === Math.ceil(r.pct / 100 * p.n - 1e-9)
+   ? `${r.pct}% of <b>${fmt(p.n)}</b> is <b>${(r.pct / 100 * p.n).toFixed(1)}</b>; rounded up to <b>${fmt(G.target)}</b> so "hit ${r.pct}%" can't be met by rounding.` + (p.cfg ? ` Matches the project's own minimum: <b>${fmt(p.cfg.minimum_correct)}</b>.` : "")
+   : a.vs === "closed" && p.closed ? `The closed model gets <b>${fmt(p.closed.correct)}</b> of ${fmt(p.n)} on this slice. Target is set at ${G.target === p.closed.correct ? "its count" : "2 points under it, inside run-to-run noise"}: <b>${fmt(G.target)}</b> (${pctExact}%).`
+   : `Champion <b>${p.champ.name}</b> has <b>${fmt(p.champ.correct)}</b>. ${fmt(G.target - p.champ.correct)} more is the smallest gain a paired test on ${fmt(p.n)} reliably detects.`;
+  G.why.now = `Best champion run on ${p.slice}: <b>${p.champ.name}</b>, ${fmt(p.champ.correct)} of ${fmt(p.n)}.` + (p.closed && a.vs === "closed" ? ` Closed model: <b>${fmt(p.closed.correct)}</b>.` : "");
+ } else if (a.kpi === "lat") {
+  G.target = +val; G.now = p.champ.p50; G.dir = "le";
+  con.add(`keep ≥ ${fmt(p.champ.correct)} of ${fmt(p.n)} correct`);
+  G.name = `${p.key === "gsm8k-ft" ? "gsm8k" : "pid"}-fast`; G.title = `Median answer in ${sec(G.target)}`;
+  G.why.target = a.vs === "closed" && p.closed ? `The closed model's median on ${p.slice} is <b>${sec(p.closed.p50)}</b>.` :
+   `Champion median is <b>${sec(p.champ.p50)}</b> on ${p.slice}. ` + (+val === p.base.p50 || val === p.base.p50.toFixed(1) ? `<b>${p.base.name}</b> did <b>${sec(p.base.p50)}</b>, so it is reachable.` : `Half of it is <b>${sec(+val)}</b>: a change a user notices.`);
+  G.why.now = `Median seconds per answer, champion <b>${p.champ.name}</b>, n = ${fmt(p.n)}.`;
+ } else {
+  G.target = val === "half" ? 0.5 : 1; G.now = null; G.dir = "le"; G.name = `${p.key === "gsm8k-ft" ? "gsm8k" : "pid"}-cheap`;
+  G.title = val === "half" ? "Half the cost per answer" : "No more cost per answer";
+  con.add(`keep ≥ ${fmt(p.champ.correct)} of ${fmt(p.n)} correct`);
+  G.why.target = `No run in the ledger logs cost yet (0 of ${p.key === "gsm8k-ft" ? 4 : 3} full runs). The first champion run with cost sets the reference.`;
+  G.why.now = "Nothing to show until runs log cost.";
+ }
+ G.why.slice = `Every ${p.label.slice(0, -1)} in ${p.dataset}: <b>${fmt(p.n)}</b>. Dev and random slices are for climbing; the goal is judged on the whole set.` + (p.sim ? " (simulated project)" : "");
+ G.why.vs = a.vs === "closed" && !p.closed ? "No closed model has a run on this slice. arx runs it first, so the comparison is paired on the same questions." : `Paired against <b>${a.vs === "closed" ? p.closed.name : p.champ.name}</b> on the same ${fmt(p.n)} ${p.label}.`;
+ G.why.con = "Read from the ask and the project config. A candidate that breaks one can't achieve the goal.";
+ G.constraints = [...con];
+ const lg = p.ledgerGoal;
+ G.exists = !!(lg && a.kpi === "acc" && G.slice === lg.slice && G.target === Math.ceil(lg.target * lg.n - 1e-9));
+ if (G.exists) { G.name = lg.name; G.title = lg.title; }
+ else if (lg && G.name === lg.name) G.name = lg.name + "-v2";
+ return G;
+}
+
+/* ---------- rendering: conversation ---------- */
+function start(raw){
+ raw = raw.trim(); if (!raw) return;
+ const r = read(raw);
+ S = {read: r, ans: {kpi: r.kpi, vs: null, done: null}, step: r.kpi ? 1 : 0, goal: null, created: false, added: new Set()};
+ document.querySelectorAll(".chip").forEach(c => c.classList.toggle("on", c.textContent === raw));
+ $("#cardwrap").innerHTML = ""; $("#relwrap").classList.add("hide");
+ renderThread(); renderMap(); renderCmds();
+}
+function renderThread(){
+ const qs = questions();
+ let h = `<div class="said">${esc(S.read.raw)}</div>`;
+ qs.forEach((q, i) => {
+  if (i > S.step) return;
+  const cur = S.ans[q.id];
+  h += `<div class="q"><div class="who">arx · ${i + 1} of 3</div><div class="text">${esc(q.text)}${q.read && cur === S.read.kpi ? `<span class="read">${esc(q.read)}</span>` : ""}</div><div class="opts">` +
+   q.opts.map(o => `<button class="opt${cur === o.v ? " on" : ""}" data-q="${q.id}" data-v="${esc(o.v)}">${esc(o.l)}<small>${esc(o.s)}</small></button>`).join("") + `</div></div>`;
+ });
+ $("#thread").innerHTML = h;
+ $("#thread").querySelectorAll(".opt").forEach(b => b.onclick = () => answer(b.dataset.q, b.dataset.v));
+ if (S.ans.done) { S.goal = propose(); renderCard(); }
+}
+function answer(id, v){
+ const order = ["kpi", "vs", "done"], i = order.indexOf(id);
+ S.ans[id] = v;
+ order.slice(i + 1).forEach(k => {           // later answers depend on earlier ones
+  if (k === "done" && S.ans.done) { const ok = doneOpts(S.read.proj, S.ans.kpi, S.ans.vs, S.read).some(o => o.v === S.ans.done); if (!ok) S.ans.done = null; }
+ });
+ S.step = Math.max(S.step, i + 1);
+ if (!S.ans.done) { S.created = false; $("#cardwrap").innerHTML = ""; $("#relwrap").classList.add("hide"); }
+ renderThread(); renderMap(); renderCmds();
+}
+
+/* ---------- goal card ---------- */
+function distance(g, unitLabel){
+ if (g.now == null) return {txt: "not measured", cls: "", state: "none"};
+ if (g.dir === "ge") {
+  const d = g.target - g.now;
+  return d > 0 ? {txt: `${fmt(d)} short`, cls: "short", state: "short", d} : {txt: d === 0 ? "met, at the line" : `met, ${fmt(-d)} spare`, cls: "met", state: "met", d};
+ }
+ const d = Math.round((g.now - g.target) * 10) / 10;
+ return d > 0 ? {txt: `${d.toFixed(1)} s to cut`, cls: "short", state: "short", d} : {txt: `met, ${(-d).toFixed(1)} s headroom`, cls: "met", state: "met", d};
+}
+function spark(p, g){
+ if (g.kpi !== "acc" || !p.traj.length) return "";
+ const W = 150, H = 34, pts = p.traj, lo = Math.min(...pts.map(x => x.c), p.base.correct) - 10, hi = Math.max(g.target, ...pts.map(x => x.c)) + (Math.max(g.target, ...pts.map(x => x.c)) - lo) * 0.35;
+ const t0 = pts[0].t, t1 = Math.max(pts[pts.length - 1].t, t0 + 1);
+ const X = t => 2 + (t - t0) / (t1 - t0) * (W - 30), Y = c => H - 3 - (c - lo) / (hi - lo) * (H - 6);
+ let d = ""; pts.forEach((q, i) => d += (i ? `H${X(q.t).toFixed(1)}V${Y(q.c).toFixed(1)}` : `M${X(q.t).toFixed(1)},${Y(q.c).toFixed(1)}`));
+ const last = pts[pts.length - 1];
+ return `<svg class="spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-label="best on full over time">
+  <line x1="0" x2="${W}" y1="${Y(g.target)}" y2="${Y(g.target)}" stroke="var(--faint)" stroke-dasharray="3 3"/>
+  <text x="${W}" y="${Math.max(9, Y(g.target) - 3)}" text-anchor="end" font-size="9" fill="var(--faint)" font-family="var(--mono)">${fmt(g.target)}</text>
+  <path d="${d}" fill="none" stroke="var(--chart-1)" stroke-width="1.6"/>
+  <circle cx="${X(last.t)}" cy="${Y(last.c)}" r="2.6" fill="var(--chart-1)"/></svg>`;
+}
+function renderCard(){
+ const g = S.goal, p = S.read.proj, dist = distance(g);
+ const tUnit = g.kpi === "acc" ? `of ${fmt(g.n)} correct` : g.kpi === "lat" ? "s median" : "× champion cost";
+ const tVal = g.kpi === "lat" ? g.target.toFixed(1) : g.kpi === "acc" ? fmt(g.target) : g.target;
+ const kpiTxt = {acc: "Correct answers", lat: "Median seconds per answer", cost: "Cost per answer"}[g.kpi];
+ const nowTxt = g.now == null ? `<span class="empty">no run logs cost</span>` : g.kpi === "acc" ? `<span class="num big">${fmt(g.now)}</span><span class="num">of ${fmt(g.n)}</span>` : `<span class="num big">${sec(g.now)}</span>`;
+ const vsTxt = g.vs === "closed" ? (p.closed ? `${esc(p.closed.name)} <span class="num">· ${g.kpi === "lat" ? sec(p.closed.p50) : fmt(p.closed.correct) + " of " + fmt(p.n)}</span>` : `closed model <span class="pill warn">not run yet</span>`) : `<span class="num">${esc(p.champ.name)}</span>`;
+ $("#cardwrap").innerHTML = `<div class="card">
+  <div class="head"><span class="title ed" contenteditable="true" spellcheck="false" data-f="title">${esc(g.title)}</span>
+   <span class="num ed" contenteditable="true" spellcheck="false" data-f="name" style="color:var(--faint);font-size:13px">${esc(g.name)}</span>
+   ${g.exists ? `<span class="pill acc">already open</span>` : ""}${p.sim ? `<span class="pill">simulated</span>` : ""}</div>
+  <div class="fields">
+   <div class="k">KPI</div><div class="v"><select class="ed" data-f="kpi">${[["acc","Correct answers"],["lat","Median seconds per answer"],["cost","Cost per answer"]].map(([v,l]) => `<option value="${v}"${v === g.kpi ? " selected" : ""}>${l}</option>`).join("")}</select></div>
+   <div class="k">Judged on</div><div class="v"><select class="ed num" data-f="slice">${p.slices.map(s => `<option value="${s.name}"${s.name === g.slice ? " selected" : ""}>${s.name} · ${fmt(s.n)}</option>`).join("")}</select>${why(g.why.slice)}</div>
+   <div class="k">Target</div><div class="v"><span class="num big">${g.dir === "ge" ? "≥" : "≤"} <span class="ed" contenteditable="true" spellcheck="false" inputmode="decimal" data-f="target">${tVal}</span></span><span class="num">${tUnit}</span>${why(g.why.target)}</div>
+   <div class="k">Now</div><div class="v">${nowTxt}${g.now != null ? `<span class="${dist.cls} num">${dist.txt}</span>` : ""}${spark(p, g)}${why(g.why.now)}</div>
+   <div class="k">Against</div><div class="v">${vsTxt}${why(g.why.vs)}</div>
+   <div class="k">Constraints</div><div class="v" id="cons">${g.constraints.map((c, i) => `<span class="con">${esc(c)}<button data-rm="${i}" aria-label="remove">×</button></span>`).join("")}<input class="addcon" id="addcon" placeholder="+ add" size="8">${why(g.why.con)}</div>
+  </div>
+  <div class="foot"><span class="note">${g.exists ? "Same slice and target as the open ledger goal." : ""}</span>
+   <button class="btn primary" id="create">${S.created ? "✓ " + (g.exists ? "Using" : "Opened") + " " + esc(g.name) : g.exists ? "Use " + esc(g.name) : "Open goal"}</button></div>
+ </div>`;
+ const card = $("#cardwrap .card");
+ card.querySelectorAll("[contenteditable]").forEach(el => {
+  el.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } };
+  el.onblur = () => edit(el.dataset.f, el.textContent.trim());
+ });
+ card.querySelectorAll("select").forEach(el => el.onchange = () => edit(el.dataset.f, el.value));
+ card.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { g.constraints.splice(+b.dataset.rm, 1); renderCard(); renderCmds(); });
+ $("#addcon").onkeydown = e => { if (e.key === "Enter" && e.target.value.trim()) { g.constraints.push(e.target.value.trim()); renderCard(); renderCmds(); setTimeout(() => $("#addcon").focus()); } };
+ $("#create").onclick = () => { S.created = true; renderCard(); renderRelated(); renderMap(); renderCmds(); $("#relwrap").scrollIntoView({behavior: "smooth", block: "start"}); };
+ if (S.created) renderRelated();
+ renderMap(); renderCmds();
+}
+function edit(f, v){
+ const g = S.goal, p = S.read.proj;
+ if (f === "title" || f === "name") { if (v) g[f] = f === "name" ? v.replace(/\s+/g, "-").toLowerCase() : v; }
+ if (f === "target") {
+  let x = parseFloat(v.replace(/[, ]/g, "")); if (isNaN(x)) return renderCard();
+  if (g.kpi === "acc") { x = Math.max(1, Math.min(g.n, Math.round(x))); g.why.target = `Set by hand: <b>${fmt(x)}</b> of ${fmt(g.n)} (${(x / g.n * 100).toFixed(2)}%).`; }
+  else g.why.target = `Set by hand: <b>${x}</b>.`;
+  g.target = x;
+ }
+ if (f === "kpi") { S.ans.kpi = v; S.ans.done = doneOpts(p, v, S.ans.vs, S.read)[0].v; renderThread(); return; }
+ if (f === "slice") {
+  const s = p.slices.find(s => s.name === v), ratio = s.n / g.n;
+  g.slice = v;
+  if (g.kpi === "acc") { g.target = Math.ceil(g.target * ratio); const lb = p.lb && p.lb[v]; g.now = v === p.slice ? p.champ.correct : null; }
+  g.n = s.n; g.why.slice = `${v}: <b>${fmt(s.n)}</b> ${p.label}. A goal on a sample is a lead, not a result; the full set is the default.`;
+  g.why.now = g.now == null ? `Champion has no run on ${v} in this view.` : g.why.now;
+ }
+ const lg = p.ledgerGoal;
+ g.exists = !!(lg && g.kpi === "acc" && g.slice === lg.slice && g.target === Math.ceil(lg.target * lg.n - 1e-9) && g.name === lg.name);
+ if (!g.exists && lg && g.name === lg.name) g.name = lg.name + "-v2";
+ renderCard();
+}
+
+/* ---------- related goals ---------- */
+function related(){
+ const g = S.goal, p = S.read.proj, out = [];
+ const champ = p.champ;
+ if (g.kpi !== "lat") {
+  const t = Math.ceil(champ.p50 * 1.1);
+  out.push({id: "lat", role: "guard", title: `Don't get slower than ${t} s median`, kpi: "lat", slice: p.slice, n: p.n, target: t, now: champ.p50, dir: "le",
+   name: `${g.name}-latency`, why: `Champion median on ${p.slice} is ${sec(champ.p50)}; 10% headroom.`});
+ }
+ if (g.kpi !== "acc") out.push({id: "acc", role: "guard", title: `Keep ≥ ${fmt(champ.correct)} of ${fmt(p.n)} correct`, kpi: "acc", slice: p.slice, n: p.n, target: champ.correct, now: champ.correct, dir: "ge",
+   name: `${g.name}-accuracy`, why: "A faster or cheaper model that answers fewer questions doesn't count."});
+ if (g.kpi !== "cost") out.push({id: "cost", role: "guard", title: "No more cost per answer than today", kpi: "cost", slice: p.slice, n: p.n, target: 1, now: null, dir: "le",
+   name: `${g.name}-cost`, why: "No run logs cost yet. Turns on once evals record it."});
+ if (g.kpi === "lat") out.push({id: "p95", role: "guard", title: `Slowest 5% under ${Math.ceil(g.target * 2)} s`, kpi: "lat95", slice: p.slice, n: p.n, target: Math.ceil(g.target * 2), now: champ.p95 == null ? null : champ.p95, dir: "le",
+   name: `${g.name}-p95`, why: "A median target can hide a long tail."});
+ if (g.kpi === "acc") {
+  const hn = 500, ht = Math.ceil((g.target / g.n - 0.02) * hn);
+  out.push({id: "rob", role: "guard", title: `Same score on unseen ${p.label}`, kpi: "acc", slice: `${p.key === "gsm8k-ft" ? "gsm-heldout" : "pid-heldout"}/${hn}`, n: hn, target: ht, now: null, dir: "ge",
+   name: `${g.name}-heldout`, newSlice: true, why: `${hn} new ${p.label} never used for tuning. Within 2 points of the main target: ≥ ${fmt(ht)} of ${hn}.`});
+ }
+ if (g.kpi === "acc" && p.hills.length) {
+  p.hills.forEach(h => {
+   let target, now = h.champ, why;
+   if (h.status === "climbed" && h.base != null) {
+    target = h.base + Math.ceil(h.gain * h.n);
+    why = `Hill aim: +${Math.round(h.gain * 100)} points over ${p.base.name} (${fmt(h.base)} of ${fmt(h.n)}) → ${fmt(target)}.`;
+   } else {
+    const wrong = h.n - h.arch; target = h.arch + Math.ceil(wrong / 2);
+    why = `Fix half of the ${wrong} wrong (archived run: ${fmt(h.arch)} of ${fmt(h.n)}). These ${p.label} are inside ${p.slice}, so each fix counts toward the main ${fmt(g.target - g.now)}.`;
+   }
+   out.push({id: "hill-" + h.name, role: "sub", hill: h.name, title: `Fix ${h.name}`, sub: h.title, kpi: "acc", slice: h.slice, n: h.n, target, now, arch: h.arch, dir: "ge",
+    name: `${g.name}-${h.name}`, why});
+  });
+ } else if (g.kpi === "acc") {
+  out.push({id: "find", role: "sub", title: "Find the hills", sub: `Error analysis on the ${fmt(p.n - p.champ.correct)} wrong answers`, kpi: "acc", slice: p.slice, n: p.n, now: null, target: null, dir: "ge",
+   name: null, why: "No hills yet. Sub-goals come from grouping the champion's wrong answers by cause."});
+ }
+ return out;
+}
+function relDist(s){
+ if (s.id === "find") return `<span class="empty">${fmt(S.read.proj.n - S.read.proj.champ.correct)} wrong to sort</span>`;
+ if (s.now == null && s.arch != null) return `<span class="pill warn">champion not run</span> <span class="num">archived ${fmt(s.arch)} · ${fmt(s.target - s.arch)} short of ${fmt(s.target)}</span>`;
+ if (s.now == null) return `<span class="empty">not measured</span>`;
+ const d = distance(s);
+ const of = s.kpi === "acc" ? ` of ${fmt(s.n)}` : "";
+ return d.state === "short" ? `<span class="short num">${s.kpi === "acc" ? fmt(d.d) + " more" + of : d.txt}</span>` : `<span class="met num">${d.txt}</span>`;
+}
+function renderRelated(){
+ $("#relwrap").classList.remove("hide");
+ const list = related();
+ $("#sugs").innerHTML = list.map(s => {
+  const on = S.added.has(s.id);
+  return `<div class="sug${on ? " added" : ""}"><div class="t"><span>${esc(s.title)}</span><span class="pill${s.role === "sub" ? " acc" : ""}" style="flex:none">${s.role === "sub" ? "sub-goal" : "guard"}</span>${why(esc(s.why))}</div>
+   ${s.sub ? `<div class="d">${esc(s.sub)}</div>` : ""}
+   <div class="row"><span class="d">${relDist(s)}</span><button class="btn" data-add="${s.id}">${on ? "✓ Added" : "+ Add"}</button></div></div>`;
+ }).join("");
+ $("#sugs").querySelectorAll("[data-add]").forEach(b => b.onclick = () => {
+  const id = b.dataset.add; S.added.has(id) ? S.added.delete(id) : (S.added.add(id), S.justAdded = id);
+  renderRelated(); renderMap(); renderCmds();
+ });
+}
+
+/* ---------- map ---------- */
+function nodeHTML(g, main, isNew){
+ let d, bar = "";
+ if (g.id === "find") { d = relDist(g); bar = `<div class="bar none"></div>`; }
+ else if (g.now == null) {
+  d = g.arch != null ? `<span class="pill warn">not run</span> <span class="num" style="color:var(--muted)">archived ${fmt(g.target - g.arch)} short</span>` : `<span class="empty">not measured</span>`;
+  bar = `<div class="bar none"></div>`;
+ } else {
+  const ds = distance(g);
+  if (g.kpi === "acc") {
+   d = ds.state === "short" ? `<span class="short num">${fmt(ds.d)} more</span> <span class="num" style="color:var(--muted)">of ${fmt(g.n)} · ${fmt(g.now)} → ${fmt(g.target)}</span>` : `<span class="met num">${ds.txt}</span>`;
+   const from = g.from != null ? g.from : Math.max(0, g.target - Math.max(60, (g.target - g.now) * 2.5));
+   bar = `<div class="bar"><i style="width:${Math.max(2, Math.min(100, (g.now - from) / (g.target - from) * 100)).toFixed(1)}%"></i></div>`;
+  } else {
+   d = `<span class="${ds.cls} num">${ds.txt}</span> <span class="num" style="color:var(--muted)">${sec(g.now)} vs ≤ ${sec(g.target)}</span>`;
+   bar = `<div class="bar lat"><i style="width:${Math.min(100, g.target / Math.max(g.now, g.target) * 100).toFixed(1)}%"></i></div>`;
+  }
+ }
+ return `<div class="node${main ? " main" : ""}${isNew ? " new" : ""}"><div class="nt">${esc(g.title)}${g.ledger ? `<span class="pill">ledger</span>` : ""}</div>
+  <div class="nd">${d}</div>${bar}<div class="nm">${esc(g.name || "")}${g.slice ? " · " + esc(g.slice) : ""}</div></div>`;
+}
+function ledgerTrees(){
+ // the gsm8k-ft project's ledger goal, always shown
+ const lg = P.gsm.ledgerGoal;
+ const t = Math.ceil(lg.target * lg.n - 1e-9);
+ return {proj: P.gsm, main: {name: lg.name, title: lg.title, kpi: "acc", slice: lg.slice, n: lg.n, target: t, now: Math.round(lg.value * lg.n), dir: "ge", ledger: true, from: P.gsm.base.correct}, kids: []};
+}
+function renderMap(){
+ const trees = [];
+ const gsm = ledgerTrees();
+ const g = S && S.goal && S.ans.done ? S.goal : null;
+ let mine = null;
+ if (g && S.created) {
+  const kids = related().filter(s => S.added.has(s.id));
+  if (g.exists) { gsm.kids = kids; mine = gsm; }
+  else mine = {proj: S.read.proj, main: Object.assign({}, g, {from: g.kpi === "acc" ? S.read.proj.base.correct : null}), kids};
+ }
+ if (!mine || mine === gsm) trees.push(gsm);
+ if (mine && mine !== gsm) { if (mine.proj.key === "gsm8k-ft") trees.push(gsm); trees.unshift(mine); }
+ // group by project
+ const byProj = {};
+ trees.forEach(t => (byProj[t.proj.key] = byProj[t.proj.key] || {proj: t.proj, trees: []}).trees.push(t));
+ $("#map").innerHTML = Object.values(byProj).map(bp => `<div class="tree"><div class="proj">${esc(bp.proj.key)}${bp.proj.sim ? " · simulated" : ""}</div>` +
+  bp.trees.map(t => {
+   const guards = t.kids.filter(k => k.role === "guard"), subs = t.kids.filter(k => k.role === "sub");
+   return `<div style="margin-bottom:14px">${nodeHTML(t.main, true)}` +
+    (guards.length ? `<div class="lvl"><div class="lab">guards</div>${guards.map(k => nodeHTML(k, false, k.id === S.justAdded)).join("")}</div>` : "") +
+    (subs.length ? `<div class="lvl"><div class="lab">sub-goals</div>${subs.map(k => nodeHTML(k, false, k.id === S.justAdded)).join("")}</div>` : "") + `</div>`;
+  }).join("") + `</div>`).join("");
+ if (S) S.justAdded = null;
+}
+
+/* ---------- commands ---------- */
+const prop = s => `<mark title="not in arx yet">${s}</mark>`;
+function frac(g){ return g.kpi === "acc" ? (g.target / g.n).toFixed(4) : String(g.target); }
+function goalCmd(g, parent, role){
+ const L = [];
+ if (g.kpi === "acc") L.push(`<span class="c"># ≥ ${fmt(g.target)} of ${fmt(g.n)} correct</span>`);
+ const kpi = g.kpi === "lat" ? " --kpi latency_p50 --lower-is-better" : g.kpi === "lat95" ? " --kpi latency_p95 --lower-is-better" : g.kpi === "cost" ? " --kpi cost --lower-is-better" : "";
+ let c = `arx goal open ${esc(g.name)} --title "${esc(g.title)}" \\\n    --slice ${esc(g.slice)} --target ${frac(g)}${kpi}`;
+ if (!parent) c += ` \\\n    --problem "${esc(g.raw.replace(/"/g, "'"))}"`;
+ (g.constraints || []).forEach(x => c += ` \\\n    ${prop(`--constraint "${esc(x)}"`)}`);
+ if (parent) c += ` \\\n    ${prop(`--parent ${esc(parent)} --role ${role}`)}`;
+ if (g.hill) c += ` ${prop(`--hill ${esc(g.hill)}`)}`;
+ L.push(c);
+ return L.join("\n");
+}
+function renderCmds(){
+ const out = [];
+ if (S && S.goal && S.ans.done) {
+  const g = S.goal, p = S.read.proj;
+  if (S.read.proj.sim) out.push(`<span class="c"># simulated project: pid-agent</span>`);
+  if (g.vs === "closed" && !p.closed) out.push(`<span class="c"># first: a paired run of the closed model on ${esc(g.slice)}</span>\narx model closed-ref --title "Closed model reference"\narx gate closed-ref`);
+  if (g.exists) out.push(`<span class="c"># ${esc(g.name)} is already open with this slice and target: nothing to run</span>`);
+  else out.push(goalCmd(g));
+  if (S.created) related().filter(s => S.added.has(s.id)).forEach(s => {
+   if (s.id === "find") { out.push(`<span class="c"># sub-goals follow from error analysis</span>\narx task start "Error analysis: ${fmt(p.n - p.champ.correct)} wrong answers on ${esc(p.slice)}"`); return; }
+   if (s.newSlice) out.push(`arx dataset add ${esc(s.slice.split("/")[0])} --ids-file heldout-${s.n}.txt --size ${s.n} --no-random \\\n    --description "${s.n} unseen ${p.label}, never used for tuning"`);
+   if (s.newSlice) s = Object.assign({}, s, {slice: s.slice.split("/")[0] + "/full"});
+   out.push(goalCmd(s, g.name, s.role));
+  });
+ }
+ $("#pre").innerHTML = out.length ? out.join("\n\n") : `<span class="c"># pick an ask above</span>`;
+ $("#ncmd").textContent = out.filter(x => /^arx |\narx /.test(x.replace(/<[^>]+>/g, ""))).reduce((a, x) => a + (x.replace(/<[^>]+>/g, "").match(/(^|\n)arx /g) || []).length, 0);
+}
+
+/* ---------- boot ---------- */
+$("#chips").innerHTML = CHIPS.map(c => `<button class="chip" type="button">${esc(c)}</button>`).join("");
+$("#chips").querySelectorAll(".chip").forEach(b => b.onclick = () => { $("#raw").value = b.textContent; start(b.textContent); });
+$("#ask").onsubmit = e => { e.preventDefault(); start($("#raw").value); };
+$("#raw").onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); start($("#raw").value); } };
+
+fetch("../data/gsm8k-ft-state.json").then(r => r.json()).then(D => {
+ P.gsm = buildGsm(D); P.pid = buildPid();
+ renderMap(); renderCmds();
+}).catch(e => { $("#map").innerHTML = `<div class="empty">Could not load ../data/gsm8k-ft-state.json (${esc(e.message)})</div>`; });
+</script>
+</body>
+</html>

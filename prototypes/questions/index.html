@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Question tree</title>
+<style>
+/* tokens copied from autoresearch/web/app.css (framed-sheet) */
+:root{
+ --ground:#f2f5f8;--surface:#fff;--raised:#f5f7f9;--active:#e4e9ee;--border:#e3e7eb;--rule:#eef1f4;--control:#cdd3d9;
+ --text:#131416;--muted:#5b6168;--faint:#6f767d;
+ --accent:#1b6c80;--accent-soft:#e3f0f3;--primary:#16181a;--on-primary:#fff;
+ --positive:#1e7b4f;--negative:#c4242a;--warning:#92400e;--amber:#a86f0c;
+ --grid:#e9edf0;--hl:rgba(217,164,65,.26);
+ --pill-positive-bg:#dcfae5;--pill-positive-ink:#04250e;--pill-negative-bg:#ffedea;--pill-negative-ink:#831c1e;
+ --pill-warning-bg:#fff5db;--pill-warning-ink:#7a3a0b;--pill-neutral-bg:#ebeef1;--pill-neutral-ink:#353736;
+ --pill-accent-bg:#ddeef2;--pill-accent-ink:#0f4a59;
+ --radius-card:8px;--radius-control:6px;--radius-chip:4px;--radius-sheet:16px;
+ --font:"IBM Plex Sans",Inter,system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+ --pop:0 12px 32px -12px rgba(19,20,22,.22),0 2px 6px rgba(19,20,22,.06);
+ color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+ --ground:#0c0f12;--surface:#13171b;--raised:#1a1f24;--active:#232a31;--border:#232a30;--rule:#1c2227;--control:#3a434b;
+ --text:#eef1f3;--muted:#a3abb3;--faint:#8c959d;--accent:#5cb8cc;--accent-soft:#163038;--primary:#eef1f3;--on-primary:#0c0f12;
+ --positive:#4cc38a;--negative:#f07575;--warning:#e3a84f;--amber:#d9a441;--grid:#222930;--hl:rgba(217,164,65,.22);
+ --pill-positive-bg:#14291e;--pill-positive-ink:#6fd6a1;--pill-negative-bg:#2e1a1d;--pill-negative-ink:#f59a9a;
+ --pill-warning-bg:#2b2215;--pill-warning-ink:#e8b765;--pill-neutral-bg:#222930;--pill-neutral-ink:#c3cad1;
+ --pill-accent-bg:#14303a;--pill-accent-ink:#8fd3e2;--pop:0 12px 32px -8px rgba(0,0,0,.55),0 0 0 1px #232a30;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--ground);color:var(--text);font:400 14px/1.45 var(--font);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit}
+.mono{font-family:var(--mono);font-size:12px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+
+.top{display:flex;align-items:center;gap:14px;height:48px;padding:0 16px;flex-wrap:nowrap;min-width:0}
+.top b{font-weight:600}
+.top .crumb{color:var(--muted);font-size:13px;white-space:nowrap}
+.dist{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:13px;white-space:nowrap}
+.dist .n{font-weight:600;font-size:15px}
+.dist svg{display:block}
+.sheet{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sheet);margin:0 8px 8px;min-height:calc(100vh - 56px);
+ display:grid;grid-template-columns:minmax(320px,1fr) minmax(0,1.15fr);overflow:hidden}
+.col{min-width:0;padding:20px 24px}
+.col.tree{border-right:1px solid var(--border)}
+.bar{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.bar h2{font-size:16px;font-weight:600;margin:0}
+.legend{display:flex;gap:12px;color:var(--muted);font-size:12px;margin-left:auto;flex-wrap:wrap}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.need{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
+.chip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:var(--radius-chip);
+ background:var(--pill-warning-bg);color:var(--pill-warning-ink);font-size:12.5px;font-weight:500;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip:hover{filter:brightness(.97)}
+.chip svg{flex:none}.chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+
+/* outline */
+ul.t{list-style:none;margin:0;padding:0}
+ul.t ul.t{margin-left:11px;padding-left:12px;border-left:1px solid var(--rule)}
+.row{display:flex;align-items:flex-start;gap:6px;padding:5px 6px;border-radius:var(--radius-control);cursor:pointer;min-width:0}
+.row:hover{background:var(--raised)}
+.row.on{background:var(--active)}
+.row .car{all:unset;width:14px;height:20px;display:grid;place-items:center;color:var(--faint);flex:none;cursor:pointer}
+.row .car svg{transition:transform .15s}
+.row.closed .car svg{transform:rotate(-90deg)}
+.row .car.none{visibility:hidden}
+.row .sh{flex:none;height:20px;display:grid;place-items:center}
+.row .tx{min-width:0;flex:1}
+.row .q{display:block;overflow-wrap:anywhere}
+.row .cl{display:block;font-size:12.5px;color:var(--muted);margin-top:1px;overflow-wrap:anywhere}
+.row.dead .q{color:var(--muted)}
+.row .ct{flex:none;font-size:12px;color:var(--faint);padding-top:1px}
+.row.fresh{animation:fl 1.2s ease}
+@keyframes fl{0%{background:var(--hl)}100%{background:transparent}}
+.you{display:inline-block;font-size:11px;font-weight:600;color:var(--pill-warning-ink);background:var(--pill-warning-bg);border-radius:3px;padding:0 5px;margin-left:6px;vertical-align:1px}
+.spin{animation:sp 1s linear infinite;transform-origin:center}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* focus panel */
+.path{display:flex;gap:6px;flex-wrap:wrap;color:var(--faint);font-size:12.5px;margin-bottom:8px}
+.path a{cursor:pointer}.path a:hover{color:var(--text)}
+.fq{display:flex;gap:10px;align-items:flex-start}
+.fq h1{font-size:22px;line-height:1.25;font-weight:600;letter-spacing:-.01em;margin:0;overflow-wrap:anywhere}
+.fq .sh{padding-top:5px}
+.claim{margin:12px 0 0;font-size:15px;padding:10px 12px;border-radius:var(--radius-card);background:var(--raised);border-left:3px solid var(--control)}
+.claim.answered{border-left-color:var(--positive)}
+.claim.dead{border-left-color:var(--negative)}
+.claim.agent{border-left-color:var(--accent);color:var(--muted)}
+.claim.human{border-left-color:var(--amber)}
+.sec{margin-top:22px}
+.sec h3{font-size:13px;font-weight:600;color:var(--muted);margin:0 0 8px}
+table.ev{width:100%;border-collapse:collapse;font-size:13px}
+table.ev td{padding:7px 8px 7px 0;border-top:1px solid var(--rule);vertical-align:middle}
+table.ev td.m{overflow-wrap:anywhere;min-width:0}
+table.ev td.num{white-space:nowrap;text-align:right}
+table.ev .sl{color:var(--faint);font-size:12px}
+table.ev td.ci{width:100px}
+table.ev td.m .mono{white-space:nowrap}
+.pos{color:var(--positive)}.neg{color:var(--negative)}.neu{color:var(--muted)}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
+.btn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:var(--radius-control);border:1px solid var(--control);
+ background:var(--surface);font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--raised)}
+.btn.primary{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+.btn.primary:hover{opacity:.9}
+.btn.warn{background:var(--pill-warning-bg);color:var(--pill-warning-ink);border-color:transparent}
+.in{height:32px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface);color:var(--text);padding:0 10px;font:inherit;font-size:13px;flex:1;min-width:0}
+.branchf{display:none;gap:8px;margin-top:10px}
+.branchf.on{display:flex}
+.kids{display:flex;flex-direction:column;gap:2px}
+.kid{all:unset;cursor:pointer;display:flex;gap:8px;align-items:flex-start;padding:5px 6px;border-radius:var(--radius-control)}
+.kid:hover{background:var(--raised)}
+.kid .cl{color:var(--muted);font-size:12.5px}
+
+/* reading pane */
+.read{margin-top:26px;border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden}
+.read .rh{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--raised);border-bottom:1px solid var(--border);font-size:13px;font-weight:600}
+.read .rh span{color:var(--faint);font-weight:400;margin-left:auto;font-size:12px}
+.read .body{max-height:260px;overflow:auto;padding:4px 14px 10px}
+.note{padding:10px 0;border-bottom:1px solid var(--rule)}
+.note:last-child{border-bottom:0}
+.note .meta{font-size:12px;color:var(--faint);margin-bottom:3px;display:flex;gap:8px}
+.note .meta a{cursor:pointer;color:var(--accent)}
+.note p{margin:0;line-height:1.55}
+.note mark{background:var(--hl);color:inherit;border-radius:2px}
+.ask{position:absolute;z-index:20;display:none;background:var(--surface);border-radius:var(--radius-card);box-shadow:var(--pop);padding:8px;gap:6px;width:min(360px,calc(100vw - 32px))}
+.ask.on{display:flex}
+
+@media (max-width:820px){
+ .sheet{grid-template-columns:1fr}
+ .col{padding:16px}
+ .col.tree{border-right:0;border-bottom:1px solid var(--border)}
+ .top .crumb{display:none}
+ table.ev td.ci{width:70px}
+ ul.t ul.t{margin-left:6px;padding-left:8px}
+ .fq h1{font-size:19px}
+}
+</style>
+</head>
+<body>
+<header class="top">
+ <b>gsm8k-ft</b><span class="crumb">Questions</span>
+ <div class="dist" id="dist"></div>
+</header>
+<div class="sheet">
+ <section class="col tree">
+  <div class="bar"><h2>Questions</h2>
+   <div class="legend" id="legend"></div>
+  </div>
+  <div class="need" id="need"></div>
+  <ul class="t" id="tree"></ul>
+ </section>
+ <section class="col" id="panel"></section>
+</div>
+<div class="ask" id="ask"><input class="in" id="askin"><button class="btn primary" id="askgo">Ask</button></div>
+
+<script>
+/* data-proto: the ledger has no "questions" yet. The tree below is DERIVED from gsm8k-ft-state.json:
+   hills (percent-base, time-rate, group-count), model `change` hypotheses, decision reasons and task notes.
+   Correct counts are computed live from state.leaderboard (score × n); paired CIs and win/loss counts come from
+   state.gates, state.goals.vs_baseline or the decision/analysis note text where the gate object is absent.
+   Rows with `c`/`bc` literal counts are copied from analysis notes (vLLM same-engine baselines not in the leaderboard). */
+const FULL='gsm8k-test/full',DEV='gsm8k-test/dev-percent-base-v1',CTL='gsm8k-test/control-ordinary-v1';
+const SPEC={id:'root',q:'Can a 4B Qwen reach 96% on GSM8K?',st:'open',
+ ev:[{m:'@champ',b:'qwen3-4b-rl-fresh-v1',s:FULL,goal:1}],
+ kids:[
+ {id:'harness',q:'Can we trust the archived baseline?',st:'answered',claim:'No. A fresh audited harness scores 1,155; archived numbers drift by parser.',
+  ev:[{m:'qwen3-4b-rl-archived',b:'qwen3-4b-rl-fresh-v1',s:FULL},{lbl:'archived parser replay',c:1154,bc:1151,n:1319,s:FULL,bl:'stored'}]},
+ {id:'pct',hill:'percent-base',q:'Why do percentage problems fail?',st:'answered',claim:'The % is applied to the wrong base, or an increase is read as the final value.',
+  ev:[{share:'percent-base'},{m:'qwen3-4b-rl-fresh-v1',s:DEV}],
+  kids:[
+   {id:'sft',q:'Does SFT on percentage examples fix it?',st:'dead',claim:'No. One epoch of LoRA SFT lost 4 problems on target.',ev:[{m:'percent-sft-v1',b:'qwen3-4b-rl-fresh-v1',s:DEV}]},
+   {id:'struct',q:'Does a base/equation/check prompt prefix help?',st:'dead',claim:'No. The prefix cost 17 target problems.',ev:[{m:'percent-structured-v1',b:'qwen3-4b-rl-fresh-v1',s:DEV}]},
+   {id:'rlvr',q:'Does correctness-only RL (GRPO) help?',st:'dead',claim:'No. Two GRPO runs, both CIs cross zero; full slice slightly worse.',
+    ev:[{m:'percent-rlvr-v1',b:'qwen3-4b-rl-fresh-v1',s:FULL,ci:[-.76,.45],wl:[10,12]},{m:'percent-rlvr-v2',b:'qwen3-4b-rl-fresh-v1',s:DEV,ci:[-.54,2.70],wl:[3,1]}]},
+   {id:'vote',q:'Does 5-answer voting on % questions help?',st:'dead',claim:'Inconclusive at 4.9× the tokens. Stopped.',ev:[{m:'percent-vote5-v1',b:'qwen3-4b-rl-fresh-v1',s:DEV,ci:[-.54,3.78],wl:[5,2]}]},
+   {id:'adapter',q:'Is the RL adapter hurting the base model?',st:'answered',claim:'Partly. The raw base gains 7 on target, and its misses are truncations.',
+    ev:[{m:'percent-base-ablation-v1',b:'qwen3-4b-rl-fresh-v1',s:DEV},{m:'percent-base-ablation-v1',b:'qwen3-4b-rl-fresh-v1',s:CTL}],
+    kids:[
+     {id:'len',q:'Is the gap output length?',st:'answered',claim:'Yes. Raw base at 1,024 tokens: +69 on full. Promoted.',
+      ev:[{m:'percent-base-1024-v1',b:'qwen3-4b-rl-fresh-v1',s:FULL,goal:1},{m:'percent-base-1024-v1',b:'qwen3-4b-rl-fresh-v1',s:DEV}],
+      kids:[
+       {id:'l2048',q:'Do 2,048 tokens help further?',st:'open',claim:'Lead. Control gains; target CI crosses zero.',
+        ev:[{m:'percent-base-2048-v1',gate:'dev',s:DEV},{m:'percent-base-2048-v1',gate:'dev',s:CTL}]},
+       {id:'think',q:'Is the gap thinking length?',st:'dead',claim:'No. 8,192 thinking tokens lost 6 target problems at 7× latency.',
+        ev:[{m:'thinking4b-8192-v1',c:161,bc:167,n:185,s:DEV,bl:'raw 1024, same engine'}],
+        kids:[{id:'thinkok',q:'Does a separate Thinking checkpoint count as "Qwen3 4B"?',st:'open',human:1,
+          claim:'Only you can say. Same 4.02B parameters, different checkpoint.',choices:['Counts','Does not count']}]},
+       {id:'parse',q:'Are the remaining misses cap hits and parse failures?',st:'agent',live:{m:'raw-numeric4096-v1',n:185},
+        claim:'Running: numeric final line + 4,096 tokens.',
+        ev:[{lbl:'full audit: wrong',c:95,n:1319,s:FULL,raw:1},{lbl:'cap hits among wrong',c:29,n:95,s:FULL,raw:1},{lbl:'missing parses',c:13,n:1319,s:FULL,raw:1}],
+        kids:[{id:'boxed',q:'Should a boxed answer that matches the reference count?',st:'open',human:1,
+          claim:'Scorer policy. 8 of 24 wrong target outputs box the right number.',choices:['Keep frozen scorer','Accept boxed']}]}
+      ]}
+    ]}
+  ]},
+ {id:'fresh',q:'Does fine-tuning the raw base help?',st:'open',claim:'One lead, two dead ends.',
+  kids:[
+   {id:'sft5',q:'Does SFT at lr 5e-6 help?',st:'open',claim:'Lead. +10 / −1 on target; CI touches zero.',ev:[{m:'raw-sft-lr5e6-v1',gate:'dev',s:DEV},{m:'raw-sft-lr5e6-v1',gate:'dev',s:CTL}]},
+   {id:'sft2',q:'Does a higher lr (2e-5) help?',st:'dead',claim:'No. Lost 41 target problems.',ev:[{m:'raw-sft-lr2e5-v1',b:'@champ',s:DEV},{m:'raw-sft-lr2e5-v1',b:'@champ',s:CTL}]},
+   {id:'rft',q:'Does training on its own correct traces help?',st:'dead',claim:'No. Same score as the champion.',ev:[{m:'raw-rft-vllm-greedy-v1',b:'@champ',s:DEV}]},
+   {id:'rlfresh',q:'Does RL from a fresh base beat SFT?',st:'open',human:1,claim:'Not run. Needs your call on GPU time.',choices:['Run it','Not now']}
+  ]},
+ {id:'infer',q:'Do inference-time tricks close the gap?',st:'dead',claim:'No. Voting, verification and programs all failed the paired gate.',
+  ev:[{m:'raw-vllm-vote5-v1',c:168,bc:167,n:185,s:DEV,bl:'raw 1024, same engine'},{m:'raw-vllm-verify-v1',c:167,bc:167,n:185,s:DEV,ci:[-2.70,2.70],wl:[5,5],bl:'raw 1024, same engine'},
+      {m:'raw-vllm-program-v1',c:160,bc:166,n:185,s:DEV,wl:[6,12],bl:'raw 1024, same engine'},{m:'fresh-sft-vllm-vote5-v1',s:DEV,b:'@champ'}]},
+ {id:'time',hill:'time-rate',q:'Do time and rate problems still fail?',st:'open',claim:'Unknown for the champion. Only archived runs exist.',
+  ev:[{share:'time-rate'},{m:'qwen3-4b-rl-archived',s:'gsm8k-test/dev-time-rate-v1'}]},
+ {id:'group',hill:'group-count',q:'Do group and multiplicity problems still fail?',st:'open',claim:'Unknown for the champion. Only archived runs exist.',
+  ev:[{share:'group-count'},{m:'qwen3-4b-rl-archived',s:'gsm8k-test/dev-group-count-v1'}]}
+ ]};
+
+/* data-proto: reading pane = real task/decision notes from the ledger, spacing restored for readability; `node` = where an Ask branches. */
+const NOTES=[
+ {id:'1026-045247-analysis-7220',node:'parse',t:'Full raw 1024 audit of 1,319: 95 wrong, 34 cap hits including 29 wrong, 13 missing parses, 2 wrong with a matching simple boxed answer. Diagnostics only, score unchanged at 1,224.'},
+ {id:'1026-044504-analysis-dbb0',node:'think',t:'Target 161/185 vs 167; 4 cap hits, all wrong; 4 extractions returned None. Of 24 wrong, 19 were boxed; 8 simple last-boxed values match the reference. Diagnostic only, score unchanged.'},
+ {id:'1026-042405-analysis-c3ee',node:'infer',t:'Rejected: target 160/185 vs 166, 6 fixes and 12 regressions; control 92/100 vs 97. The program path was used on 153 target and 93 control questions; the rest fell back.'},
+ {id:'1026-041402-analysis-1c2b',node:'infer',t:'Rejected: target 167/185 vs 167, 5 fixes and 5 regressions, CI −2.70 to +2.70 pts. First pass scored 169 and verification reduced it to 167 (3 fixes, 5 regressions); 11 parse fallbacks.'},
+ {id:'decision percent-vote5-v1',node:'vote',t:'Inconclusive under the predeclared evidence rule: target 153/185 vs 150, +1.62 pts, 90% paired CI −0.54 to +3.78. 5 fixes and 2 regressions at roughly 4.9× output tokens. Stop widening.'}
+];
+
+let S,byId={},closed=new Set(),focus='root',lb,seq=0;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=n=>n.toLocaleString('en-US');
+
+function shape(st,human,sz=14){
+ const c=sz/2,r=sz/2-1.5;
+ if(st==='agent')return `<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}"><circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--rule)" stroke-width="2"/><path class="spin" d="M${c} ${c-r}A${r} ${r} 0 0 1 ${c+r} ${c}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/></svg>`;
+ if(human&&st==='open')return `<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}"><path d="M${c} 1L${sz-1} ${c}L${c} ${sz-1}L1 ${c}Z" fill="var(--amber)"/></svg>`;
+ if(st==='answered')return `<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}"><circle cx="${c}" cy="${c}" r="${r}" fill="var(--positive)"/></svg>`;
+ if(st==='dead')return `<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}"><rect x="2" y="2" width="${sz-4}" height="${sz-4}" rx="1.5" fill="none" stroke="var(--negative)" stroke-width="1.6"/><path d="M5 5L${sz-5} ${sz-5}M${sz-5} 5L5 ${sz-5}" stroke="var(--negative)" stroke-width="1.6"/></svg>`;
+ return `<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}"><circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--accent)" stroke-width="1.8"/></svg>`;
+}
+
+function index(n,p){n.parent=p;n.kids=n.kids||[];n.ev=n.ev||[];byId[n.id]=n;n.kids.forEach(k=>index(k,n))}
+function count(n){let a=0;n.kids.forEach(k=>{a+=1+count(k)});return a}
+
+/* resolve one evidence row against the real ledger */
+function evRow(e){
+ const champ=S.champion,m=e.m==='@champ'?champ:e.m,b=e.b==='@champ'?champ:e.b;
+ if(e.share){const h=S.hills[e.share];return {lbl:'share of archived errors',s:'archived errors',c:h.share.count,n:h.share.of,raw:1}}
+ const sl=e.s,L=lb[sl]||{};
+ let n=e.n,c=e.c,bc=e.bc,ci=e.ci,wl=e.wl,bl=e.bl;
+ if(e.gate){const g=S.gates[m];const ch=g&&g.rungs.flatMap(r=>r.checks).find(x=>x.slice===sl&&'delta'in x);
+  if(ch){n=ch.n;c=Math.round(ch.cand*n);bc=Math.round(ch.base*n);ci=[ch.lo*100,ch.hi*100];wl=[ch.wins,ch.losses];bl='champion, '+ch.base_runs+' runs'}}
+ if(e.goal){const v=S.goals['gsm8k-96'].vs_baseline;n=v.n;c=Math.round(v.cand*n);bc=Math.round(v.base*n);ci=[v.lo*100,v.hi*100];wl=[v.wins,v.losses]}
+ if(c==null&&L[m]){n=L[m].n;c=Math.round(L[m].score*n)}
+ if(bc==null&&b&&L[b]){bc=Math.round(L[b].score*(n||L[b].n))}
+ return {m:e.lbl||m,b:bl||b,s:sl,n,c,bc,ci,wl,raw:e.raw,task:L[m]&&L[m].task}
+}
+function ciSvg(r){
+ if(r.bc==null||r.raw)return '';
+ const d=(r.c-r.bc)/r.n*100,W=140,R=8,x=v=>W/2+Math.max(-R,Math.min(R,v))/R*(W/2-4);
+ const col=r.ci?(r.ci[0]>0?'var(--positive)':r.ci[1]<0?'var(--negative)':'var(--muted)'):(d>0?'var(--positive)':d<0?'var(--negative)':'var(--muted)');
+ return `<svg width="100%" height="16" viewBox="0 0 ${W} 16" preserveAspectRatio="none"><line x1="${W/2}" y1="1" x2="${W/2}" y2="15" stroke="var(--control)"/>`+
+  (r.ci?`<line x1="${x(r.ci[0])}" y1="8" x2="${x(r.ci[1])}" y2="8" stroke="${col}" stroke-width="3" stroke-linecap="round" opacity=".45"/>`:'')+
+  `<circle cx="${x(d)}" cy="8" r="3.5" fill="${col}"/></svg>`
+}
+function evTable(n){
+ if(!n.ev.length)return '';
+ const rows=n.ev.map(evRow).map(r=>{
+  const short=String(r.s).split('/').pop();
+  if(r.raw)return `<tr><td class="m">${esc(r.m)}<div class="sl">${esc(short)}</div></td><td class="num" colspan="3"><b>${fmt(r.c)}</b> <span class="neu">of ${fmt(r.n)}</span></td></tr>`;
+  const d=r.bc!=null?(r.c-r.bc)/r.n*100:null,cls=d==null?'neu':(r.ci?(r.ci[0]>0?'pos':r.ci[1]<0?'neg':'neu'):(d>0?'pos':d<0?'neg':'neu'));
+  return `<tr><td class="m"><span class="mono">${esc(r.m)}</span><div class="sl">${esc(short)} · n ${fmt(r.n)}${r.b?' · vs '+esc(r.b):''}</div></td>`+
+   `<td class="num"><b>${fmt(r.c)}</b>${r.bc!=null?` <span class="neu">vs ${fmt(r.bc)}</span>`:''}</td>`+
+   `<td class="num ${cls}">${d==null?'':(d>0?'+':'')+d.toFixed(1)+' pts'}${r.ci?`<div class="sl">${r.ci[0].toFixed(1)} to ${r.ci[1]>0?'+':''}${r.ci[1].toFixed(1)}</div>`:''}${r.wl?`<div class="sl">${r.wl[0]} fixed / ${r.wl[1]} broke</div>`:''}</td>`+
+   `<td class="ci">${ciSvg(r)}</td></tr>`}).join('');
+ return `<div class="sec"><h3>Evidence</h3><table class="ev">${rows}</table></div>`
+}
+
+function rowHtml(n){
+ const has=n.kids.length,cl=closed.has(n.id);
+ return `<li><div class="row ${n.id===focus?'on':''} ${cl?'closed':''} ${n.st==='dead'?'dead':''} ${n.fresh?'fresh':''}" data-id="${n.id}">`+
+  `<button class="car ${has?'':'none'}" data-car="${n.id}" aria-label="toggle"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 3.5L5 6.5L8 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>`+
+  `<span class="sh">${shape(n.st,n.human)}</span><span class="tx"><span class="q">${esc(n.q)}${n.human&&n.st==='open'?'<span class="you">you</span>':''}</span>`+
+  (n.claim||n.st==='agent'?`<span class="cl">${esc(n.st==='agent'?agentLine(n):n.claim)}</span>`:'')+
+  `</span>${has&&cl?`<span class="ct">${count(n)}</span>`:''}</div>`+
+  (has&&!cl?`<ul class="t">${n.kids.map(rowHtml).join('')}</ul>`:'')+`</li>`
+}
+function agentLine(n){return n.live?`${n.live.m} · ${n.live.done||0}/${n.live.n}`:'agent investigating'}
+
+function renderTree(){
+ $('#tree').innerHTML=rowHtml(SPEC);
+ Object.values(byId).forEach(n=>n.fresh=0);
+ const hs=Object.values(byId).filter(n=>n.human&&n.st==='open');
+ $('#need').innerHTML=hs.map(n=>`<button class="chip" data-go="${n.id}">${shape('open',1,10)}<span>${esc(n.q)}</span></button>`).join('');
+}
+function pathOf(n){const p=[];for(let x=n.parent;x;x=x.parent)p.unshift(x);return p}
+
+function renderPanel(){
+ const n=byId[focus],st=n.human&&n.st==='open'?'human':n.st;
+ const label={open:'Open',answered:'Answered',dead:'Dead end',agent:'Agent investigating',human:'Needs you'}[st];
+ let h=`<div class="path">${pathOf(n).map(p=>`<a data-go="${p.id}">${esc(p.q.length>34?p.q.slice(0,32)+'…':p.q)}</a><span>/</span>`).join('')}</div>`+
+  `<div class="fq"><span class="sh">${shape(n.st,n.human,18)}</span><h1>${esc(n.q)}</h1></div>`;
+ if(n.claim||n.st==='agent')h+=`<div class="claim ${st}"><span class="sl" style="font-size:12px;color:var(--faint);display:block">${label}</span>${esc(n.st==='agent'&&!n.claim?'…':n.claim)}${n.st==='agent'&&n.live?` <span class="mono neu">${n.live.done||0}/${n.live.n}</span>`:''}</div>`;
+ if(n.quote)h+=`<div class="sec"><h3>Asked from</h3><div class="note"><p><mark>${esc(n.quote)}</mark></p></div></div>`;
+ if(n.id==='root')h+=goalLine();
+ h+=evTable(n);
+ if(n.human&&n.st==='open')h+=`<div class="acts">${n.choices.map((c,i)=>`<button class="btn ${i?'':'warn'}" data-pick="${i}">${esc(c)}</button>`).join('')}</div>`;
+ if(n.kids.length)h+=`<div class="sec"><h3>Sub-questions</h3><div class="kids">${n.kids.map(k=>`<button class="kid" data-go="${k.id}"><span class="sh" style="padding-top:3px">${shape(k.st,k.human)}</span><span><span>${esc(k.q)}</span>${k.claim&&k.st!=='open'?`<div class="cl">${esc(k.claim)}</div>`:''}</span></button>`).join('')}</div></div>`;
+ h+=`<div class="acts"><button class="btn primary" id="branch">Branch</button></div><div class="branchf" id="bf"><input class="in" id="bin" placeholder="New question"><button class="btn primary" id="bgo">Ask</button></div>`;
+ h+=readPane(n);
+ $('#panel').innerHTML=h;
+}
+function goalLine(){
+ const g=S.goals['gsm8k-96'],need=Math.ceil(g.target*g.n),have=Math.round(g.value*g.n);
+ return `<div class="sec"><h3>Distance</h3><div style="font-size:15px"><b>${need-have}</b> more problems of ${fmt(g.n)}</div></div>`
+}
+function readPane(n){
+ /* notes closest to the focus first: its own, then its subtree's, then the rest */
+ const sub=new Set();(function w(x){sub.add(x.id);x.kids.forEach(w)})(n);
+ const ns=[...NOTES].sort((a,b)=>(sub.has(b.node)-sub.has(a.node)));
+ return `<div class="read"><div class="rh">Reading<span>select text to ask</span></div><div class="body" id="rbody">`+
+  ns.map(x=>`<div class="note" data-node="${x.node}"><div class="meta"><span class="mono">${esc(x.id)}</span><a data-go="${x.node}">${esc(byId[x.node].q.slice(0,40))}${byId[x.node].q.length>40?'…':''}</a></div><p>${esc(x.t)}</p></div>`).join('')+`</div></div>`
+}
+
+function render(){renderTree();renderPanel()}
+function showPanel(){const t=$('#panel').getBoundingClientRect().top;if(t<0||innerWidth<=820)$('#panel').scrollIntoView({behavior:'smooth',block:'start'})}
+function go(id){focus=id;for(let x=byId[id].parent;x;x=x.parent)closed.delete(x.id);render();showPanel()}
+
+function addChild(pid,q,quote){
+ const p=byId[pid],id='u'+(++seq);
+ const n={id,q,st:'agent',ev:[],kids:[],parent:p,fresh:1,quote};
+ p.kids.push(n);byId[id]=n;closed.delete(pid);
+ focus=id;render();showPanel();
+ setTimeout(()=>{n.st='answered';n.claim='Placeholder answer. The agent\'s claim and its runs land here.';n.fresh=1;render()},6000);
+}
+
+document.addEventListener('click',e=>{
+ const car=e.target.closest('[data-car]');
+ if(car){const id=car.dataset.car;closed.has(id)?closed.delete(id):closed.add(id);renderTree();return}
+ const g=e.target.closest('[data-go]');if(g){go(g.dataset.go);return}
+ const r=e.target.closest('.row');if(r){go(r.dataset.id);return}
+ if(e.target.id==='branch'){$('#bf').classList.add('on');$('#bin').focus();return}
+ if(e.target.id==='bgo'){const v=$('#bin').value.trim();if(v)addChild(focus,v);return}
+ const pk=e.target.closest('[data-pick]');
+ if(pk){const n=byId[focus];n.st='answered';n.claim='You: '+n.choices[+pk.dataset.pick]+'.';n.fresh=1;render();return}
+ if(e.target.id==='askgo'){submitAsk();return}
+ if(!e.target.closest('#ask'))$('#ask').classList.remove('on');
+});
+document.addEventListener('keydown',e=>{
+ if(e.key==='Enter'&&e.target.id==='bin')$('#bgo').click();
+ if(e.key==='Enter'&&e.target.id==='askin')submitAsk();
+ if(e.key==='Escape')$('#ask').classList.remove('on');
+});
+
+/* select text in the reading pane -> Ask */
+let pending=null;
+document.addEventListener('mouseup',()=>setTimeout(checkSel,0));
+document.addEventListener('touchend',()=>setTimeout(checkSel,250));
+function checkSel(){
+ const s=getSelection();if(!s||s.isCollapsed)return;
+ const txt=s.toString().trim(),a=s.anchorNode&&s.anchorNode.parentElement&&s.anchorNode.parentElement.closest('.note');
+ if(!a||txt.length<3)return;
+ const rc=s.getRangeAt(0).getBoundingClientRect(),box=$('#ask');
+ pending={node:a.dataset.node,quote:txt};
+ $('#askin').value=`Why "${txt.length>60?txt.slice(0,58)+'…':txt}"?`;
+ box.classList.add('on');
+ const w=box.offsetWidth;
+ box.style.left=Math.max(16,Math.min(innerWidth-w-16,rc.left+scrollX))+'px';
+ box.style.top=(rc.bottom+scrollY+6)+'px';
+ $('#askin').focus();$('#askin').select();
+}
+function submitAsk(){
+ if(!pending)return;const v=$('#askin').value.trim();if(!v)return;
+ $('#ask').classList.remove('on');getSelection().removeAllRanges();
+ addChild(pending.node,v,pending.quote);pending=null;
+}
+
+function header(){
+ const g=S.goals['gsm8k-96'],need=Math.ceil(g.target*g.n),have=Math.round(g.value*g.n);
+ /* data-proto: trajectory = full-slice correct counts per model in promotion order, from leaderboard */
+ const pts=['qwen3-4b-rl-archived','qwen3-4b-rl-fresh-v1',S.champion].map(m=>Math.round(lb[FULL][m].score*g.n));
+ const W=90,H=22,lo=1100,x=i=>i/(pts.length-1)*(W-6)+3,y=v=>H-3-(v-lo)/(g.n-lo)*(H-6);
+ $('#dist').innerHTML=`<svg width="${W}" height="${H}"><line x1="0" x2="${W}" y1="${y(need)}" y2="${y(need)}" stroke="var(--amber)" stroke-dasharray="2 2"/>`+
+  `<polyline points="${pts.map((v,i)=>x(i)+','+y(v)).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="1.6"/>`+
+  `<circle cx="${x(pts.length-1)}" cy="${y(pts.at(-1))}" r="2.5" fill="var(--accent)"/></svg>`+
+  `<span><span class="n">${need-have}</span> more of ${fmt(g.n)}</span>`;
+ $('#legend').innerHTML=[['open','Open'],['answered','Answered'],['dead','Dead end'],['agent','Agent'],['human','You']]
+  .map(([s,l])=>`<span>${shape(s==='human'?'open':s,s==='human',12)}${l}</span>`).join('');
+}
+
+/* simulated live: the running candidate ticks through its 185 target questions (shape of a real eval task's progress) */
+setInterval(()=>{
+ const n=byId.parse;if(!n||n.st!=='agent')return;
+ n.live.done=Math.min(n.live.n,(n.live.done||0)+1+Math.floor(Math.random()*3));
+ document.querySelectorAll('.row[data-id="parse"] .cl').forEach(el=>el.textContent=agentLine(n));
+ if(focus==='parse'){const m=document.querySelector('.claim .mono');if(m)m.textContent=`${n.live.done}/${n.live.n}`}
+ if(n.live.done>=n.live.n)n.live.done=0;
+},900);
+
+fetch('../data/gsm8k-ft-state.json').then(r=>r.json()).then(d=>{
+ S=d;lb=d.leaderboard;index(SPEC,null);header();render();
+}).catch(err=>{$('#panel').textContent='Could not load ../data/gsm8k-ft-state.json: '+err});
+</script>
+</body>
+</html>
