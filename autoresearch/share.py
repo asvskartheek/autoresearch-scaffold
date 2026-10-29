@@ -332,7 +332,7 @@ def export_dashboard(p, key: str | None = None) -> str:
                 papers={n: export_paper(p, n) for n in papers.names(p)}, ref=_refs(p))
     head = (f"<script>window.ARX_SNAP={_js(snap)};</script>"
             f"<script>{_inline(SHIM)}</script><style>{SNAP_CSS}</style>")
-    return page.replace("<head>", "<head>\n" + head, 1)
+    return page.replace("<head>", "<head>\n<meta charset=\"utf-8\">" + head, 1)  # the charset within the first 1 KB
 
 
 def _base_css() -> str:
