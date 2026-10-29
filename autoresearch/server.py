@@ -431,11 +431,13 @@ HUMAN_KINDS = ("comment", "reply", "resolve", "reopen", "edit", "delete", "seen"
 
 def human_event(p: Project, name: str, kind: str, d: dict) -> dict | None:
     """One event from the reader. People never post as the agent; ids they point at must exist in that paper."""
-    author = str(d.get("author") or "").strip()[:40] or "Reviewer"
+    by, author = people.who(d)
+    if author is None:
+        return None  # a share-link guest claiming a person of this machine
+    author = author[:40] or "Reviewer"
     if author.lower() in ("agent", "claude", "arx"):  # names the agent signs with; a person never posts as it
         return None
     body = str(d.get("body") or "").strip()[:4000]
-    by = str(d.get("by") or "") if people.ID.match(str(d.get("by") or "")) else None
     who = dict(author=author, by=by)
     log = {e["id"]: e for e in papers.thread(p, name)}
     ids = set(log)
@@ -640,7 +642,11 @@ def serve(port: int = 8890, root=None):
                     d = json.loads(self.rfile.read(n) or b"{}")
                     if isinstance(d, dict):  # a feature may treat someone on another machine differently (people.py)
                         d["_remote"] = self._remote
-                    return self._send(*_feature(features.POST, p, path, d))
+                    features.REQUEST.remote = self._remote
+                    try:
+                        return self._send(*_feature(features.POST, p, path, d))
+                    finally:
+                        features.REQUEST.remote = False
                 if parts[:2] == ["api", "paper"] and len(parts) == 4 and parts[3] in HUMAN_KINDS:
                     n = int(self.headers.get("Content-Length") or 0)
                     if not 0 <= n <= 64_000:
@@ -648,7 +654,12 @@ def serve(port: int = 8890, root=None):
                     d = json.loads(self.rfile.read(n) or b"{}")
                     if not isinstance(d, dict):
                         return self._send(400, b'{"error":"bad request"}', "application/json")
-                    ev = human_event(p, parts[2], parts[3], d)
+                    d["_remote"] = self._remote
+                    features.REQUEST.remote = self._remote
+                    try:
+                        ev = human_event(p, parts[2], parts[3], d)
+                    finally:
+                        features.REQUEST.remote = False
                     if ev is None:
                         return self._send(400, b'{"error":"bad request"}', "application/json")
                     return self._send(200, json.dumps(ev).encode(), "application/json")

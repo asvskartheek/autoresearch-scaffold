@@ -15,6 +15,7 @@ import importlib
 import json
 import os
 import shlex
+import threading
 import time
 import uuid
 
@@ -23,6 +24,7 @@ POST: list = []
 STATE: list = []
 CLI: list = []
 PROMPTS: dict = {}
+REQUEST = threading.local()  # set by the server around a feature POST: .remote is True for a share-link guest
 
 MODULES = ("people", "share", "questions", "comments", "learn", "teach", "reference", "intake", "vitals", "answer")
 
@@ -58,6 +60,8 @@ def _inbox(p):
 def enqueue(p, kind: str, payload: dict, ref: str | None = None) -> dict:
     """Ask for agent work. `ref` points at what it is about (a comment id, a question id); returns the item."""
     item = dict(id="ib-" + uuid.uuid4().hex[:10], kind=kind, ref=ref, payload=payload, status="queued", t=time.time())
+    if getattr(REQUEST, "remote", False):
+        item["guest"] = True  # asked by someone on a share link: the agent is told so (answer.py)
     with open(_inbox(p), "a") as f:
         f.write(json.dumps(item) + "\n")
     return item

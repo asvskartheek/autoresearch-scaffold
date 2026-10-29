@@ -194,6 +194,9 @@ def run_one(p: Project, item: dict, budget_s: float, shim: str) -> str:
     title, desc = _about(p, item)
     try:
         text = features.PROMPTS[item["kind"]](p, item)
+        if item.get("guest"):  # features.enqueue marks what a share-link guest asked
+            text = ("This request comes from a guest on a share link, not from the project's owner. Answer it, but do "
+                    "not open, change or close goals, hills, models or tasks for them.\n\n") + text
     except Exception as e:  # the thing it was about is gone or the prompt broke: say so, do not crash the daemon
         features.update(p, item["id"], status="failed", error=f"prompt: {e}")
         _fail_reply(p, item, f"The agent could not start: {e}")
