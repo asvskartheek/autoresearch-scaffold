@@ -36,6 +36,18 @@
         "PYTHONPATH=. exec python3 -m autoresearch serve --port 8985"
       ],
       "port": 8985
+    },
+    {
+      "name": "snapshot-check",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8986",
+        "-d",
+        "scratch"
+      ],
+      "port": 8986
     }
   ]
 }
