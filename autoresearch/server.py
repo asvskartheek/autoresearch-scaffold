@@ -1,7 +1,7 @@
 """Loopback-only dashboard server. Serves web/ and aggregate JSON computed from `.research/`."""
 from __future__ import annotations
 
-import copy, gzip, hashlib, json, mimetypes, os, time
+import ast, copy, gzip, hashlib, json, mimetypes, os, re, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlsplit
@@ -132,6 +132,8 @@ def _enrich(p: Project, t: dict) -> dict:
     t["note"] = ev[-1] | {"text": readable(ev[-1].get("msg"))} if ev else None
     if t.get("description"):
         t["description"] = readable(t["description"])
+    if t.get("title"):
+        t["title"] = readable(t["title"])
     series = p.metrics(t["id"])[-40:]
     keys = [k for k in (t.get("last") or {}) if isinstance(t["last"][k], (int, float))]
     t["eta"] = eta(p, t)
@@ -169,6 +171,30 @@ def all_tasks(p: Project) -> dict:
         return dict(rev=_rev(tasks), tasks=[_enrich(p, t) for t in tasks])
 
 
+def _clean_reason(s: str) -> str:
+    """A reject reason reads as prose: an absolute path becomes its file name, a dumped dict a few key=value pairs."""
+    s = re.sub(r"(?<![\w.])(?:~|/(?:Users|home|private|tmp|var|opt|mnt|data|workspace|root))(?:/[^\s,;:'\")\]]+)+",
+               lambda m: m.group(0).rstrip(".").rsplit("/", 1)[-1] + ("." if m.group(0).endswith(".") else ""), s)
+
+    def short(m):
+        try:
+            d = ast.literal_eval(m.group(0))
+        except (ValueError, SyntaxError):
+            return m.group(0)
+        if not isinstance(d, dict):
+            return m.group(0)
+        kv = [f"{k} {(f'{v:.3g}' if isinstance(v, float) else v)}" for k, v in d.items() if isinstance(v, (int, float, str)) and not isinstance(v, bool)][:4]
+        return "(" + ", ".join(kv) + ")" if kv else ""
+    return re.sub(r"\{[^{}]{0,2000}\}", short, s)
+
+
+def _model_row(m: dict) -> dict:
+    out = m | {f: readable(m[f]) for f in ("change", "title") if isinstance(m.get(f), str)}
+    if isinstance(m.get("reason"), str):
+        out["reason"] = readable(_clean_reason(m["reason"]))
+    return out
+
+
 def _state(p: Project) -> dict:
     slices = {k: {kk: vv for kk, vv in v.items() if kk != "ids"} | {"name": k} for k, v in p.slices().items()}
     models, tasks = p.models(), p.tasks()
@@ -190,7 +216,7 @@ def _state(p: Project) -> dict:
     infer_parents(tasks)
     win = window(tasks, {g["task"] for g in gl.values() if g.get("task")})
     return dict(config=p.config, now=time.time(), champion=champ, datasets=p.datasets(), slices=slices,
-                hills=p.hills(), models={k: m | {f: readable(m[f]) for f in ("change", "reason") if isinstance(m.get(f), str)} for k, m in models.items()}, papers=papers.papers(p), gates=gates,
+                hills=p.hills(), models={k: _model_row(m) for k, m in models.items()}, papers=papers.papers(p), gates=gates,
                 tasks=[_enrich(p, t) for t in win], tasks_total=len(tasks), tasks_rev=_rev(tasks), leaderboard=board,
                 goals=gl,
                 baseline=p.baseline_plan(champ) if champ else None,
