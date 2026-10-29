@@ -41,10 +41,12 @@ def _h(*xs) -> int:
 
 
 def _f(x, d=None):
+    """A finite float, else d: "nan", "inf" and 1e309 never reach a grade or the log (the log must stay valid JSON)."""
     try:
-        return float(x)
-    except (TypeError, ValueError):
+        x = float(x)
+    except (TypeError, ValueError, OverflowError):
         return d
+    return x if math.isfinite(x) else d
 
 
 # ---------------------------------------------------------------- which methods fit a card
@@ -163,9 +165,10 @@ def safe_eval(expr: str, names: dict) -> float | None:
         if not isinstance(n, _OK) or isinstance(n, ast.Name) and n.id not in names or isinstance(n, ast.Constant) and not isinstance(n.value, (int, float)):
             return None
     try:
-        return float(eval(compile(tree, "<code>", "eval"), {"__builtins__": {}}, dict(names)))
+        x = float(eval(compile(tree, "<code>", "eval"), {"__builtins__": {}}, dict(names)))
     except (ZeroDivisionError, OverflowError, TypeError, ValueError):
         return None
+    return x if math.isfinite(x) else None
 
 
 def grade(c: dict, method: str, ans) -> dict:
@@ -197,15 +200,28 @@ def grade(c: dict, method: str, ans) -> dict:
         err = abs(math.log(max(n, 1) / max(need, 1)))
         return dict(hit=err <= math.log(1.35), err=round(err, 3), show=dict(need=round(need)))
     if method == "code":
-        got = safe_eval(ans, dict(fixed=v["wins"], broken=v["losses"], n=v["n"]))
-        want = 100 * (v["wins"] - v["losses"]) / v["n"]
-        hit = got is not None and abs(got - want) <= max(0.05, abs(want) * 0.01)
-        return dict(hit=hit, err=None if got is None else round(abs(got - want), 3), show=dict(line="100 * (fixed - broken) / n", value=round(want, 2), got=got))
+        return _grade_code(ans, v["wins"], v["losses"], v["n"])
     if method == "explain":
         text = str(ans or "")[:1000].lower()
         got = [name for name, rx in _ideas(c) if re.search(rx, text)]
         return dict(hit=len(got) >= 2, err=None, show=dict(named=got))
     return dict(hit=None, err=None, show={})
+
+
+def _code_ok(got, want) -> bool:
+    return got is not None and abs(got - want) <= max(0.05, abs(want) * 0.01)
+
+
+def _grade_code(ans, fixed: int, broken: int, n: int) -> dict:
+    """The line is right when it gives the paired delta on these numbers and on two other sets of counts, so a typed
+    constant (the value itself) is not a line that computes it."""
+    sets = [(fixed, broken, n), (fixed + 7, broken + 3, n + 50), (broken + 2, fixed + 5, 2 * n + 9)]
+    gots = [safe_eval(ans, dict(fixed=f, broken=b, n=k)) for f, b, k in sets]
+    want = 100 * (fixed - broken) / n
+    hit = all(_code_ok(g, 100 * (f - b) / k) for g, (f, b, k) in zip(gots, sets))
+    got = gots[0]
+    return dict(hit=hit, err=None if got is None else round(abs(got - want), 3),
+                show=dict(line="100 * (fixed - broken) / n", value=round(want, 2), got=None if got is None else round(got, 4), ok=hit))
 
 
 # ---------------------------------------------------------------- attempts and profiles

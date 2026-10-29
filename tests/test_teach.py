@@ -39,6 +39,16 @@ class Teach(unittest.TestCase):
         self.assertIsNone(teach.safe_eval("n ** 99999", dict(n=2)))
         self.assertEqual(teach.safe_eval("(fixed-broken)/n*100", dict(fixed=v["wins"], broken=v["losses"], n=v["n"])), 100 * (v["wins"] - v["losses"]) / v["n"])
 
+    def test_code_refuses_non_finite_and_bare_constants(self):
+        v = self.gate["viz"]
+        for bad in ("1e309", "1e308*10", "0*1e309", "fixed/0"):
+            self.assertIsNone(teach.safe_eval(bad, dict(fixed=1, broken=0, n=1)))
+            g = teach.grade(self.gate, "code", bad)
+            self.assertFalse(g["hit"]); json.dumps(g, allow_nan=False)
+        const = repr(100 * (v["wins"] - v["losses"]) / v["n"])
+        self.assertFalse(teach.grade(self.gate, "code", const)["hit"])  # the value typed in is not a line
+        self.assertEqual(teach._f("nan"), None); self.assertEqual(teach._f("inf", 0), 0)
+
     def test_spot_prototype_explain(self):
         s, wrong = teach._spot_ci(self.gate)
         self.assertTrue(teach.grade(self.gate, "spot", wrong)["hit"])

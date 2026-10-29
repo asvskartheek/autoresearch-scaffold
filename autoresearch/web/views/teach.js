@@ -92,7 +92,7 @@ function codeBody(c,s){
  return `<pre class="t-code"><span class="k">const</span> fixed = <b>${t.vars.fixed}</b>, broken = <b>${t.vars.broken}</b>, n = <b>${t.vars.n}</b>;
 <span class="k">const</span> delta_pts = <input id="tcode" spellcheck="false" autocomplete="off" value="${esc(s.code||'')}" ${c.pred?'disabled':''} placeholder="…">;
 <span class="c">// ${v==null?'= ?':'= '+(+v.toFixed(2))+' pts'}</span>${sh?`
-<span class="c">// ${sh.got!=null&&Math.abs(sh.got-sh.value)<=Math.max(.05,Math.abs(sh.value)*.01)?'✓':'✗'} ${esc(sh.line)} = ${sh.value} pts</span>`:''}</pre>`;
+<span class="c">// ${(sh.ok??(sh.got!=null&&Math.abs(sh.got-sh.value)<=Math.max(.05,Math.abs(sh.value)*.01)))?'✓':'✗'} ${esc(sh.line)} = ${sh.value} pts</span>`:''}</pre>`;
 }
 
 // ---------- explain: one sentence; the ideas it names light up after
