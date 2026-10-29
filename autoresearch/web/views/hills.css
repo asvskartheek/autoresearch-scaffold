@@ -79,6 +79,8 @@
 .hdev td .two a:hover b{color:var(--accent)}
 .hdev tr.rej td.hm b{font-weight:400;color:var(--muted)}
 .htag{font-size:12px;color:var(--muted);white-space:nowrap}
+/* why a rejected candidate was rejected, from the ledger: one line, the rest on hover */
+.hdev .hrej{color:var(--negative)}
 .hrun{color:inherit}
 .hrun:hover b,.hrun:focus-visible b{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
 .hctl{margin:12px 0 0;padding-top:12px;border-top:1px solid var(--rule);color:var(--muted);font-size:13px;line-height:1.5}
@@ -129,6 +131,7 @@
  .hlede{font-size:16px;margin-top:-4px}
  .hans>div,.hwhy{grid-template-columns:1fr;gap:2px}
  .hdev .hfl,.hdev .hdc,.hdev td .two .sub{display:none}
+ .hdev td .two .sub.hrej{display:block}
  .hdev td.hm{width:auto}
  .hdev td .two{max-width:46vw}
  .hdev td .two b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

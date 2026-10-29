@@ -236,7 +236,7 @@ function hAttempts(x,runs,U){
   const me=o.m===ch,fl=!me&&cr&&T.runs[o.m]?hFlips(T.runs[o.m],cr,bin):null,mod=L.models[o.m]||{};
   const tag=me?pill('champion','champion'):o.m===x.climbed_by?pill('climbed it','climbed'):mod.status==='rejected'?`<span class="htag" title="${esc(mod.reason||'')}">rejected</span>`:'';
   const run=(r,f)=>r?.task?`<a class="hrun" href="#task/${enc(r.task)}" onclick="event.stopPropagation()" title="Open this run">${f}</a>`:f;
-  return `<tr class="click${mod.status==='rejected'?' rej':''}" onclick="location.hash='#model/${enc(o.m)}'"><td class="hm"><div class="two"><a href="#model/${enc(o.m)}" title="${esc(o.m)}"><b>${mn(o.m)}</b></a>${mod.change?`<span class="sub ell" title="${esc(mod.change)}">${esc(mod.change)}</span>`:''}</div></td>
+  return `<tr class="click${mod.status==='rejected'?' rej':''}" onclick="location.hash='#model/${enc(o.m)}'"><td class="hm"><div class="two"><a href="#model/${enc(o.m)}" title="${esc(o.m)}"><b>${mn(o.m)}</b></a>${mod.change?`<span class="sub ell" title="${esc(mod.change)}">${esc(mod.change)}</span>`:''}${mod.status==='rejected'&&mod.reason?`<span class="sub ell hrej" title="${esc(mod.reason)}">${esc(firstLine(mod.reason))}</span>`:''}</div></td>
    <td class="htg">${tag}</td>
    <td class="num fig">${run(o.r,hFig(o.r,U,sl))}</td><td class="hbar">${isRate(o.r,sl)?meter(o.r.score,{mark:!me&&now&&isRate(now.r,sl)?now.r.score:null,cls:me?'muted':''}):''}</td>
    ${now?`<td class="num fig hdl">${me?DASH:(p=>p?pairCell(p,x.target):hDelta(o.r,now.r,U,sl))(hPaired(o.m,x.target,T?.runs?.[o.m],cr))}</td>`:''}
