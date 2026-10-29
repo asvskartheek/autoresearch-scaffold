@@ -116,7 +116,12 @@ def sync_papers(p: Project) -> None:
             ref = f"paper:{name}:{th['last']}"
             if ref in known:
                 continue
-            features.enqueue(p, "paper", dict(paper=name, thread=th["id"], message=th["last"]), ref=ref)
+            item = features.enqueue(p, "paper", dict(paper=name, thread=th["id"], message=th["last"]), ref=ref)
+            # Paper requests are queued later by this daemon, outside the originating HTTP request.
+            # Preserve the guest provenance recorded on the actual message, not the daemon's local context.
+            source = next((e for e in papers.thread(p, name) if e["id"] == th["last"]), {})
+            if source.get("guest"):
+                features.update(p, item["id"], guest=True)
             if not th["thinking"]:
                 papers.post(p, name, "seen", parent=th["last"])
 

@@ -84,6 +84,49 @@ class Remote(unittest.TestCase):
         code, b, _ = self.req(f"/p/{self.ka}/api/questions/add", dict(title="Is it fake", by="Kartheek"), cookie=self.tok, origin=o)
         self.assertTrue(json.loads(b)["by"].startswith("guest: "))
 
+    def test_guest_cannot_approve_project_decisions(self):
+        from autoresearch import features, questions
+        q = questions.add(self.a, "Approve a new run?", needs_human=True)
+        item = features.enqueue(self.a, "goal", dict(ask="An owner request"))
+        origin = f"http://192.168.7.9:{self.port}"
+        for action in ("answer", "dead", "reopen", "flag"):
+            code, _, _ = self.req(f"/p/{self.ka}/api/questions/{action}",
+                                  dict(id=q["id"], claim="Approved"), cookie=self.tok, origin=origin)
+            self.assertEqual(code, 403, action)
+        for action in ("open", "answer", "retry", "dismiss"):
+            code, _, _ = self.req(f"/p/{self.ka}/api/intake/{action}",
+                                  dict(id=item["id"], goal={}), cookie=self.tok, origin=origin)
+            self.assertEqual(code, 403, action)
+        self.assertEqual(questions.stored(self.a)[q["id"]]["status"], "open")
+        self.assertEqual(self.req(f"/p/{self.ka}/api/questions/ask", dict(title="What does this mean?"),
+                                  cookie=self.tok, origin=origin)[0], 200)
+        self.assertTrue(features.inbox(self.a)[-1]["guest"])
+
+    def test_paper_guest_cannot_impersonate_display_name_or_resolve_owner(self):
+        from autoresearch import answer, features, people
+        people.remember("p-1111cafe", "Paper Owner", self.ka)
+        people.remember("p-2222cafe", "Paper Owner", self.ka, remote=True)
+        src = self.a.root / "ownership.html"
+        src.write_text('<p data-block="a">Evidence</p>')
+        papers.add(self.a, "ownership", src)
+        own = papers.post(self.a, "ownership", "comment", author="Paper Owner", by="p-1111cafe",
+                          body="Keep this", anchor=dict(block="a", quote="Evidence"))
+        origin = f"http://192.168.7.9:{self.port}"
+        for kind in ("edit", "delete", "resolve", "reopen"):
+            code, _, _ = self.req(f"/p/{self.ka}/api/paper/ownership/{kind}",
+                                  dict(target=own["id"], parent=own["id"], by="p-2222cafe", body="Changed"),
+                                  cookie=self.tok, origin=origin)
+            self.assertGreaterEqual(code, 400, kind)
+        code, body, _ = self.req(f"/p/{self.ka}/api/paper/ownership/reply",
+                                dict(parent=own["id"], by="p-2222cafe", body="What does this mean?"),
+                                cookie=self.tok, origin=origin)
+        self.assertEqual(code, 200)
+        answer.sync_papers(self.a)
+        pending = [i for i in features.inbox(self.a) if i["kind"] == "paper" and i["payload"]["paper"] == "ownership"]
+        self.assertEqual(len(pending), 1)
+        self.assertTrue(pending[0].get("guest"))
+        self.assertEqual(papers.threads(papers.thread(self.a, "ownership"))[0]["messages"][0]["body"], "Keep this")
+
     def test_guest_cannot_rename(self):
         from autoresearch import people
         people.remember("p-0000aaaa", "Owner", self.ka)

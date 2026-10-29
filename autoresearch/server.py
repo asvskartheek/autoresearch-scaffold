@@ -440,7 +440,7 @@ def human_event(p: Project, name: str, kind: str, d: dict) -> dict | None:
     if author.lower() in ("agent", "claude", "arx"):  # names the agent signs with; a person never posts as it
         return None
     body = str(d.get("body") or "").strip()[:4000]
-    who = dict(author=author, by=by)
+    who = dict(author=author, by=by, guest=bool(d.get("_remote")))
     log = {e["id"]: e for e in papers.thread(p, name)}
     ids = set(log)
     if kind == "comment":
@@ -461,9 +461,12 @@ def human_event(p: Project, name: str, kind: str, d: dict) -> dict | None:
     if kind == "reply":
         return papers.post(p, name, "reply", parent=ref, body=body, mentions=people.mentioned(body, people.members(p)) or None, **who)
     if kind in ("resolve", "reopen"):
+        if log[ref]["kind"] != "comment" or d.get("_remote") and log[ref].get("by") != by:
+            return None
         return papers.post(p, name, kind, parent=ref, **who)
-    t = log[ref]  # edit / delete: only your own message, never the agent's
-    if t["kind"] not in ("comment", "reply") or t.get("agent") or (t.get("author") or "") != author:
+    t = log[ref]  # ids establish ownership; a matching display name is not an identity
+    own = t.get("by") == by if t.get("by") else not d.get("_remote") and not by and t.get("author") == author
+    if t["kind"] not in ("comment", "reply") or t.get("agent") or not own:
         return None
     return papers.post(p, name, kind, target=ref, body=body or None, **who)
 
@@ -637,6 +640,12 @@ def serve(port: int = 8890, root=None):
             try:
                 p, path = pick(self.path.split("?")[0])
                 parts = [unquote(x) for x in path.strip("/").split("/")]
+                # Share links permit discussion, not approval of project decisions or changes to another
+                # person's question. Enforce this before dispatch, including goal-opening intake routes.
+                action = path.rstrip("/").rsplit("/", 1)[-1]
+                if self._remote and ((path.startswith("/api/intake/") and action != "new")
+                                     or (path.startswith("/api/questions/") and action not in ("ask", "add"))):
+                    return self._send(403, b'{"error":"project decisions require the owner"}', "application/json")
                 if any(path.startswith(pre) for pre, _ in features.POST):
                     n = int(self.headers.get("Content-Length") or 0)
                     if not 0 <= n <= 1_000_000:

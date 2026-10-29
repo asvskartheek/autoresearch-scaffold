@@ -1,6 +1,7 @@
 """People on one dashboard: roster, presence, seen-by, mentions (people.py, comments.py). Run: python3 -m pytest -q tests"""
 import os, tempfile, unittest
 from pathlib import Path
+from unittest.mock import patch
 
 os.environ["ARX_HOME"] = tempfile.mkdtemp()  # never touch the real ~/.arx
 from autoresearch import comments, features, people
@@ -20,6 +21,11 @@ def call(table, path, p, d):
 
 class People(unittest.TestCase):
     def setUp(self):
+        home = tempfile.TemporaryDirectory()
+        self.addCleanup(home.cleanup)
+        env = patch.dict(os.environ, ARX_HOME=home.name)
+        env.start()
+        self.addCleanup(env.stop)
         self.p = project()
         for pid, n in (("p-a0000001", "Ann Lee"), ("p-b0000002", "Bo"), ("p-c0000003", "Ann Ray")):
             self.assertEqual(call(features.POST, "/api/people", self.p, dict(id=pid, name=n, route="#overview"))[0], 200)
