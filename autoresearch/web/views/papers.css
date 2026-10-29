@@ -12,6 +12,7 @@
 .pp-ln .st{font-size:13px}
 .pp-ln a.ln .st{color:var(--accent)}
 .pp-k{color:var(--faint)}
+.pp-h{gap:4px}.pp-h .pill{font-size:12px;cursor:help}
 .ptbl .pp-c .two{align-items:flex-end}
 .ptbl .pp-c .fig{font-size:13px}
 .ptbl .pp-c .sub{font-size:12px}

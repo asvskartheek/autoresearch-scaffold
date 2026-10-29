@@ -414,9 +414,12 @@ def cmd_paper(a):
             sys.exit(str(e))
         print(f"{f}\n{base}/papers/{a.name}")
     elif a.verb == "ls":
-        for name, m in papers.papers(p).items():
+        for name, m in papers.papers(p, with_health=True).items():
+            hl = m.get("health") or {}
             print(f"{name}  {m.get('title') or ''}  threads={m['comments']} open={m['open']} waiting={m['waiting']}"
-                  + (f" edits-owed={m['owed']}" if m.get("owed") else "") + f"  {base}/papers/{name}")
+                  + (f" edits-owed={m['owed']}" if m.get("owed") else "")
+                  + (f" check-errors={hl['errors']}" if hl.get("errors") else "")
+                  + "".join(f" [stale: {x}]" for x in hl.get("stale") or []) + f"  {base}/papers/{name}")
     elif a.verb == "poll":  # blocks until a person is waiting on the agent; one JSON line per thread
         for th in papers.owed(p, a.name):  # promised edits stay in view until the paper is republished
             print(f"edit owed: {th['paper']} thread {th['id']}: you agreed to change the paper and have not "

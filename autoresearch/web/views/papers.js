@@ -17,11 +17,18 @@ function pLinks(p){
  if(p.hill)out.push(h?(h.title===pTitle(p)?`<a class="ln" href="#hill/${enc(p.hill)}" onclick="event.stopPropagation()">${st(h.status,'Hill '+h.status)}</a>`:`<span class="pp-k">Hill</span><a class="ln ell" href="#hill/${enc(p.hill)}" onclick="event.stopPropagation()">${esc(h.title||p.hill)}</a>`):`<span class="pp-k">Hill</span><span class="ell">${esc(p.hill)}</span>`);
  return out.length?out.map(x=>`<span class="pp-ln">${x}</span>`).join(''):`<span class="id">${esc(p.name)}</span>`;
 }
+// is the paper still true: lint errors now (goal papers are also checked against the ledger) and what moved since
+function pHealth(p){
+ const h=p.health||{},out=[];
+ if(h.stale?.length)out.push(`<span class="pill warn" title="${esc(h.stale.map(x=>x[0].toUpperCase()+x.slice(1)).join('. '))}">Out of date</span>`);
+ if(h.errors)out.push(`<span class="pill neg" title="${esc(h.first||'')}">${esc(plural(h.errors,'check error'))}</span>`);
+ return out.length?`<span class="pp-ln pp-h">${out.join('')}</span>`:'';
+}
 function pRow(p){
  const res=(p.comments||0)-(p.open||0);
  const com=p.comments?`<span class="fig"><b>${p.open}</b> open</span><span class="sub">${res} resolved</span>`:'<span class="faint">No comments</span>';
  return `<tr class="click${p.waiting?' wait':''}" onclick="${pGo(p)}">
-  <td class="pp-t"><div class="two"><a href="${esc(paperUrl(p))}" onclick="event.stopPropagation()"><b>${esc(pTitle(p))}</b></a><span class="pp-lns">${pLinks(p)}</span></div></td>
+  <td class="pp-t"><div class="two"><a href="${esc(paperUrl(p))}" onclick="event.stopPropagation()"><b>${esc(pTitle(p))}</b></a><span class="pp-lns">${pLinks(p)}${pHealth(p)}</span></div></td>
   <td class="num pp-c"><div class="two">${com}</div></td>
   <td class="num pp-w${p.waiting||p.owed?'':' none'}">${p.waiting?pill(plural(p.waiting,'waiting','waiting'),'acc'):''}${p.owed?pill(plural(p.owed,'edit owed','edits owed'),'warn'):''}${p.waiting||p.owed?'':DASH}</td>
   <td class="num pp-u"><span title="${esc(stamp(p.updated))}">${p.updated?ago(p.updated):DASH}</span></td></tr>`;
@@ -48,6 +55,7 @@ VIEWS.papers=()=>{
  const finding=waiting?`<b>${plural(waiting,'comment')} ${waiting===1?'is':'are'} waiting for the agent</b> ${wp.length===1?`on <a class="ln" href="${esc(paperUrl(wp[0]))}">${esc(pTitle(wp[0]))}</a>`:`across ${wp.length} papers`}.`+
   `${open>waiting?` ${plural(open,'thread')} open in all.`:''}`
   :ps.some(p=>p.owed)?`<b>${plural(ps.reduce((a,p)=>a+(p.owed||0),0),'promised edit')} not yet published</b> on ${esc(pTitle(ps.find(p=>p.owed)))}.`
+  :ps.some(p=>p.health?.stale?.length||p.health?.errors)?`<b>${plural(ps.filter(p=>p.health?.stale?.length||p.health?.errors).length,'paper')} out of date or failing the check.</b>`
   :open?`Nothing waiting for the agent; ${plural(open,'thread')} still open.`:`${plural(ps.length,'paper')}; every comment answered and resolved.`;
  const acts=waiting?cmd('arx paper poll'):'';
  const pub=ps.filter(p=>p.goal),int=ps.filter(p=>!p.goal);

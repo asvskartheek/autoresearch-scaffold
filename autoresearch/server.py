@@ -218,7 +218,7 @@ def _state(p: Project) -> dict:
     gates = running_next(gates, tasks, p.slices())
     win = window(tasks, {g["task"] for g in gl.values() if g.get("task")})
     return dict(config=p.config, now=time.time(), champion=champ, datasets=p.datasets(), slices=slices,
-                hills=p.hills(), models={k: _model_row(m) for k, m in models.items()}, papers=papers.papers(p), gates=gates,
+                hills=p.hills(), models={k: _model_row(m) for k, m in models.items()}, papers=papers.papers(p, with_health=True), gates=gates,
                 tasks=[_enrich(p, t) for t in win], tasks_total=len(tasks), tasks_rev=_rev(tasks), leaderboard=board,
                 goals=gl,
                 baseline=p.baseline_plan(champ) if champ else None,

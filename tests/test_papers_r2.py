@@ -71,5 +71,19 @@ class OwedEdit(unittest.TestCase):
         self.assertFalse(papers.promises("The judge is a separate model with no rubric."))
 
 
+class Health(unittest.TestCase):
+    def test_lint_errors_and_champion_drift(self):
+        p, src = project()
+        p.add_dataset("ds", list(range(4)))
+        p.open_hill("h", "Hill", "ds/full") if hasattr(p, "open_hill") else None
+        papers.add(p, "h", src, hill="h")
+        hl = papers.papers(p, with_health=True)["h"]["health"]
+        self.assertGreater(hl["errors"], 0); self.assertTrue(hl["first"])
+        self.assertEqual(hl["stale"], [])
+        time.sleep(0.02)
+        p.add_model("m", status="champion"); p._upsert("models", "m", promoted=time.time())
+        self.assertEqual(papers.health(p, "h")["stale"], ["champion changed after it was published"])
+
+
 if __name__ == "__main__":
     unittest.main()

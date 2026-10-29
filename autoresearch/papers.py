@@ -65,7 +65,52 @@ def title_of(p: Project, name: str, meta: dict | None = None) -> str:
     return meta.get("title") or h1_title(p, name) or g.get("title") or h.get("title") or name
 
 
-def papers(p: Project) -> dict:
+_HEALTH: dict = {}  # (root, name) -> (key, health); lint and goal status are recomputed only when something moved
+
+
+def _mt(f: Path) -> float:
+    try:
+        return f.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def health(p: Project, name: str, meta: dict = None) -> dict:
+    """Is the paper still true? `errors`: how many `arx paper check` errors it has now (with `check_goal` for a goal
+    paper, which compares its numbers with the ledger), `first`: the first of them; `stale`: what moved in the ledger
+    since it was published (the champion changed, its goal was achieved or abandoned)."""
+    meta = meta if meta is not None else _read(pdir(p, name) / "meta.json", {})
+    v = version(p, name)
+    key = (v, *(_mt(p.dir / f) for f in ("models.json", "goals.json", "hills.json", "slices.json", "tasks")))
+    hit = _HEALTH.get((str(p.root), name))
+    if hit and hit[0] == key:
+        return hit[1]
+    html = (pdir(p, name) / "paper.html").read_text(errors="replace")
+    found = check(html, slices=list(p.slices()))
+    goals, models, hills = p.goals(), p.models(), p.hills()
+    g = goals.get(meta.get("goal")) if meta.get("goal") else None
+    if g:
+        try:
+            found += check_goal(html, p.goal_status(meta["goal"]), hill_papers=names(p),
+                                titles={k: m["title"] for k, m in models.items() if m.get("title")})
+        except (SystemExit, KeyError, ValueError):
+            pass
+    errs = [m for lv, m in found if lv == "error"]
+    stale = []
+    if g and g.get("status") in ("achieved", "abandoned") and (g.get(g["status"]) or 0) > v:
+        stale.append(f"goal {g['status']} after it was published")
+    h = hills.get(meta.get("hill")) if meta.get("hill") else None
+    champ = next((m for m in models.values() if m.get("status") == "champion"), None)
+    live = g is not None or (h is not None and h.get("status") in ("open", "climbed"))
+    if live and champ and (champ.get("promoted") or 0) > v:
+        stale.append("champion changed after it was published")
+    out = dict(errors=len(errs), first=errs[0] if errs else None, stale=stale)
+    _HEALTH[(str(p.root), name)] = (key, out)
+    return out
+
+
+def papers(p: Project, with_health: bool = False) -> dict:
+    """Every paper with its thread counts; `with_health` adds `health()` (lint errors and ledger drift)."""
     out = {}
     for name in names(p):
         d = pdir(p, name)
@@ -75,6 +120,11 @@ def papers(p: Project) -> dict:
         out[name] = dict(meta, title=title_of(p, name, meta), name=name, version=v,
                          comments=len(ts), open=sum(1 for t in ts if not t["resolved"]),
                          waiting=sum(1 for t in ts if t["waiting"]), owed=sum(1 for t in ts if t["owed"]))
+        if with_health:
+            try:
+                out[name]["health"] = health(p, name, meta)
+            except OSError:
+                pass
     return out
 
 
