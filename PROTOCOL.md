@@ -130,7 +130,9 @@ layout. This holds for every paper, every figure and every widget.
       section (`<section data-block="system">`) near the top that names the starting champion and the champion and
       draws both systems side by side: what each added part does, how it works on one paraphrased example, and
       which errors it fixed. The first thing a reader wants is what the new system is and why it is better; a
-      paper that only reports the number fails them. A link to every
+      paper that only reports the number fails them. Each part is drawn, not labelled: where its input comes from,
+      what it outputs on the example (the readout on the sheet, the rows it finds), and its cost (latency, calls).
+      The same holds for a model's paper: a part named only in words is a part the reader cannot learn. A link to every
       internal hill paper (`<a class="internal" href="../<hill>" target="_top">`); "draft" while the goal is open,
       "abandoned" if it was. No dev-slice number is the claim.
 
