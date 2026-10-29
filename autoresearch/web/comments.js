@@ -102,8 +102,9 @@ function ARXPICK(o){
    for(let a=el;a&&a!==R()&&R().contains(a);a=a.parentElement)if(ok(a))return a;return null}return null}
  // the next one up that looks different (a wrapper the same size as its child is skipped)
  function up(el){const r=el.getBoundingClientRect();for(let a=el.parentElement;a&&a!==R()&&R().contains(a);a=a.parentElement)if(ok(a)&&!same(a.getBoundingClientRect(),r))return a;return null}
- // the meaningful elements directly under p: no other meaningful element between them and p
- function kids(p){const out=[],walk=n=>{for(const c of n.children){if(o.skip&&o.skip(c))continue;if(ok(c)&&!same(c.getBoundingClientRect(),p.getBoundingClientRect()))out.push(c);else walk(c)}};walk(p);return out}
+ // the meaningful elements directly under p: no other meaningful element between them and p (a skipped wrapper, such
+ // as the page's #main, is walked through: its cards are the page's top level)
+ function kids(p){const out=[],walk=n=>{for(const c of n.children){if(o.skip&&o.skip(c)){walk(c);continue}if(ok(c)&&!same(c.getBoundingClientRect(),p.getBoundingClientRect()))out.push(c);else walk(c)}};walk(p);return out}
  function set(el,how){if(el===cur)return;cur=el||null;via=how||via;kept=el?path(D().documentElement,el):null;draw();if(el&&how==='key'){const r=el.getBoundingClientRect(),f=O(),y=r.top+f.y;
   if(y<60||y+Math.min(r.height,200)>innerHeight-60)el.scrollIntoView({block:'center',behavior:'instant'})}}
  function draw(){if(!on||!cur){box.style.display=tag.style.display='none';return}
