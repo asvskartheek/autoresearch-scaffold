@@ -250,6 +250,7 @@ td svg.strip{width:160px;height:18px;display:block}
 .lane .cseg.off{--c:var(--faint)}
 .lane .ev.cseg:hover,.lane .ev.cseg.open{outline:2px solid var(--accent);outline-offset:1px}
 .k-full{--c:var(--chart-1)}.k-random{--c:var(--chart-2)}.k-control{--c:var(--chart-3)}.k-dev{--c:var(--chart-4)}.k-synthetic,.k-other{--c:var(--faint)}
+@media (max-width:560px){.hn{display:none}#results td.id{white-space:normal;word-break:break-all}#results th,#results td{padding:7px 5px}.spine{flex-direction:column;align-items:stretch}.spine .ar{align-self:center;transform:rotate(90deg);line-height:1}}
 .more-btn{border:1px solid var(--control);background:var(--surface);border-radius:var(--radius-control);padding:4px 10px;font-size:12.5px;margin-top:8px}
 </style></head><body data-keep>
 <div id="app" data-keep><div id="load">loading ledger…</div></div>
@@ -353,7 +354,7 @@ $("#app").innerHTML = `
   <h1>${mn(CH)}</h1>${mnt(CH) !== CH ? `<div class="kick" style="margin:-4px 0 10px">${esc(CH)}</div>` : ""}
   <div class="facts">
     ${stPill(M.status)}
-    ${M.title ? `<span class="pill">${esc(M.title)}</span>` : ""}
+    ${M.title && M.title !== mnt(CH) ? `<span class="pill">${esc(M.title)}</span>` : ""}
     ${M.promoted ? `<span class="pill pos">champion since ${dt(M.promoted)}</span>` : ""}
     ${PV ? `<span class="pill">vs ${mn(PV)}</span>` : ""}
     ${champGoal && champGoal.need != null && champGoal.have != null && !champGoal.met ? `<span class="pill warn">${N0(champGoal.need - champGoal.have)} more of ${N0(champGoal.n)} to goal</span>` : ""}
@@ -367,7 +368,8 @@ ${SECS.map(([id, t], i) => sec(i, id, t)).join("")}
 <div id="pop" role="dialog"></div><div id="tip"></div><div id="toast"></div>`;
 const body = id => $(`[data-body="${id}"]`);
 const FW = id => Math.max(300, Math.min(900, Math.round(body(id)?.clientWidth || 800)));  // charts drawn at their real width, so 12px text stays 12px
-function section(id, fn) { try { const h = fn(); if (typeof h === "string") body(id).innerHTML = h; } catch (e) { console.warn(id, e); body(id).innerHTML = `<div class="empty">This section could not be drawn from the ledger: ${esc(e.message)}</div>`; } }
+const DRAW = {};
+function section(id, fn) { DRAW[id] = fn; try { const h = fn(); if (typeof h === "string") body(id).innerHTML = h; } catch (e) { console.warn(id, e); body(id).innerHTML = `<div class="empty">This section could not be drawn from the ledger: ${esc(e.message)}</div>`; } }
 
 /* ================= 01 claim ================= */
 section("claim", () => {
@@ -487,13 +489,14 @@ section("results", () => {
   if (bins.length) {
     const ext = Math.max(2, ...bins.flatMap(r => [Math.abs(r.vs.lo * 100), Math.abs(r.vs.hi * 100), Math.abs(r.vs.delta * 100)]));
     const st = niceStep(ext / 3), lo = -Math.ceil(ext / st) * st, hi = -lo;
-    const W = 800, L = 230, Rr = 70, X = v => L + (v - lo) / (hi - lo) * (W - L - Rr), rh = 28, H = bins.length * rh;
-    let s = `<svg viewBox="0 0 ${W} ${H + 40}" role="img" aria-label="Paired delta per slice with 90% CI">`;
-    for (let v = lo; v <= hi + 1e-9; v += st) s += `<line class="${Math.abs(v) < 1e-9 ? "s-text" : "grid"}" x1="${X(v)}" x2="${X(v)}" y1="4" y2="${H + 6}"/><text class="t-f" x="${X(v)}" y="${H + 22}" text-anchor="middle">${v > 0 ? "+" : ""}${+v.toFixed(2)}</text>`;
+    const W = FW("results"), nar = W < 560, L = nar ? Math.round(Math.min(150, W * .4)) : 230, Rr = nar ? 52 : 70, X = v => L + (v - lo) / (hi - lo) * (W - L - Rr), rh = 28, H = bins.length * rh;
+    const lch = Math.max(6, Math.floor((L - 14) / 7) - (nar ? 0 : 8));
+    let s = `<svg viewBox="0 0 ${W} ${H + 40}" width="${W}" role="img" aria-label="Paired delta per slice with 90% CI">`;
+    for (let v = lo, k = 0; v <= hi + 1e-9; v += st, k++) s += `<line class="${Math.abs(v) < 1e-9 ? "s-text" : "grid"}" x1="${X(v)}" x2="${X(v)}" y1="4" y2="${H + 6}"/>${nar && k % 2 && Math.abs(v) > 1e-9 ? "" : `<text class="t-f" x="${X(v)}" y="${H + 22}" text-anchor="middle">${v > 0 ? "+" : ""}${+v.toFixed(2)}</text>`}`;
     s += `<text class="t-f" x="${X(hi)}" y="${H + 36}" text-anchor="end">pts, ${esc(mnt(CH).length > 30 ? "this" : mnt(CH))} − ${esc(PV && mnt(PV).length < 30 ? mnt(PV) : "before")}</text>`;
     bins.forEach((r, i) => {
       const y = 16 + i * rh, p = r.vs, c = p.lo > 0 ? "pos" : p.hi < 0 ? "neg" : "mut";
-      s += `<text x="${L - 10}" y="${y + 4}" text-anchor="end">${esc(short(r.slice).slice(0, 30))} <tspan class="t-f">n ${N0(r.n)}</tspan></text>`;
+      s += `<text x="${L - 10}" y="${y + 4}" text-anchor="end">${esc(short(r.slice).length > lch ? short(r.slice).slice(0, lch - 1) + "…" : short(r.slice))}${nar ? "" : ` <tspan class="t-f">n ${N0(r.n)}</tspan>`}</text>`;
       s += `<line x1="${X(p.lo * 100)}" x2="${X(p.hi * 100)}" y1="${y}" y2="${y}" stroke-width="3" class="s-${c}" stroke-linecap="round"/><circle cx="${X(p.delta * 100)}" cy="${y}" r="5" class="f-${c === "mut" ? "mut" : c}"/>`;
       s += `<text x="${W - Rr + 8}" y="${y + 4}" class="t-b">${sgn(p.delta * 100)}</text>`;
     });
@@ -505,12 +508,12 @@ section("results", () => {
     const rank = 1 + f.filter(x => (D.project.higher_is_better ? x[1] > r.score : x[1] < r.score) && x[0] !== CH).length;
     return `<svg class="strip" viewBox="0 0 160 18" preserveAspectRatio="none"><line class="grid" x1="6" x2="154" y1="9" y2="9"/>${f.map(x => `<circle cx="${X(x[1])}" cy="9" r="${x[0] === CH ? 5 : 3}" class="${x[0] === CH ? "f-pos" : x[0] === PV ? "f-acc" : "f-mut"}"><title>${esc(mnt(x[0]))} · ${sc(x[1], r)}</title></circle>`).join("")}</svg><span class="faint" style="font:11px var(--mono)">rank ${rank} of ${f.length}</span>`;
   };
-  return `${fig}<div class="tw"><table><thead><tr><th>slice</th><th class="n">n</th><th class="n">this</th><th class="n">before</th><th class="n">Δ</th><th class="n">90% CI</th><th class="n">fixed / broken</th><th class="n">runs</th><th>every try</th></tr></thead><tbody>
-  ${R.map(r => { const p = r.vs; return `<tr${r.slice === D.main ? ' class="me"' : ""}><td class="id">${esc(short(r.slice))}</td><td class="n">${N0(r.n)}</td>
-    <td class="n">${ev(isBin(r) ? cnt(r.score, r) : sc(r.score, r), evRes(r))} ${isBin(r) ? `<span class="faint">${pct(r.score)}</span>` : ""}</td>
-    <td class="n">${p ? (isBin(r) ? cnt(p.base, r) + ` <span class="faint">${pct(p.base)}</span>` : sc(p.base, r)) : '<span class="faint">—</span>'}</td>
+  return `${fig}<div class="tw"><table><thead><tr><th>slice</th><th class="n hn">n</th><th class="n">this</th><th class="n hn">before</th><th class="n">Δ</th><th class="n">90% CI</th><th class="n hn">fixed / broken</th><th class="n hn">runs</th><th class="hn">every try</th></tr></thead><tbody>
+  ${R.map(r => { const p = r.vs; return `<tr${r.slice === D.main ? ' class="me"' : ""}><td class="id">${esc(short(r.slice))}</td><td class="n hn">${N0(r.n)}</td>
+    <td class="n">${ev(isBin(r) ? cnt(r.score, r) : sc(r.score, r), evRes(r))} ${isBin(r) ? `<span class="faint hn">${pct(r.score)}</span>` : ""}</td>
+    <td class="n hn">${p ? (isBin(r) ? cnt(p.base, r) + ` <span class="faint">${pct(p.base)}</span>` : sc(p.base, r)) : '<span class="faint">—</span>'}</td>
     <td class="n ${p ? (p.lo > 0 ? "pos" : p.hi < 0 ? "neg" : "") : ""}">${p ? ev(dl(p.delta, r), evPair(r, p)) : "—"}</td><td class="n">${p ? ev(ciTxt(p, r), evPair(r, p)) : "—"}</td>
-    <td class="n">${p ? `<span class="pos">${p.wins}</span> / <span class="neg">${p.losses}</span>` : "—"}</td><td class="n">${r.runs}${r.base ? " · " + r.base.runs : ""}</td><td>${strip(r)}</td></tr>`; }).join("")}
+    <td class="n hn">${p ? `<span class="pos">${p.wins}</span> / <span class="neg">${p.losses}</span>` : "—"}</td><td class="n hn">${r.runs}${r.base ? " · " + r.base.runs : ""}</td><td class="hn">${strip(r)}</td></tr>`; }).join("")}
   </tbody></table></div>
   <dl class="f" style="margin-top:12px"><dt>this</dt><dd>${mn(CH)}: mean per id over every complete run</dd><dt>before</dt><dd>${PV ? mn(PV) : "no comparator"}</dd><dt>CI</dt><dd>paired bootstrap over shared ids, 2,000 resamples, seed 0</dd><dt>errors</dt><dd>count as 0</dd></dl>`;
 });
@@ -660,12 +663,12 @@ section("cost", () => {
   let s = "";
   if (ls.length) {
     const hi = Math.max(...ls.flatMap(r => [r.latency_p95 ?? r.latency_p50, r.base?.latency_p95 ?? r.base?.latency_p50 ?? 0])) * 1.1;
-    const W = 800, L = 200, X = v => L + Math.min(v, hi) / hi * (W - L - 110), rh = 40, st = niceStep(hi / 6);
-    s = `<svg viewBox="0 0 ${W} ${ls.length * rh + 34}" role="img" aria-label="Latency p50 and p95">`;
+    const W = FW("cost"), nar = W < 560, L = nar ? 96 : 200, X = v => L + Math.min(v, hi) / hi * (W - L - (nar ? 70 : 110)), rh = 40, st = niceStep(hi / (nar ? 3 : 6));
+    s = `<svg viewBox="0 0 ${W} ${ls.length * rh + 34}" width="${W}" role="img" aria-label="Latency p50 and p95">`;
     for (let v = 0; v <= hi; v += st) s += `<line class="grid" x1="${X(v)}" x2="${X(v)}" y1="0" y2="${ls.length * rh}"/><text class="t-f" x="${X(v)}" y="${ls.length * rh + 14}" text-anchor="middle">${+v.toFixed(2)}s</text>`;
     s += `<text class="t-f" x="${W - 30}" y="${ls.length * rh + 30}" text-anchor="end">s per example · dot p50, bar end p95</text>`;
     ls.forEach((r, i) => {
-      const y = 12 + i * rh; s += `<text x="${L - 10}" y="${y + 10}" text-anchor="end">${esc(short(r.slice).slice(0, 28))}</text>`;
+      const y = 12 + i * rh; s += `<text x="${L - 10}" y="${y + 10}" text-anchor="end">${esc(short(r.slice).slice(0, nar ? 12 : 28))}</text>`;
       [[r.base, 0, "s-mut", "f-mut"], [r, 14, "s-acc", "f-acc"]].forEach(([x, dy, sc2, fc]) => { if (!x || x.latency_p50 == null) return; const p95 = x.latency_p95 ?? x.latency_p50;
         s += `<line class="${sc2}" stroke-width="4" stroke-linecap="round" x1="${X(x.latency_p50)}" x2="${X(p95)}" y1="${y + dy}" y2="${y + dy}" opacity=".55"/><circle class="${fc}" cx="${X(x.latency_p50)}" cy="${y + dy}" r="4.5"/><text class="t-f" x="${X(p95) + 6}" y="${y + dy + 4}">${x.latency_p50.toFixed(1)} / ${p95.toFixed(1)}</text>`; });
     });
@@ -715,6 +718,10 @@ arx baseline ${esc(CH)} --dry-run`;
   ${D.runs.map(t => `<tr><td class="id">${esc(short(t.slice))}</td><td class="id">${esc(t.hash)}</td><td class="id">${esc(t.task)}</td><td class="mono" style="word-break:break-all;font-size:12px">${esc(t.command || "—")}</td><td class="id">${dt(t.ended)}</td></tr>`).join("")}
   </tbody></table></div>`;
 });
+
+/* charts are drawn at their section's width: redraw them when that width changes a lot (rotate, resize) */
+let lastW = FW("results"), rzT;
+addEventListener("resize", () => { clearTimeout(rzT); rzT = setTimeout(() => { const w = FW("results"); if (Math.abs(w - lastW) < 40 || matchMedia("print").matches) return; lastW = w; ["claim", "results", "cost"].forEach(id => section(id, DRAW[id])); }, 200); });
 
 /* ---------------- popover ---------------- */
 const pop = $("#pop"); let popFor = null;
