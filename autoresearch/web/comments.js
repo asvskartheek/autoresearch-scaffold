@@ -209,10 +209,22 @@ function cleanSvg(src){const t=document.createElement('template');t.innerHTML=sr
   for(const c of [...el.childNodes]){if(c.nodeType===3)continue;if(c.nodeType!==1||!SVG_OK.has(c.localName)){c.remove();continue}walk(c)}};
  walk(svg);return `<div class="cm-fig">${svg.outerHTML}</div>`}
 const linky=s=>h(s).replace(/(https?:\/\/[^\s<]+[^\s<.,;:)])|(^|[\s(])(#[a-z]+(?:\/[^\s<]*[^\s<.,;:)])?)/g,(m,url,pre,hash)=>url?`<a href="${url}" target="_blank" rel="noopener">${url}</a>`:`${pre}<a href="${hash}">${hash}</a>`);
-const rich=b=>String(b||'').split(/(<svg[\s\S]*?<\/svg>)/i).map((x,i)=>i%2?cleanSvg(x):linky(x)).join('');
+// the figure first, then the words
+const rich=b=>{const parts=String(b||'').split(/(<svg[\s\S]*?<\/svg>)/i);
+ return parts.filter((x,i)=>i%2).map(cleanSvg).join('')+linky(parts.filter((x,i)=>!(i%2)).join('').replace(/\n{3,}/g,'\n\n').trim())};
+// after a figure is on screen: greys and black/white become theme colours (readable in dark mode), text never under 11 px
+const NEUTRAL=v=>{if(!v||/none|currentcolor|transparent/i.test(v))return null;const c=document.createElement('canvas').getContext('2d');c.fillStyle='#010203';c.fillStyle=v;
+ const m=/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(c.fillStyle);if(!m)return null;const [r,g,b]=m.slice(1).map(x=>parseInt(x,16)),mx=Math.max(r,g,b),mn=Math.min(r,g,b);
+ if(mx-mn>48)return null;const l=(mx+mn)/510;return l<.3||l>.85?'currentColor':'var(--muted)'};
+function fitFigs(root){root.querySelectorAll('.cm-fig svg').forEach(svg=>{
+ if(!svg.getAttribute('viewBox')){const w=parseFloat(svg.getAttribute('width')),ht=parseFloat(svg.getAttribute('height'));if(w&&ht)svg.setAttribute('viewBox',`0 0 ${w} ${ht}`)}
+ svg.removeAttribute('width');svg.removeAttribute('height');
+ for(const el of svg.querySelectorAll('*'))for(const k of ['fill','stroke']){const t=NEUTRAL(el.getAttribute(k));if(t)el.style[k]=t}
+ const vb=svg.viewBox.baseVal,sc=vb&&vb.width?svg.getBoundingClientRect().width/vb.width:1;if(!sc)return;
+ for(const t of svg.querySelectorAll('text')){const fs=parseFloat(t.getAttribute('font-size')||getComputedStyle(t).fontSize)||12;if(fs*sc<11)t.setAttribute('font-size',r1(11/sc))}})}
 
 /* ---------- compose and threads */
-function place(p,x,y){p.style.left=Math.max(12,Math.min(innerWidth-332,x+14))+'px';p.style.top=Math.max(12,Math.min(innerHeight-p.offsetHeight-60,y+14))+'px'}  // clear of the buttons
+function place(p,x,y){p.style.left=Math.max(12,Math.min(innerWidth-p.offsetWidth-12,x+14))+'px';p.style.top=Math.max(12,Math.min(innerHeight-p.offsetHeight-60,y+14))+'px'}  // clear of the buttons
 function closePop(){pops.innerHTML='';open=null;if(pending){pending=null;drawPins()}}
 const focusLater=ta=>{ta.focus({preventScroll:true});setTimeout(()=>{ta.focus({preventScroll:true});requestAnimationFrame(()=>{if(document.activeElement!==ta)ta.focus({preventScroll:true})})},0)};
 const nameField=()=>me()?'<span class="cm-sp"></span>':'<input class="cm-name cm-sp" placeholder="Your name" maxlength="60">';
@@ -286,7 +298,7 @@ function thread(id){const c=all.find(t=>t.id===id);if(!c)return;
  const ag=stranded(c)?`<div class="cm-m"><div class="cm-who">Agent</div><div class="cm-msg cm-idle">No agent running · <code>arx answer</code></div></div>`:working(c)?`<div class="cm-m"><div class="cm-who">Agent</div><div class="cm-msg agent cm-busy"><span class="cm-dot"></span>${h(c.agent.note||(c.agent.status==='queued'?'Queued':'Working'))}${c.agent.task?` <a href="#task/${encodeURIComponent(c.agent.task)}">task</a>`:''}</div></div>`:'';
  p.innerHTML=`<div class="cm-anchor">${mine().indexOf(c)+1} · ${h(anchorText(c.anchor||{}))}</div><div class="cm-msgs">${c.messages.map(msg).join('')}${ag}</div>
  <textarea placeholder="Reply"></textarea><div class="cm-row">${nameField()}<button class="cm-sm rs">${c.resolved?'Reopen':'Resolve'}</button><button class="cm-sm pri go">Reply</button></div>`;
- pops.append(p);const [x,y]=pos(c)||[innerWidth-360,innerHeight-120];place(p,x,y);const ta=p.querySelector('textarea');ta.value=draft;
+ if(p.querySelector('.cm-fig'))p.classList.add('wide');pops.append(p);fitFigs(p);const [x,y]=pos(c)||[innerWidth-360,innerHeight-120];place(p,x,y);const ta=p.querySelector('textarea');ta.value=draft;
  const ms=p.querySelector('.cm-msgs');ms.scrollTop=ms.scrollHeight;
  const send=async()=>{if(p.dataset.busy)return;const body=ta.value.trim();if(!body)return needText(ta);busy(p,true,'Sending…');
   const ev=await post({kind:'reply',parent:id,body,author:takeName(p)});if(!ev)return p.isConnected&&failed(p);

@@ -52,7 +52,8 @@
 .cm-msg.agent{background:var(--accent-soft)}
 .cm-msg.err{background:var(--pill-warning-bg);color:var(--pill-warning-ink)}
 .cm-msg a{color:var(--accent);text-decoration:underline}
-.cm-fig{white-space:normal;margin:6px 0 2px;color:var(--text)}.cm-fig svg{max-width:100%;height:auto;display:block}
+.cm-pop.wide{width:440px}
+.cm-fig{white-space:normal;margin:0 0 6px;color:var(--text)}.cm-fig svg{width:100%;height:auto;display:block;font-family:var(--font)}
 .cm-busy{display:flex;gap:8px;align-items:center;color:var(--muted)}.cm-busy a{white-space:nowrap;margin-left:auto}
 .cm-idle{color:var(--muted)}.cm-idle code{font:500 12px var(--mono);color:var(--text)}
 .cm-dot{flex:none;width:8px;height:8px;border-radius:4px;background:var(--cm-rep);animation:cm-blink 1.2s ease-in-out infinite}
