@@ -33,7 +33,8 @@ const clock=t=>new Date(t*1000).toLocaleTimeString('en-GB',{hour:'2-digit',minut
 const stamp=t=>{if(!t)return '—';const d=new Date(t*1000),y=new Date(now()*1000).getFullYear();return d.toLocaleDateString('en-GB',{day:'numeric',month:'short',...(d.getFullYear()!==y?{year:'numeric'}:{})})+', '+clock(t)};
 const num=(v,p=3)=>v===0?'0':Math.abs(v)>=1000?v.toLocaleString(undefined,{maximumFractionDigits:0}):Math.abs(v)>=1?v.toFixed(p):Math.abs(v)<1e-3?v.toExponential(1):v.toPrecision(p);
 const fmtv=v=>typeof v!=='number'?esc(v):num(v);
-const short=s=>String(s||'').split('/').slice(1).join('/')||s;
+// a slice without its dataset ("gsm8k-test/random50" -> "random50"); kept whole when the rest is only a size ("cold/n24")
+const short=s=>{const r=String(s||'').split('/').slice(1).join('/');return !r||/^n?\d+$/i.test(r)?s:r};
 const plural=(n,w,ws)=>`${n} ${n===1?w:(ws||w+'s')}`;
 const solved=r=>Math.round(r.score*r.n);
 // a score in its slice's terms. 0/1 slice: "1,224 of 1,319" and deltas in pts. Continuous slice: its unit, and a
