@@ -361,7 +361,7 @@ const nextPanel=function(g){
    // a run the gate still counts as started, whose task went silent for over a day: dead, so it is run again
    const dead=!run&&c.next.find(n=>n.running);
    const dt=dead&&byId(dead.running),at=rung(c.m)?` (${esc(rung(c.m))} rung)`:'';
-   items.push(dead?[`${mLink(c.m)}${at}: its run on <span class="mono">${esc(short(dead.slice))}</span> went silent${dt?` ${ago(dt.heartbeat||dt.updated||dt.created)}`:''}${dt?.progress?.total?` at <a class="ln" href="#task/${enc(dt.id)}">${N(dt.progress.done||0)} of ${N(dt.progress.total)}</a>`:''}. Fail it and run it again.`,`arx gate ${c.m}`]
+   items.push(dead?[`${mLink(c.m)}${at}: its run on <span class="mono">${esc(short(dead.slice))}</span> went silent${dt?` ${ago(dt.heartbeat||dt.updated||dt.created)}`:''}${dt?.progress?.total?` at <a class="ln" href="#task/${enc(dt.id)}">${N(dt.progress.done||0)} of ${N(dt.progress.total)}</a>`:''}. Fail it, then run it again.`,dt?`arx task finish ${dt.id} --status failed`:`arx gate ${c.m}`]
     :run?[`${mLink(c.m)} on ${hLink(c.o.hill)} is running on <span class="mono">${esc(short(runTask(run).slice||run.slice))}</span>${rest.length?`, then needs ${rest.map(n=>(n.model!==c.m?'champion on ':'')+ms([n])).join(', ')}`:''}.`,null,runChip(run)]
     :[`${mLink(c.m)}${at} on ${hLink(c.o.hill)} needs ${ms(c.next)}.`,`arx gate ${c.m}`]);}
   if(!cands.length){const oh=goalHills(g).find(([,s])=>s==='open');
