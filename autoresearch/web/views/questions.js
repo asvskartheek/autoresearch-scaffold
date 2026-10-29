@@ -65,7 +65,8 @@ function qCol(e){
 }
 // a model's readable label as plain text (mnt() without the HTML escaping; data-qtip is escaped once by esc())
 const qM=k=>{if(!k)return '';const t=S.state?.models?.[k]?.title;if(t)return t;const s=String(k);return s.split('+').length>3?'…+'+s.split('+').slice(-2).join('+'):s};
-const qCI=e=>e.lo==null?'':isCont(e.slice)?`90% CI ${sd(e.slice,e.lo)} to ${sd(e.slice,e.hi)}`:`90% CI ${pts(e.lo)} to ${pts(e.hi)} pts`;
+const qCI=e=>{if(e.lo==null)return '';const [lo,hi]=negSlice(e.slice)?[e.hi,e.lo]:[e.lo,e.hi];
+ return isCont(e.slice)?`90% CI ${sd(e.slice,lo)} to ${sd(e.slice,hi)}`:`90% CI ${pts(lo)} to ${pts(hi)} pts`};
 // a claim's #model/<id>, #hill/<id>, #goal/<id>, #task/<id> or #answer/<id> becomes a link titled with the name it stands for
 function qRouteName(k,id){
  const st=S.state||{};
@@ -105,8 +106,9 @@ function qEvidence(n){
   let lane='';
   if(e.kind==='raw')lane=`<div class="trk"></div><div class="fill" style="width:${e.n&&e.c!=null&&!(e.slice&&isCont(e.slice))?Math.max(0,Math.min(100,100*e.c/e.n)).toFixed(1):0}%"></div>`;
   else if(e.kind==='paired'&&e.delta!=null){
-   const col=qCol(e),k=isPts(e)?100:1,r=isPts(e)?R:(span(e)*1.15||1),x=v=>50+Math.max(-r,Math.min(r,k*v))/r*48;
-   lane=`<div class="z"></div>`+(e.lo!=null?`<div class="ci" style="left:${x(e.lo)}%;width:${Math.max(.5,x(e.hi)-x(e.lo))}%;background:${col}"></div>`:'')+`<div class="d" style="left:${x(e.delta)}%;background:${col}"></div>`}
+   const col=qCol(e),k=isPts(e)?100:negSlice(e.slice)?-1:1,r=isPts(e)?R:(span(e)*1.15||1),x=v=>50+Math.max(-r,Math.min(r,k*v))/r*48;
+   const left=Math.min(x(e.lo),x(e.hi)),right=Math.max(x(e.lo),x(e.hi));
+   lane=`<div class="z"></div>`+(e.lo!=null?`<div class="ci" style="left:${left}%;width:${Math.max(.5,right-left)}%;background:${col}"></div>`:'')+`<div class="d" style="left:${x(e.delta)}%;background:${col}"></div>`}
   const href=e.task?`#task/${enc(e.task)}`:e.model?`#model/${enc(e.model)}`:'';
   const cap=[who(e),e.kind==='raw'&&e.role==='errors'?(e.what||e.label):e.slice,e.n?'n '+qFmt(e.n):'',e.kind==='paired'&&e.base?'vs '+qM(e.base):'',qCI(e)].filter(Boolean).map(esc).join(' · ');
   const tag=e.role==='errors'?'errors':qTag(e);
