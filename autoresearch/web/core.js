@@ -84,6 +84,7 @@ const ICON={
  menu:I('<path d="M4 7h16M4 12h16M4 17h16"/>',18),
  sun:I('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),
  moon:I('<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>'),
+ auto:I('<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor"/>'),
  copy:I('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',13)};
 // the product's mark: a ladder (two rails, three rungs) in the accent
 const MARK='<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="6" fill="var(--accent)"/><path d="M8 18.5V5.5M16 18.5V5.5M8 15h8M8 11.5h8M8 8h8" stroke="var(--surface)" stroke-width="1.8" stroke-linecap="round"/></svg>';
@@ -118,20 +119,23 @@ function renderNav(){
   (S.projects.length>1?`<div class="grp">Projects</div>`+S.projects.map(q=>{const on=q.key===PKEY||(!PKEY&&q.default);return `<a class="nav proj ${on?'on':''}" href="/p/${enc(q.key)}/${keep?'#'+keep:''}" title="${esc(q.name)} · ${esc(q.root)}" ${on?'aria-current="true"':''}><span class="pdot ${q.error?'bad':q.running?'run':q.stalled?'bad':''}"></span><span class="ell">${esc(q.name)}</span>${pq(q)}</a>`}).join(''):'')+
   (st?`<div class="foot"><b title="${esc(st.champion||'')}">${st.champion?mn(st.champion):'No champion yet'}</b><span>${st.champion?'champion · ':''}${plural(Object.keys(st.models).length,'model')}</span></div>`:''));
 }
+const THEMES={light:'Light',dark:'Dark','':'System'};
 function renderTop(){
- const dark=document.documentElement.dataset.theme==='dark'||(!document.documentElement.dataset.theme&&matchMedia('(prefers-color-scheme: dark)').matches);
- const c=S.crumbs.length?S.crumbs:[[ROUTES.find(([k])=>k===route().r)?.[1]||'Overview']];
+ const t=document.documentElement.dataset.theme||'',next=t==='light'?'dark':t==='dark'?'':'light';
+ const c=S.crumbs.length?S.crumbs:[[routeLabel(route().r)]];
  setHTML($('#top'),`<button class="iconbtn menu-btn" aria-label="Menu" onclick="$('#app').classList.toggle('nav-open')">${ICON.menu}</button>
  <nav class="crumbs" aria-label="Breadcrumb">${c.map(([l,h],i)=>i===c.length-1?`<b>${esc(l)}</b>`:`<a href="${h}">${esc(l)}</a><span class="sep">/</span>`).join('')}</nav>
  <div class="right"><span class="live" title="${S.ok?'Polling the ledger every 4s':'The dashboard server is not answering'}"><span class="dot ${S.ok?'':'off'}"></span>${S.ok?'Live':'Offline'}<span class="clk">${S.state&&S.ok?' · '+clock(S.state.now):''}</span></span>
- <button class="iconbtn" aria-label="Toggle theme" onclick="toggleTheme()">${dark?ICON.sun:ICON.moon}</button></div>`);
+ <button class="iconbtn" aria-label="Theme: ${THEMES[t]}. Switch to ${THEMES[next]}" title="Theme: ${THEMES[t]} (click for ${THEMES[next]})" onclick="toggleTheme()">${t==='light'?ICON.sun:t==='dark'?ICON.moon:ICON.auto}</button></div>`);
 }
+// light -> dark -> system (follow the OS) -> light
 function toggleTheme(){
- const el=document.documentElement,dark=el.dataset.theme==='dark'||(!el.dataset.theme&&matchMedia('(prefers-color-scheme: dark)').matches);
- el.dataset.theme=dark?'light':'dark';try{localStorage.setItem('arx-theme',el.dataset.theme)}catch(e){}renderTop();render();
+ const el=document.documentElement,t=el.dataset.theme||'',next=t==='light'?'dark':t==='dark'?'':'light';
+ if(next)el.dataset.theme=next;else delete el.dataset.theme;
+ try{next?localStorage.setItem('arx-theme',next):localStorage.removeItem('arx-theme')}catch(e){}renderTop();render();
 }
 
-addEventListener('storage',e=>{if(e.key==='arx-theme'&&e.newValue){document.documentElement.dataset.theme=e.newValue;renderTop()}});
+addEventListener('storage',e=>{if(e.key!=='arx-theme')return;if(e.newValue)document.documentElement.dataset.theme=e.newValue;else delete document.documentElement.dataset.theme;renderTop()});
 // swap an element's HTML only when it changed, keeping open <details>, focus and caret across the 4s poll
 function setHTML(el,html){
  if(el._html===html)return false;el._html=html;
