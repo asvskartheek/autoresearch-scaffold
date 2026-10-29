@@ -127,7 +127,7 @@ class Cli(unittest.TestCase):
         it = features.enqueue(self.p, "goal", {"ask": "faster"})
         f = Path(self.p.root) / "prop.json"
         f.write_text(json.dumps(PROPOSAL))
-        self.assertIn("ds-90 (score >= 18 of 20", self.arx("goal", "propose", it["id"], "--json", f"@{f}"))
+        self.assertIn("ds-90 (≥ 18 of 20 correct", self.arx("goal", "propose", it["id"], "--json", f"@{f}"))
         self.assertIn("ds-90", self.arx("goal", "propose", it["id"], "--json", json.dumps(PROPOSAL)))
         self.arx("goal", "open", "main", "--title", "Main", "--slice", "full", "--target", "0.9", "--constraint", "open weights")
         self.arx("goal", "open", "fast", "--title", "Fast", "--slice", "full", "--target", "3", "--kpi", "latency_p50",
