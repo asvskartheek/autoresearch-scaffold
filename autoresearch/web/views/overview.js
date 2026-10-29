@@ -63,7 +63,8 @@ VIEWS.overview=()=>{
   .map(([k,m])=>[k,m,st.gates[k]||{}])
   .sort((a,b)=>(b[2].promotable-a[2].promotable)||(!!ovFailedAt(a[2])-!!ovFailedAt(b[2]))||(ovPassed(b[2])-ovPassed(a[2]))||((b[1].created||0)-(a[1].created||0)));
  // research work only: answer agents are not research, and a task silent for over a day is dead, not running
- const work=active().filter(t=>t.kind!=='answer');
+ // a harness sub-task whose count its eval already shows (detail_of) is the same job, listed once
+ const work=active().filter(t=>t.kind!=='answer'&&!t.detail_of);
  const dead=work.filter(ovDead),stalled=work.filter(t=>t.status==='stalled'&&!ovDead(t)),running=work.filter(t=>t.status!=='stalled');
  const hills=Object.values(st.hills),open=hills.filter(h=>h.status==='open').length,climbed=hills.filter(h=>h.status==='climbed').length;
  const promotable=cands.filter(c=>c[2].promotable),failed=cands.filter(c=>ovFailedAt(c[2])),onWay=cands.filter(c=>ovPassed(c[2])&&!ovFailedAt(c[2]));
