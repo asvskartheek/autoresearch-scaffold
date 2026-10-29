@@ -57,7 +57,7 @@
 .tk-dl dd .faint{margin-left:4px;white-space:nowrap}
 .tk-dl dd .copy{width:20px;height:20px}
 .tk-dl .ln{display:inline-flex;align-items:center;gap:4px}
-/* ids, hashes and paths only */ .tk-mono{font-family:var(--mono);font-size:12.5px;overflow-wrap:anywhere;min-width:0}
+/* ids, hashes and paths only: they wrap anywhere, even inside a nowrap note (a long model id at 375 px) */ .tk-mono,.tk-dl dd .tk-mono.faint{font-family:var(--mono);font-size:12.5px;overflow-wrap:anywhere;white-space:normal;min-width:0}
 .tk-cmdline .cmd{max-width:100%}
 .tk-right{display:flex;flex-direction:column;gap:24px;min-width:0}
 .tk-sh{display:flex;align-items:center;gap:8px;margin-bottom:8px;min-height:24px}
