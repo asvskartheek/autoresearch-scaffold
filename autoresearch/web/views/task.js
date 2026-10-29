@@ -93,26 +93,75 @@ function vsChamp(vc,t){
   {cls:'tk-vcp',meta:`paired on the same ${vc.n} examples${pooled(vc)}`,right:`<a class="more" href="#task/${enc(vc.task)}">${vc.runs>1?"Champion's latest run":"Champion's run"}</a>`})}</div>`;
 }
 
-function charts(t,d){
- const keys=[...new Set(d.metrics.flatMap(m=>Object.keys(m).filter(k=>k!=='t'&&k!=='step'&&typeof m[k]==='number')))];
- if(!keys.length)return '';
+// ---------- curves: a main chart you pick, small multiples for the rest, all on one crosshair and zoom; other runs of
+// the same kind (evals: the same slice) overlay from a legend you toggle; GPU readings (`sys` rows) in their own row
+const PRIO=['reward','running_score','score','accuracy','mean_token_accuracy','loss','kl','entropy','grad_norm','learning_rate'];
+const MINOR=/(^|\/|_)(min|max|std)(_|\/|$)|clip_ratio|^epoch$|^total_flos$|^train_|_per_second$|^num_tokens$|terminated/;
+const SYS=new Set(['gpu_util','gpu_mem_gb','gpu_mem_total_gb','gpus']);
+S.tkMetric=S.tkMetric||{};S.xcRuns=S.xcRuns||{};
+const yfOf=k=>isScoreKey(k)&&!isCont(CUR)?'pct':/latency|_s$/.test(k)?'s':'num';
+function keysOf(rows){
+ const n={},first={};
+ rows.forEach((m,i)=>{for(const [k,v] of Object.entries(m))if(k!=='t'&&k!=='step'&&k!=='sys'&&typeof v==='number'&&isFinite(v)){n[k]=(n[k]||0)+1;if(!(k in first))first[k]=i}});
+ const ks=Object.keys(n).filter(k=>n[k]>=2&&!SYS.has(k));
+ const flat=ks.filter(k=>{const y=rows.map(m=>m[k]).filter(v=>typeof v==='number');return Math.max(...y)-Math.min(...y)<=1e-12*Math.max(1,Math.abs(y[0]))});
+ const live=ks.filter(k=>!flat.includes(k)).sort((a,b)=>{const pa=PRIO.indexOf(a),pb=PRIO.indexOf(b);return (pa<0?99:pa)-(pb<0?99:pb)||first[a]-first[b]});
+ return {main:live.filter(k=>!MINOR.test(k)),minor:live.filter(k=>MINOR.test(k)),flat};
+}
+// other runs to overlay: the newest five of the same kind (evals: the newest run of each model on the same slice)
+function peers(t){
+ let ps=S.state.tasks.filter(x=>x.id!==t.id&&x.kind===t.kind&&(t.kind!=='eval'||x.slice===t.slice)&&!x.superseded_by).sort((a,b)=>b.created-a.created);
+ if(t.kind==='eval'){const seen=new Set([t.model]);ps=ps.filter(x=>x.model&&!seen.has(x.model)&&seen.add(x.model));const c=S.state.champion;ps.sort((a,b)=>(b.model===c)-(a.model===c))}
+ return ps.slice(0,5);
+}
+function wantRuns(ids){
+ const need=ids.filter(i=>{const c=S.xcRuns[i];return !c||(isLive(byId(i))&&Date.now()-c.at>8000)});
+ if(!need.length||S.xcBusy)return;S.xcBusy=true;
+ fetch('api/vitals/series?ids='+need.map(enc).join(','),{cache:'no-store'}).then(r=>r.json()).then(d=>{for(const i of need)S.xcRuns[i]={at:Date.now(),d:d[i]||null}}).catch(()=>{}).finally(()=>{S.xcBusy=false;render()});
+}
+function curves(t,d){
+ const rows=d.metrics.filter(m=>!m.sys),sys=d.metrics.filter(m=>m.sys&&typeof m.gpu_util==='number');
+ const {main,minor,flat}=keysOf(rows);
+ if(!main.length&&!minor.length&&!sys.length)return '';
+ const grp='tk-'+t.id,ev=t.kind==='eval',T=isCont(CUR)&&timedSl(CUR);
+ const ps=peers(t);wantRuns(ps.map(x=>x.id));
+ const g=XC.g(grp,{w:ev?0:.6,hidden:ps.map(x=>x.id)});
+ const runs=[{id:t.id,name:t.model?S.state.models[t.model]?.title||t.model:'This run',rows,t0:t.created,color:XC.PAL[0]},
+  ...ps.map((x,i)=>({id:x.id,name:x.model?S.state.models[x.model]?.title||x.model:x.title,title:x.title,t0:x.created,rows:(S.xcRuns[x.id]?.d?.metrics)||[],color:XC.PAL[(i+1)%XC.PAL.length]}))];
+ const all=[...main,...minor];
+ let cur=S.tkMetric[t.id];if(!all.includes(cur))cur=all[0];
+ const flip=k=>T&&isScoreKey(k);
+ const ser=k=>runs.map(r=>({id:r.id,name:r.name,color:r.color,smooth:!ev&&!/running_score/.test(k),pts:r.rows.filter(m=>typeof m[k]==='number').map(m=>[m.step,flip(k)?-m[k]:m[k],m.t])}));
+ const total=t.progress?.total,dom=isLive(t)&&total&&g.x==='step'?[0,total]:null;
  const base=d.vs_champion?.base??null;
- // a slice scored as minus seconds charts its score as seconds, so the axis reads as time
- const T=isCont(CUR)&&timedSl(CUR),flip=k=>T&&isScoreKey(k),name=k=>flip(k)?(k==='running_score'?'Mean time so far':'Mean time'):wbMetric(k);
- const cards=keys.map((k,i)=>{const p=d.metrics.filter(m=>typeof m[k]==='number').map(m=>[m.step,flip(k)?-m[k]:m[k]]),lv=p.at(-1)?.[1];
-  return panel(esc(name(k)),lineChart([{name:name(k),color:'var(--chart-1)',pts:p}],{pctAxis:isScoreKey(k)&&!isCont(CUR),ref:k==='running_score'&&base!=null?(flip(k)?-base:base):null,refLabel:k==='running_score'&&base!=null?'champion '+scoreOf(base,CUR).replace(/&nbsp;/g,' '):'',xLabel:t.kind==='eval'?'examples':'steps',h:200}),
-   {right:`<span class="sub">${isLive(t)?'latest':'last'}</span> <b class="tk-lv">${mval(k,lv)}</b>`})});
- // an odd chart out gets a figures card beside it, so the grid closes without stretching a chart
- if(keys.length%2){const rows=keys.map(k=>{const y=d.metrics.map(m=>m[k]).filter(v=>typeof v==='number'),hi=S.state.config.higher_is_better!==false&&!/loss|latency|_s$|err/.test(k);
-   const best=hi?Math.max(...y):Math.min(...y);
-   return `<div><dt>${esc(name(k))}</dt><dd><span class="sub">first</span> ${mval(k,y[0])}</dd><dd><span class="sub">${flip(k)?'fastest':hi?'highest':'lowest'}</span> ${mval(k,best)}</dd><dd><span class="sub">last</span> <b>${mval(k,y.at(-1))}</b></dd></div>`}).join('');
-  const nPts=Math.max(...keys.map(k=>d.metrics.filter(m=>typeof m[k]==='number').length));
-  let body=`<dl class="tk-fig">${rows}</dl>`;
-  if(keys.length===1){const k=keys[0],y=d.metrics.map(m=>m[k]).filter(v=>typeof v==='number'),hi=S.state.config.higher_is_better!==false&&!/loss|latency|_s$|err/.test(k),ch=y.at(-1)-y[0];
-   const kv=[['First',mval(k,y[0])],[flip(k)?'Fastest':hi?'Highest':'Lowest',mval(k,hi?Math.max(...y):Math.min(...y))],['Last',`<b>${mval(k,y.at(-1))}</b>`],['Change',isScoreKey(k)?deltaOf(ch,CUR):(ch>0?'+':ch<0?'−':'')+fmtv(Math.abs(ch))],['Points logged',nPts.toLocaleString()]];
-   body=`<dl class="tk-kv tk-fig1">${kv.map(([a,b])=>`<div><dt>${a}</dt><dd>${b}</dd></div>`).join('')}</dl>`}
-  cards.push(panel(keys.length===1?esc(name(keys[0]))+' in figures':'Figures',body,{meta:keys.length===1?'':`${plural(nPts,'point')} logged`}))}
- return `<div class="grid g2 section tk-charts">${cards.join('')}</div>`;
+ const spec=(k,mode,h)=>({group:grp,mode,h,xLabel:ev?'examples':'step',yLabel:mode==='full'?nm(k):null,yfmt:flip(k)?'s':yfOf(k),t0:t.created,domain:dom,series:ser(k),
+  ref:k==='running_score'&&base!=null?{y:flip(k)?-base:base,label:'champion'}:null});
+ const nm=k=>flip(k)?(k==='running_score'?'Mean time so far':'Mean time'):wbMetric(k);
+ const lastOf=k=>{const y=rows.map(m=>m[k]).filter(v=>typeof v==='number');return y.length?mval(k,flip(k)?-y.at(-1):y.at(-1)):DASH};
+ const sm=k=>`<div class="tk-sm"><div class="tk-smh"><button type="button" class="tk-pick" data-k="${esc(k)}" onclick="S.tkMetric[${esc(JSON.stringify(t.id))}]=this.dataset.k;render();scrollTo({top:document.querySelector('.tk-curves')?.offsetTop-60||0,behavior:'smooth'})" title="Make this the main chart">${esc(nm(k))}</button><b>${lastOf(k)}</b></div>${XC.box(`tk-${t.id}-${k}`,spec(k,'compact',120))}</div>`;
+ const legend=ps.length?XC.legend(grp,runs.map((r,i)=>{const y=r.rows.map(m=>m[cur]).filter(v=>typeof v==='number');
+  return {id:r.id,name:r.name,title:r.title||r.name,color:r.color,fixed:i===0,value:y.length?XC.yv(flip(cur)?'s':yfOf(cur),flip(cur)?-y.at(-1):y.at(-1)):null,cls:y.length?'':'na'}})):'';
+ const opts=all.length>1?`<select class="tk-msel" aria-label="Metric" onchange="S.tkMetric[${esc(JSON.stringify(t.id))}]=this.value;render()">${all.map(k=>`<option value="${esc(k)}" ${k===cur?'selected':''}>${esc(nm(k))}</option>`).join('')}</select>`:'';
+ let h=`<div class="section tk-curves">${panel(esc(nm(cur)),`<div class="tk-ctl">${opts}${XC.bar(grp,{smooth:!ev,log:true,x:true})}</div>${legend}${XC.box(`tk-${t.id}-main`,spec(cur,'full',innerWidth<600?240:320))}`,
+  {right:`<span class="sub">${isLive(t)?'latest':'last'}</span> <b class="tk-lv">${lastOf(cur)}</b>`})}`;
+ const rest=main.filter(k=>k!==cur),more=minor.filter(k=>k!==cur);
+ if(rest.length)h+=`<div class="tk-multi">${rest.map(sm).join('')}</div>`;
+ if(more.length)h+=`<details class="tk-moredet"><summary>${plural(more.length,'more metric')}</summary><div class="tk-multi">${more.map(sm).join('')}</div></details>`;
+ if(flat.length)h+=`<p class="tk-flat"><span>Flat</span>${flat.map(k=>`<span>${esc(nm(k))} <b>${lastOf(k)}</b></span>`).join('')}</p>`;
+ if(sys.length){const tot=sys.at(-1).gpu_mem_total_gb;
+  const sp=(k,f,ref)=>({group:grp,mode:'compact',h:120,xLabel:ev?'examples':'step',yfmt:f,t0:t.created,domain:dom,ymin:0,ymax:k==='gpu_util'?100:null,logOk:false,ref,
+   series:[{id:t.id,name:k==='gpu_util'?'GPU utilisation':'GPU memory',color:'var(--chart-2)',smooth:false,pts:sys.filter(m=>typeof m[k]==='number').map(m=>[m.step,m[k],m.t])}]});
+  h+=`<div class="tk-multi tk-sys">
+   <div class="tk-sm"><div class="tk-smh"><span>GPU utilisation</span><b>${Math.round(sys.at(-1).gpu_util)}%</b></div>${XC.box(`tk-${t.id}-gpu`,sp('gpu_util','pct100'))}</div>
+   ${typeof sys.at(-1).gpu_mem_gb==='number'?`<div class="tk-sm"><div class="tk-smh"><span>GPU memory</span><b>${sys.at(-1).gpu_mem_gb.toFixed(1)}${tot?` of ${tot.toFixed(0)}`:''} GB</b></div>${XC.box(`tk-${t.id}-gmem`,sp('gpu_mem_gb','num',tot?{y:tot,label:'total'}:null))}</div>`:''}</div>`}
+ return h+`</div>`;
+}
+// the finish estimate over the run: each point is where the rate over the last 5 minutes put the finish
+function etaCard(t){
+ const e=t.eta;if(!e?.hist?.length||t.status!=='running')return '';
+ const h0=e.hist[0][1];
+ return `<div class="section">${panel('Finish estimate',XC.box(`tk-${t.id}-eta`,{group:'tk-eta-'+t.id,mode:'compact',h:120,xfmt:'clock',yfmt:'dmin',smooth:false,logOk:false,zero:true,
+  series:[{name:'Moved by',pts:e.hist.map(([x,f])=>[x,(f-h0)/60])}]}),{right:`<b class="tk-lv">${wbClock(e.finish_at)}</b> <span class="sub">${e.drift_s>=0?'+':'−'}${wbSpan(Math.abs(e.drift_s))} in 5 min</span>`})}</div>`;
 }
 
 function examples(rows){
@@ -208,7 +257,7 @@ function siblings(t){
 VIEWS.task=(id)=>{
  if(S.tkLogFor!==id){S.tkLogFor=id;S.tkLogAll=false;S.tkCfgAll=false}
  const sx=S.state,d=S.detail&&S.detail.task?.id===id?S.detail:null;
- const t=d?{...byId(id),...d.task}:byId(id);
+ const t0=byId(id),t=d?{...t0,...d.task,...(t0?.eta!==undefined?{eta:t0.eta,health:t0.health}:{})}:t0;
  CUR=t?slOf(t):null;
  if(!t)return page({title:'Task not found',crumbs:[['Archive','#archive'],['Not found']],finding:`No task <span class="id">${esc(id)}</span> in this ledger.`})+panel('',empty('Nothing to show','<a class="ln" href="#archive">Back to the archive</a>'));
  const live=isLive(t),par=byId(t.parent),hill=hillOf(t);
@@ -228,7 +277,7 @@ VIEWS.task=(id)=>{
  const pr=t.progress||{};
  if(live&&pr.total)h+=`<div class="tk-prog">${meter(pr.done/pr.total,{cls:t.status==='stalled'?'muted':''})}</div>`;
  if(!d)return h+`<div class="section">${panel('Log','<div class="skel" style="height:96px"></div>')}</div>`+`<div class="section">${panel('Details','<div class="skel" style="height:160px"></div>')}</div>`;
- h+=vsChamp(d.vs_champion,t)+charts(t,d)+examples(d.rows)+log(t,d)+subTasks(t)+details(t,d);
+ h+=vsChamp(d.vs_champion,t)+etaCard(t)+curves(t,d)+examples(d.rows)+log(t,d)+subTasks(t)+details(t,d);
  return h;
 };
 }

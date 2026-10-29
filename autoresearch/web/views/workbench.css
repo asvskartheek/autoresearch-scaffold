@@ -1,42 +1,76 @@
-/* workbench view */
-.wb-gh{display:flex;align-items:baseline;gap:8px;margin-bottom:12px}
-.wb-grp.stalled .wb-gh h2{color:var(--negative)}
-.wb-list{display:flex;flex-direction:column;gap:12px}
-/* the card is one link: the title's link is stretched over it, inner links and buttons sit above it */
-.wb-card{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;transition:border-color .12s}
-.wb-card:hover{border-color:var(--control)}
-.wb-card:has(.wb-open:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
-.wb-card.is-stalled{border-color:color-mix(in srgb,var(--negative) 16%,var(--border))}
-.wb-card.is-stalled:hover{border-color:color-mix(in srgb,var(--negative) 32%,var(--border))}
-.wb-t a::after{content:"";position:absolute;inset:0;border-radius:inherit}
-.wb-in,.wb-card .cmd{position:relative;z-index:1}
-.wb-main{min-width:0;display:flex;flex-direction:column;gap:8px}
-.wb-head{display:flex;align-items:center;gap:10px;min-width:0}
-.wb-meta{color:var(--muted);font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.wb-meta i{font-style:normal;color:var(--faint);margin:0 6px}
-.wb-meta a:hover{color:var(--accent);text-decoration:underline}
-.wb-open{margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:2px;height:24px;padding:0 6px 0 8px;border-radius:var(--radius-control);font-size:13px;font-weight:500;color:var(--muted)}
-.wb-open:focus-visible{outline:none}
-.wb-card:hover .wb-open,.wb-open:focus-visible{color:var(--text);background:var(--raised)}
-.wb-t{font-size:15px;font-weight:600;line-height:1.35;overflow-wrap:anywhere}
-.wb-card:hover .wb-t{color:var(--accent)}
-.wb-desc{margin:0;color:var(--muted);font-size:13px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.wb-fix{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin:2px 0 0;font-size:13px;color:var(--muted)}
-.wb-kids{margin-top:4px;border-top:1px solid var(--rule);padding-top:8px}
-.wb-kh{font-size:12px;color:var(--muted);margin-bottom:2px}
-.wb-kids .kid .vl{font-variant-numeric:tabular-nums}
-.wb-kids .more-k .nm{color:var(--accent)}
-.wb-side{display:flex;flex-direction:column;gap:14px;min-width:0;border-left:1px solid var(--rule);padding-left:24px}
-.wb-pl{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px;color:var(--muted);margin-bottom:6px}
-.wb-pl b{color:var(--text);font-weight:500}
-.wb-kv{margin:0;display:flex;flex-direction:column}
-.wb-kv div{display:flex;justify-content:space-between;align-items:baseline;gap:12px;min-height:24px;font-size:13px}
-.wb-kv dt{color:var(--muted);white-space:nowrap}
-.wb-kv dd{margin:0;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-.wb-spark svg{display:block}
+/* workbench view: one card per long job with live panels, one row per short job, stalled first */
+.wb-strip{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.wb-chip{max-width:100%;overflow:hidden;display:flex;align-items:baseline;gap:8px;padding:5px 11px;border:1px solid var(--border);border-radius:var(--radius-control);background:var(--raised);font-size:13px;white-space:nowrap}
+.wb-chip:hover{border-color:var(--control)}
+.wb-chip .nm{font-weight:500;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.wb-chip .res{font-family:var(--mono);font-size:12px}
+.wb-chip .at{font-size:12px;color:var(--faint)}
+.wb-jobs{display:flex;flex-direction:column;gap:12px}
+.wb-job{position:relative;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface);transition:border-color .12s}
+.wb-job:hover{border-color:var(--control)}
+.wb-job.stalled{border-color:color-mix(in srgb,var(--negative) 45%,var(--border));background:color-mix(in srgb,var(--pill-negative-bg) 45%,var(--surface))}
+/* the whole job opens the task: the title's link is stretched over it; panels, links and commands sit above it */
+.wb-ttl a::after{content:"";position:absolute;inset:0;border-radius:inherit}
+.wb-ttl a:focus-visible{outline:none}
+.wb-job:has(.wb-ttl a:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.wb-in,.wb-job .cmd{position:relative;z-index:1}
+
+/* headline: kind · title · x of N · ETA · health */
+.wb-hl{display:flex;align-items:center;gap:12px;padding:14px 16px 0;min-width:0}
+.wb-kind{flex:none;font-size:12px;color:var(--muted);border:1px solid var(--border);border-radius:var(--radius-chip);padding:0 6px;line-height:18px}
+.wb-ttl{margin:0;font-size:15px;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wb-job:hover .wb-ttl{color:var(--accent)}
+.wb-ttl .on{color:var(--muted);font-weight:400}
+.wb-par{flex:0 1 auto;min-width:0;font-size:12px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wb-par:hover{color:var(--accent);text-decoration:underline}
+.wb-cnt{flex:none;font:13px var(--mono);color:var(--muted);white-space:nowrap}
+.wb-cnt b{color:var(--text);font-weight:500}
+.wb-eta{margin-left:auto;flex:none;font:500 15px var(--mono);white-space:nowrap}
+.wb-eta small{font:400 12px var(--font);color:var(--faint);margin-right:6px}
+.wb-hp{flex:none;display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.wb-hp::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.wb-hp.ok{background:var(--pill-positive-bg);color:var(--pill-positive-ink)}
+.wb-hp.warn{background:var(--pill-warning-bg);color:var(--pill-warning-ink)}
+.wb-hp.bad{background:var(--negative);color:#fff}
+.wb-bar{margin:12px 16px 0}
+.wb-bar .meter{height:6px;background:var(--active)}
+.wb-note{padding:10px 16px 0}
+.wb-fix{display:flex;padding:12px 16px 0}
+.wb-fix .cmd{background:var(--surface)}
+
+/* long job: vital-sign panels, the lead one twice as tall */
+.wb-vit{display:grid;grid-template-columns:1.7fr 1fr 1fr;gap:1px;background:var(--rule);margin-top:14px;border-top:1px solid var(--rule);border-radius:0 0 var(--radius-card) var(--radius-card);overflow:hidden}
+.wb-vit.n1{grid-template-columns:1fr}
+.wb-vit.n2{grid-template-columns:1.7fr 2fr}.wb-vit.n2 .wb-pn.lead{grid-row:auto}
+.wb-vit.n3 .wb-pn:not(.lead){grid-column:span 2}
+.wb-vit.n4 .wb-pn:last-child{grid-column:span 2}
+.wb-pn{background:var(--surface);padding:10px 14px;min-width:0;display:flex;flex-direction:column}
+.wb-job.stalled .wb-pn{background:color-mix(in srgb,var(--pill-negative-bg) 30%,var(--surface))}
+.wb-pn.lead{grid-row:span 2}
+.wb-lb{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:8px;min-width:0}
+.wb-lb span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wb-lb span:last-child{color:var(--faint);white-space:nowrap}
+.wb-big{font:500 18px var(--mono);margin:2px 0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wb-big small{font:400 12px var(--font);color:var(--muted);margin-left:6px}
+.wb-pn .xc{margin-top:auto}
+.wb-mem{margin-top:6px}.wb-mem .meter{height:4px;background:var(--active)}.wb-mem .meter i{background:var(--chart-2)}
+
+/* short job: one compact row */
+.wb-job.short .wb-hl{padding:11px 16px}
+.wb-job.short.stalled .wb-fix{padding:0 16px 12px}
+.wb-mini{flex:0 0 96px}.wb-mini .meter{min-width:0;background:var(--active)}
+.wb-vs{flex:0 1 auto;min-width:0;font:13px var(--mono);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
 @media (max-width:900px){
- .wb-card{grid-template-columns:1fr;gap:14px}
- .wb-side{border-left:0;padding-left:0;border-top:1px solid var(--rule);padding-top:14px}
- .wb-head{flex-wrap:wrap;row-gap:4px}
- .wb-meta{order:3;flex-basis:100%}
+ .wb-vit,.wb-vit.n2{grid-template-columns:1fr 1fr}
+ .wb-pn.lead{grid-column:1/-1;grid-row:auto}
+ .wb-vit.n3 .wb-pn:not(.lead){grid-column:auto}
+ .wb-hl{flex-wrap:wrap;row-gap:4px}
+ .wb-ttl{flex:1 1 100%;order:-1;white-space:normal}
+ .wb-eta{margin-left:0}
+}
+@media (max-width:640px){
+ .wb-vit,.wb-vit.n2{grid-template-columns:1fr}
+ .wb-vit .wb-pn{grid-column:auto!important}
+ .wb-mini{flex:1 1 100%;order:5}
 }

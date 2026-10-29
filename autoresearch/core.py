@@ -582,6 +582,70 @@ def _ago(t) -> str:
 
 _open: list["Task"] = []  # tasks running in this process, innermost last; new tasks nest under the top one
 
+# ---------- system vitals: one sampler thread per process writes GPU readings into every task open in it.
+# Rows carry `sys: true` and never touch `last`, the step counter or the heartbeat (a hung job must still go stalled).
+# Off with ARX_SAMPLE=0; skipped silently without nvidia-smi. ARX_SAMPLE_CMD swaps the command (tests, other tools):
+# it must print "util %, used MiB, total MiB" per GPU, one line each, like nvidia-smi's csv.
+_sampled: list["Task"] = []
+_sampler_lock = threading.Lock()
+_sampler: threading.Thread | None = None
+
+
+def _gpu_cmd() -> list[str] | None:
+    if os.environ.get("ARX_SAMPLE_CMD"):
+        return shlex.split(os.environ["ARX_SAMPLE_CMD"])
+    import shutil
+    exe = shutil.which("nvidia-smi")
+    return [exe, "--query-gpu=utilization.gpu,memory.used,memory.total", "--format=csv,noheader,nounits"] if exe else None
+
+
+def gpu_sample() -> dict | None:
+    """One reading over every GPU: mean utilisation (%), memory used and total (GB). None when nothing answers."""
+    cmd = _gpu_cmd()
+    if not cmd:
+        return None
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=10).stdout
+        rows = [[float(x) for x in line.split(",")[:3]] for line in out.strip().splitlines() if line.count(",") >= 2]
+    except Exception:
+        return None
+    if not rows:
+        return None
+    return dict(gpu_util=round(sum(r[0] for r in rows) / len(rows), 1), gpu_mem_gb=round(sum(r[1] for r in rows) / 1024, 2),
+                gpu_mem_total_gb=round(sum(r[2] for r in rows) / 1024, 2), gpus=len(rows))
+
+
+def _sample_loop():
+    global _sampler
+    period = max(1.0, float(os.environ.get("ARX_SAMPLE_S") or 15))
+    ok, misses = False, 0
+    while True:
+        time.sleep(period)  # first reading after one period: a short-lived `arx task start` never samples
+        with _sampler_lock:
+            tasks = [t for t in _sampled if t.meta.get("status") == "running"]
+            if not tasks or (not ok and misses >= 3):  # nothing open, or the command never answers: stop quietly
+                _sampled.clear()
+                _sampler = None
+                return
+        s = gpu_sample()
+        ok, misses = ok or bool(s), misses + (not s)
+        for t in tasks if s else ():
+            try:
+                t._sys(s)
+            except Exception:
+                pass
+
+
+def _sample(task: "Task") -> None:
+    global _sampler
+    if os.environ.get("ARX_SAMPLE", "1") == "0" or not _gpu_cmd():
+        return
+    with _sampler_lock:
+        _sampled.append(task)
+        if _sampler is None:
+            _sampler = threading.Thread(target=_sample_loop, name="arx-sampler", daemon=True)
+            _sampler.start()
+
 
 class BudgetExceeded(Exception):
     """Raised by `Task.check()` once a task (or one of its ancestors) has run out of time."""
@@ -620,6 +684,10 @@ class Task:
                 self._env = os.environ.get("ARX_PARENT")
                 _open.append(self)
                 os.environ["ARX_PARENT"] = self.id
+            try:
+                _sample(self)
+            except Exception:  # vitals are a nicety; they never stop a task from starting
+                pass
         else:
             self.meta = _read(self.dir / "task.json")
 
@@ -679,6 +747,12 @@ class Task:
         with self._lock:
             self._flush()
 
+    def _sys(self, reading: dict):
+        """A system reading (see _sample_loop): appended to metrics with `sys: true`; no heartbeat, `last` untouched."""
+        with self._lock:
+            if self.meta.get("status") == "running":
+                _append(self.dir / "metrics.jsonl", dict(t=now(), step=self._step, sys=True, **reading))
+
     def add_row(self, row: dict):
         with self._lock:
             _append(self.dir / "rows.jsonl", row)
@@ -695,6 +769,9 @@ class Task:
                 self.meta["summary"] = self.meta.get("summary", {}) | summary
             self.meta["status"], self.meta["ended"] = status, now()
             self._flush()
+        with _sampler_lock:
+            if self in _sampled:
+                _sampled.remove(self)
         if self in _open:
             _open.remove(self)
             env = _open[-1].id if _open else self._env

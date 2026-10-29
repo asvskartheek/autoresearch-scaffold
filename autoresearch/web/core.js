@@ -146,29 +146,14 @@ function ciBar(c){
  const P=v=>(50+v/span*50).toFixed(1)+'%';
  return `<div class="ci ${c.state||''}" title="Δ ${pts(c.delta)} pts, 90% CI ${pts(c.lo)} to ${pts(c.hi)}"><div class="axis"></div><div class="zero" style="left:${P(0)}"></div>${c.threshold?`<div class="thr" style="left:${P(c.threshold)}"></div>`:''}<div class="span" style="left:${P(c.lo)};width:calc(${P(c.hi)} - ${P(c.lo)})"></div><div class="pt" style="left:${P(c.delta)}"></div></div>`;
 }
-// line chart: few faint gridlines, no legend for one series, the last point marked and labelled
-function lineChart(series,{w=560,h=180,y0=null,ref=null,refLabel='',pctAxis=false,xLabel='step'}={}){
- const all=series.flatMap(s=>s.pts).filter(p=>p[1]!=null&&isFinite(p[1]));
- if(!all.length)return empty('No points yet');
- const W=w,H=h,L=44,R=14,T=12,B=22;
- const xs=all.map(p=>p[0]),ys=all.map(p=>p[1]);if(ref!=null)ys.push(ref);
- let x0=Math.min(...xs),x1=Math.max(...xs);if(x1===x0)x1=x0+1;
- let lo=y0??Math.min(...ys),hi=Math.max(...ys);if(hi===lo){hi+=Math.abs(hi)*.1||1;lo-=Math.abs(lo)*.1||0}
- const pad=(hi-lo)*.08;if(y0==null)lo-=pad;hi+=pad;
- const X=x=>L+(x-x0)/(x1-x0)*(W-L-R),Y=y=>T+(1-(y-lo)/(hi-lo))*(H-T-B);
- const tl=v=>pctAxis?Math.round(v*100)+'%':num(v,2);
- let g=[0,1/3,2/3,1].map(f=>lo+f*(hi-lo)).map(v=>`<line class="ax" x1="${L}" x2="${W-R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"/><text x="${L-8}" y="${Y(v)+3.5}" text-anchor="end">${tl(v)}</text>`).join('');
- g+=`<text x="${L}" y="${H-5}">${Math.round(x0)}</text><text x="${W-R}" y="${H-5}" text-anchor="end">${Math.round(x1).toLocaleString()} ${esc(xLabel)}</text>`;
- if(ref!=null)g+=`<line x1="${L}" x2="${W-R}" y1="${Y(ref)}" y2="${Y(ref)}" stroke="var(--chart-3)" stroke-dasharray="4 4" stroke-width="1.5"/>${refLabel?`<text x="${W-R}" y="${Y(ref)-5}" text-anchor="end" style="fill:var(--chart-3)">${esc(refLabel)}</text>`:''}`;
- for(const s of series){const p=s.pts.filter(p=>p[1]!=null&&isFinite(p[1]));if(!p.length)continue;
-  g+=`<path d="${p.map((q,i)=>(i?'L':'M')+X(q[0]).toFixed(1)+' '+Y(q[1]).toFixed(1)).join('')}" fill="none" stroke="${s.color||'var(--chart-1)'}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
-  const l=p[p.length-1];g+=`<circle cx="${X(l[0])}" cy="${Y(l[1])}" r="3.5" fill="${s.color||'var(--chart-1)'}" stroke="var(--surface)" stroke-width="2"/>`}
- return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(series.map(s=>s.name).join(', '))} by ${esc(xLabel)}">${g}</svg>`;
+// line chart: an interactive chart from charts.js (crosshair, drag-zoom, 1-2-5 ticks); opts.id keeps it across polls
+function lineChart(series,{h=180,y0=null,ref=null,refLabel='',pctAxis=false,xLabel='step',id=null,group=null,mode='compact'}={}){
+ if(!series.some(s=>s.pts.some(p=>p[1]!=null&&isFinite(p[1]))))return empty('No points yet');
+ const key=id||'lc-'+series.map(s=>s.name).join('|')+'-'+xLabel+'-'+(XC.mount.n=(XC.mount.n||0)+1);
+ return XC.box(key,{group:group||key,mode,h,xLabel,ymin:y0,yfmt:pctAxis?'pct':'num',smooth:false,
+  ref:ref!=null?{y:ref,label:refLabel}:null,series:series.map(s=>({name:s.name,color:s.color,pts:s.pts}))});
 }
-function spark(y,color='var(--chart-1)',h=32){
- if(!y||y.length<2)return '';const W=300,lo=Math.min(...y),hi=Math.max(...y),r=hi-lo||1;
- return `<svg viewBox="0 0 ${W} ${h}" width="100%" height="${h}" preserveAspectRatio="none" aria-hidden="true"><path d="${y.map((v,i)=>(i?'L':'M')+(i/(y.length-1)*W).toFixed(1)+' '+(h-3-(v-lo)/r*(h-6)).toFixed(1)).join('')}" fill="none" stroke="${color}" stroke-width="1.75" vector-effect="non-scaling-stroke"/></svg>`;
-}
+const spark=(y,color,h)=>XC.spark(y,color,h);
 // task bits shared by workbench, task and model views
 function kidRow([k,depth]){
  const pr=k.progress||{},sc=k.summary?.score??k.last?.running_score;
