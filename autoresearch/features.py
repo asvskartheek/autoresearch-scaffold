@@ -85,7 +85,9 @@ def inbox(p) -> list[dict]:
 
 
 def pending(p) -> list[dict]:
-    return [i for i in inbox(p) if i.get("status") == "queued"]
+    """Queued items whose time has come (`not_before`: an agent's usage limit resets then)."""
+    t = time.time()
+    return [i for i in inbox(p) if i.get("status") == "queued" and (i.get("not_before") or 0) <= t]
 
 
 def model_label(p, name: str | None) -> str:

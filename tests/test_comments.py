@@ -1,5 +1,5 @@
 """Comments on dashboard views and the `arx answer` daemon, with a fake agent. Run: python3 -m pytest -q tests"""
-import json, os, stat, sys, tempfile, unittest
+import json, os, stat, sys, tempfile, time, unittest
 from pathlib import Path
 
 os.environ["ARX_HOME"] = tempfile.mkdtemp()  # never touch the real ~/.arx
@@ -84,6 +84,18 @@ class Daemon(unittest.TestCase):
         self.assertIn("exit code 3", ma[-1]["body"]); self.assertTrue(ma[-1]["error"])
         self.assertIn("without replying", mb[-1]["body"])
         self.assertEqual({i["status"] for i in features.inbox(p)}, {"failed"})
+
+    def test_usage_limit_requeues(self):
+        p = project()
+        a = comments._post(p, "/api/comments", dict(kind="comment", body="later", anchor=ANCHOR))[1]
+        self.run_daemon(p, fake_agent(p.root, "echo \"You've hit your session limit · resets 11:20pm (Asia/Calcutta)\"; exit 1"))
+        th = comments.find(p, a["id"])
+        self.assertEqual(len(th["messages"]), 1)  # no failure reply: the question waits its turn
+        item = features.inbox(p)[0]
+        self.assertEqual(item["status"], "queued"); self.assertGreater(item["not_before"], time.time())
+        self.assertEqual(features.pending(p), [])
+        self.assertIn("usage limit", comments.with_agent(p, [th])[0]["agent"]["note"])
+        self.assertIsNone(answer.limited(Path(p.root / "research.json")))
 
     def test_timeout(self):
         p = project()

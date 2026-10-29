@@ -21,6 +21,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import re
 import time
 from pathlib import Path
 
@@ -191,6 +192,13 @@ def run_one(p: Project, item: dict, budget_s: float, shim: str) -> str:
     finally:
         log.close()
     took = now() - started
+    wait = limited(t.dir / "agent.log") if rc not in (0, None) else None
+    if wait:  # the agent's account hit its usage limit: not this question's fault, so it waits its turn again
+        at = time.strftime("%H:%M", time.localtime(wait))
+        t.note(f"Paused: the agent hit its usage limit. It retries at {at}.", "warn")
+        t.finish("failed")
+        features.update(p, item["id"], status="queued", not_before=wait, error=None, note=f"Waiting for the agent's usage limit to reset at {at}")
+        return "limited"
     if rc is None:
         status, msg = "budget", f"The agent ran out of its {budget_s / 60:.0f} min budget without answering."
     elif rc != 0:
@@ -206,6 +214,31 @@ def run_one(p: Project, item: dict, budget_s: float, shim: str) -> str:
     t.finish(status)
     features.update(p, item["id"], status="done" if status == "done" else "failed", error=msg)
     return status
+
+
+LIMIT = re.compile(r"(session|usage|rate) limit|limit reached|resets? (at )?\d|too many requests|\b429\b", re.I)
+RESET = re.compile(r"resets?\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*([ap]m)?", re.I)
+
+
+def limited(log: Path, default_s: float = 1800) -> float | None:
+    """When the agent's output says it hit a usage limit: the time to retry (the reset it names, else in 30 min)."""
+    try:
+        tail = log.read_bytes()[-4000:].decode(errors="replace")
+    except OSError:
+        return None
+    if not LIMIT.search(tail):
+        return None
+    m = RESET.search(tail)
+    if not m:
+        return now() + default_s
+    hh, mm, ap = int(m.group(1)), int(m.group(2) or 0), (m.group(3) or "").lower()
+    if ap == "pm" and hh < 12:
+        hh += 12
+    if ap == "am" and hh == 12:
+        hh = 0
+    lt = time.localtime()
+    at = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, hh % 24, mm, 0, 0, 0, -1)) + 60
+    return at + 86400 if at <= now() else at
 
 
 def _answered_safe(p, item, since):
