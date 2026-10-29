@@ -89,7 +89,8 @@ a:hover>.gl-pt,a:focus-visible>.gl-pt{stroke:var(--text);stroke-width:2}
  .gl-bn{display:none}
  .gl-ends span:last-child{flex:none}
  .gl-strip .kpi .s{white-space:normal}
- .gl-body{grid-template-columns:1fr;gap:14px;padding:12px 0 10px}
+ .gl-body{grid-template-columns:minmax(0,1fr);gap:14px;padding:12px 0 10px}
+ .gl-body>*{min-width:0}
  .gl-big{font-size:28px}
  .gl-figs{grid-template-columns:1fr;gap:0}
  .gl-figs>div{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;border-left:0;padding:8px 0;border-top:1px solid var(--rule)}
