@@ -50,7 +50,7 @@ const ARXP=window.ARXP={
   ta.addEventListener('input',()=>{const v=ta.value.slice(0,ta.selectionStart),m=/(^|\s)@([\w-]{0,20})$/.exec(v);close();if(!m)return;
    const q=m[2].toLowerCase(),opts=[...Object.entries(roster).filter(([k,p])=>k!==me.id&&p.name&&p.name.toLowerCase().startsWith(q)).map(([k,p])=>[k,p.name]),...('agent'.startsWith(q)?[['agent','agent']]:[])].slice(0,5);
    if(!opts.length)return;box=document.createElement('div');box.className='px-pick';
-   box.innerHTML=opts.map(([k,n])=>`<button type="button" data-n="${h(n)}">${k==='agent'?'<span class="px-face" style="--pc:var(--accent,#3b82f6)">AI</span>':ARXP.face(k,n)}${h(n)}</button>`).join('');
+   box.innerHTML=opts.map(([k,n])=>`<button type="button" data-n="${h(n)}">${k==='agent'?'<span class="px-face" style="--pc:var(--px-accent)">AI</span>':ARXP.face(k,n)}${h(n)}</button>`).join('');
    const r=ta.getBoundingClientRect();Object.assign(box.style,{left:r.left+'px',top:(r.bottom+4)+'px'});document.body.append(box);
    box.onmousedown=e=>{const b=e.target.closest('button');if(!b)return;e.preventDefault();const s=ta.selectionStart,pre=ta.value.slice(0,s).replace(/@[\w-]*$/,'@'+b.dataset.n+' ');
     ta.value=pre+ta.value.slice(s);ta.selectionStart=ta.selectionEnd=pre.length;close();ta.focus()}});
@@ -70,15 +70,20 @@ function cleanSvg(src){const t=document.createElement('template');t.innerHTML=sr
  walk(svg);if(!svg.getAttribute('viewBox')){const w=parseFloat(svg.getAttribute('width')),ht=parseFloat(svg.getAttribute('height'));if(w&&ht)svg.setAttribute('viewBox',`0 0 ${w} ${ht}`)}
  svg.removeAttribute('width');svg.removeAttribute('height');return `<div class="px-fig">${svg.outerHTML}</div>`}
 const css=document.createElement('style');
-css.textContent=`.px-face{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;flex:none;font:600 10px/1 var(--sans,system-ui);
- background:color-mix(in srgb,var(--pc) 18%,var(--page,#fff));color:var(--pc);box-shadow:0 0 0 2px var(--page,#fff)}
+// tokens: the dashboard (app.css) has --surface/--text/--raised, the paper reader (ui.css) --page/--foreground/--soft
+// and its teal is --ring (its --accent is a grey); system colours are the last resort and follow color-scheme
+css.textContent=`:root{--px-bg:var(--surface,var(--page,Canvas));--px-fg:var(--text,var(--foreground,CanvasText));
+ --px-hi:var(--raised,var(--soft,color-mix(in srgb,CanvasText 7%,transparent)));--px-line:var(--border,color-mix(in srgb,CanvasText 15%,transparent));
+ --px-accent:var(--ring,var(--accent,#2563eb))}
+.px-face{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;flex:none;font:600 10px/1 var(--sans,system-ui);
+ background:color-mix(in srgb,var(--pc) 18%,var(--px-bg));color:var(--pc);box-shadow:0 0 0 2px var(--px-bg)}
 .px-face.sm{width:18px;height:18px;font-size:8.5px}
-.px-face.on{box-shadow:0 0 0 2px var(--page,#fff),0 0 0 3.5px var(--pc)}
+.px-face.on{box-shadow:0 0 0 2px var(--px-bg),0 0 0 3.5px var(--pc)}
 .px-here{display:inline-flex;align-items:center}.px-here .px-face+.px-face{margin-left:-6px}
-.px-pick{position:fixed;z-index:2147483600;display:flex;flex-direction:column;min-width:180px;padding:4px;border-radius:10px;background:var(--surface,#fff);color:var(--text,#111);box-shadow:0 8px 28px rgba(0,0,0,.18),0 0 0 1px var(--border,#ddd)}
+.px-pick{position:fixed;z-index:2147483600;display:flex;flex-direction:column;min-width:180px;max-width:calc(100vw - 16px);padding:4px;border-radius:10px;background:var(--px-bg);color:var(--px-fg);box-shadow:0 8px 28px rgba(0,0,0,.28),0 0 0 1px var(--px-line)}
 .px-pick button{all:unset;display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;font:13px var(--sans,system-ui)}
-.px-pick button:hover{background:var(--hover,rgba(0,0,0,.05))}
-b.at{font-weight:600;color:var(--accent,#2563eb)}
-.px-fig{margin:6px 0 8px;color:var(--text,inherit)}.px-fig svg{display:block;width:100%;height:auto;max-height:260px}`;
+.px-pick button:hover,.px-pick button.on{background:var(--px-hi)}
+b.at{font-weight:600;color:var(--px-accent)}
+.px-fig{margin:6px 0 8px;color:var(--px-fg)}.px-fig svg{display:block;width:100%;height:auto;max-height:260px}`;
 document.head.append(css);
 })();
