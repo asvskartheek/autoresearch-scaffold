@@ -25,6 +25,7 @@ const SVGK=/^(rect|circle|ellipse|line|polyline|polygon|path|text|image|use)$/;
 const INLINE=/^(span|b|i|em|strong|small|sub|sup|u|s|abbr|time|kbd|var|q|cite|tspan|br|wbr|font)$/;
 const SEM=/^(tr|td|th|li|p|h[1-6]|a|button|img|canvas|svg|table|figure|figcaption|input|select|textarea|summary|blockquote|pre|dt|dd|caption|video|iframe|label|code|mark)$/;
 const NAMED=/(^|[\s_-])(tick|bar|tile|chip|pill|badge|tag|card|row|cell|dot|seg|stat|kpi|node|step|rung|track|lane|count|legend)s?($|[\s_-])/;
+const MARK=/^(point|tick|cell|bar|fill|track|label|line)$/;  // a mark on a chart: its tag also names the row or series it is in
 const isSvg=el=>el.namespaceURI==='http://www.w3.org/2000/svg';
 const cls=el=>(el.getAttribute('class')||'').toLowerCase();
 const ownText=el=>[...el.childNodes].some(n=>n.nodeType===3&&n.nodeValue.trim());
@@ -87,12 +88,39 @@ function kind(el){const t=el.localName,c=cls(el),r=el.getBoundingClientRect();
  return ownText(el)?'text':'box'}
 // the words around an element with none of its own (a bar: its row's), for the tag
 function around(el,max=60){for(let a=el.parentElement,i=0;a&&i<6&&a.localName!=='body';a=a.parentElement,i++){const t=a.getAttribute('title')||a.getAttribute('aria-label')||textOf(a,max);if(t)return t.replace(/\s+/g,' ').trim().slice(0,max)}return ''}
-// its own words: a figure mark has none, so its <title>, label or data-* value
+// a chart mark's value read off the chart itself: a slider's value; a tick's label (the text in line with it); a point's
+// x and y from the axis labels around it (the numeric labels in one row below it and in one column left of it, linear,
+// or logarithmic when the labels say so)
+const numOf=s=>{const t=String(s).replace(/[\s,+]/g,'').replace('\u2212','-');if(!/^-?(\d+\.?\d*|\.\d+)(k|K|M|%|s|ms)?$/.test(t))return null;
+ let v=parseFloat(t);if(/k$/i.test(t))v*=1e3;if(/M$/.test(t))v*=1e6;return isFinite(v)?v:null};
+function axisVal(ls,pos){ls=ls.slice().sort((a,b)=>a.p-b.p);const a=ls[0],b=ls[ls.length-1];if(b.p-a.p<4||a.v===b.v)return null;
+ const lin=p=>a.v+(p-a.p)*(b.v-a.v)/(b.p-a.p);
+ const log=a.v>0&&b.v>0&&ls.length>2&&ls.slice(1,-1).some(m=>Math.abs(lin(m.p)-m.v)>.05*Math.abs(b.v-a.v));
+ const v=log?Math.exp(Math.log(a.v)+(pos-a.p)*(Math.log(b.v)-Math.log(a.v))/(b.p-a.p)):lin(pos);
+ const dec=Math.min(2,Math.max(...ls.map(m=>(/\.(\d+)/.exec(m.s.replace(/[^\d.]/g,''))||[0,''])[1].length))+(log?0:1));
+ const u=(/(%|ms|s)$/.exec(a.s.trim())||[''])[0];
+ return v.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:Math.abs(v)>=100?0:dec})+u}
+function markVal(el){const svg=el.ownerSVGElement;if(!svg)return '';
+ const sl=el.closest('[role=slider][aria-valuenow]');if(sl){const v=+sl.getAttribute('aria-valuenow');return isFinite(v)?v.toLocaleString('en-US'):''}
+ const r=el.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,k=kind(el);
+ const ls=[...svg.querySelectorAll('text')].map(t=>{const q=t.getBoundingClientRect(),s=(t.textContent||'').trim();return {s,q,x:q.left+q.width/2,y:q.top+q.height/2,v:numOf(s)}}).filter(o=>o.s&&o.q.width);
+ if(k==='tick'){const vert=r.height>=r.width;let best=null,bd=1e9;
+  for(const o of ls){const d=vert?Math.abs(o.x-cx)+(Math.abs(o.y-cy)>40?1e6:0):Math.abs(o.y-cy)+(Math.abs(o.x-cx)>90?1e6:0);if(d<bd){bd=d;best=o}}
+  return best&&bd<12?best.s:''}
+ if(k!=='point'&&k!=='bar')return '';
+ const ns=ls.filter(o=>o.v!=null),grp=(f)=>{const g=[];for(const o of ns){let hh=g.find(x=>Math.abs(f(x[0])-f(o))<3);if(!hh)g.push(hh=[]);hh.push(o)}return g.filter(x=>x.length>=2)};
+ const xs=grp(o=>o.y).filter(g=>g[0].y>cy).sort((a,b)=>b[0].y-a[0].y)[0],ys=grp(o=>o.q.right).filter(g=>g[0].q.right<cx).sort((a,b)=>a[0].q.right-b[0].q.right)[0];
+ const xv=xs&&axisVal(xs.map(o=>({...o,p:o.x})),cx),yv=ys&&axisVal(ys.map(o=>({...o,p:o.y})),k==='bar'?r.top:cy);
+ return [xv,yv].filter(Boolean).join(', ')}
+// its own words: a figure mark has none, so its <title>, label, the value it stands for on its chart or data-* value; a
+// cell among many alike (a heatmap's) leads with its id
 function text(el,max=90){
  const svgT=x=>x.querySelector?.(':scope>title')?.textContent;
  let s=isSvg(el)&&el.localName!=='text'&&el.localName!=='svg'?svgT(el)||(el.parentElement&&el.parentElement.localName==='g'?svgT(el.parentElement):''):'';
  s=s||(el.localName==='svg'?'':textOf(el,max))||el.getAttribute('aria-label')||el.getAttribute('title')||el.getAttribute('alt')||'';
+ if(!s&&isSvg(el)&&el.localName!=='svg')s=markVal(el);
  if(!s&&el.localName!=='svg')s=over(el);  // a bar with its label drawn on top of it ("Champion · 1224")
+ const id=el.getAttribute('data-id');if(id&&!ownText(el)&&!el.childElementCount&&!String(s).includes(id))s=id+(s?' · '+s:'');
  if(!s)for(const a of el.attributes)if(/^data-(label|name|title|id|key|v|value)$/.test(a.name)&&a.value){s=a.value;break}
  if(!s&&el.localName==='svg')s=svgT(el)||el.getAttribute('aria-label')||textOf(el,max);
  return String(s).replace(/\s+/g,' ').trim().slice(0,max)}
@@ -134,7 +162,9 @@ function ARXPICK(o){
   if(!cur.isConnected){let again=null;try{again=kept&&D().documentElement.querySelector(':scope>'+kept)}catch(e){}again=again||(last&&leaf(last.x,last.y));cur=null;if(again&&ok(again))cur=again;if(!cur){box.style.display=tag.style.display='none';return}}
   const r=cur.getBoundingClientRect(),f=O(),L=r.left+f.x,T=r.top+f.y;
   Object.assign(box.style,{display:'block',left:L-2+'px',top:T-2+'px',width:r.width+4+'px',height:r.height+4+'px'});
-  const k=kind(cur),t=text(cur,48),c=t?'':around(cur);tag.innerHTML='';tag.append(k);if(t||c){const i=top.createElement('i');i.textContent=t?' · ':' · in ';tag.append(i,t||c)}
+  const k=kind(cur),t=text(cur,48),c=!t||MARK.test(k)?around(cur,40):'';tag.innerHTML='';tag.append(k);
+  if(t){const i=top.createElement('i');i.textContent=' · ';tag.append(i,t)}
+  if(c&&c!==t){const i=top.createElement('i');i.textContent=' · in ';tag.append(i,c)}
   tag.style.display='block';const tw=tag.offsetWidth,th=tag.offsetHeight;
   tag.style.left=Math.max(8,Math.min(innerWidth-tw-8,L-2))+'px';tag.style.top=(T-th-6>4?T-th-6:Math.min(innerHeight-th-4,T+r.height+6))+'px'}
  const loop=()=>{if(!on)return;draw();raf=requestAnimationFrame(loop)};
@@ -168,7 +198,7 @@ function ARXPICK(o){
    if(k==='k'||k==='ArrowUp')return go(()=>{trail=[];set(cur?sib(cur,-1):first(),'key')});
    return false}};
  return api}
-ARXPICK.kind=kind;ARXPICK.around=around;ARXPICK.text=text;ARXPICK.path=path;ARXPICK.textOf=textOf;ARXPICK.meaningful=meaningful;
+ARXPICK.kind=kind;ARXPICK.MARK=MARK;ARXPICK.around=around;ARXPICK.text=text;ARXPICK.path=path;ARXPICK.textOf=textOf;ARXPICK.meaningful=meaningful;
 window.ARXPICK=ARXPICK;
 })();
 
@@ -271,7 +301,7 @@ setTool('pick');
 // a picked element: its stable key (anchorFor), what it is, its own words and the card around it
 function pickEl(el){const r=el.getBoundingClientRect(),k=ARXPICK.kind(el),t=ARXPICK.text(el);
  const card=el.parentElement?.closest('section,article,.card'),head=card&&card!==el&&[...card.querySelectorAll('h1,h2,h3,h4,.hd,header')].find(x=>!x.contains(el));
- const a={...anchorFor(el),what:k,text:t||k,ctx:(t?'':ARXPICK.around(el,80))||(head&&textOf(head,80))||ctxOf(el,t),rx:0,ry:0,px:r1(r.left+scrollX),py:r1(r.top+scrollY)};
+ const a={...anchorFor(el),what:k,text:t||k,ctx:(!t||ARXPICK.MARK.test(k)?ARXPICK.around(el,80):'')||(head&&textOf(head,80))||ctxOf(el,t),rx:0,ry:0,px:r1(r.left+scrollX),py:r1(r.top+scrollY)};
  setMode(false);compose(a,Math.min(r.right,innerWidth-20),Math.max(r.top,8))}
 $c('.cm-lst').onclick=()=>{list.classList.toggle('on');drawList()};
 const KEYS={p:'pick',b:'box',a:'arrow',d:'pen',h:'highlight'};
