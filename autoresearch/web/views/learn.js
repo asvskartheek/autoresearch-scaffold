@@ -6,7 +6,9 @@ const L={b:null,loading:false,err:null,at:0,cur:null,ui:{},since:null,mode:null,
 const LK=()=>'arx-brief-seen:'+(PKEY||'home');
 const lget=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
 const lset=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
-const viewer=()=>lget('arx-name')||'';
+// who is learning: the person id (people.js); the name is what the side panel shows
+const viewer=()=>window.ARXP?ARXP.me().id:lget('arx-name')||'';
+const viewerName=()=>window.ARXP?ARXP.me().name:lget('arx-name')||'';
 // a card value: a count, a percentage (hill cards) or a signed delta in the card's unit
 const lfmt=(c,v)=>v==null?'—':c.int?Math.round(v).toLocaleString():c.unit==='%'?(+v).toFixed(1)+'%':lamt(c.unit||'',+v);
 // a stable shuffle per card, so options never sit in the same slot and do not jump between renders
@@ -113,6 +115,7 @@ const snap=(c,v)=>{v=Math.round(v/c.step)*c.step;return Math.min(c.max,Math.max(
 // ---------- the deck
 function uiOf(c){if(!L.ui[c.id])L.ui[c.id]={choice:c.pred&&c.type==='choice'?c.pred.guess:null,guess:c.pred?c.pred.guess:c.start,conf:c.pred?Math.round(c.pred.conf*100):70};return L.ui[c.id]}
 function cardHTML(c){
+ if(typeof TEACH!=='undefined'&&TEACH.active(c))return TEACH.card(c);  // sketch, spot, prototype, code or explain
  const u=uiOf(c),p=c.pred,rv=c.reveal,open=c.open,truth=rv?rv.truth:null;
  let body='';
  if(c.type==='choice'){
@@ -129,9 +132,10 @@ function cardHTML(c){
   reveal=`<div class="reveal"><div class="verdict">${verdict}${truth!=null?`<b>${c.type==='choice'?esc(truth):lfmt(c,truth)}</b>`:''}<span class="you">you: ${yours} at ${Math.round(p.conf*100)}%</span></div>${viz(rv.viz)}<p class="why">${esc(rv.why||'')}</p></div>`;
  }
  const n=L.b.cards.length,i=L.cur,ready=c.type==='number'||u.choice!=null;
+ const other=!p&&(c.methods||[]).length>1;
  return `<div class="kind">${pill(c.label,c.tone)}<span>${i+1} of ${n}</span>${c.t?`<span>${ago(c.t)}</span>`:''}</div>
   <p class="q">${esc(c.q)}</p>${c.ctx?`<p class="ctx">${esc(c.ctx)}</p>`:''}${body}${reveal}
-  <div class="actions">${p?`<button class="btn primary" data-l="next">${i===n-1?'Finish':'Next'} <kbd>space</kbd></button>`:`<button class="btn primary" data-l="commit" ${ready?'':'disabled'}>Reveal <kbd>space</kbd></button>`}
+  <div class="actions">${p?`<button class="btn primary" data-l="next">${i===n-1?'Finish':'Next'} <kbd>space</kbd></button>`:`<button class="btn primary" data-l="commit" ${ready?'':'disabled'}>Reveal <kbd>space</kbd></button>${other?'<button class="btn" data-t="skip" title="Learn this card another way">Another way</button>':''}`}
   ${i>0?'<button class="btn" data-l="prev">Back</button>':''}${c.ev?`<a class="ev mono" href="${/^\d{4}-\d{6}-/.test(c.ev)?'#task/'+enc(c.ev):'#slices'}">${esc(c.ev)}</a>`:''}</div>`;
 }
 function doneHTML(){
@@ -162,9 +166,9 @@ function knowHTML(){
  const bs=u.docs?.brief?.step_ms||{},catchMs=Object.entries(bs).filter(([k])=>ids.has(k)).reduce((a,[,v])=>a+v,0);
  const missed=(u.missed||[]).filter(m=>m.doc!=='brief').map(m=>{const id=m.doc.startsWith('concept:')?m.doc.slice(8):null,c=id&&b.concepts.find(x=>x.id===id);return c?{t:c.t,id}:{t:m.doc}});
  const uniq=[...new Map(missed.map(m=>[m.t,m])).values()];
- const v=viewer();
+ const v=viewerName();
  return `<div class="score"><div><b>${cal.hits}/${cal.n}</b><span>right</span></div><div><b>${cal.brier==null?'–':cal.brier.toFixed(2)}</b><span>Brier</span></div><div><b>${catchMs?span(catchMs/1000):'–'}</b><span>to catch up</span></div></div>
-  ${calChart(cal)}
+  ${calChart(cal)}${typeof TEACH!=='undefined'?TEACH.profile():''}
   ${uniq.length?`<div class="missed"><span class="muted">Missed</span>${uniq.map(m=>m.id?`<button class="chip" data-l="concept" data-id="${esc(m.id)}">${esc(m.t)}</button>`:`<span class="chip">${esc(m.t)}</span>`).join('')}</div>`:''}
   <div class="who"><span class="muted">${v?esc(v):'No name set'}</span><button class="linkbtn" data-l="name">${v?'Change':'Set your name'}</button></div>`;
 }
@@ -207,8 +211,9 @@ VIEWS.learn=()=>{
 // ---------- actions
 async function commitCard(){
  const c=L.b.cards[L.cur];if(!c||c.pred)return;const u=uiOf(c);
+ if(typeof TEACH!=='undefined'&&TEACH.active(c))return TEACH.submit(c);
  if(c.type==='choice'&&u.choice==null)return;
- if(!viewer()){const n=(prompt('Your name, so your predictions are yours')||'').trim();if(!n)return;lset('arx-name',n.slice(0,60))}
+ if(!viewerName()){const n=(prompt('Your name, so your predictions are yours')||'').trim();if(!n)return;window.ARXP?ARXP.setName(n):lset('arx-name',n.slice(0,60))}
  const guess=c.type==='choice'?u.choice:u.guess;
  try{
   const r=await fetch('api/predictions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({viewer:viewer(),card:c.id,guess,conf:u.conf/100})});
@@ -219,7 +224,7 @@ async function commitCard(){
  }catch(e){alert('Could not save the prediction: '+(e.message||e))}
 }
 function go(k){if(!L.b)return;L.cur=Math.max(0,Math.min(L.b.cards.length,k));render(true)}
-function setName(){const n=(prompt('Your name',viewer())||'').trim();if(n){lset('arx-name',n.slice(0,60));L.ui={};L.cur=null;loadBrief(true)}}
+function setName(){const n=(prompt('Your name',viewerName())||'').trim();if(n){window.ARXP?ARXP.setName(n):lset('arx-name',n.slice(0,60));L.ui={};L.cur=null;loadBrief(true)}}
 
 // concept dialog: one check at a time, options shuffled, a clear ✓ / ✗, results posted as understanding events
 function dlgEl(){let d=document.getElementById('ldlg');if(!d){d=document.createElement('dialog');d.id='ldlg';d.className='ldlg';document.body.append(d);

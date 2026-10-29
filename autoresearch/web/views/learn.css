@@ -96,3 +96,25 @@
 .ldlg .cq p{margin:0;font-weight:500;font-size:15px;overflow-wrap:anywhere}
 .ldlg .actions{margin-top:6px}
 .lrn .cal{max-width:320px}
+/* teaching methods (views/teach.js) */
+.lrn .t-strip{margin-left:auto;display:inline-flex;align-items:center;gap:2px}
+.lrn .t-strip b{margin-left:6px;font-size:12px;font-weight:600;color:var(--accent)}
+.lrn .t-m{display:grid;place-items:center;width:22px;height:22px;border-radius:6px;color:var(--muted)}
+.lrn .t-m.on{background:var(--accent-soft);color:var(--accent)}
+.t-ico{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.lrn .t-sk{cursor:ew-resize;touch-action:none;user-select:none}
+.lrn .t-sk[data-kind=bars]{cursor:pointer}
+.lrn .t-range{width:100%;margin:6px 0 2px;accent-color:var(--accent)}
+.lrn .t-need{opacity:.85;border-top:1px dashed var(--border);margin-top:6px;padding-top:6px}
+.lrn .t-code{margin:8px 0;padding:12px 14px;border-radius:10px;background:var(--subtle,var(--active));font:13px/1.9 var(--mono,ui-monospace,monospace);white-space:pre-wrap;overflow-x:auto}
+.lrn .t-code .k{color:var(--accent)}.lrn .t-code .c{color:var(--muted)}.lrn .t-code b{color:var(--text)}
+.lrn .t-code input{font:inherit;width:min(260px,60vw);padding:2px 6px;border-radius:6px;border:1px solid var(--control);background:var(--surface);color:var(--text)}
+.lrn .t-code input:focus{outline:2px solid var(--accent);outline-offset:1px}
+.lrn .t-ex{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--control);background:var(--surface);color:var(--text);font:inherit;resize:vertical}
+.lrn .t-ideas{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.lrn .t-ideas .chip.ok{background:color-mix(in srgb,var(--positive) 18%,transparent);color:var(--positive)}
+.lrn .t-ideas .chip.no{opacity:.55;text-decoration:line-through}
+.t-prof{display:flex;flex-direction:column;gap:6px;margin:12px 0 4px}
+.t-pr{display:grid;grid-template-columns:18px 1fr 40px;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.t-bar{display:flex;height:8px;border-radius:4px;background:var(--active);overflow:hidden}
+.t-bar i{display:block;height:100%}.t-bar .ok{background:var(--positive)}.t-bar .no{background:var(--negative);opacity:.7}.t-bar .sk{background:var(--control)}
