@@ -59,6 +59,18 @@ class State(unittest.TestCase):
         self.assertEqual((row["running"], row["stalled"], row["asks"], row["waiting"]), (1, 0, 1, 0))
 
 
+class Decisions(unittest.TestCase):
+    def test_old_promotes_kept_with_slim_gate(self):
+        f = Path(tempfile.mkdtemp()) / "decisions.jsonl"
+        gate = dict(rungs=[dict(rung="dev", status="pass", checks=[dict(slice="ds/dev", n=10, delta=0.1, lo=0.0, hi=0.2, cand_task="x")])])
+        lines = [dict(t=0, kind="promote", model="m1", replaced="m0", gate=gate)] + [dict(t=i, kind="note", gate=gate) for i in range(1, 80)]
+        f.write_text("\n".join(json.dumps(d) for d in lines))
+        out = server._tail(f, 50)
+        self.assertEqual(len(out), 51)
+        self.assertEqual(out[0]["gate"]["rungs"][0]["checks"][0], dict(slice="ds/dev", n=10, delta=0.1, lo=0.0, hi=0.2))
+        self.assertNotIn("gate", out[-1])
+
+
 class Reasons(unittest.TestCase):
     def test_paths_and_dicts(self):
         r = server._clean_reason("No climb {'n': 185, 'delta': 0.010811, 'lo': -0.011} see /Users/me/work/run/out.json.")

@@ -301,17 +301,38 @@ def project_list(default: Project) -> list[dict]:
     return out
 
 
+_CHECK = ("slice", "rule", "state", "threshold", "noisy", "n", "delta", "lo", "hi", "wins", "losses", "cand", "base")
+
+
+def _slim_gate(g) -> dict | None:
+    """A promote record's gate, without the task ids: each rung's checks with their paired numbers."""
+    if not isinstance(g, dict):
+        return None
+    return dict(rungs=[dict(rung=r.get("rung"), status=r.get("status"),
+                            checks=[{k: c.get(k) for k in _CHECK if k in c} for c in r.get("checks") or [] if isinstance(c, dict)])
+                       for r in g.get("rungs") or [] if isinstance(r, dict)])
+
+
 def _tail(path: Path, n: int) -> list:
+    """The last n decisions, plus every older promote: the champion page shows its promotion evidence whatever its
+    age. A promote keeps a slim gate; other decisions drop theirs."""
     if not path.exists():
         return []
+    lines = path.read_text().splitlines()
     out = []
-    for line in path.read_text().splitlines()[-n:]:
+    for i, line in enumerate(lines):
+        if i < len(lines) - n and '"promote"' not in line:
+            continue
         try:
             d = json.loads(line)
-            d.pop("gate", None)
-            out.append(d)
         except ValueError:
-            pass
+            continue
+        if i < len(lines) - n and d.get("kind") != "promote":
+            continue
+        g = d.pop("gate", None)
+        if d.get("kind") == "promote":
+            d["gate"] = _slim_gate(g)
+        out.append(d)
     return out
 
 
