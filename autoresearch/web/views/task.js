@@ -22,7 +22,9 @@ const scoreOf=(v,sl)=>v==null?DASH:isCont(sl)?cVal(v,sl):pct(v);
 const deltaOf=(d,sl)=>isCont(sl)?cDelta(d,sl):pts(d)+' pts';
 const mval=(k,v)=>v==null?DASH:isScoreKey(k)?scoreOf(v,CUR):/_runtime$/.test(k)?wbSpan(v):/_per_second$/.test(k)?XC.fmt(v)+' a second':/_s$/.test(k)?secs(v):fmtv(v);
 // a task's last logged numbers, the headline ones first (reward, score, loss…), bookkeeping (train_runtime…) last
-const lastKeys=t=>Object.entries(t.last||{}).filter(([k,v])=>typeof v==='number'&&!/^(t|step|epoch)$/.test(k))
+// (t.last is the last metrics row; a trainer's closing row holds only its summary, so merge every row when we have them)
+const lastOf_=(t,d)=>d?.metrics?.length?Object.assign({},...d.metrics.filter(m=>!m.sys)):t.last||{};
+const lastKeys=(t,d)=>Object.entries(lastOf_(t,d)).filter(([k,v])=>typeof v==='number'&&!/^(t|step|epoch)$/.test(k))
  .map(([k,v],i)=>[k,v,(MINOR.test(k)?1000:0)+(PRIO.includes(k)?PRIO.indexOf(k):100)+i/1e3]).sort((a,b)=>a[2]-b[2]).map(([k,v])=>[k,v]);
 // the champion side of vs_champion: its score is pooled per example over every complete run it has on the slice
 const pooled=vc=>vc.runs>1?`, champion pooled over ${vc.runs} runs`:'';
@@ -52,7 +54,7 @@ function finding(t,d){
  }
  const lead={done:'Done',completed:'Done',failed:'<b class="neg">Failed</b>',budget:'<b class="neg">Stopped by its time budget</b>'}[t.status]||esc(wbKind(t.status));
  const inside=t.budget_s&&t.ended?(t.ended-t.created<=t.budget_s?`, inside its ${wbSpan(t.budget_s)} budget`:`, over its ${wbSpan(t.budget_s)} budget`):'';
- const nums=lastKeys(t).slice(0,2).map(([k,v])=>`${wbMetric(k).toLowerCase()} ${mval(k,v)}`);
+ const nums=lastKeys(t,d).slice(0,2).map(([k,v])=>`${wbMetric(k).toLowerCase()} ${mval(k,v)}`);
  const sc=sm.score!=null?`scored ${scoreOf(sm.score,slOf(t))}${sm.n?` on ${sm.n.toLocaleString()}`:''}`:'';
  const extra=[sc,...(sc?[]:nums.map(x=>'final '+x))].filter(Boolean);
  const errE=t.status==='failed'?([...(d?.events||[])].reverse().find(e=>e.level==='error')||(t.note?.level==='error'?t.note:null)):null;
@@ -76,7 +78,7 @@ function kpiStrip(t,d){
   if(!live)items.push(['Errors',`<span class="${sm.errors?'neg':''}">${sm.errors??DASH}</span>`,sm.missing?`${sm.missing} examples missing`:'none missing']);
  }else{
   if(pr.total)items.push(['Progress',`${pr.done.toLocaleString()}<small>of ${pr.total.toLocaleString()}</small>`,(100*pr.done/pr.total).toFixed(0)+'%']);
-  const last=lastKeys(t).slice(0,2);
+  const last=lastKeys(t,d).slice(0,2);
   for(const [k,v] of last)items.push([wbMetric(k),mval(k,v),live?'latest':'final']);
   if(!items.length)return '';
  }
