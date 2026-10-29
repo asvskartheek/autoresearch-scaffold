@@ -1,6 +1,146 @@
 'use strict';
-// Comment on anything, on every view: press C (or the button), then Pin (click), Box, Arrow, Pen or Highlight on top of
-// the page, or select text outside comment mode. Stored through /api/comments in .research/comments.jsonl (see
+// The element picker (window.ARXPICK), shared by the dashboard and the paper reader (paper.html loads this file too),
+// like a browser inspector: the element under the pointer gets an outline and a tag naming it ("bar · Champion 1224").
+// It picks the smallest meaningful element (a bar, a tick, a chart, a row, a tile, a cell, a paragraph), never a wrapper
+// that only holds one. ] or Alt+wheel up: its parent; [ or Alt+wheel down: back to the child. j/k (or the arrows): the
+// next / previous sibling (past the last, the parent's). Enter or a click picks; Esc leaves. Touch: tap to show, tap
+// again to pick.
+//   const p = ARXPICK({doc, off, root, skip, pick, exit})   doc(): the document the elements live in; off(): its
+//   viewport's top-left in this window; root(): nothing above it is picked; skip(el): elements never picked;
+//   pick(el): the chosen one; exit(): Esc. p.on(el?) / p.off() / p.point(x, y) / p.tap(x, y, touch) / p.wheel(dy) /
+//   p.key(e) -> handled / p.cur()          ARXPICK.kind(el), ARXPICK.text(el), ARXPICK.path(from, el)
+(()=>{
+if(window.ARXPICK)return;
+// the element's text as it reads on screen: text nodes in different elements that sit apart get a space between them
+// ("+1" and "90% CI" are two spans with a margin, never "+190% CI"); hidden text is skipped
+function textOf(el,max=90){const d=el.ownerDocument;let out='',pr=null,pe=null,n=0;const w=d.createTreeWalker(el,NodeFilter.SHOW_TEXT);let t;
+ while((t=w.nextNode())&&n++<400&&out.length<max+40){const s=t.nodeValue;if(t.parentElement?.closest('script,style,noscript'))continue;
+  if(!s.trim()){if(out&&!/\s$/.test(out))out+=' ';continue}
+  const rg=d.createRange();rg.selectNodeContents(t);const rs=rg.getClientRects();if(!rs.length&&el.getClientRects().length)continue;
+  const r0=rs[0],rl=rs[rs.length-1];
+  if(pr&&r0&&t.parentElement!==pe&&!/\s$/.test(out)&&!/^\s/.test(s)&&(r0.left-pr.right>1.5||Math.abs(r0.top-pr.top)>4))out+=' ';
+  out+=s;pr=rl||pr;pe=t.parentElement}
+ return out.replace(/\s+/g,' ').trim().slice(0,max)}
+const SVGK=/^(rect|circle|ellipse|line|polyline|polygon|path|text|image|use)$/;
+const INLINE=/^(span|b|i|em|strong|small|sub|sup|u|s|abbr|time|kbd|var|q|cite|tspan|br|wbr|font)$/;
+const SEM=/^(tr|td|th|li|p|h[1-6]|a|button|img|canvas|svg|table|figure|figcaption|input|select|textarea|summary|blockquote|pre|dt|dd|caption|video|iframe|label|code|mark)$/;
+const NAMED=/(^|[\s_-])(tick|bar|tile|chip|pill|badge|tag|card|row|cell|dot|seg|stat|kpi|node|step|rung|track|lane)s?($|[\s_-])/;
+const isSvg=el=>el.namespaceURI==='http://www.w3.org/2000/svg';
+const cls=el=>(el.getAttribute('class')||'').toLowerCase();
+const ownText=el=>[...el.childNodes].some(n=>n.nodeType===3&&n.nodeValue.trim());
+function boxed(el){const s=el.ownerDocument.defaultView.getComputedStyle(el);
+ const bg=s.backgroundColor,clear=!bg||bg==='transparent'||/rgba\(.*,\s*0\)$/.test(bg);
+ return !clear||s.backgroundImage!=='none'||parseFloat(s.borderTopWidth)+parseFloat(s.borderLeftWidth)+parseFloat(s.borderBottomWidth)>0&&s.borderTopStyle+s.borderLeftStyle+s.borderBottomStyle!=='nonenonenone'||s.boxShadow!=='none'}
+const area=r=>r.width*r.height;
+const same=(a,b)=>Math.abs(a.left-b.left)<1.5&&Math.abs(a.top-b.top)<1.5&&Math.abs(a.right-b.right)<1.5&&Math.abs(a.bottom-b.bottom)<1.5;
+// is el something a person would point at? (a wrapper, a bare inline span or a chart's background rect is not)
+function meaningful(el){
+ if(!el||el.nodeType!==1)return false;const t=el.localName,r=el.getBoundingClientRect();if(r.width<1&&r.height<1)return false;
+ if(isSvg(el)){if(t==='svg')return true;
+  if(SVGK.test(t)){if(t==='tspan')return false;const svg=el.ownerSVGElement;if(t==='rect'&&svg){const sr=svg.getBoundingClientRect();if(area(r)>.8*area(sr))return false}  // a chart's background
+   return true}
+  return t==='g'&&!!(el.querySelector(':scope>title')||el.getAttribute('aria-label')||[...el.attributes].some(a=>a.name.startsWith('data-')))}
+ const s=el.ownerDocument.defaultView.getComputedStyle(el);if(s.display==='contents'||s.visibility==='hidden')return false;
+ if(SEM.test(t))return true;
+ if(NAMED.test(cls(el))||el.getAttribute('role')||el.getAttribute('aria-label'))return true;
+ if(INLINE.test(t))return boxed(el);  // a pill is a span with a background
+ if(boxed(el))return true;
+ if(ownText(el)){  // a line of text: itself, unless it is a number or a label inside a small boxed thing (a tile)
+  for(let a=el.parentElement,i=0;a&&i<3;a=a.parentElement,i++){if(boxed(a)||NAMED.test(cls(a)))return area(a.getBoundingClientRect())>90000}
+  return true}
+ return false}
+// what it is, in one word a person would use
+function kind(el){const t=el.localName,c=cls(el),r=el.getBoundingClientRect();
+ if(isSvg(el)){if(t==='svg')return 'chart';if(t==='rect')return /tick/.test(c)||Math.min(r.width,r.height)<=3?'tick':'bar';
+  if(t==='circle'||t==='ellipse')return 'point';if(t==='line')return Math.max(r.width,r.height)<=14||/tick/.test(c)?'tick':'line';
+  if(t==='text')return 'label';if(t==='path'||t==='polyline')return /area|band/.test(c)?'band':'line';return t==='g'?'group':'mark'}
+ const m=NAMED.exec(c);if(m){const k=m[2];return {pill:'chip',badge:'chip',tag:'chip',dot:'point',seg:'bar',kpi:'tile',stat:'tile',rung:'step',lane:'track'}[k]||k}
+ const T={tr:'row',td:'cell',th:'cell',li:'item',p:'paragraph',a:'link',button:'button',img:'image',canvas:'chart',table:'table',figure:'figure',
+  figcaption:'caption',pre:'code',code:'code',blockquote:'quote',input:'field',select:'field',textarea:'field',summary:'heading',label:'label',dt:'term',dd:'value',caption:'caption',video:'video',iframe:'frame',mark:'mark'};
+ if(T[t])return T[t];if(/^h[1-6]$/.test(t))return 'heading';if(el.getAttribute('role'))return el.getAttribute('role');
+ if(boxed(el)||!ownText(el)&&!el.children.length){if(Math.min(r.width,r.height)<=3)return 'tick';if(r.height<=18&&r.width>=3*r.height||r.width<=18&&r.height>=3*r.width)return 'bar';
+  if(Math.max(r.width,r.height)<=18)return 'point';return area(r)<=90000?'tile':'card'}
+ return ownText(el)?'text':'box'}
+// the words around an element with none of its own (a bar: its row's), for the tag
+function around(el,max=60){for(let a=el.parentElement,i=0;a&&i<6&&a.localName!=='body';a=a.parentElement,i++){const t=a.getAttribute('title')||a.getAttribute('aria-label')||textOf(a,max);if(t)return t.replace(/\s+/g,' ').trim().slice(0,max)}return ''}
+// its own words: a figure mark has none, so its <title>, label or data-* value
+function text(el,max=90){
+ const svgT=x=>x.querySelector?.(':scope>title')?.textContent;
+ let s=isSvg(el)&&el.localName!=='text'&&el.localName!=='svg'?svgT(el)||(el.parentElement&&el.parentElement.localName==='g'?svgT(el.parentElement):''):'';
+ s=s||(el.localName==='svg'?'':textOf(el,max))||el.getAttribute('aria-label')||el.getAttribute('title')||el.getAttribute('alt')||'';
+ if(!s)for(const a of el.attributes)if(/^data-(label|name|title|id|key|v|value)$/.test(a.name)&&a.value){s=a.value;break}
+ if(!s&&el.localName==='svg')s=svgT(el)||el.getAttribute('aria-label')||textOf(el,max);
+ return String(s).replace(/\s+/g,' ').trim().slice(0,max)}
+// the path from one element down to another: tag:nth-of-type steps (SVG tags too)
+function path(from,el){const parts=[];
+ while(el&&el!==from){let i=1,s=el;while((s=s.previousElementSibling))if(s.localName===el.localName)i++;
+  parts.unshift(el.localName+`:nth-of-type(${i})`);el=el.parentElement}
+ return el===from?parts.join('>'):null}
+const CSS0=`.pk-box{position:fixed;z-index:2147482000;pointer-events:none;border:2px solid var(--pk,#f59f00);border-radius:3px;box-shadow:0 0 0 1px rgba(0,0,0,.35);
+background:color-mix(in srgb,var(--pk,#f59f00) 12%,transparent);display:none;transition:all .06s ease-out}
+.pk-tag{position:fixed;z-index:2147482001;pointer-events:none;display:none;max-width:min(420px,calc(100vw - 16px));padding:2px 7px;border-radius:4px;
+font:500 11px/18px var(--mono,ui-monospace,Menlo,monospace);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+background:var(--text,var(--foreground,#131416));color:var(--surface,var(--page,var(--background,#fff)));box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.pk-tag i{font-style:normal;opacity:.6}`;
+const st=document.createElement('style');st.textContent=CSS0;(document.head||document.documentElement).append(st);
+function ARXPICK(o){
+ const top=document,box=top.createElement('div'),tag=top.createElement('div');box.className='pk-box';tag.className='pk-tag';
+ let on=false,cur=null,trail=[],last=null,via='pointer',raf=0,acc=0,kept=null;
+ const D=()=>o.doc(),R=()=>(o.root&&o.root())||D().body,O=()=>(o.off?o.off():{x:0,y:0});
+ const ok=el=>el&&el.isConnected&&R().contains(el)&&el!==R()&&!(o.skip&&o.skip(el))&&meaningful(el);
+ // the smallest meaningful element at a point (viewport px of this window)
+ function leaf(x,y){const f=O(),d=D();for(const el of d.elementsFromPoint(x-f.x,y-f.y)){if(o.skip&&o.skip(el))continue;
+   for(let a=el;a&&a!==R()&&R().contains(a);a=a.parentElement)if(ok(a))return a;return null}return null}
+ // the next one up that looks different (a wrapper the same size as its child is skipped)
+ function up(el){const r=el.getBoundingClientRect();for(let a=el.parentElement;a&&a!==R()&&R().contains(a);a=a.parentElement)if(ok(a)&&!same(a.getBoundingClientRect(),r))return a;return null}
+ // the meaningful elements directly under p: no other meaningful element between them and p
+ function kids(p){const out=[],walk=n=>{for(const c of n.children){if(o.skip&&o.skip(c))continue;if(ok(c)&&!same(c.getBoundingClientRect(),p.getBoundingClientRect()))out.push(c);else walk(c)}};walk(p);return out}
+ function set(el,how){if(el===cur)return;cur=el||null;via=how||via;kept=el?path(D().documentElement,el):null;draw();if(el&&how==='key'){const r=el.getBoundingClientRect(),f=O(),y=r.top+f.y;
+  if(y<60||y+Math.min(r.height,200)>innerHeight-60)el.scrollIntoView({block:'center',behavior:'instant'})}}
+ function draw(){if(!on||!cur){box.style.display=tag.style.display='none';return}
+  if(!cur.isConnected){let again=null;try{again=kept&&D().documentElement.querySelector(':scope>'+kept)}catch(e){}again=again||(last&&leaf(last.x,last.y));cur=null;if(again&&ok(again))cur=again;if(!cur){box.style.display=tag.style.display='none';return}}
+  const r=cur.getBoundingClientRect(),f=O(),L=r.left+f.x,T=r.top+f.y;
+  Object.assign(box.style,{display:'block',left:L-2+'px',top:T-2+'px',width:r.width+4+'px',height:r.height+4+'px'});
+  const k=kind(cur),t=text(cur,48),c=t?'':around(cur);tag.innerHTML='';tag.append(k);if(t||c){const i=top.createElement('i');i.textContent=t?' · ':' · in ';tag.append(i,t||c)}
+  tag.style.display='block';const tw=tag.offsetWidth,th=tag.offsetHeight;
+  tag.style.left=Math.max(8,Math.min(innerWidth-tw-8,L-2))+'px';tag.style.top=(T-th-6>4?T-th-6:Math.min(innerHeight-th-4,T+r.height+6))+'px'}
+ const loop=()=>{if(!on)return;draw();raf=requestAnimationFrame(loop)};
+ function grow(){if(!cur)return;const p=up(cur);if(p){trail.push(cur);set(p,via)}}
+ function shrink(){if(!cur)return;let c=trail.pop();if(!c||!cur.contains(c)){const ks=kids(cur);c=last&&ks.find(k=>{const r=k.getBoundingClientRect(),f=O();return last.x-f.x>=r.left&&last.x-f.x<=r.right&&last.y-f.y>=r.top&&last.y-f.y<=r.bottom})||ks[0]}if(c)set(c,via)}
+ function sib(el,dir){const p=up(el)||R(),ks=kids(p);let i=ks.indexOf(el);if(i<0)i=ks.findIndex(k=>k.contains(el));
+  if(i>=0&&ks[i+dir])return ks[i+dir];return p===R()?el:sib(p,dir)}
+ function first(){const f=O(),x=innerWidth/2,ys=[innerHeight*.3,innerHeight*.5,120];for(const y of ys){const el=leaf(x,y);if(el)return el}return kids(R())[0]||null}
+ const api={
+  on(el){if(on){if(el&&ok(el))set(el,'key');return}on=true;top.body.append(box,tag);trail=[];cur=null;last=null;
+   if(el){let a=el;while(a&&!ok(a))a=a.parentElement;if(a)set(a,'key')}loop()},
+  off(){on=false;cancelAnimationFrame(raf);cur=null;trail=[];box.remove();tag.remove()},
+  active:()=>on,cur:()=>cur&&cur.isConnected?cur:null,
+  point(x,y){if(!on)return;last={x,y};const el=leaf(x,y);if(!el){if(via==='pointer')set(null,'pointer');return}
+   if(cur&&cur.isConnected&&(cur===el||cur.contains(el)))return;  // still inside the grown pick: keep it
+   trail=[];set(el,'pointer')},
+  hide(){set(null,'pointer')},
+  tap(x,y,touch){last={x,y};const el=leaf(x,y);if(!el)return;
+   if(touch&&!(cur&&cur.isConnected&&(cur===el||cur.contains(el)))){trail=[];set(el,'pointer');return}
+   if(!(cur&&cur.isConnected&&(cur===el||cur.contains(el))))set(el,'pointer');o.pick(cur)},
+  wheel(dy){acc+=dy;if(Math.abs(acc)<40)return;acc<0?grow():shrink();acc=0},
+  grow,shrink,
+  key(e){if(!on||e.metaKey||e.ctrlKey)return false;const k=e.key;
+   const go=f=>{e.preventDefault();e.stopPropagation();e.stopImmediatePropagation?.();f();return true};
+   if(k==='Escape')return go(()=>o.exit&&o.exit());
+   if(k==='Enter')return go(()=>{if(!cur||!cur.isConnected)set(first(),'key');else o.pick(cur)});
+   if(e.altKey)return false;
+   if(k===']'||k==='ArrowRight')return go(()=>cur?grow():set(first(),'key'));
+   if(k==='['||k==='ArrowLeft')return go(()=>cur?shrink():set(first(),'key'));
+   if(k==='j'||k==='ArrowDown')return go(()=>{trail=[];set(cur?sib(cur,1):first(),'key')});
+   if(k==='k'||k==='ArrowUp')return go(()=>{trail=[];set(cur?sib(cur,-1):first(),'key')});
+   return false}};
+ return api}
+ARXPICK.kind=kind;ARXPICK.around=around;ARXPICK.text=text;ARXPICK.path=path;ARXPICK.textOf=textOf;ARXPICK.meaningful=meaningful;
+window.ARXPICK=ARXPICK;
+})();
+
+// Comment on anything, on every view: press C (or the Comment button) to pick an element (above), or choose Box, Arrow,
+// Pen or Highlight in the same toolbar to mark a region; or select text outside comment mode. Stored through /api/comments in .research/comments.jsonl (see
 // autoresearch/comments.py); every comment and reply asks the agent (`arx answer`), which replies in the thread.
 // Anchor: {route, key, rel, sel, text, quote, rx, ry, px, py, shape}. route = location.hash, so a comment stays on its
 // view. key = the nearest stable element (an id, a unique data-* attribute, an entity link such as #task/<id>, or the
@@ -8,16 +148,17 @@
 // shape = {tool, d, bw, bh, fit, ox, oy}: SVG path data in px from the anchor's top-left (page origin ox, oy when the
 // anchor is gone). Pins and shapes re-place after every dashboard render (S.afterRender), scroll and resize.
 (()=>{
-if(window.__arxComments)return;window.__arxComments=1;
+if(typeof S==='undefined'||window.__arxComments)return;window.__arxComments=1;  // the paper reader loads this file for ARXPICK only
 const API='api/comments';
 const host=document.createElement('div');host.id='arx-comments';host.className='cm-host';
-const TOOLS=[['pin','Pin','P'],['box','Box','B'],['arrow','Arrow','A'],['pen','Pen','D'],['highlight','Highlight','H']];
-host.innerHTML=`<svg class="cm-shapes" xmlns="http://www.w3.org/2000/svg"></svg><div class="cm-hl"></div><div class="cm-layer"></div><div class="cm-pins"></div><div class="cm-pops"></div>
+// the toolbar in comment mode: Pick (the main path), then the drawing tools for a region rather than an element
+const DRAW=[['box','Box','B'],['arrow','Arrow','A'],['pen','Pen','D'],['highlight','Highlight','H']];
+host.innerHTML=`<svg class="cm-shapes" xmlns="http://www.w3.org/2000/svg"></svg><div class="cm-layer"></div><div class="cm-pins"></div><div class="cm-pops"></div>
 <div class="cm-list"></div><div class="cm-chip"><button class="cm-btn on cmt">Comment</button><button class="cm-btn ask">Ask</button></div>
-<div class="cm-fab"><div class="cm-tools">${TOOLS.map(([k,n,key])=>`<button data-tool="${k}" title="${n} (${key})">${n}<b>${key}</b></button>`).join('')}</div><button class="cm-btn cm-lst" title="Comments">0</button><button class="cm-btn cm-mode">Comment<b>C</b></button></div>`;
-const $c=s=>host.querySelector(s),hl=$c('.cm-hl'),pinsEl=$c('.cm-pins'),pops=$c('.cm-pops'),list=$c('.cm-list'),chip=$c('.cm-chip'),layer=$c('.cm-layer'),shapesEl=$c('.cm-shapes'),tools=$c('.cm-tools');
+<div class="cm-fab"><div class="cm-tools"><button data-tool="pick" class="pk" title="Pick an element (P)">Pick</button><span class="cm-sep"></span>${DRAW.map(([k,n,key])=>`<button data-tool="${k}" title="${n} (${key})">${n}</button>`).join('')}</div><button class="cm-btn cm-lst" title="Comments">0</button><button class="cm-btn cm-mode">Comment<b>C</b></button></div>`;
+const $c=s=>host.querySelector(s),pinsEl=$c('.cm-pins'),pops=$c('.cm-pops'),list=$c('.cm-list'),chip=$c('.cm-chip'),layer=$c('.cm-layer'),shapesEl=$c('.cm-shapes'),tools=$c('.cm-tools');
 const h=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let mode=false,tool='pin',all=[],open=null,hot=null,draw=null,pending=null,agentOn=true;
+let mode=false,tool='pick',all=[],open=null,hot=null,draw=null,pending=null,agentOn=true;
 const here=()=>location.hash.slice(1)||'overview';
 // the person (people.js): one id per browser, a name they can change; every event carries both. at(html, thread): the
 // thread's author names count as mentionable too, so a mention made before a rename still reads as one
@@ -61,15 +202,7 @@ function cssPath(el){const parts=[];while(el&&el.nodeType===1&&el!==document.bod
  let i=1,s=el;while((s=s.previousElementSibling))if(s.tagName===el.tagName)i++;
  parts.unshift(el.tagName.toLowerCase()+`:nth-of-type(${i})`);el=el.parentElement}
  return parts.join('>')}
-// the element's text as it reads on screen: text nodes in different elements that sit apart get a space between them
-// ("+1" and "90% CI" are two spans with a margin, never "+190% CI"); hidden text is skipped
-function textOf(el,max=90){let out='',pr=null,pe=null,n=0;const w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let t;
- while((t=w.nextNode())&&n++<400&&out.length<max+40){const s=t.nodeValue;if(!s.trim()){if(out&&!/\s$/.test(out))out+=' ';continue}
-  const rg=document.createRange();rg.selectNodeContents(t);const rs=rg.getClientRects();if(!rs.length&&el.getClientRects().length)continue;
-  const r0=rs[0],rl=rs[rs.length-1];
-  if(pr&&r0&&t.parentElement!==pe&&!/\s$/.test(out)&&!/^\s/.test(s)&&(r0.left-pr.right>1.5||Math.abs(r0.top-pr.top)>4))out+=' ';
-  out+=s;pr=rl||pr;pe=t.parentElement}
- return out.replace(/\s+/g,' ').trim().slice(0,max)}
+const textOf=ARXPICK.textOf;
 const label=el=>{const t=textOf(el)||(el.getAttribute?.('aria-label')||el.getAttribute?.('title')||'').trim();
  return (t||el.tagName.toLowerCase()).slice(0,90)};
 function anchorFor(el){const [key,node]=keyOf(el);const rel=node?relPath(node,el):null;
@@ -90,15 +223,24 @@ const target=(x,y)=>{host.style.display='none';const el=document.elementFromPoin
 const isPage=el=>!el||el===document.documentElement||el===document.body||el.id==='app';
 
 /* ---------- mode, tools, keys */
-function setTool(t){tool=t;tools.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.tool===t));if(t!=='pin')hl.style.display='none'}
-function setMode(on){mode=on;$c('.cm-mode').classList.toggle('on',on);tools.classList.toggle('on',on);layer.classList.toggle('on',on);
- if(!on){hl.style.display='none';cancelDraw()}}
+// the picker (ARXPICK above): a click or Enter anchors a comment to exactly the element it outlines
+const picker=ARXPICK({doc:()=>document,root:()=>document.body,exit:()=>setMode(false),pick:el=>pickEl(el),
+ skip:el=>host.contains(el)||isPage(el)||el.id==='main'||el.closest?.('.pk-box,.pk-tag,.kh-ov,.kh-l')});
+function setTool(t,el){tool=t;tools.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.tool===t));
+ layer.classList.toggle('pick',t==='pick');if(mode&&t==='pick')picker.on(el);else picker.off()}
+function setMode(on,el){mode=on;$c('.cm-mode').classList.toggle('on',on);tools.classList.toggle('on',on);layer.classList.toggle('on',on);
+ if(on)setTool('pick',el);else{picker.off();cancelDraw()}}
 $c('.cm-mode').onclick=()=>setMode(!mode);
 tools.querySelectorAll('button').forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
-setTool('pin');
+setTool('pick');
+// a picked element: its stable key (anchorFor), what it is, its own words and the card around it
+function pickEl(el){const r=el.getBoundingClientRect(),k=ARXPICK.kind(el),t=ARXPICK.text(el);
+ const a={...anchorFor(el),what:k,text:t||k,ctx:ctxOf(el,t),rx:0,ry:0,px:r1(r.left+scrollX),py:r1(r.top+scrollY)};
+ setMode(false);compose(a,Math.min(r.right,innerWidth-20),Math.max(r.top,8))}
 $c('.cm-lst').onclick=()=>{list.classList.toggle('on');drawList()};
-const KEYS={p:'pin',b:'box',a:'arrow',d:'pen',h:'highlight'};
+const KEYS={p:'pick',b:'box',a:'arrow',d:'pen',h:'highlight'};
 addEventListener('keydown',e=>{const t=e.composedPath()[0]||{};if(/INPUT|TEXTAREA|SELECT/.test(t.tagName)||t.isContentEditable)return;
+ if(mode&&tool==='pick'&&picker.key(e))return;  // j k [ ] arrows Enter Esc move and choose the pick, before keys.js
  if(e.metaKey||e.ctrlKey||e.altKey)return;const k=e.key.toLowerCase();
  if(k==='c'&&!window.ARXK){e.preventDefault();e.stopPropagation();setMode(!mode);return}  // with keys.js, C is its (rebindable) comment key
  if(mode&&KEYS[k]){e.preventDefault();e.stopPropagation();setTool(KEYS[k]);return}  // only in comment mode: views keep their keys
@@ -118,14 +260,13 @@ function cancelDraw(){if(!draw)return;try{layer.releasePointerCapture(draw.id)}c
 layer.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.preventDefault();e.stopPropagation();
  getSelection()?.removeAllRanges();chip.style.display='none';layer.setPointerCapture(e.pointerId);
  document.documentElement.style.userSelect='none';
- draw={id:e.pointerId,tool,pts:[{x:e.clientX,y:e.clientY}],moved:false};hl.style.display='none'});
+ draw={id:e.pointerId,tool,pts:[{x:e.clientX,y:e.clientY}],moved:false}});
 layer.addEventListener('pointermove',e=>{e.preventDefault();
- if(!draw){if(tool!=='pin')return;const el=target(e.clientX,e.clientY);if(isPage(el)){hl.style.display='none';return}
-  const r=el.getBoundingClientRect();Object.assign(hl.style,{display:'block',left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px'});return}
+ if(!draw){if(tool==='pick')picker.point(e.clientX,e.clientY);return}
  const p={x:e.clientX,y:e.clientY},a=draw.pts[0],last=draw.pts[draw.pts.length-1];
  if(Math.hypot(p.x-a.x,p.y-a.y)>4)draw.moved=true;
  if(draw.tool==='pen'||draw.tool==='highlight'){if(Math.hypot(p.x-last.x,p.y-last.y)>=2)draw.pts.push(p)}else draw.pts=[a,p];
- if(draw.tool!=='pin')renderDraft()});
+ if(draw.tool!=='pick')renderDraft()});
 function renderDraft(){if(!draw)return;const d=shapePath(draw.tool,draw.pts);
  shapesEl.querySelector('.live')?.remove();shapesEl.insertAdjacentHTML('beforeend',`<g class="draft live"><path class="v ${draw.tool}" d="${d}"/></g>`)}
 // what a shape is about: an arrow -> the element under its tip (kept at the same spot inside it, the tail at the same
@@ -185,8 +326,9 @@ function finish(e){if(!draw||e.pointerId!==draw.id)return;e.preventDefault();e.s
  const d=draw;draw=null;try{layer.releasePointerCapture(e.pointerId)}catch(err){}document.documentElement.style.userSelect='';
  shapesEl.querySelector('.live')?.remove();
  const a=d.pts[0],b=d.pts[d.pts.length-1];
- if(d.tool==='pin'||!d.moved){const el=target(a.x,a.y);if(isPage(el)&&d.tool!=='pin'){drawPins();return}
-  if(!el||isPage(el)){setMode(false);return}const r=el.getBoundingClientRect();
+ if(d.tool==='pick'){picker.tap(a.x,a.y,e.pointerType!=='mouse');return}  // picks through pickEl
+ if(!d.moved){const el=target(a.x,a.y);if(!el||isPage(el)){drawPins();return}  // a click with a drawing tool: a comment on that element
+  const r=el.getBoundingClientRect();
   compose({...anchorFor(el),ctx:ctxOf(el,label(el)),rx:(a.x-r.left)/Math.max(1,r.width),ry:(a.y-r.top)/Math.max(1,r.height),px:a.x+scrollX,py:a.y+scrollY},a.x,a.y);
   setMode(false);return}
  const B=bbox(d.pts,d.tool),at={x:(B.right+B.left)/2,y:Math.min(B.bottom,innerHeight-20)};
@@ -217,9 +359,11 @@ layer.addEventListener('pointerup',finish);layer.addEventListener('pointercancel
 layer.addEventListener('lostpointercapture',e=>{if(draw&&e.pointerId===draw.id)cancelDraw()});
 for(const ev of['click','dblclick','contextmenu','selectstart','dragstart'])layer.addEventListener(ev,e=>{e.preventDefault();e.stopPropagation()});
 // the layer covers the page in comment mode; pass wheel scrolling through
-layer.addEventListener('wheel',e=>{let el=target(e.clientX,e.clientY);
- while(el&&!isPage(el)){const s=getComputedStyle(el);if(/(auto|scroll)/.test(s.overflowY+s.overflowX)&&(el.scrollHeight>el.clientHeight||el.scrollWidth>el.clientWidth)){el.scrollBy(e.deltaX,e.deltaY);e.preventDefault();return}el=el.parentElement}
- scrollBy(e.deltaX,e.deltaY);e.preventDefault()},{passive:false});
+// (Alt+wheel while picking: a bigger or smaller pick)
+layer.addEventListener('wheel',e=>{e.preventDefault();if(tool==='pick'&&e.altKey){picker.wheel(e.deltaY);return}
+ const re=()=>tool==='pick'&&picker.point(e.clientX,e.clientY);let el=target(e.clientX,e.clientY);
+ while(el&&!isPage(el)){const s=getComputedStyle(el);if(/(auto|scroll)/.test(s.overflowY+s.overflowX)&&(el.scrollHeight>el.clientHeight||el.scrollWidth>el.clientWidth)){el.scrollBy(e.deltaX,e.deltaY);re();return}el=el.parentElement}
+ scrollBy(e.deltaX,e.deltaY);re()},{passive:false});
 
 /* ---------- selected text -> one chip next to it: Comment (anchored to the quoted range) or Ask (questions.js qAsk) */
 document.addEventListener('mouseup',e=>{if(mode||host.contains(e.target))return;setTimeout(()=>{const s=getSelection();
@@ -268,13 +412,16 @@ function busy(p,on,label){p.dataset.busy=on?'1':'';p.querySelectorAll('textarea,
 function failed(p){busy(p,false);const e=p.querySelector('.cm-err')||p.insertBefore(Object.assign(document.createElement('div'),{className:'cm-err'}),p.querySelector('.cm-row'));e.textContent='Not sent. Try again.'}
 function needText(ta){ta.classList.remove('need');void ta.offsetWidth;ta.classList.add('need');ta.focus({preventScroll:true})}
 function takeName(p){const n=p.querySelector('.cm-name');if(!n)return me()||'you';const v=n.value.trim();if(v)setMe(v);return v||'you'}
+// a picked element (the picker): a kind word in `what` (bar, row, tile) and no shape or quote
+const picked=a=>!!a.what&&!a.shape&&!a.quote&&!a.what.includes('.');
 const shapeName={box:'Box',arrow:'Arrow',pen:'Drawing',highlight:'Highlight'};
 const anchorText=a=>{const bare=a.what&&a.text&&a.what.split('.')[0]===a.text;  // an element with no text of its own: name its card
+ if(picked(a))return a.what+' · '+(bare?a.ctx?'in '+a.ctx:'':a.text);
  return a.quote?'“'+a.quote.slice(0,120)+'”':(a.shape?shapeName[a.shape.tool]+' on ':'')+(bare&&a.ctx?a.ctx:a.text||'page')};
 function compose(a,x,y){closePop();a.route=here();a.vw=innerWidth;const p=document.createElement('div');p.className='cm-pop';
  p.innerHTML=`<div class="cm-anchor">${h(anchorText(a))}</div><textarea placeholder="Comment"></textarea><div class="cm-row">${nameField()}<button class="cm-sm x">Cancel</button><button class="cm-sm pri go" title="⌘↵">Comment</button></div>`;
  pops.append(p);place(p,x,y);const ta=p.querySelector('textarea');focusLater(ta);P&&P.complete(ta);
- if(a.shape||a.quote){pending=a;drawPins()}
+ if(a.shape||a.quote||picked(a)){pending=a;drawPins()}
  const send=async()=>{if(p.dataset.busy)return;const body=ta.value.trim();if(!body)return needText(ta);const author=takeName(p);busy(p,true,'Sending…');
   const ev=await post({kind:'comment',anchor:a,body,author});if(!ev||!ev.id)return p.isConnected&&failed(p);
   if(p.isConnected){closePop();thread(ev.id)}};  // closed with Esc while sending: the pin shows, the popover stays shut
@@ -309,7 +456,9 @@ function pos(c){const a=c.anchor||{},g=where(a),s=a.shape;
  if(s&&s.bx!=null&&(g.r||s.mode!=='text'))return [g.tx+s.bx*g.sx,g.ty+s.by*g.sy];
  if(g.r)return g.r.height<=48&&g.r.width<=360?[g.r.left,g.r.top]:[g.r.left+(a.rx??.5)*g.r.width,g.r.top+(a.ry??.5)*g.r.height];  // a word or a line: its corner
  return a.px!=null?[a.px-scrollX,a.py-scrollY]:null}
-function shapeSvg(a,cl,id){const s=a.shape,g=where(a),cls=`${cl}${id&&id===hot?' hot':''}`;
+function shapeSvg(a,cl,id){const s=a.shape,g=where(a),cls=`${cl}${id&&(id===hot||id===open)?' hot':''}`;
+ if(picked(a)){if(!g.r)return '';const q=g.r;  // the picked element's outline, shown while its thread is hovered, open or being written
+  return `<g class="${cls} pk" data-id="${h(id||'')}"><rect class="v pk" x="${r1(q.left-2)}" y="${r1(q.top-2)}" width="${r1(q.width+4)}" height="${r1(q.height+4)}" rx="3"/></g>`}
  if(g.rg){const rs=[...g.rg.getClientRects()].filter(q=>q.width>.5);
   return `<g class="${cls} q" data-id="${h(id||'')}">${rs.map(q=>`<rect class="v q" x="${r1(q.left)}" y="${r1(q.top)}" width="${r1(q.width)}" height="${r1(q.height)}" rx="2"/>`).join('')}</g>`}
  if(!s||!s.d)return '';const d=h(s.d),t=h(s.tool);
@@ -328,7 +477,7 @@ function drawPins(){if(draw)return;const ts=ready()?mine():[],openN=mine().filte
  pinsEl.innerHTML=ts.map((c,i)=>{const xy=pos(c);if(!xy)return '';const [x,y]=xy;
   return `<div class="cm-pin ${klass(c)}${x<28?' r':''}${c.id===hot?' hot':''}" data-id="${c.id}" style="left:${x}px;top:${y}px" title="${h(c.messages[0].body.slice(0,200))}">${i+1}</div>`}).join('');
  const live=shapesEl.querySelector('.live');
- shapesEl.innerHTML=ts.map(c=>shapeSvg(c.anchor||{},klass(c),c.id)).join('')+(pending&&(pending.shape||pending.quote)?shapeSvg(pending,'draft',''):'');if(live)shapesEl.append(live);
+ shapesEl.innerHTML=ts.map(c=>shapeSvg(c.anchor||{},klass(c),c.id)).join('')+(pending&&(pending.shape||pending.quote||picked(pending))?shapeSvg(pending,'draft',''):'');if(live)shapesEl.append(live);
  pinsEl.querySelectorAll('.cm-pin').forEach(el=>el.onclick=()=>thread(el.dataset.id));
  if(open){const c=ts.find(t=>t.id===open),p=pops.firstChild;if(c&&p&&!p.contains(document.activeElement)){const [x,y]=pos(c)||[innerWidth-360,innerHeight-120];place(p,x,y)}}}
 function setHot(id){if(hot===id)return;hot=id;host.querySelectorAll('[data-id]').forEach(e=>e.classList.toggle('hot',!!id&&e.dataset.id===id))}
@@ -378,7 +527,7 @@ addEventListener('scroll',drawPins,{passive:true,capture:true});addEventListener
 const threadFor=el=>el&&mine().find(t=>{if(t.resolved)return false;const a=anchorEl(t);return a&&(el.contains(a)||a.contains(el))});
 const target2=el=>open&&all.find(t=>t.id===open)||threadFor(el);
 window.ARXC={
- comment(el){if(!el){setMode(!mode);return}const r=el.getBoundingClientRect();compose(anchorFor(el),Math.max(8,r.left),r.bottom+6)},
+ comment(el){setMode(!mode,el)},  // pick mode, starting on the focused item when there is one (Enter comments on it)
  step(d){const ts=mine().filter(t=>!t.resolved);if(!ts.length)return false;const i=ts.findIndex(t=>t.id===open);thread(ts[((i<0?(d>0?-1:0):i)+d+ts.length)%ts.length].id);return true},
  reply(el){const c=target2(el);if(!c)return false;if(open!==c.id)thread(c.id);const ta=pops.querySelector('textarea');ta&&focusLater(ta);return true},
  resolve(el){const c=target2(el);if(!c||c.resolved)return false;post({kind:'resolve',parent:c.id,author:me()||'you'}).then(()=>{if(open===c.id)closePop()});return true},

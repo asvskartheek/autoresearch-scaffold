@@ -12,7 +12,13 @@
 .cm-tools button{height:26px;padding:0 9px;border-radius:4px;border:0;background:transparent;color:var(--muted);cursor:pointer}
 .cm-tools button:hover{background:var(--raised);color:var(--text)}
 .cm-tools button.on{background:var(--active);color:var(--text);font-weight:600}
-.cm-tools b{font:500 10px var(--mono);opacity:.6;margin-left:5px}
+.cm-tools button.pk{color:var(--text);font-weight:500}
+.cm-tools button:not(.pk){font-size:12px;padding:0 7px}
+.cm-sep{flex:none;width:1px;margin:4px 3px;background:var(--rule)}
+.cm-layer.pick{cursor:default}
+/* a picked element's outline: faint until its thread is hovered or open, dashed while the comment is written */
+.cm-shapes rect.v.pk{fill:none;stroke:var(--c);stroke-width:2;opacity:0;transition:opacity .12s}
+.cm-shapes g.hot rect.v.pk{opacity:1}.cm-shapes g.draft rect.v.pk{opacity:1;stroke-dasharray:5 3}
 .cm-layer{position:fixed;inset:0;pointer-events:none;cursor:crosshair;user-select:none;-webkit-user-select:none;touch-action:none}
 .cm-layer.on{pointer-events:auto}
 .cm-shapes{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;overflow:visible}
@@ -25,7 +31,6 @@
 .cm-shapes .hit.highlight{stroke-width:20}
 .cm-shapes rect.v.q{fill:var(--c);fill-opacity:.28;stroke:none}.cm-shapes g.hot rect.v.q{fill-opacity:.45}.cm-shapes g.res rect.v.q{fill-opacity:.15}
 .cm-shapes g.draft .v{stroke-dasharray:6 4}.cm-shapes g.draft .v.highlight{stroke-dasharray:none}
-.cm-hl{position:fixed;border:2px solid var(--cm-open);border-radius:4px;background:color-mix(in srgb,var(--cm-open) 8%,transparent);pointer-events:none;display:none}
 .cm-pin{position:fixed;width:24px;height:24px;margin:-24px 0 0 -24px;border-radius:12px 12px 2px 12px;background:var(--cm-open);color:#16181a;
  font:600 11px var(--mono);display:flex;align-items:center;justify-content:center;pointer-events:auto;cursor:pointer;border:2px solid var(--surface);transition:transform .12s}
 .cm-pin.rep{background:var(--cm-rep);color:var(--on-primary)}.cm-pin.res{background:var(--cm-res);opacity:.55;color:var(--on-primary)}
@@ -69,7 +74,7 @@
 .cm-n{font:600 11px var(--mono);color:var(--warning);margin-right:6px}
 .cm-chip{position:fixed;pointer-events:auto;display:none;gap:4px}
 #main::after{content:"";display:block;height:56px}  /* room under the last card for the Comment button */
-@media (max-width:600px){.cm-btn b,.cm-tools b{display:none}}  /* no keyboard hints on a phone */
+@media (max-width:600px){.cm-btn b{display:none}.cm-tools button:not(.pk){padding:0 5px}}  /* no keyboard hints on a phone */
 @media print{.cm-host{display:none}#main::after{display:none}}
 /* people: faces on messages, who has read the thread, threads for you */
 .cm-who{display:flex;align-items:center;gap:6px}
