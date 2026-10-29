@@ -718,7 +718,7 @@ function setHover(id) {
 inkSvg.addEventListener("click", e => { const g = e.target.closest("g[data-id]"); if (g && g.dataset.id !== "_draft") { e.stopPropagation(); setActive(g.dataset.id, { scroll: "if-needed" }); } });
 inkSvg.addEventListener("pointerover", e => { const g = e.target.closest("g[data-id]"); g && g.dataset.id !== "_draft" && setHover(g.dataset.id); });
 inkSvg.addEventListener("pointerout", e => { const g = e.target.closest("g[data-id]"); if (g && !g.contains(e.relatedTarget)) setHover(null); });
-addEventListener("resize", drawInk);
+addEventListener("resize", () => { if (pen && mobile()) setPen(pen); drawInk(); });
 
 // ---------- share: the paper's link (for others once `arx share on` ran) and the paper as one file ----------
 async function paperLink(hash = "") {
@@ -830,7 +830,7 @@ $("#showRes").onclick = toggleRes; $("#showRes").onkeydown = e => (e.key === " "
 function onKey(e) {
   const typing = e.target.closest && e.target.closest("input,textarea,[contenteditable]");
   const k = { b: "box", a: "arrow", d: "pen", h: "highlight" }[e.key];
-  if (!typing && !e.metaKey && !e.ctrlKey && !e.altKey && k) { e.preventDefault(); setPen(k); return; }
+  if (!typing && !e.metaKey && !e.ctrlKey && !e.altKey && k && !mobile()) { e.preventDefault(); setPen(k); return; }  // below 900 px the tools are hidden: no drawing
   if (e.key === "Escape" && pen) { setPen(pen); return; }
   if ((e.metaKey || e.ctrlKey) && e.altKey && (e.key === "m" || e.code === "KeyM")) { e.preventDefault(); startDraft(); }
   if (e.key === "Escape") { if (draft) cancelDraft(); else if (active) setActive(null); }
