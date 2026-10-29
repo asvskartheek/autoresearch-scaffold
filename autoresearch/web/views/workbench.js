@@ -157,11 +157,14 @@ const row=t=>`<article class="wb-job short ${t.status==='stalled'?'stalled':''}"
 // (e.g. "live: …" rolling numbers): the eval shows, its sub-card does not.
 function strip(skip=new Set()){
  const evalKid=t=>t.parent&&byId(t.parent)?.kind==='eval';
- const done=S.state.tasks.filter(t=>!isLive(t)&&t.ended&&!skip.has(t.id)&&!evalKid(t)&&(t.kind==='eval'||!S.state.tasks.some(k=>k.parent===t.id))).sort((a,b)=>b.ended-a.ended).slice(0,6);
- if(!done.length)return '';
- return `<div class="wb-strip">${done.map(t=>{const ok=t.status==='done'||t.status==='completed',sm=t.summary||{};
-  const res=t.kind==='eval'&&sm.score!=null?(S.state.slices[t.slice]?.scale==='continuous'?fmtv(sm.score):`${n0(sm.score*(sm.n||0))} of ${n0(sm.n||0)}`):span(t.ended-t.created);
-  return `<a class="wb-chip" href="#task/${enc(t.id)}" title="${esc(t.title)}"><span class="${ok?'pos':'neg'}">${ok?'✓':'✕'}</span><span class="nm">${t.kind==='eval'&&t.model?mn(t.model)+(t.slice?` <span class="mono sub">${esc(short(t.slice))}</span>`:''):esc(t.title)}</span><span class="res">${esc(res)}</span><span class="at">${ago(t.ended)}</span></a>`}).join('')}</div>`;
+ const done=S.state.tasks.filter(t=>!isLive(t)&&t.ended&&!skip.has(t.id)&&!evalKid(t)&&(t.kind==='eval'||!S.state.tasks.some(k=>k.parent===t.id))).sort((a,b)=>b.ended-a.ended).slice(0,30);
+ // repeats of one job (three "Answer a question request" in a row) are one chip with a count
+ const grp=[];for(const t of done){const g=grp.at(-1),ok=t.status==='done'||t.status==='completed';
+  if(g&&t.kind!=='eval'&&g.t.kind===t.kind&&g.t.title===t.title&&g.ok===ok)g.n++;else grp.push({t,n:1,ok})}
+ if(!grp.length)return '';
+ return `<div class="wb-strip">${grp.slice(0,6).map(({t,n,ok})=>{const sm=t.summary||{};
+  const res=t.kind==='eval'&&sm.score!=null?(S.state.slices[t.slice]?.scale==='continuous'?fmtv(sm.score):`${n0(sm.score*(sm.n||0))} of ${n0(sm.n||0)}`):emptyEval(t)?'no results':wbTook(t)!=null?span(wbTook(t)):'recorded';
+  return `<a class="wb-chip" href="#task/${enc(t.id)}" title="${esc(t.title)}${n>1?` · ${n} in a row, the latest opens`:''}"><span class="${ok&&!emptyEval(t)?'pos':'neg'}">${ok&&!emptyEval(t)?'✓':'✕'}</span><span class="nm">${t.kind==='eval'&&t.model?mn(t.model)+(t.slice?` <span class="mono sub">${esc(short(t.slice))}</span>`:''):esc(t.title)}${n>1?` <b class="wb-x">×${n}</b>`:''}</span><span class="res">${esc(res)}</span><span class="at">${ago(t.ended)}</span></a>`}).join('')}</div>`;
 }
 
 // recent failures nobody has opened yet: a red row with the error, until opened or a day old

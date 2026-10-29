@@ -5,6 +5,7 @@
 .wb-chip .nm{font-weight:500;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .wb-chip .res{font-family:var(--mono);font-size:12px}
 .wb-chip .at{font-size:12px;color:var(--faint)}
+.wb-chip .wb-x{font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
 .wb-jobs{display:flex;flex-direction:column;gap:12px}
 .wb-job{position:relative;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface);transition:border-color .12s}
 .wb-job:hover{border-color:var(--control)}
