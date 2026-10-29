@@ -8,11 +8,15 @@ import os
 from pathlib import Path
 import unittest
 
-from playwright.sync_api import sync_playwright
+try:
+    from playwright.sync_api import sync_playwright
+except ImportError:
+    sync_playwright = None
 
 KEYS = Path(__file__).resolve().parents[2] / 'autoresearch/web/keys.js'
 
 
+@unittest.skipUnless(sync_playwright, "Install Playwright to run browser regressions")
 class Keyboard(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
