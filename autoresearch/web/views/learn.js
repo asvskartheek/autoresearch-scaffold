@@ -200,7 +200,7 @@ VIEWS.learn=()=>{
  const since=b.since?`Since ${stamp(b.since)}`:'All time';
  const stage=!b.cards.length?`<div class="done-h"><h2>${b.since?'Nothing new since '+esc(stamp(b.since)):'Nothing to predict yet'}</h2>${b.empty?`<span class="muted">${esc(b.empty)}</span>`:''}</div>`:c?cardHTML(c):doneHTML();
  return head+`<div class="lrn"><div class="lhead"><span class="muted">${esc(since)} · ${plural(b.cards.length,'card')}</span><div class="pips">${pips}</div></div>
-  <div class="layout"><section class="stage${b.cards.length?'':' empty'}" aria-live="polite">${stage}</section>
+  <div class="layout"><section class="stage${b.cards.length?'':' blank'}" aria-live="polite">${stage}</section>
   <aside class="lside">${panel('How well you know this project',knowHTML())}</aside></div>${conceptsHTML()}</div>`;
 };
 
