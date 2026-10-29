@@ -250,8 +250,8 @@ def _card_goal(p: Project, name: str) -> dict | None:
         g = p.goal_status(name)
     except SystemExit:
         return None
-    if g.get("value") is None or g.get("kpi", "score") != "score" or not g.get("n"):
-        return None
+    if g.get("value") is None or g.get("kpi", "score") != "score" or not g.get("n") or _cont(p, g["slice"]):
+        return None  # the card counts examples right: a continuous goal slice has no count
     N, have = int(g["n"]), round(g["value"] * g["n"])
     need = math.ceil(g["target"] * N - 1e-9)
     traj = []
