@@ -58,3 +58,4 @@ tr.sl-runs-row td{padding-top:4px;padding-bottom:12px}
 .sl-rt{font-size:12px;text-align:right;white-space:nowrap}
 .sl-runf{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 @media (max-width:640px){.sl-runl li{grid-template-columns:minmax(0,1fr) auto}.sl-rt{display:none}}
+.sl-pr{display:block;font-size:12px;color:var(--muted);font-weight:400;white-space:nowrap}
