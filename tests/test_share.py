@@ -92,11 +92,11 @@ class Export(unittest.TestCase):
         papers.post(p, "demo", "comment", body="why <svg><rect/></svg>?", author="Ann", anchor=dict(block="a", quote="some"))
         one = share.export_paper(p, "demo")
         self.assertIn("@layer arx{", one); self.assertIn('<div class="arx-fig"><svg><rect/></svg></div>', one)
-        html = share.export_dashboard(p, "gamma")
+        html = share.export_dashboard(p, "gamma", view="#hill/x")
         self.assertIn("window.ARX_SNAP=", html); self.assertNotIn('<script src="', html); self.assertNotIn('<link rel="stylesheet"', html)
         snap = json.loads(html.split("window.ARX_SNAP=", 1)[1].split(";</script>", 1)[0])
         self.assertIn("base", snap["ref"]["models"]); self.assertEqual(snap["ref"]["champion"], "base")  # model papers open
-        self.assertIn(share.SNAP_TAG, snap["ref"]["tpl"])
+        self.assertIn(share.SNAP_TAG, snap["ref"]["tpl"]); self.assertEqual(snap["view"], "hill/x")  # opens on that view
         self.assertIn("demo", snap["papers"]); self.assertIn("api/state", snap["data"]); self.assertEqual(snap["data"]["api/projects"][0]["key"], "gamma")
         self.assertNotIn("</script", html.split("window.ARX_SNAP=", 1)[1].split(";</script>", 1)[0])
         for write in (".cm-pop textarea", ".cm-pop .go", ".gi,", ".q-form", "[data-t=go]"):  # read-only: no write control shows

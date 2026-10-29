@@ -239,6 +239,7 @@ def snapshot_data(p, key: str | None = None, budget: int = TASK_BUDGET) -> dict:
 
 
 SHIM = r"""(()=>{const S=window.ARX_SNAP;const _f=window.fetch;
+if(!location.hash&&S.view)history.replaceState(null,'','#'+S.view);  // opens on the view it was taken from
 const key=u=>{const m=String(u).match(/api\/[^?#]*/);return m?decodeURIComponent(m[0]):null};
 const ok=b=>new Response(JSON.stringify(b),{status:200,headers:{'Content-Type':'application/json'}});
 // a short line at the foot of the page: what this file cannot show
@@ -320,7 +321,7 @@ def _refs(p) -> dict | None:
     return dict(tpl=tpl, models=models, champion=p.champion())
 
 
-def export_dashboard(p, key: str | None = None) -> str:
+def export_dashboard(p, key: str | None = None, view: str = "") -> str:
     page = (WEB / "index.html").read_text()
     page = re.sub(r"<script>/\* start the ledger reads.*?</script>\n", "", page, flags=re.S)
     page = re.sub(r'<link rel="(?:preconnect|preload)"[^>]*>\n?', "", page)
@@ -329,7 +330,8 @@ def export_dashboard(p, key: str | None = None) -> str:
     page = re.sub(r'<script src="([^"]+)"></script>',
                   lambda m: f"<script>{_inline((WEB / m.group(1)).read_text())}</script>", page)
     snap = dict(taken=time.time(), project=key or "", data=snapshot_data(p, key),
-                papers={n: export_paper(p, n) for n in papers.names(p)}, ref=_refs(p))
+                papers={n: export_paper(p, n) for n in papers.names(p)}, ref=_refs(p),
+                view=str(view or "").lstrip("#")[:300])
     head = (f"<script>window.ARX_SNAP={_js(snap)};</script>"
             f"<script>{_inline(SHIM)}</script><style>{SNAP_CSS}</style>")
     return page.replace("<head>", "<head>\n<meta charset=\"utf-8\">" + head, 1)  # the charset within the first 1 KB
@@ -501,7 +503,7 @@ def _export(p, path, q):
     if q.get("paper"):
         body, fname = export_paper(p, q["paper"]), f"{q['paper']}.html"
     else:
-        body, fname = export_dashboard(p, key), f"{key or 'arx'}-{time.strftime('%Y%m%d-%H%M')}.html"
+        body, fname = export_dashboard(p, key, q.get("view") or ""), f"{key or 'arx'}-{time.strftime('%Y%m%d-%H%M')}.html"
     return 200, body.encode(), "text/html; charset=utf-8", {"Content-Disposition": f'attachment; filename="{fname}"'}
 
 
