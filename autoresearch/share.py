@@ -196,7 +196,7 @@ addEventListener('DOMContentLoaded',()=>{const b=document.createElement('div');b
 
 SNAP_CSS = """.arx-snap{position:fixed;left:12px;bottom:12px;z-index:50;padding:4px 10px;border-radius:999px;font-size:12px;
 background:var(--surface,#fff);color:var(--muted,#666);box-shadow:0 0 0 1px var(--border,#ddd)}
-.cm-fab .cm-mode,.cm-chip{display:none!important}"""
+.cm-fab .cm-mode,.cm-chip,.top .live,.top [aria-label=Share]{display:none!important}"""
 
 
 def export_dashboard(p, key: str | None = None) -> str:

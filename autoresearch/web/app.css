@@ -262,3 +262,9 @@ svg .ax{stroke:var(--grid)}
 .pdot.run{background:var(--accent)}.pdot.bad{background:var(--negative)}
 .side a.nav .count.hot{color:var(--on-primary);background:var(--accent);border-radius:9px;padding:0 6px;line-height:18px}
 .side{overflow-y:auto}
+/* share menu */
+.sh-pop{position:fixed;z-index:60;width:min(420px,calc(100vw - 16px));padding:12px;border-radius:12px;background:var(--surface);box-shadow:var(--shadow-pop,0 10px 30px rgba(0,0,0,.18)),0 0 0 1px var(--border);display:flex;flex-direction:column;gap:10px;font-size:13px}
+.sh-row{display:flex;align-items:center;gap:8px}.sh-l{font-weight:600}
+.sh-url{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;background:var(--subtle,var(--hover))}
+.sh-url code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.sh-dl{align-self:flex-start;display:inline-flex;align-items:center;gap:6px}.sh-dl svg{width:16px;height:16px}

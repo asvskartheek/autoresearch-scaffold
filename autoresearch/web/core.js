@@ -69,6 +69,8 @@ const better=(a,b)=>S.state.config.higher_is_better===false?a<b:a>b;
 // ---------- icons: 16px outline, 1.5 stroke
 const I=(d,s=16)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const ICON={
+ share:I('<circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="M8.2 10.8l7.6-4M8.2 13.2l7.6 4"/>'),
+ download:I('<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>'),
  overview:I('<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>'),
  workbench:I('<path d="M4 12h3l2-6 4 12 2-6h5"/>'),
  models:I('<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M8.3 7l7.5 4M8.3 17l7.5-4"/>'),
@@ -127,7 +129,20 @@ function renderTop(){
  setHTML($('#top'),`<button class="iconbtn menu-btn" aria-label="Menu" onclick="$('#app').classList.toggle('nav-open')">${ICON.menu}</button>
  <nav class="crumbs" aria-label="Breadcrumb">${c.map(([l,h],i)=>i===c.length-1?`<b>${esc(l)}</b>`:`<a href="${h}">${esc(l)}</a><span class="sep">/</span>`).join('')}</nav>
  <div class="right">${hereFaces()}<span class="live" title="${S.ok?'Polling the ledger every 4s':'The dashboard server is not answering'}"><span class="dot ${S.ok?'':'off'}"></span>${S.ok?'Live':'Offline'}<span class="clk">${S.state&&S.ok?' · '+clock(S.state.now):''}</span></span>
- <button class="iconbtn" aria-label="Theme: ${THEMES[t]}. Switch to ${THEMES[next]}" title="Theme: ${THEMES[t]} (click for ${THEMES[next]})" onclick="toggleTheme()">${t==='light'?ICON.sun:t==='dark'?ICON.moon:ICON.auto}</button></div>`);
+ <button class="iconbtn" aria-label="Share" title="Share this view" onclick="shareMenu(this)">${ICON.share}</button><button class="iconbtn" aria-label="Theme: ${THEMES[t]}. Switch to ${THEMES[next]}" title="Theme: ${THEMES[t]} (click for ${THEMES[next]})" onclick="toggleTheme()">${t==='light'?ICON.sun:t==='dark'?ICON.moon:ICON.auto}</button></div>`);
+}
+// Share: a link to this view (it works on another machine once `arx share on` ran) and a one-file snapshot
+async function shareMenu(btn){
+ document.querySelector('.sh-pop')?.remove();
+ let d={};try{d=await (await fetch('api/share',{cache:'no-store'})).json()}catch(e){}
+ const here=location.hash||'#overview',url=(d.link||location.origin+location.pathname)+here;
+ const pop=document.createElement('div');pop.className='sh-pop';
+ pop.innerHTML=`<div class="sh-row"><span class="sh-l">${d.link?'Anyone on your network with this link':'Only this machine'}</span></div>
+  <div class="sh-url"><code>${esc(url)}</code>${copyBtn(url)}</div>
+  ${d.link?'':`<div class="sh-row sub"><code>arx share on</code>${copyBtn('arx share on')}<span>for others</span></div>`}
+  <a class="btn sh-dl" href="api/export" download>${ICON.download}Snapshot</a>`;
+ document.body.append(pop);const r=btn.getBoundingClientRect();pop.style.top=r.bottom+6+'px';pop.style.right=Math.max(8,innerWidth-r.right)+'px';
+ setTimeout(()=>addEventListener('click',function off(e){if(!pop.contains(e.target)){pop.remove();removeEventListener('click',off)}}),0);
 }
 // who else has this project open: their faces, ringed when they are on this same view
 function hereFaces(){
