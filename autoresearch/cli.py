@@ -181,9 +181,16 @@ def cmd_hill(a):
 
 
 def _kpi_fmt(g, v):
+    """A goal value in units: solved/n on a 0/1 slice, the slice's own unit on a continuous one."""
     if v is None:
         return "—"
-    return f"{100 * v:.1f}%" if g.get("kpi", "score") == "score" else f"{v:.4g}"
+    if g.get("kpi", "score") != "score":
+        return f"{v:.4g}"
+    sl = Project().slices().get(g.get("slice")) or {}
+    if sl.get("scale") == "continuous":
+        return f"{v:.4g} {sl.get('unit') or ''}".rstrip()
+    n = g.get("n") or sl.get("n")
+    return f"{round(v * n)}/{n} ({100 * v:.1f}%)" if n else f"{100 * v:.1f}%"
 
 
 def cmd_goal(a):

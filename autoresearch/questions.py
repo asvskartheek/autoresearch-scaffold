@@ -136,8 +136,10 @@ def _hill_title(k, h) -> str:
 
 
 def _goal_title(g, k) -> str:
-    t = (g.get("title") or k).strip()
-    return f"Reach {t}?" if len(t.split()) <= 5 else _short(t) + "?"
+    t = (g.get("title") or k).strip().rstrip("?.")
+    if re.match(r"(?i)(no|zero|reach|get|make|keep|cut|beat)\b", t) or len(t.split()) > 5:
+        return _short(t[:1].upper() + t[1:]) + "?"  # already a verb phrase or a negation: "Reach No …" reads badly
+    return f"Reach {t[:1].lower() + t[1:] if t[1:2].islower() else t}?"
 
 
 def _model_title(k, m) -> str:
