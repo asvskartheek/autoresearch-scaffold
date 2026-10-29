@@ -262,7 +262,7 @@ def seeded(p) -> dict:
             loose = loose or "x:hills"
             par = loose
         st = {"climbed": "answered", "closed": "dead", "abandoned": "dead"}.get(h.get("status"), "open")
-        claim = (f"Climbed by {h['climbed_by']}." if st == "answered" and h.get("climbed_by") else
+        claim = (f"Climbed by {features.model_label(p, h['climbed_by'])}." if st == "answered" and h.get("climbed_by") else
                  _line(h.get("reason")) if st == "dead" else _line(h.get("symptom") or h.get("problem")))
         ev = [dict(share=k)] if (h.get("share") or {}).get("of") else []
         best = h.get("climbed_by") if st == "answered" else champ
