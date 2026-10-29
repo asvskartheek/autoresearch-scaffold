@@ -477,10 +477,20 @@ function fitFigs(root){root.querySelectorAll('.cm-fig svg').forEach(svg=>{
  for(const t of svg.querySelectorAll('text')){const fs=parseFloat(t.getAttribute('font-size')||getComputedStyle(t).fontSize)||12;if(fs*sc<11)t.setAttribute('font-size',r1(11/sc))}})}
 
 /* ---------- compose and threads */
-// clear of the buttons, and left of the open comment list when there is room (on a phone it sits on top of the list)
-function place(p,x,y){let mx=innerWidth-p.offsetWidth-12;
- if(list.classList.contains('on')){const L=list.getBoundingClientRect().left-p.offsetWidth-12;if(L>=12)mx=Math.min(mx,L)}
- p.style.left=Math.max(12,Math.min(mx,x+14))+'px';p.style.top=Math.max(12,Math.min(innerHeight-p.offsetHeight-60,y+14))+'px'}
+// beside what it is about, never on it: right of it, else left of it, else under it, else above it; under the top bar
+// and left of the open comment list when there is room (on a phone it sits on top of the list)
+const barBottom=()=>{const t=document.getElementById('top');return t?Math.max(0,t.getBoundingClientRect().bottom):0};
+function placeBy(p,r){const m=12,W=p.offsetWidth,H=p.offsetHeight,t0=Math.max(m,barBottom()+6);let R=innerWidth-m;
+ if(list.classList.contains('on')){const L=list.getBoundingClientRect().left-m;if(L-W>=m)R=L}
+ let x,y;if(r.right+m+W<=R){x=r.right+m;y=r.top}else if(r.left-m-W>=m){x=r.left-m-W;y=r.top}
+ else{x=Math.max(m,Math.min(R-W,r.left));y=r.bottom+m+H<=innerHeight-m?r.bottom+m:r.top-m-H>=t0?r.top-m-H:innerHeight-H-m}
+ p.style.left=Math.max(m,x)+'px';p.style.top=Math.max(t0,Math.min(innerHeight-H-m,y))+'px'}
+// the screen box of what a comment is about: the quoted text, the drawn box, the picked element, else its pin
+function rectOf(a){const g=where(a);if(g.el===false)return null;
+ if(g.rg){const rs=[...g.rg.getClientRects()].filter(q=>q.width);if(rs.length)return {left:Math.min(...rs.map(q=>q.left)),top:Math.min(...rs.map(q=>q.top)),right:Math.max(...rs.map(q=>q.right)),bottom:Math.max(...rs.map(q=>q.bottom))}}
+ if(g.box)return {left:g.box[0],top:g.box[1],right:g.box[2],bottom:g.box[3]};
+ if(g.r)return g.r;
+ const xy=pos({anchor:a});return xy?{left:xy[0]-24,top:xy[1]-24,right:xy[0],bottom:xy[1]}:null}
 function closePop(){pops.innerHTML='';open=null;if(pending){pending=null;drawPins()}}
 const focusLater=ta=>{ta.focus({preventScroll:true});setTimeout(()=>{ta.focus({preventScroll:true});requestAnimationFrame(()=>{if(document.activeElement!==ta)ta.focus({preventScroll:true})})},0)};
 const nameField=()=>me()?'<span class="cm-sp"></span>':'<input class="cm-name cm-sp" placeholder="Your name" maxlength="60">';
@@ -497,8 +507,9 @@ const anchorText=a=>{const bare=a.what&&a.text&&a.what.split('.')[0]===a.text;  
  if(picked(a))return a.what+' · '+(bare?a.ctx?'in '+a.ctx:'':a.text);
  return a.quote?'“'+a.quote.slice(0,120)+'”':(a.shape?shapeName[a.shape.tool]+' on ':'')+(bare&&a.ctx?a.ctx:a.text||'page')};
 function compose(a,x,y){closePop();a.route=here();a.vw=innerWidth;const p=document.createElement('div');p.className='cm-pop';
+ const box=()=>rectOf(a)||{left:x,top:y,right:x,bottom:y};
  p.innerHTML=`<div class="cm-anchor">${h(anchorText(a))}</div><textarea placeholder="Comment"></textarea><div class="cm-row">${nameField()}<button class="cm-sm x">Cancel</button><button class="cm-sm pri go" title="⌘↵">Comment</button></div>`;
- pops.append(p);place(p,x,y);const ta=p.querySelector('textarea');focusLater(ta);P&&P.complete(ta);
+ pops.append(p);placeBy(p,box());const ta=p.querySelector('textarea');focusLater(ta);P&&P.complete(ta);
  if(a.shape||a.quote||picked(a)){pending=a;drawPins()}
  const send=async()=>{if(p.dataset.busy)return;const body=ta.value.trim();if(!body)return needText(ta);const author=takeName(p);busy(p,true,'Sending…');
   const ev=await post({kind:'comment',anchor:a,body,author});if(!ev||!ev.id)return p.isConnected&&failed(p);
@@ -559,28 +570,39 @@ function drawPins(){if(draw)return;const ts=ready()?mine():[],openN=mine().filte
  const live=shapesEl.querySelector('.live');
  shapesEl.innerHTML=ts.map(c=>shapeSvg(c.anchor||{},klass(c),c.id)).join('')+(pending&&(pending.shape||pending.quote||picked(pending))?shapeSvg(pending,'draft',''):'');if(live)shapesEl.append(live);
  pinsEl.querySelectorAll('.cm-pin').forEach(el=>el.onclick=()=>thread(el.dataset.id));
- if(open){const c=ts.find(t=>t.id===open),p=pops.firstChild;if(c&&p&&!p.contains(document.activeElement)){const [x,y]=pos(c)||[innerWidth-360,innerHeight-120];place(p,x,y)}}}
+ if(open){const c=ts.find(t=>t.id===open),p=pops.firstChild;if(c&&p&&!p.contains(document.activeElement)){const r=rectOf(c.anchor||{});if(r)placeBy(p,r)}}}
 function setHot(id){if(hot===id)return;hot=id;host.querySelectorAll('[data-id]').forEach(e=>e.classList.toggle('hot',!!id&&e.dataset.id===id))}
 for(const el of[pinsEl,shapesEl,list]){
  el.addEventListener('pointerover',e=>{const t=e.target.closest?.('[data-id]');if(t&&t.dataset.id)setHot(t.dataset.id)});
  el.addEventListener('pointerout',e=>{const t=e.relatedTarget?.closest?.('[data-id]');if(!t||t.dataset.id!==hot)setHot(null)})}
 shapesEl.addEventListener('click',e=>{const t=e.target.closest?.('g[data-id]');if(t&&t.dataset.id)thread(t.dataset.id)});
 const when=t=>new Date(t*1000).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-function thread(id){const c=all.find(t=>t.id===id);if(!c)return;
- if(c.route!==here()){location.hash='#'+c.route;setTimeout(()=>thread(id),400);return}
- const ta0=pops.querySelector('textarea'),draft=open===id&&ta0?ta0.value:'';
- closePop();open=id;const p=document.createElement('div');p.className='cm-pop';
+// how: 'again' (the 4 s poll: rebuilt only when the thread changed, keeping where its messages were scrolled), 'sent'
+// (after your reply: the newest message in view); else a fresh open: what it is about scrolled into view, the thread
+// read from its first message
+const tsig=c=>JSON.stringify([c.last_t,c.resolved,c.waiting,c.agent&&c.agent.status,c.agent&&c.agent.note,Object.keys(c.seen||{}).length,agentOn]);
+function thread(id,how){const c=all.find(t=>t.id===id);if(!c)return;
+ if(c.route!==here()){location.hash='#'+c.route;setTimeout(()=>thread(id,how),400);return}
+ if(!ready()&&!(how>40)){setTimeout(()=>thread(id,(+how||0)+1),250);return}  // the view is still reading the ledger: its anchors are not on the page yet
+ if(+how)how=undefined;
+ const p0=pops.firstChild;if(how==='again'&&open===id&&p0&&p0.dataset.sig===tsig(c))return;
+ const ta0=pops.querySelector('textarea'),draft=open===id&&ta0?ta0.value:'',ms0=open===id&&p0?.querySelector('.cm-msgs')?.scrollTop;
+ if(!how){const r=rectOf(c.anchor||{}),top=barBottom()+8;
+  if(r&&(r.top<top||r.bottom>innerHeight-8)){const el=anchorEl(c);if(el&&el.scrollIntoView&&!(r.bottom-r.top>innerHeight*.6))el.scrollIntoView({block:'center',behavior:'instant'});
+   else scrollBy({top:r.top-top-24,behavior:'instant'});drawPins()}}
+ closePop();open=id;const p=document.createElement('div');p.className='cm-pop';p.dataset.sig=tsig(c);
  const msg=m=>`<div class="cm-m"><div class="cm-who">${face(m)}${h(m.agent?'Agent':m.author)} · ${when(m.t)}</div><div class="cm-msg ${m.agent?'agent':''}${m.error?' err':''}">${m.agent?rich(m.body):at(linky(m.body),c)}</div></div>`;
  const seenBy=P?P.seenFaces(Object.fromEntries(Object.entries(c.seen||{}).filter(([k,t])=>t>=c.last_t)),myId()):'';
  const ag=stranded(c)?`<div class="cm-m"><div class="cm-who">Agent</div><div class="cm-msg cm-idle">No agent running · <code>arx answer</code></div></div>`:working(c)?`<div class="cm-m"><div class="cm-who">Agent</div><div class="cm-msg agent cm-busy"><span class="cm-dot"></span>${h(c.agent.note||(c.agent.status==='queued'?'Queued':'Working'))}${c.agent.task?` <a href="#task/${encodeURIComponent(c.agent.task)}">task</a>`:''}</div></div>`:'';
  p.innerHTML=`<div class="cm-anchor">${mine().indexOf(c)+1} · ${h(anchorText(c.anchor||{}))}</div><div class="cm-msgs">${c.messages.map(msg).join('')}${ag}</div>${seenBy?`<div class="cm-seen" title="Read the latest message">Seen ${seenBy}</div>`:''}
  <textarea placeholder="Reply"></textarea><div class="cm-row">${nameField()}<button class="cm-sm ln" title="Copy a link to this thread">Link</button><button class="cm-sm rs">${c.resolved?'Reopen':'Resolve'}</button><button class="cm-sm pri go">Reply</button></div>`;
- if(p.querySelector('.cm-fig'))p.classList.add('wide');pops.append(p);fitFigs(p);const [x,y]=pos(c)||[innerWidth-360,innerHeight-120];place(p,x,y);const ta=p.querySelector('textarea');ta.value=draft;
- const ms=p.querySelector('.cm-msgs');ms.scrollTop=ms.scrollHeight;P&&P.complete(ta);
+ if(p.querySelector('.cm-fig'))p.classList.add('wide');pops.append(p);fitFigs(p);const r=rectOf(c.anchor||{});
+ if(r)placeBy(p,r);else Object.assign(p.style,{left:Math.max(12,innerWidth-p.offsetWidth-12)+'px',top:barBottom()+12+'px'});const ta=p.querySelector('textarea');ta.value=draft;
+ const ms=p.querySelector('.cm-msgs');ms.scrollTop=how==='sent'?ms.scrollHeight:how==='again'&&ms0!=null?ms0:0;P&&P.complete(ta);
  if(myId()&&unread(c)&&readHere[id]!==c.last_t){readHere[id]=c.last_t;drawList();post({kind:'seen',parent:id},false)}  // you read it as it stands: once per version, no reload
  const send=async()=>{if(p.dataset.busy)return;const body=ta.value.trim();if(!body)return needText(ta);busy(p,true,'Sending…');
   const ev=await post({kind:'reply',parent:id,body,author:takeName(p)});if(!ev)return p.isConnected&&failed(p);
-  if(p.isConnected&&open===id){ta.value='';thread(id)}};
+  if(p.isConnected&&open===id){ta.value='';thread(id,'sent')}};
  p.querySelector('.go').onclick=send;
  p.querySelector('.ln').onclick=async e=>{const b=e.currentTarget;let base=location.origin+location.pathname;
   try{const d=await (await fetch('api/share',{cache:'no-store'})).json();if(d.link)base=d.link}catch(_){}
@@ -599,7 +621,7 @@ function drawList(){const you=all.filter(forMe);$c('.cm-lst').classList.toggle('
 
 async function post(row,reload=true){let ev=null;row.by=myId();try{const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(row)});if(r.ok)ev=await r.json()}catch(e){}if(reload)await load();return ev}
 async function load(){try{const r=await fetch(API,{cache:'no-store'});if(!r.ok)return;const d=await r.json();all=d.threads||[];agentOn=!d.answer_agent||!!d.answer_agent.running;
- const p=pops.firstChild,reopen=open&&p&&!p.dataset.busy&&!p.contains(document.activeElement);drawPins();drawList();if(reopen)thread(open)}catch(e){}}
+ const p=pops.firstChild,reopen=open&&p&&!p.dataset.busy&&!p.contains(document.activeElement);drawPins();drawList();if(reopen)thread(open,'again')}catch(e){}}
 document.body.append(host);
 addEventListener('scroll',drawPins,{passive:true,capture:true});addEventListener('resize',drawPins);
 // for keys.js: comment on an element, step through this view's threads, reply in or resolve the open one (or the one
@@ -617,5 +639,9 @@ addEventListener('hashchange',()=>{closePop();setMode(false);chip.style.display=
 setInterval(()=>{if(!draw&&mine().length)drawPins()},1000);setInterval(()=>{if(!document.hidden)load()},4000);
 // a shared thread link (?c=<id>): open that thread once the comments are in, then drop it from the address
 const c0=new URLSearchParams(location.search).get('c');
-load().then(()=>{if(c0&&all.some(t=>t.id===c0)){history.replaceState(null,'',location.pathname+location.hash);setTimeout(()=>thread(c0),600)}});
+// (a thread that is gone says so, briefly, beside the comment list)
+load().then(()=>{if(!c0)return;history.replaceState(null,'',location.pathname+location.hash);
+ if(all.some(t=>t.id===c0))return setTimeout(()=>thread(c0),600);
+ const p=document.createElement('div');p.className='cm-pop cm-gone';p.textContent='That comment is gone: deleted, or the link is wrong.';pops.append(p);
+ Object.assign(p.style,{right:'12px',left:'auto',top:barBottom()+12+'px'});setTimeout(()=>p.isConnected&&p.remove(),6000)});
 })();
