@@ -71,6 +71,19 @@ class Course(unittest.TestCase):
         b = learn.brief(self.p, 0, "ann")
         self.assertEqual(b["course"]["due"], ["gate"])
 
+    def test_record_rejects_non_boolean_results(self):
+        for value in ("false", 1, None, []):
+            code, _ = course.record(self.p, dict(viewer="ann", item="gate", hit=value))
+            self.assertEqual(code, 400)
+        self.assertEqual(course.rows(self.p, "ann"), [])
+
+    def test_achieved_goal_needs_no_negative_answers(self):
+        self.p.open_goal("met", "Already met", "full", 0.5)
+        data = course._ledger(self.p)
+        data["goal"] = self.p.goal_status("met")
+        lesson = course.lesson_goal(self.p, data, learn)
+        self.assertEqual(lesson["checks"][0]["a"], "0")
+
     def test_cards_name_the_lessons_they_need(self):
         self.assertEqual(course.needs("promote|x"), ["champion", "paired-delta", "interval"])
         self.assertEqual(course.needs("nope|x"), [])

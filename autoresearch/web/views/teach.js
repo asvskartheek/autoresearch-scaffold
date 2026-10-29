@@ -6,9 +6,9 @@
 const TEACH=(()=>{
 // per person and card: a name change in the same tab starts from a blank card
 const ST={};const sk=c=>(viewer()||'anon')+'|'+c.id,st=c=>ST[sk(c)]||(ST[sk(c)]={t0:performance.now()});
-const NAMES={predict:'Predict',sketch:'Sketch',spot:'Spot the error',prototype:'Prototype',code:'Code',explain:'Explain back'};
+const NAMES={predict:'Predict',sketch:'Sketch',spot:'Spot the error',ndrag:'Drag n',code:'Code',explain:'Explain back'};
 const ICO={predict:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>',sketch:'<path d="M4 18c3-6 6 2 9-4s4-6 7-8"/>',
- spot:'<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',prototype:'<path d="M4 12h16"/><circle cx="9" cy="12" r="3"/>',
+ spot:'<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',ndrag:'<path d="M4 12h16"/><circle cx="9" cy="12" r="3"/>',
  code:'<path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/>',explain:'<path d="M5 6h14v9H9l-4 4z"/>'};
 const ico=m=>`<svg viewBox="0 0 24 24" class="t-ico">${ICO[m]||''}</svg>`;
 const amt=(u,x)=>lamt(u||'pts',x);
@@ -22,7 +22,7 @@ function ciWin(t,s){const z=s.z??t.view??zFull(t);let a=Math.max(t.min,-z),b=Mat
  if(s.tv){const v=s.tv,k=s.sk||{},xs=[v.lo,v.hi,v.delta,k.lo,k.hi,t.bar].filter(q=>q!=null&&isFinite(q));const lo=Math.min(a,...xs),hi=Math.max(b,...xs),pad=(hi-lo)*.06;
   if(lo<a)a=lo-pad;if(hi>b)b=hi+pad}
  return [a,b]}
-function zoom(c,dir){const s=st(c),t=c.task||s.tk,f=zFull(t),z=s.z??t.view??f;s.z=dir>0?Math.max(f/20,niceD(z/2)):Math.min(f,niceU(z*2));const fo=document.activeElement?.id==='tsk';render(true);if(fo)document.getElementById('tsk')?.focus()}
+function zoom(c,dir){const s=st(c),t=c.task||s.tk,f=zFull(t),z=s.z??t.view??f;s.z=dir>0?Math.max(f/1000,niceD(z/2)):Math.min(f,niceU(z*2));const fo=document.activeElement?.id==='tsk';render(true);if(fo)document.getElementById('tsk')?.focus()}
 function sketchCI(c,s){
  const t=c.task||s.tk;s.tv=c.reveal?.viz||null;if(!s.sk){const [a0,b0]=ciWin(t,s);s.sk={delta:0,lo:-(b0-a0)*.08,hi:(b0-a0)*.08}}const k=s.sk;
  const W=LW(),H=92,Lx=16,R=W-16,[a,b]=ciWin(t,s),x=q=>Lx+(Math.max(a,Math.min(b,q))-a)/(b-a)*(R-Lx),span=b-a;
@@ -40,7 +40,7 @@ function sketchCI(c,s){
 }
 // the zoom buttons sit under the sketch (outside the svg, so a redraw while dragging leaves them alone)
 function zoomBtns(c,s){const t=c.task||s.tk;if(c.pred||t.kind==='bars')return '';const [a,b]=ciWin(t,s);
- return `<div class="t-zoom"><button class="btn" data-t="zout" aria-label="Zoom out" title="Zoom out (−)" ${b-a>=zFull(t)*1.99?'disabled':''}>−</button><button class="btn" data-t="zin" aria-label="Zoom in" title="Zoom in (+)" ${(s.z??t.view??zFull(t))<=zFull(t)/20+1e-9?'disabled':''}>+</button></div>`;
+ return `<div class="t-zoom"><button class="btn" data-t="zout" aria-label="Zoom out" title="Zoom out (−)" ${b-a>=zFull(t)*1.99?'disabled':''}>−</button><button class="btn" data-t="zin" aria-label="Zoom in" title="Zoom in (+)" ${(s.z??t.view??zFull(t))<=zFull(t)/1000+1e-9?'disabled':''}>+</button></div>`;
 }
 function sketchBars(c,s){
  const t=c.task||s.tk,W=LW(),rh=44,H=t.rows.length*rh+4,R=W-(W<420?96:120);
@@ -101,7 +101,7 @@ function keySketch(e,c){
 function spotBody(c,s){
  const t=c.task||s.tk,v=t.viz,ans=c.reveal?.show?.wrong,u=v.unit||'pts';
  const opts=[['counts',`${v.wins.toLocaleString()} fixed · ${v.losses.toLocaleString()} broken`],['delta','Δ '+amt(u,v.delta)],['interval',`[${amt(u,v.lo)}, ${amt(u,v.hi)}]`]];
- return vizCI(v)+`<div class="opts t-spot" style="--n:3">${opts.map(([k,l],i)=>`<button class="opt${s.pick===k?' on':''}${ans?k===ans?' truth':s.pick===k?' wrong':'':''}" data-t="pick" data-v="${k}" ${c.pred?'disabled':''}><kbd>${i+1}</kbd>${esc(l)}</button>`).join('')}</div>`;
+ return vizCI(v)+`<div class="opts t-spot" style="--n:3">${opts.filter(([k])=>(t.parts||[]).includes(k)).map(([k,l],i)=>`<button class="opt${s.pick===k?' on':''}${ans?k===ans?' truth':s.pick===k?' wrong':'':''}" data-t="pick" data-v="${k}" ${c.pred?'disabled':''}><kbd>${i+1}</kbd>${esc(l)}</button>`).join('')}</div>`;
 }
 
 // ---------- prototype: drag n, the interval narrows as 1/√n
@@ -109,13 +109,13 @@ function protoSVG(t,n,label){
  const W=LW(),H=96,Lx=16,R=W-16,half=(t.hi-t.lo)/2*Math.sqrt(t.n/n),lo=t.delta-half,hi=t.delta+half;
  const ext=Math.max(Math.abs(t.lo),Math.abs(t.hi),Math.abs(t.delta)*2,2)*1.15,x=q=>Lx+(q+ext)/(2*ext)*(R-Lx),clear=lo>0||hi<0;
  const col=clear?(t.delta>0?'var(--positive)':'var(--negative)'):'var(--muted)';
- let s=`<line x1="${x(0)}" x2="${x(0)}" y1="20" y2="70" stroke="var(--text)" stroke-width="1.5"/>`;
+ let s=`<text x="${x(0)}" y="82" text-anchor="middle">0</text><line x1="${x(0)}" x2="${x(0)}" y1="20" y2="70" stroke="var(--text)" stroke-width="1.5"/>`;
  s+=`<line x1="${x(Math.max(-ext,lo))}" x2="${x(Math.min(ext,hi))}" y1="46" y2="46" stroke="${col}" stroke-width="10" stroke-linecap="round" opacity=".4" style="transition:all .12s"/><circle cx="${x(t.delta)}" cy="46" r="6" fill="${col}"/>`;
- s+=`<text x="${Lx}" y="14" class="mono strong">n = ${Math.round(n).toLocaleString()}</text><text x="${R}" y="14" text-anchor="end" class="mono" style="fill:${col}">[${amt('pts',lo)}, ${amt('pts',hi)}]</text>`;
+ s+=`<text x="${Lx}" y="14" class="mono strong">n = ${Math.round(n).toLocaleString()}</text><text x="${R}" y="14" text-anchor="end" class="mono" style="fill:${col}">[${amt(t.unit||'pts',lo)}, ${amt(t.unit||'pts',hi)}]</text>`;
  if(label)s+=`<text x="${Lx}" y="90" class="mono">${esc(label)}</text>`;
  return `<svg class="lv" id="tproto" viewBox="0 0 ${W} ${H}">${s}</svg>`;
 }
-const pLo=t=>Math.max(4,t.n/20),pHi=t=>t.n*60,toN=(t,f)=>Math.exp(Math.log(pLo(t))+f*(Math.log(pHi(t))-Math.log(pLo(t)))),toF=(t,n)=>(Math.log(n)-Math.log(pLo(t)))/(Math.log(pHi(t))-Math.log(pLo(t)));
+const pLo=t=>Math.max(4,t.n/20),pHi=t=>Math.max(t.n*60,t.n*((t.hi-t.lo)/2/Math.max(Math.abs(t.delta),1e-12))**2*2),toN=(t,f)=>Math.exp(Math.log(pLo(t))+f*(Math.log(pHi(t))-Math.log(pLo(t)))),toF=(t,n)=>(Math.log(n)-Math.log(pLo(t)))/(Math.log(pHi(t))-Math.log(pLo(t)));
 function protoBody(c,s){
  const t=c.task||s.tk,need=c.reveal?.show?.need;if(!t)return '';
  if(s.n==null)s.n=t.n;
@@ -131,7 +131,7 @@ function codeBody(c,s){
  return `<pre class="t-code"><span class="k">const</span> fixed = <b>${t.vars.fixed}</b>, broken = <b>${t.vars.broken}</b>, n = <b>${t.vars.n}</b>;
 <span class="k">const</span> delta_pts = <input id="tcode" spellcheck="false" autocomplete="off" value="${esc(s.code||'')}" ${c.pred?'disabled':''} placeholder="…">;
 <span class="c">// ${v==null?'= ?':'= '+(+v.toFixed(2))+' pts'}</span>${sh?`
-<span class="c">// ${(sh.ok??(sh.got!=null&&Math.abs(sh.got-sh.value)<=Math.max(.05,Math.abs(sh.value)*.01)))?'✓':'✗'} ${esc(sh.line)} = ${sh.value} pts</span>${sh.card!=null&&c.reveal?.viz?`
+<span class="c">// correct: ${esc(sh.line)} = ${sh.value} pts</span>${sh.card!=null&&c.reveal?.viz?`
 <span class="c">// this card: 100 * (${c.reveal.viz.wins} - ${c.reveal.viz.losses}) / ${c.reveal.viz.n} = ${amt('pts',sh.card)}</span>`:''}`:''}</pre>`;
 }
 
@@ -145,65 +145,64 @@ function explainBody(c,s){
 // the task stays with the card's state, so the reveal can still draw it (the server sends it only before an answer)
 function body(c){const s=st(c);if(c.task&&(!s.tk||s.m!==c.method)){s.tk=c.task;s.m=c.method}const t=c.task||s.tk;if(!t||s.m!==c.method)return '';
  return c.method==='sketch'?(t.kind==='bars'?sketchBars(c,s):sketchCI(c,s)+zoomBtns(c,s)):c.method==='spot'?spotBody(c,s):
-  c.method==='prototype'?protoBody(c,s):c.method==='code'?codeBody(c,s):c.method==='explain'?explainBody(c,s):''}
+  c.method==='ndrag'?protoBody(c,s):c.method==='code'?codeBody(c,s):c.method==='explain'?explainBody(c,s):''}
 function strip(c){const ms=c.methods||[];return `<div class="t-strip">${ms.map(m=>`<span class="t-m${m===c.method?' on':''}" title="${esc(NAMES[m])}">${ico(m)}</span>`).join('')}<b>${esc(NAMES[c.method]||'')}</b></div>`}
 
+const ready=c=>{const s=st(c),t=c.task||s.tk;return c.method==='sketch'?!!(s.sk?.moved||s.sbm):c.method==='spot'?s.pick!=null:c.method==='code'?!!t&&codeVal(t,s.code)!=null:c.method==='explain'?(s.ex||'').trim().length>8:c.method==='ndrag'?s.n!=null:false};
+const answerOf=c=>{const s=st(c);return c.method==='sketch'?(s.sk?{...s.sk}:{rows:s.sb}):c.method==='spot'?s.pick:c.method==='ndrag'?Math.round(s.n):c.method==='code'?s.code:s.ex};
+const stepCard=c=>c.step?{id:c.id+'::step',method:c.step.method,task:c.step.task,pred:c.step.done?{hit:c.step.hit}:null,reveal:c.step.done?{show:c.step.show}:null}:null;
+function after(c){
+ if(c.selfcheck){const s=st(c);s.self=s.self||{};return `<section class="t-after"><h3>Check your explanation</h3>${c.selfcheck.map((x,i)=>`<label class="t-self"><input type="checkbox" data-t-self="${i}" ${s.self[i]?'checked':''}>I explained ${esc(x)}</label>`).join('')}<button class="btn" data-t="self">Save self-check</button></section>`}
+ const q=stepCard(c);if(!q)return '';const s=st(q),ss=c.step;
+ const title=q.method==='code'?'Write the line for this result':q.method==='spot'?'Spot the error in this result':`Drag n ${q.task.dir==='down'?'down until the interval touches zero':'up until the interval clears zero'}`;
+ const content=body(q),verdict=ss.done?`<div class="verdict"><span class="vd ${ss.hit?'ok':'no'}">${ss.hit?'✓ Step correct':'✗ Try the explanation below'}</span></div>${ss.show?.why?`<p>${esc(ss.show.why)}</p>`:''}`:'';
+ return `<section class="t-after" data-step="${esc(c.id)}"><h3>${title}</h3>${content}${verdict}${ss.done?'':`<div class="actions"><button class="btn" data-t="step" ${ready(q)?'':'disabled'}>Check step</button><button class="btn" data-t="step-skip">Skip step</button></div>`}</section>`;
+}
 function card(c){
- const s=st(c);const n=L.b.cards.length,i=L.cur,p=c.pred,rv=c.reveal;
- const t=c.task||s.tk,ex=t&&(t.example||t.viz?.example)?`Example at n = ${(t.n||t.viz?.n||t.vars?.n||0).toLocaleString()}: `:'';
- const q=c.method==='spot'?ex+'one number is wrong.':c.method==='prototype'?ex+'drag n to where its interval just clears zero.':c.method==='code'?ex+'the paired gain, in points.':c.q;
- const ready=c.method==='sketch'?!!(s.sk?.moved||s.sbm):c.method==='spot'?s.pick!=null:c.method==='code'?codeVal(c.task||s.tk,s.code)!=null:c.method==='explain'?(s.ex||'').trim().length>8:true;
- let reveal='';
- if(p&&rv){const verdict=p.hit==null?'<span class="vd open">Open</span>':p.hit?'<span class="vd ok">✓ Right</span>':'<span class="vd no">✗ Not quite</span>';
-  const own=q!==c.q?`<p class="ctx t-own">${esc(c.q)}</p>`:'';  // the method asked about an example: the card's own question and answer follow
-  reveal=`<div class="reveal">${own}<div class="verdict">${verdict}${rv.truth!=null?`<b>${c.type==='choice'?esc(rv.truth):lfmt(c,rv.truth)}</b>`:''}</div>${c.method==='sketch'?'':viz(rv.viz)}<p class="why">${esc(rv.why||'')}</p></div>`}
- return `<div class="kind">${pill(c.label,c.tone)}<span>${i+1} of ${n}</span>${c.t?`<span>${ago(c.t)}</span>`:''}${strip(c)}</div>
-  <p class="q">${esc(q)}</p>${c.ctx&&c.method!=='spot'?`<p class="ctx">${esc(c.ctx)}</p>`:''}${body(c)}${reveal}
-  <div class="actions">${p?`<button class="btn primary" data-l="next">${i===n-1?'Finish':'Next'} <kbd>space</kbd></button>`:`<button class="btn primary" data-t="go" ${ready?'':'disabled'}>Check <kbd>space</kbd></button>${(c.others??1)>0?'<button class="btn" data-t="skip" title="Learn this card another way">Another way</button>':''}`}
-  ${i>0?'<button class="btn" data-l="prev">Back</button>':''}</div>`;
+ const s=st(c),p=c.pred,rv=c.reveal,n=L.b.cards.length,i=L.cur;
+ const content=body(c);let reveal='';
+ if(p&&rv){const verdict=p.hit==null?'Awaiting your self-check':p.hit?'✓ Right':'✗ Not quite';
+  reveal=`<div class="reveal"><div class="verdict"><span class="vd ${p.hit==null?'open':p.hit?'ok':'no'}">${verdict}</span>${rv.truth!=null?`<b>${c.type==='choice'?esc(rv.truth):lfmt(c,rv.truth)}</b>`:''}</div>${c.method==='sketch'&&content?'':viz(rv.viz)}<p class="why">${esc(rv.why||'')}</p></div>${after(c)}`}
+ return `<div class="kind">${pill(c.label,c.tone)}<span>${i+1} of ${n}</span>${strip(c)}</div><p class="q">${esc(c.q)}</p>${c.ctx?`<p class="ctx">${esc(c.ctx)}</p>`:''}${c.adapt?`<p class="ctx">${esc(c.adapt)}</p>`:''}${content}${reveal}
+ <div class="actions">${p?`<button class="btn primary" data-l="next">${i===n-1?'Finish':'Next'} <kbd>space</kbd></button>`:`<button class="btn primary" data-t="go" ${ready(c)?'':'disabled'}>Check <kbd>space</kbd></button>${(c.others??0)>0?'<button class="btn" data-t="skip">Another way</button>':''}`}${i>0?'<button class="btn" data-l="prev">Back</button>':''}</div>`;
 }
-
-async function submit(c){
- if(c.pred)return;const s=st(c),m=c.method;
- const answer=m==='sketch'?(s.sk?{...s.sk}:{rows:s.sb}):m==='spot'?s.pick:m==='prototype'?Math.round(s.n):m==='code'?s.code:m==='explain'?s.ex:null;
- if(answer==null||answer==='')return;
- try{const r=await fetch('api/teach',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({viewer:viewer()||'anon',card:c.id,method:m,answer,ms:Math.round(performance.now()-s.t0)})});
-  const d=await r.json();if(!r.ok)throw new Error(d.error||r.status);
-  const nc={...d.card,methods:c.methods,task:c.task};L.b.cards[L.cur]=nc;
-  leaveCard({check:c.id,ok:d.attempt.hit==null?null:!!d.attempt.hit,alt_used:m});tStart(c.id);L.at=0;render(true);loadBrief(true);
- }catch(e){alert('Could not check it: '+(e.message||e))}
+async function post(c,payload){
+ const id=c.id;L.seq=(L.seq||0)+1;L.loading=false;L.at=Date.now();
+ const r=await fetch('api/teach',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({viewer:viewer()||'anon',card:id,...payload})});const d=await r.json();if(!r.ok)throw new Error(d.error||r.status);return d;
 }
-async function skip(c){
- try{const r=await fetch('api/teach',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({viewer:viewer()||'anon',card:c.id,method:c.method,skip:true,ms:Math.round(performance.now()-st(c).t0)})});
-  const d=await r.json();if(!r.ok)throw new Error(d.error||r.status);delete ST[sk(c)];
-  L.b.cards[L.cur]={...c,method:d.method,task:d.task||undefined,others:d.others};render(true);
- }catch(e){alert('Could not switch: '+(e.message||e))}
-}
+function replace(c,d){const i=L.b.cards.findIndex(x=>x.id===c.id);if(i>=0)L.b.cards[i]={...d,needs:c.needs};render(true)}
+async function submit(c){if(c.pred||!ready(c)||st(c).busy)return;const s=st(c);s.busy=true;
+ try{const d=await post(c,{method:c.method,answer:answerOf(c),ms:Math.round(performance.now()-s.t0)});replace(c,{...d.card,methods:c.methods,task:c.task});leaveCard({check:c.id,ok:d.attempt.hit,alt_used:c.method});loadBrief(true)}catch(e){alert('Could not check it: '+e.message)}finally{s.busy=false}}
+async function skip(c){try{const d=await post(c,{method:c.method,skip:true});delete ST[sk(c)];replace(c,{...c,method:d.method,task:d.task||undefined,others:d.others,adapt:d.adapt})}catch(e){alert('Could not switch: '+e.message)}}
+async function step(c,skipIt){const q=stepCard(c);if(!q||(!skipIt&&!ready(q)))return;
+ try{const d=await post(c,{method:q.method,step:true,...(skipIt?{skip:true}:{answer:answerOf(q)})});delete ST[sk(q)];replace(c,{...c,step:d.step});loadBrief(true)}catch(e){alert('Could not save the step: '+e.message)}}
+async function self(c){try{const d=await post(c,{method:'explain',self:c.selfcheck.map((_,i)=>!!st(c).self?.[i])});replace(c,{...c,selfcheck:null,pred:{...c.pred,hit:d.attempt.hit},step:d.step});loadBrief(true)}catch(e){alert('Could not save your self-check: '+e.message)}}
+const eventCard=(e,c)=>e.target.closest('.t-after[data-step]')?stepCard(c):c;
 
 // how each method has gone for this person: tries, right, skipped
 function profile(){
  const pr=L.b?.teach?.profile;if(!pr)return '';const ms=Object.entries(pr.methods);const top=Math.max(1,...ms.map(([,s])=>s.n+s.skips));
- return `<div class="t-prof">${ms.map(([m,s])=>`<div class="t-pr" title="${esc(NAMES[m])}: ${s.hits} right of ${s.n}${s.skips?', '+s.skips+' skipped':''}">${ico(m)}<span class="t-bar"><i class="ok" style="width:${100*s.hits/top}%"></i><i class="no" style="width:${100*(s.n-s.hits)/top}%"></i><i class="sk" style="width:${100*s.skips/top}%"></i></span><span class="mono">${s.n?s.hits+'/'+s.n:'–'}</span></div>`).join('')}</div>`;
+ return `<div class="t-prof">${ms.map(([m,s])=>`<div class="t-pr" title="${esc(NAMES[m])}: ${s.hits} right of ${s.n}${s.skips?', '+s.skips+' skipped':''}">${ico(m)}<span>${esc(NAMES[m]||m)}</span><span class="t-bar"><i class="ok" style="width:${100*s.hits/top}%"></i><i class="no" style="width:${100*(s.n-s.hits)/top}%"></i><i class="sk" style="width:${100*s.skips/top}%"></i></span><span class="mono">${s.n?s.hits+'/'+s.n:'–'}</span></div>`).join('')}</div>`;
 }
 
 document.addEventListener('click',e=>{
  if(route().r!=='learn')return;const a=e.target.closest('#main [data-t]');if(!a)return;const c=L.b?.cards[L.cur];if(!c)return;
- const k=a.dataset.t;if(k==='zin'||k==='zout'){if(!c.pred)zoom(c,k==='zin'?1:-1)}else if(k==='go')submit(c);else if(k==='skip')skip(c);else if(k==='pick'&&!c.pred){st(c).pick=a.dataset.v;render(true)}
+ const k=a.dataset.t;if(k==='step'){step(c,false);return}if(k==='step-skip'){step(c,true);return}if(k==='self'){self(c);return}const ec=eventCard(e,c);if(k==='zin'||k==='zout'){if(!c.pred)zoom(c,k==='zin'?1:-1)}else if(k==='go')submit(c);else if(k==='skip')skip(c);else if(k==='pick'&&ec&&!ec.pred){st(ec).pick=a.dataset.v;render(true)}
 });
 document.addEventListener('pointerdown',e=>{if(route().r!=='learn'||!e.target.closest)return;const c=L.b?.cards[L.cur];if(c&&c.method==='sketch')dragSketch(e,c)});
 document.addEventListener('input',e=>{
- if(route().r!=='learn')return;const c=L.b?.cards[L.cur];if(!c||c.pred)return;const s=st(c);
+ if(route().r!=='learn')return;const raw=L.b?.cards[L.cur];if(!raw)return;if(e.target.dataset.tSelf!=null){st(raw).self=st(raw).self||{};st(raw).self[e.target.dataset.tSelf]=e.target.checked;return}const c=eventCard(e,raw);if(!c||c.pred)return;const s=st(c);
  if(e.target.id==='tpn'){const t=c.task||s.tk;s.n=toN(t,e.target.value/1000);$('#tpw').innerHTML=protoSVG(t,s.n,`measured at n = ${t.n.toLocaleString()}`)}
- else if(e.target.id==='tcode'){s.code=e.target.value;const v=codeVal(c.task||s.tk,s.code),cm=$('#main .t-code .c');if(cm)cm.textContent='// '+(v==null?'= ?':'= '+(+v.toFixed(2))+' pts');const go=$('#main [data-t=go]');if(go)go.disabled=v==null}
- else if(e.target.id==='tex'){s.ex=e.target.value;const go=$('#main [data-t=go]');if(go)go.disabled=s.ex.trim().length<=8}
+ else if(e.target.id==='tcode'){s.code=e.target.value;const v=codeVal(c.task||s.tk,s.code),cm=$('#main .t-code .c');if(cm)cm.textContent='// '+(v==null?'= ?':'= '+(+v.toFixed(2))+' pts');const go=$('#main [data-t=step]')||$('#main [data-t=go]');if(go)go.disabled=v==null}
+ else if(e.target.id==='tex'){s.ex=e.target.value;const go=$('#main [data-t=step]')||$('#main [data-t=go]');if(go)go.disabled=s.ex.trim().length<=8}
 });
 document.addEventListener('keydown',e=>{
- if(route().r!=='learn'||!L.b||e.metaKey||e.ctrlKey||e.altKey)return;const c=L.b.cards[L.cur];if(!c||c.pred)return;
- const tg=e.target;if(tg&&tg.id==='tcode'&&e.key==='Enter'){e.preventDefault();if(codeVal(c.task||st(c).tk,st(c).code)!=null)submit(c);return}
+ if(route().r!=='learn'||!L.b||e.defaultPrevented||e.metaKey||e.ctrlKey||e.altKey)return;const raw=L.b.cards[L.cur];if(!raw)return;const c=eventCard(e,raw);if(!c||c.pred)return;
+ const tg=e.target;if(tg&&tg.id==='tcode'&&e.key==='Enter'){e.preventDefault();if(codeVal(c.task||st(c).tk,st(c).code)!=null)c.id.endsWith('::step')?step(raw,false):submit(c);return}
  if(tg&&/^(TEXTAREA|INPUT|SELECT)$/.test(tg.tagName))return;
  if(c.method==='sketch'&&(c.task||st(c).tk)){if(/^Arrow/.test(e.key)&&keySketch(e,c))e.preventDefault();
   else if((e.key==='+'||e.key==='='||e.key==='-')&&(c.task||st(c).tk).kind==='ci'){zoom(c,e.key==='-'?-1:1);e.preventDefault()}return}
  if(c.method!=='spot')return;const n=+e.key,k=(c.task||st(c).tk)?.parts;if(k&&n>=1&&n<=k.length){st(c).pick=k[n-1];render(true);e.preventDefault()}
 },true);
-return {card,submit,profile,active:c=>!!(c&&c.method&&c.method!=='predict'&&(c.task||c.pred&&c.pred.method&&c.pred.method!=='predict'))};
+return {card,submit,profile,after,ready,active:c=>!!(c&&c.method&&c.method!=='predict'&&(c.task||c.pred&&c.pred.method&&c.pred.method!=='predict'))};
 })();

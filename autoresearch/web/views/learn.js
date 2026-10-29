@@ -4,7 +4,7 @@
 // the viewer has answered something: see leaveCard).
 // The deck's `since` is fixed when the page opens; finishing the deck moves last-seen for the next visit.
 const L={b:null,loading:false,err:null,at:0,cur:null,ui:{},since:null,mode:null,dlg:null,timer:{id:null,ms:0,t0:0},visits:{}};
-const LK=()=>'arx-brief-seen:'+(PKEY||'home');
+const LK=()=>'arx-brief-seen:'+(PKEY||'home')+':'+(viewer()||'anon');
 const lget=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
 const lset=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
 // who is learning: the person id (people.js); the name is what the side panel shows
@@ -22,6 +22,7 @@ function sinceFor(mode){
 }
 async function loadBrief(force){
  if(!force&&(L.loading||L.b&&Date.now()-L.at<30000))return;
+ if(L.viewer!==viewer()){L.viewer=viewer();L.ui={};L.cur=null;L.b=null;L.mode=null;L.primers={};L.since=null}
  const seq=L.seq=(L.seq||0)+1;L.loading=true;  // a newer request (new viewer or window) wins over one in flight
  if(L.mode==null){L.mode=lget(LK())?'last':'all';L.since=sinceFor(L.mode)}
  try{
@@ -72,7 +73,7 @@ function vizCI(v){
  ${bar?`<line x1="${x(bar)}" x2="${x(bar)}" y1="22" y2="66" stroke="var(--warning)" stroke-width="2" stroke-dasharray="4 3"/><text x="${x(bar)}" y="92" text-anchor="middle" style="fill:var(--warning)">bar ${lamt(u,bar)}</text>`:''}
  <line x1="${x(lo)}" x2="${x(hi)}" y1="44" y2="44" stroke="${col}" stroke-width="8" stroke-linecap="round" opacity=".35"/>
  <circle cx="${x(d)}" cy="44" r="6" fill="${col}"/>
- ${row(v.wins,'var(--positive)',100,'fixed')}${row(v.losses,'var(--negative)',118,'broken')}</svg>`;
+ ${row(v.wins,'var(--positive)',100,v.exact===false||u!=='pts'?'improved':'fixed')}${row(v.losses,'var(--negative)',118,v.exact===false||u!=='pts'?'worsened':'broken')}${v.exact===false?`<text x="${R}" y="134" text-anchor="end">Δ averages repeated runs</text>`:''}</svg>`;
 }
 const LW=()=>Math.round(Math.max(300,Math.min(560,(document.querySelector('.lrn .stage')?.clientWidth||innerWidth)-(innerWidth<=900?32:48))));
 // bars: a 0/1 row reads as a count ("166 of 185") and its length is the share; a continuous row reads in its unit
@@ -137,7 +138,7 @@ function cardHTML(c){
  const n=L.b.cards.length,i=L.cur,ready=c.type==='number'||u.choice!=null;
  const other=!p&&(c.others??((c.methods||[]).length-1))>0;  // the server counts the methods not yet skipped
  return `<div class="kind">${pill(c.label,c.tone)}<span>${i+1} of ${n}</span>${c.t?`<span>${ago(c.t)}</span>`:''}</div>
-  <p class="q">${esc(c.q)}</p>${c.ctx?`<p class="ctx">${esc(c.ctx)}</p>`:''}${body}${reveal}
+  <p class="q">${esc(c.q)}</p>${c.ctx?`<p class="ctx">${esc(c.ctx)}</p>`:''}${body}${reveal}${p&&typeof TEACH!=='undefined'?TEACH.after(c):''}
   <div class="actions">${p?`<button class="btn primary" data-l="next">${i===n-1?'Finish':'Next'} <kbd>space</kbd></button>`:`<button class="btn primary" data-l="commit" ${ready?'':'disabled'}>Reveal <kbd>space</kbd></button>${other?'<button class="btn" data-t="skip" title="Learn this card another way">Another way</button>':''}`}
   ${i>0?'<button class="btn" data-l="prev">Back</button>':''}${c.ev?`<a class="ev mono" href="${/^\d{4}-\d{6}-/.test(c.ev)?'#task/'+enc(c.ev):'#slices'}">${esc(c.ev)}</a>`:''}</div>`;
 }
@@ -167,53 +168,39 @@ function calChart(cal){
 function knowHTML(){
  const b=L.b,cal=b.calibration,u=b.understanding||{docs:{}},ids=new Set(b.cards.map(c=>c.id));
  const bs=u.docs?.brief?.step_ms||{},catchMs=Object.entries(bs).filter(([k])=>ids.has(k)).reduce((a,[,v])=>a+v,0);
- const missed=(u.missed||[]).filter(m=>m.doc!=='brief').map(m=>{const id=m.doc.startsWith('concept:')?m.doc.slice(8):null,c=id&&b.concepts.find(x=>x.id===id);return c?{t:c.t,id}:{t:m.doc}});
+ const missed=(u.missed||[]).filter(m=>m.doc!=='brief').map(m=>{const id=m.doc.startsWith('concept:')?m.doc.slice(8):null,c=id&&(b.concepts||[]).find(x=>x.id===id);return c?{t:c.t,id}:{t:m.doc}});
  const uniq=[...new Map(missed.map(m=>[m.t,m])).values()];
  const v=viewerName();
- return `<div class="score"><div><b>${cal.all_hits??cal.hits}/${cal.all_n??cal.n}</b><span>right</span></div><div title="${plural(cal.n,'prediction')} with a stated confidence"><b>${cal.brier==null?'–':cal.brier.toFixed(2)}</b><span>Brier</span></div><div><b>${catchMs?span(catchMs/1000):'–'}</b><span>to catch up</span></div></div>
+ return `<div class="score"><div><b>${cal.all_hits??cal.hits}/${cal.all_n??cal.n}</b><span>right</span></div><div title="${plural(cal.n,'prediction')} with a stated confidence"><b>${cal.brier==null?'–':cal.brier.toFixed(2)}</b><span>Confidence error</span></div><div><b>${catchMs?span(catchMs/1000):'–'}</b><span>to catch up</span></div></div>
   ${calChart(cal)}${typeof TEACH!=='undefined'?TEACH.profile():''}
   ${uniq.length?`<div class="missed"><span class="muted">Missed</span>${uniq.map(m=>m.id?`<button class="chip" data-l="concept" data-id="${esc(m.id)}">${esc(m.t)}</button>`:`<span class="chip">${esc(m.t)}</span>`).join('')}</div>`:''}
   <div class="who"><span class="muted">${v?esc(v):'No name set'}</span><button class="linkbtn" data-l="name">${v?'Change':'Set your name'}</button></div>`;
 }
-function conceptMini(v){
- if(v.kind==='paired'){const tot=96,w=Math.max(v.wins?1:0,Math.round(v.wins/v.n*tot)),l=Math.max(v.losses?1:0,Math.round(v.losses/v.n*tot));let s='';
-  for(let i=0;i<tot;i++){const c=i<w?'var(--positive)':i<w+l?'var(--negative)':'var(--active)';s+=`<rect x="${(i%16)*10}" y="${Math.floor(i/16)*10}" width="8" height="8" rx="1" fill="${c}"/>`}return `<svg viewBox="0 0 158 58">${s}</svg>`}
- if(v.kind==='ladder'){const r=v.rungs,k=r.length,st=k>1?140/(k-1):0;let s=`<line x1="14" x2="146" y1="30" y2="30" stroke="var(--control)" stroke-width="2"/>`;
-  r.forEach((n,i)=>{const x=14+i*st*132/140;s+=`<circle cx="${x}" cy="30" r="6" fill="var(--surface)" stroke="var(--control)" stroke-width="2"/><text x="${x}" y="${k>3&&i%2?14:52}" text-anchor="middle">${esc(n.length>10?n.slice(0,9)+'…':n)}</text>`});return `<svg viewBox="0 0 160 58">${s}</svg>`}
- if(v.kind==='ci-mini'){const m=Math.max(.02,...v.rows.map(r=>Math.max(Math.abs(r[1]),Math.abs(r[2])))),x=q=>80+q/m*70;let s=`<line x1="80" x2="80" y1="2" y2="56" stroke="var(--text)"/>`;
-  v.rows.forEach(([d,lo,hi],i)=>{const y=12+i*17,c=lo>0?'var(--positive)':hi<0?'var(--negative)':'var(--muted)';s+=`<line x1="${x(lo)}" x2="${x(hi)}" y1="${y}" y2="${y}" stroke="${c}" stroke-width="5" stroke-linecap="round" opacity=".4"/><circle cx="${x(d)}" cy="${y}" r="3.5" fill="${c}"/>`});
-  if(v.example)s+=`<text x="158" y="54" text-anchor="end">example</text>`;return `<svg viewBox="0 0 160 58">${s}</svg>`}
- if(v.kind==='hill'){const sh=v.share,f=sh&&sh.of?sh.count/sh.of:null;
-  return `<svg viewBox="0 0 160 58">${f!=null?`<rect x="4" y="30" width="152" height="10" rx="2" fill="var(--active)"/><rect x="4" y="30" width="${152*f}" height="10" rx="2" fill="${v.status==='climbed'?'var(--positive)':'var(--warning)'}"/><text x="4" y="22" class="strong">${sh.count} of ${sh.of}</text><text x="156" y="54" text-anchor="end">${v.status==='climbed'?'climbed':'open'}</text>`:`<text x="4" y="30" class="strong">${v.status==='climbed'?'climbed':'open'}</text>`}</svg>`}
- return '';
-}
 function conceptsHTML(){
- const u=L.b.understanding?.docs||{};let ok=0,tot=0;
- const cs=L.b.concepts.map(c=>{const res=u['concept:'+c.id]?.results||{};
-  const dots=c.qs.map((_,i)=>{tot++;const r=res[c.id+'#'+i];if(r===true)ok++;return `<b class="${r===true?'ok':r===false?'no':''}"></b>`}).join('');
-  return `<button class="concept" data-l="concept" data-id="${esc(c.id)}">${conceptMini(c.viz)}<span class="t"><span class="ell">${esc(c.t)}</span><i>${dots}</i></span></button>`}).join('');
- return `<section class="strip"><div class="hd"><h2>Concepts</h2><span class="muted">${ok} of ${tot}</span></div><div class="concepts">${cs}</div></section>`;
+ const cs=L.b.course;if(!cs)return '';return `<section class="strip"><div class="hd"><h2>101</h2><a href="#course">All lessons</a></div><div class="crs-grid">${cs.lessons.map(x=>`<a class="crs-tile" href="#course/${enc(x.id)}" data-item><b>${esc(x.t)}</b>${cs.due.includes(x.id)?'<span class="muted">Review due</span>':''}</a>`).join('')}</div></section>`;
 }
+function primerFor(c){if(!c||c.pred||typeof COURSE==='undefined')return null;COURSE.ensure();if(!COURSE.data())return null;return (c.needs||[]).find(id=>COURSE.lesson(id)&&!L.primers?.[id]&&(COURSE.primed(id)||COURSE.state(id)!=='learned'))||null}
+function primerHTML(id){const x=COURSE.lesson(id);return `<div class="crs crs-one" data-primer="${esc(id)}"><div class="kind">Before this result · ${esc(x.t)}</div>${COURSE.primer(id)}${COURSE.primed(id)?`<button class="btn primary" data-l="primer-next" data-id="${esc(id)}">Continue</button>`:''}</div>`}
 
 VIEWS.learn=()=>{
  loadBrief();
  const head=page({title:'Since you last looked',crumbs:[['Brief']],acts:`<div class="seg">${[['last','Last visit'],['day','24 h'],['week','7 d'],['all','All']].map(([k,l])=>`<button class="${L.mode===k?'on':''}" data-l="mode" data-v="${k}">${l}</button>`).join('')}</div>`});
  if(!L.b)return head+(L.err?empty('Could not load the brief',esc(L.err)):`<div class="lrn"><div class="stage skel"></div></div>`);
- const b=L.b,i=L.cur,c=b.cards[i];
+ const b=L.b,i=L.cur,c=b.cards[i],primer=primerFor(c);L.primer=primer;
  if(c&&L.timer.id!==c.id){leaveCard();tStart(c.id);L.visits[c.id]=(L.visits[c.id]||0)+1}
  if(!c&&L.timer.id){leaveCard();L.timer.id=null}
  if(!c&&b.cards.length&&i>=b.cards.length&&b.cards.every(x=>x.pred))lset(LK(),String(b.now));  // every card answered: next visit starts here
  const pips=b.cards.map((x,k)=>{const p=x.pred;const cl=k===i?'cur':!p?'':p.hit==null?'pend':p.hit?'hit':'miss';return `<button class="pip ${cl}" data-l="go" data-i="${k}" aria-label="card ${k+1}"></button>`}).join('');
  const since=b.since?`Since ${stamp(b.since)}`:'All time';
- const stage=!b.cards.length?`<div class="done-h"><h2>${b.since?'Nothing new since '+esc(stamp(b.since)):'Nothing to predict yet'}</h2>${b.empty?`<span class="muted">${esc(b.empty)}</span>`:''}</div>`:c?cardHTML(c):doneHTML();
+ const stage=!b.cards.length?`<div class="done-h"><h2>${b.since?'Nothing new since '+esc(stamp(b.since)):'Nothing to predict yet'}</h2>${b.empty?`<span class="muted">${esc(b.empty)}</span>`:''}</div>`:c?(primer?primerHTML(primer):cardHTML(c)):doneHTML();
  return head+`<div class="lrn"><div class="lhead"><span class="muted">${esc(since)} · ${plural(b.cards.length,'card')}</span><div class="pips">${pips}</div></div>
-  <div class="layout"><section class="stage${b.cards.length?'':' blank'}" aria-live="polite">${stage}</section>
+  <div class="layout"><section data-card="${esc(c?.id||'')}" class="stage${b.cards.length?'':' blank'}" aria-live="polite">${stage}</section>
   <aside class="lside">${panel('How well you know this project',knowHTML())}</aside></div>${conceptsHTML()}</div>`;
 };
 
 // ---------- actions
 async function commitCard(){
- const c=L.b.cards[L.cur];if(!c||c.pred)return;const u=uiOf(c);
+ const c=L.b.cards[L.cur];if(!c||c.pred||L.primer)return;const u=uiOf(c);
  if(typeof TEACH!=='undefined'&&TEACH.active(c))return TEACH.submit(c);
  if(c.type==='choice'&&u.choice==null)return;
  if(!viewerName()){const n=(prompt('Your name, so your predictions are yours')||'').trim();if(!n)return;window.ARXP?ARXP.setName(n):lset('arx-name',n.slice(0,60))}
@@ -229,37 +216,16 @@ async function commitCard(){
 function go(k){if(!L.b)return;L.cur=Math.max(0,Math.min(L.b.cards.length,k));render(true)}
 function setName(){const n=(prompt('Your name',viewerName())||'').trim();if(n){window.ARXP?ARXP.setName(n):lset('arx-name',n.slice(0,60));L.ui={};L.cur=null;loadBrief(true)}}
 
-// concept dialog: one check at a time, options shuffled, a clear ✓ / ✗, results posted as understanding events
-function dlgEl(){let d=document.getElementById('ldlg');if(!d){d=document.createElement('dialog');d.id='ldlg';d.className='ldlg';document.body.append(d);
- d.addEventListener('click',e=>{const a=e.target.closest('[data-d]');if(!a)return;const k=a.dataset.d;if(k==='close')d.close();else if(k==='ans')answerConcept(+a.dataset.i);else if(k==='next')advConcept()});
- d.addEventListener('close',()=>{L.dlg=null;render(true)})}return d}
-function openConcept(id){const c=L.b.concepts.find(x=>x.id===id);if(!c||!c.qs.length)return;
- const res=L.b.understanding?.docs?.['concept:'+id]?.results||{};let qi=c.qs.findIndex((_,i)=>res[id+'#'+i]!==true);if(qi<0)qi=0;
- L.dlg={c,qi,ans:null,t0:performance.now()};drawDlg();dlgEl().showModal()}
-function drawDlg(){
- const {c,qi,ans}=L.dlg,q=c.qs[qi],o=shuf(c.id+'#'+qi,q.o);
- dlgEl().innerHTML=`<div class="dh"><h2>${esc(c.t)}</h2><button class="btn" data-d="close">Close</button></div><div class="cv">${conceptMini(c.viz)}</div>
-  <div class="cq"><p>${esc(q.q)}</p><div class="opts" style="--n:1">${o.map((x,i)=>{let cl='';if(ans!=null){if(x===q.a)cl=' truth';else if(x===ans)cl=' wrong'}
-   return `<button class="opt${cl}" data-d="ans" data-i="${i}" ${ans!=null?'disabled':''}><kbd>${i+1}</kbd>${esc(x)}</button>`}).join('')}</div>
-  <div class="actions">${ans!=null?(ans===q.a?'<span class="vd ok">✓ Right</span>':`<span class="vd no">✗ Wrong · ${esc(q.a)}</span>`):''}<span class="muted">${qi+1} of ${c.qs.length}</span>${ans!=null?`<button class="btn primary" data-d="next">${qi<c.qs.length-1?'Next':'Done'} <kbd>space</kbd></button>`:''}</div></div>`;
-}
-function answerConcept(i){const st=L.dlg;if(!st||st.ans!=null)return;const q=st.c.qs[st.qi],o=shuf(st.c.id+'#'+st.qi,q.o);if(i>=o.length)return;
- st.ans=o[i];const ok=st.ans===q.a,ms=Math.round(performance.now()-st.t0),check=st.c.id+'#'+st.qi;
- L.wrote=true;sendU({doc:'concept:'+st.c.id,step:st.qi,ms,check,ok});
- const d=L.b.understanding.docs['concept:'+st.c.id]||(L.b.understanding.docs['concept:'+st.c.id]={results:{}});d.results=d.results||{};d.results[check]=ok;
- L.b.understanding.missed=(L.b.understanding.missed||[]).filter(m=>!(m.doc==='concept:'+st.c.id&&m.check===check)).concat(ok?[]:[{doc:'concept:'+st.c.id,check}]);
- drawDlg()}
-function advConcept(){const st=L.dlg;if(!st)return;if(st.qi<st.c.qs.length-1){st.qi++;st.ans=null;st.t0=performance.now();drawDlg()}else dlgEl().close()}
-
 document.addEventListener('click',e=>{
  if(route().r!=='learn')return;const a=e.target.closest('#main [data-l]');if(!a)return;
  const k=a.dataset.l,c=L.b?.cards[L.cur];
- if(k==='pick'&&c&&!c.pred){uiOf(c).choice=a.dataset.v;render(true)}
+ if(k==='primer-next'){L.primers=L.primers||{};L.primers[a.dataset.id]=true;render(true)}
+ else if(k==='pick'&&c&&!c.pred){uiOf(c).choice=a.dataset.v;render(true)}
  else if(k==='commit')commitCard();
  else if(k==='next')go(L.cur+1);
  else if(k==='prev')go(L.cur-1);
  else if(k==='go')go(+a.dataset.i);
- else if(k==='concept')openConcept(a.dataset.id);
+ else if(k==='concept')location.hash='#course';
  else if(k==='name')setName();
  else if(k==='mode'){L.mode=a.dataset.v;L.since=sinceFor(L.mode);L.cur=null;L.ui={};L.b=null;render(true);loadBrief(true)}
 });
@@ -273,15 +239,15 @@ document.addEventListener('pointerdown',e=>{
  addEventListener('pointermove',mv);addEventListener('pointerup',up);e.preventDefault();
 });
 document.addEventListener('keydown',e=>{
- if(route().r!=='learn'||!L.b||e.metaKey||e.ctrlKey||e.altKey)return;
- if(L.dlg){const n=+e.key;if(n>=1&&n<=4){answerConcept(n-1);e.preventDefault()}else if((e.key===' '||e.key==='Enter')&&L.dlg.ans!=null){advConcept();e.preventDefault()}return}
+ if(route().r!=='learn'||!L.b||e.defaultPrevented||e.metaKey||e.ctrlKey||e.altKey)return;
+ if(L.primer){const n=+e.key;if(n>=1&&n<=9){COURSE.answer(L.primer+'|primer',n-1);e.preventDefault()}return}
  const tg=e.target;if(tg&&(tg.isContentEditable||/^(TEXTAREA|SELECT)$/.test(tg.tagName)||tg.tagName==='INPUT'&&(tg.type!=='range'||/^Arrow|^(Home|End|PageUp|PageDown)$/.test(e.key))))return;  // the slider keeps its own arrow keys
  if(e.key==='['){go(L.cur-1);e.preventDefault();return}
  if(e.key===']'){go(L.cur+1);e.preventDefault();return}
  const c=L.b.cards[L.cur];
  if(!c){const k=L.b.cards.findIndex(x=>!x.pred);if(k>=0&&(e.key===' '||e.key==='Enter')){go(k);e.preventDefault()}return}
  const u=uiOf(c);
- if(e.key===' '||e.key==='Enter'){if(tg&&tg.tagName==='BUTTON'&&e.key==='Enter')return;e.preventDefault();c.pred?go(L.cur+1):commitCard();return}
+ if(e.key===' '||e.key==='Enter'){if(tg&&/^(BUTTON|A|INPUT)$/.test(tg.tagName))return;e.preventDefault();c.pred?go(L.cur+1):commitCard();return}
  if(c.pred||typeof TEACH!=='undefined'&&TEACH.active(c))return;  // a method card takes its own keys (teach.js)
  const n=+e.key;
  if(c.type==='choice'&&n>=1&&n<=c.opts.length){u.choice=shuf(c.id,c.opts)[n-1];render(true);return}
