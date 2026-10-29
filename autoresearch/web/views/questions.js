@@ -63,11 +63,13 @@ function qCol(e){
  if(e.lo!=null&&e.hi!=null)return e.lo>0?'var(--positive)':e.hi<0?'var(--negative)':'var(--muted)';
  return e.delta>0?'var(--positive)':e.delta<0?'var(--negative)':'var(--muted)';
 }
+// a model's readable label as plain text (mnt() without the HTML escaping; data-qtip is escaped once by esc())
+const qM=k=>{if(!k)return '';const t=S.state?.models?.[k]?.title;if(t)return t;const s=String(k);return s.split('+').length>3?'…+'+s.split('+').slice(-2).join('+'):s};
 function qTipOf(e){
- if(e.kind==='missing')return `${e.model||e.task}\n${e.slice||''}\nNot run`;
- const head=`${e.label||e.model||''}\n${e.slice||e.what||''}${e.n?' · n '+qFmt(e.n):''}`;
+ if(e.kind==='missing')return `${qM(e.model)||e.task}\n${e.slice||''}\nNot run`;
+ const head=`${e.label||qM(e.model)}\n${e.slice||e.what||''}${e.n?' · n '+qFmt(e.n):''}`;
  if(e.kind==='raw')return `${head}\n${qFmt(e.c)} of ${qFmt(e.n)}`+(e.what?`\n${e.what}`:'');
- return `${head}\n${qFmt(e.c)} vs ${qFmt(e.bc)} (${e.base})\n${qSgn(100*e.delta)} pts`+(e.lo!=null?` · 90% CI ${qSgn(100*e.lo)} to ${qSgn(100*e.hi)}`:'')+
+ return `${head}\n${qFmt(e.c)} vs ${qFmt(e.bc)} (${qM(e.base)})\n${qSgn(100*e.delta)} pts`+(e.lo!=null?` · 90% CI ${qSgn(100*e.lo)} to ${qSgn(100*e.hi)}`:'')+
   `\n${e.wins??0} fixed · ${e.losses??0} broke`;
 }
 function qSquares(e){
