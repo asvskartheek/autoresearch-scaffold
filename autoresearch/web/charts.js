@@ -22,7 +22,9 @@ function niceDomain(lo,hi,n=5){if(hi===lo){const d=Math.abs(hi)*.1||1;lo-=d;hi+=
 function logTicks(lo,hi){const a=Math.floor(Math.log10(lo)),b=Math.ceil(Math.log10(hi)),out=[],mult=(b-a)<=2?[1,2,5]:[1];
  for(let e=a;e<=b;e++)for(const m of mult){const v=m*Math.pow(10,e);if(v>=lo*.999&&v<=hi*1.001)out.push(v)}return out}
 // numbers: ticks at the step's precision, values at 3 significant figures, tiny and huge as 1.2e-5
-function fmt(v,step){if(v==null||!isFinite(v))return '–';const a=Math.abs(v);if(v===0)return '0';
+function fmt(v,step){if(v==null||!isFinite(v))return '–';const a=Math.abs(v);if(v===0||(step!=null&&a<step/2))return '0';
+ return fmt0(v,a,step).replace(/^-(0(?:[.,]0+)?)$/,'$1')}  // a tick that rounds to zero never reads -0
+function fmt0(v,a,step){
  if(a<1e-3||a>=1e6){const e=Math.floor(Math.log10(a)),m=v/Math.pow(10,e);return (Math.abs(m-Math.round(m))<1e-9?Math.round(m):m.toFixed(1))+'e'+e}
  if(step!=null&&step>=1e-3){const d=Math.max(0,-Math.floor(Math.log10(step)+1e-9));return v.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d})}
  return a>=1000?Math.round(v).toLocaleString():a>=100?v.toFixed(0):a>=10?v.toFixed(1):a>=1?v.toFixed(2):v.toPrecision(3)}
