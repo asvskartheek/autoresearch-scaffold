@@ -955,7 +955,7 @@ async function refresh() {
     if (version === null) { version = d.version; srcTexts(version).catch(() => {}); frame = await loadPaper(version); }
     else if (d.version !== version) { const prev = version; version = d.version; await swapPaper(version, prev); }
     threads = d.threads;
-    if (active && !threads.find(t => t.id === active)) active = null;
+    if (active && !threads.find(t => t.id === active)) { active = null; if (location.hash.startsWith("#c-")) history.replaceState(null, "", location.pathname); }
     reanchor(); renderAll();
   } catch (err) { if (++fails > 2) { $("#live").className = "live off"; $("#live").title = "Offline: retrying"; } }
   finally { busy = false; }
