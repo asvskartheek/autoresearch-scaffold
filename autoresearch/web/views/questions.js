@@ -157,17 +157,17 @@ function qRootGoal(id,ix){for(let x=ix.by[id];x;x=ix.by[x.parent])if(x.goal)retu
 
 VIEWS.questions=arg=>{
  qLoad();
- if(!QS.data)return page({title:'Questions'})+(QS.err?`<div class="banner">${esc(QS.err)}</div>`:empty('Reading the ledger…'));
+ if(!QS.data)return page({title:'Questions',crumbs:[['Questions']]})+(QS.err?`<div class="banner">${esc(QS.err)}</div>`:empty('Reading the ledger…'));
  const ix=qIndex();
  if(!QS.closed)QS.closed=qDefaultClosed(ix.by,ix.kids);
  const focus=qFocus(ix,arg);
- if(!focus)return page({title:'Questions'})+empty('No questions yet','<span>arx q add "&lt;title&gt;"</span>');
+ if(!focus)return page({title:'Questions',crumbs:[['Questions']]})+empty('No questions yet','<span>arx q add "&lt;title&gt;"</span>');
  for(let x=ix.by[ix.by[focus].parent];x;x=ix.by[x.parent])QS.closed.delete(x.id);
  const hs=QS.data.nodes.filter(qWaiting);
  const need=hs.length?`<details class="q-need"><summary class="q-ib">${qShape('human',10)}${hs.length}</summary><div class="q-pop">${hs.map(n=>`<button data-qgo="${esc(n.id)}">${qShape('human',10)}<span>${esc(n.title)}</span></button>`).join('')}</div></details>`:'';
  const key=`<span class="q-ib key" tabindex="0" data-qtip="key"><svg width="14" height="14" viewBox="0 0 14 14" aria-label="Key"><circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="7" cy="4.3" r=".9" fill="currentColor"/><path d="M7 6.5V10.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span>`;
  const roots=ix.kids['']||[];
- return page({title:'Questions',acts:qDistance(qRootGoal(focus,ix))})+
+ return page({title:'Questions',crumbs:[['Questions']],acts:qDistance(qRootGoal(focus,ix))})+
   `<section class="card flush qv"><div class="q-col q-tree"><div class="q-bar">${need}${key}</div><ul class="q-t">${roots.map(r=>qRow(r,ix,focus)).join('')}</ul></div>`+
   `<div class="q-col q-panel" id="q-panel">${qPanel(focus,ix)}</div></section>`;
 };
