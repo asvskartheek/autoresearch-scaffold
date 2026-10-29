@@ -11,6 +11,12 @@ const ovVal=(v,sl)=>v==null?'—':(Math.abs(v)>=10?v.toFixed(1):num(v,3))+(sl?.u
 const ovScore=(v,sl)=>ovBin(sl)?pct(v):esc(ovVal(v,sl));
 const ovDelta=(d,sl)=>d==null?'—':ovBin(sl)?pts(d):(d>0?'+':d<0?'−':'')+esc(ovVal(Math.abs(d),sl));
 const ovRunning=(m,s)=>active().some(t=>t.kind==='eval'&&t.model===m&&t.slice===s);
+// a gate's next run that is already running (the server sets n.running to its task): the live task, and a chip with
+// its progress that links to it. Shared by the model, hill and goal views, which load after this file.
+// A task silent for over a day is dead, so it does not count as running.
+const runTask=n=>{if(!n?.running)return null;const t=S.state.tasks.find(t=>t.id===n.running)||{id:n.running};return t.status==='stalled'&&now()-(t.heartbeat||t.updated||t.created)>86400?null:t};
+const runChip=n=>{const t=runTask(n);if(!t)return '';const pr=t.progress||{},sl=t.status==='stalled';
+ return `<a class="runchip" href="#task/${enc(t.id)}" onclick="event.stopPropagation()" title="${esc(t.title||'Open the running task')}"><span class="st ${sl?'stalled':'running'}">${sl?'silent '+span(now()-(t.heartbeat||t.updated||t.created)):'running'}</span>${pr.total?`<span class="num">${ovN(pr.done)}<span class="faint"> / ${ovN(pr.total)}</span></span>`:''}</a>`};
 const ovRungs=()=>{const st=S.state;return (st.config.ladder||[]).map(r=>r.rung).filter(Boolean).length?st.config.ladder.map(r=>r.rung):(Object.values(st.gates).find(g=>g.rungs?.length)?.rungs||[]).map(r=>r.rung)};
 // a task silent for more than a day is dead: not running, not a live card, one line
 const ovDead=t=>t.status==='stalled'&&now()-(t.heartbeat||t.updated||t.created)>86400;
@@ -49,6 +55,8 @@ function ovNextOf(k,g){
  const nx=g.next||[],f=ovFailedAt(g);
  if(g.promotable)return ['Promote',`arx promote ${k}`,'pos'];
  if(f)return [`Failed ${esc(f)}`,`arx reject ${k} --reason "failed the ${f} rung"`,'neg'];
+ const r=nx.find(runTask);
+ if(r)return [runChip(r),`arx gate ${k}`,''];
  if(nx.length)return [`<span class="mono" title="${esc(nx.map(x=>short(x.slice)).join(', '))}">${esc(short(nx[0].slice))}</span>`,`arx gate ${k}`,''];
  return ['',`arx gate ${k}`,''];
 }
