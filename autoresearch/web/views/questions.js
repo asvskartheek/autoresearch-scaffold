@@ -50,8 +50,8 @@ function qDefaultClosed(by,kids){
 function qRow(id,ix,focus){
  const n=ix.by[id],k=ix.kids[id]||[],cl=QS.closed.has(id),on=id===focus;
  return `<li><div class="q-row ${on?'on':''} ${cl?'closed':''} ${n.status==='dead'?'dead':''} ${QS.fresh.has(id)?'fresh':''}" data-qgo="${esc(id)}" data-qnode="${esc(id)}" tabindex="0"${n.claim&&!on?` data-qtip="${esc(qPlain(n.claim))}"`:''}>`+
-  `<button class="q-car ${k.length?'':'none'}" data-qcar="${esc(id)}" aria-label="Toggle" tabindex="-1"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 3.5L5 6.5L8 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>`+
-  `<span class="q-sh">${qShape(n)}</span><span class="q-tx"><span class="q-q">${esc(n.title)}</span>${on&&n.claim?`<span class="q-cl">${esc(qPlain(n.claim))}</span>`:''}</span>`+
+  `<span class="q-car ${k.length?'':'none'}" data-qcar="${esc(id)}" role="button" aria-label="Toggle"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 3.5L5 6.5L8 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>`+
+  `<span class="q-sh">${qShape(n)}</span><span class="q-tx"><a class="q-q" href="#questions/${enc(id)}" tabindex="-1">${esc(n.title)}</a>${on&&n.claim?`<span class="q-cl">${esc(qPlain(n.claim))}</span>`:''}</span>`+
   `${k.length&&cl?`<span class="q-ct">${qCount(id,ix.kids)}</span>`:''}</div>`+
   (k.length&&!cl?`<ul class="q-t">${k.map(c=>qRow(c,ix,focus)).join('')}</ul>`:'')+`</li>`;
 }

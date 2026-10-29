@@ -41,6 +41,7 @@ ul.q-t ul.q-t{margin-left:11px;padding-left:12px;border-left:1px solid var(--rul
 .q-fq h2{font-size:22px;line-height:1.25;font-weight:600;letter-spacing:-.01em;margin:0;overflow-wrap:anywhere}
 .q-fq .q-sh{padding-top:5px;height:auto}
 .q-claim.agent.idle{border-left-color:var(--chart-3)}
+a.q-q{color:inherit;text-decoration:none}
 .q-why{margin:10px 0 0;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
 .q-why a,.q-claim a{color:var(--accent);text-decoration:none}
 .q-claim{margin:12px 0 0;font-size:15px;padding:8px 12px;border-radius:var(--radius-card);background:var(--raised);border-left:3px solid var(--control);overflow-wrap:anywhere}
