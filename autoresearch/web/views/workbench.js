@@ -33,7 +33,7 @@ const wbSeen=()=>{try{return new Set(JSON.parse(localStorage.getItem(SEEN_K)||'[
 const wbMarkSeen=id=>{try{const s=wbSeen();if(s.has(id))return;s.add(id);localStorage.setItem(SEEN_K,JSON.stringify([...s].slice(-300)))}catch(e){}};
 // metric keys as words: running_score → Score so far, latency_s → Latency (s), rewards/correctness/mean → Correctness
 const wbMetric=k=>({running_score:'Score so far',score:'Score',latency_s:'Latency (s)',loss:'Loss',reward:'Reward',acc:'Accuracy',accuracy:'Accuracy',lr:'Learning rate',learning_rate:'Learning rate',grad_norm:'Gradient norm',kl:'KL to reference',entropy:'Entropy',mean_token_accuracy:'Token accuracy',reward_std:'Reward spread',gpu_util:'GPU utilisation',gpu_mem_gb:'GPU memory (GB)'})[k]
- ||(/^rewards\/([^/]+)\/mean$/.test(k)?wbKind(k.split('/')[1]):wbKind(String(k).replace(/_s$/,' (s)').replace(/\//g,' · ')));
+ ||(/^rewards\/([^/]+)\/mean$/.test(k)?wbKind(k.split('/')[1]):wbKind(String(k).replace(/_per_(s|sec|second)$/,' per second').replace(/_per_(min|minute)$/,' per minute').replace(/_s$/,' (s)').replace(/\//g,' · ')));
 
 {
 const UNIT={eval:'examples',train:'steps',data:'items',experiment:'repeats'};
@@ -66,7 +66,7 @@ function head(t,short){
 function rowValue(t){
  const l=t.last||{},bits=[];
  if(typeof l.running_score==='number')bits.push(pct(l.running_score));
- else{const k=Object.keys(l).find(k=>typeof l[k]==='number'&&!/^(t|step|epoch)$/.test(k));if(k)bits.push(`${esc(wbMetric(k).toLowerCase())} ${fmtv(l[k])}`)}
+ else{const k=Object.keys(l).find(k=>typeof l[k]==='number'&&!/^(t|step|epoch)$/.test(k));if(k)bits.push(`${esc(wbMetric(k).toLowerCase())} ${XC.fmt(l[k])}`)}
  if((t.health?.silent_s||0)>=60)bits.push(`no progress for ${span(t.health.silent_s)}`);
  else if(t.eta)bits.push(`${t.eta.per_min>=60?n0(t.eta.per_min/60)+' a second':t.eta.per_min>=10?n0(t.eta.per_min)+' a minute':t.eta.per_min.toFixed(1)+' a minute'}`);
  return bits.join(' · ');
