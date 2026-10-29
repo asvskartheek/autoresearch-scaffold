@@ -175,12 +175,14 @@ async function snapshot(e,a){
  finally{clearInterval(tick);delete a.dataset.busy}
  return false;
 }
-// who else has this project open: their faces, ringed when they are on this same view. Faces overlap (each sits in its
-// own link, so the overlap is set here) and cap at 3 on a phone, 5 wider, then "+N", so they never squeeze the crumbs
+// who else has this project open: their faces, ringed when they are on this same view. The list rides on the 4 s state
+// poll (/api/state `here`), so a move shows within a poll, not at the next 20 s heartbeat. Faces overlap by 3 px (each
+// sits in its own link, so the overlap is set here; more clips the initials) and cap at 3 on a phone, 5 wider, then "+N"
 function hereFaces(){
- if(!window.ARXP)return '';const cur=location.hash.slice(1)||'overview',hs=ARXP.here();if(!hs.length)return '';
+ if(!window.ARXP)return '';const me=ARXP.me().id,cur=location.hash.slice(1)||'overview';
+ const hs=Array.isArray(S.state?.here)?S.state.here.filter(x=>x.id!==me):ARXP.here();if(!hs.length)return '';
  const cap=innerWidth<600?3:5,shown=hs.length>cap?cap:hs.length;
- return `<span class="px-here" style="flex:none" aria-label="${hs.length} more here">${hs.slice(0,shown).map((x,i)=>{const pp=(x.route||'').startsWith('papers/');return `<a href="${pp?esc(x.route):'#'+esc(x.route||'overview')}" style="display:inline-flex;position:relative;z-index:${shown-i}${i?';margin-left:-6px':''}" title="${esc(x.name)} · ${pp?'reading the paper '+esc(x.route.slice(7)):esc(routeLabel((x.route||'overview').split('/')[0]))}">${ARXP.face(x.id,x.name,x.route===cur?'on':'')}</a>`}).join('')}${hs.length>shown?`<span class="sub" style="margin-left:4px;font-size:12px" title="${esc(hs.slice(shown).map(x=>x.name).join(', '))}">+${hs.length-shown}</span>`:''}</span>`;
+ return `<span class="px-here" style="flex:none" aria-label="${hs.length} more here">${hs.slice(0,shown).map((x,i)=>{const pp=(x.route||'').startsWith('papers/');return `<a href="${pp?esc(x.route):'#'+esc(x.route||'overview')}" style="display:inline-flex;position:relative;z-index:${shown-i}${i?';margin-left:-3px':''}" title="${esc(x.name)} · ${pp?'reading the paper '+esc(x.route.slice(7)):esc(routeLabel((x.route||'overview').split('/')[0]))}">${ARXP.face(x.id,x.name,x.route===cur?'on':'')}</a>`}).join('')}${hs.length>shown?`<span class="sub" style="margin-left:4px;font-size:12px" title="${esc(hs.slice(shown).map(x=>x.name).join(', '))}">+${hs.length-shown}</span>`:''}</span>`;
 }
 // light -> dark -> system (follow the OS) -> light
 function toggleTheme(){
