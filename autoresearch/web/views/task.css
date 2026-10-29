@@ -124,3 +124,6 @@
 .tk-sys{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
 
 .tk-err{font-family:var(--mono);font-size:.92em;color:var(--negative);word-break:break-word}
+
+.tk-result-kv{margin:0;display:grid;gap:16px}.tk-result-kv>div{min-width:0}.tk-result-kv dt{font-weight:600;margin-bottom:4px}.tk-result-kv dd{margin:0;line-height:1.6;overflow-wrap:anywhere}.tk-result-kv ul{padding-left:20px}.tk-result-table{max-width:100%;overflow:auto}.tk-result-table table{width:100%;min-width:720px}.tk-result-table th,.tk-result-table td{padding:10px;text-align:right;white-space:nowrap}.tk-result-table th:first-child,.tk-result-table td:first-child,.tk-result-table th:last-child,.tk-result-table td:last-child{text-align:left}
+.tk-result .ph{flex-wrap:wrap;row-gap:4px}.tk-result .ph .meta{white-space:normal;overflow:visible;text-overflow:clip}

@@ -85,6 +85,13 @@ def _slim(t: dict) -> dict:
     """List views need a task's status, numbers and a line of text; the full record loads with /api/task/<id>."""
     t = {k: v for k, v in t.items() if k not in ("command", "links", "host", "pid", "env", "manifest")}
     if isinstance(t.get("summary"), dict):
+        report = t["summary"].get("benchmark_report")
+        conclusion = report.get("conclusion") if isinstance(report, dict) else None
+        throughput = t["summary"].get("throughput")
+        if isinstance(conclusion, str) and conclusion:
+            t["result_summary"] = conclusion[:600]
+        elif isinstance(throughput, list) and throughput:
+            t["result_summary"] = f"{len(throughput)} measured throughput rows"
         t["summary"] = {k: v for k, v in t["summary"].items() if isinstance(v, _SUMMARY_KEEP)}
     if isinstance(t.get("description"), str) and len(t["description"]) > 280:
         t["description"] = t["description"][:277] + "..."

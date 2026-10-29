@@ -51,7 +51,7 @@ function finding(t,d){
  const B=wbBudget(t),budget=B?` of a ${wbSpanB(B)} budget`:'';
  const sub=tree(t.id).map(([k])=>k),subTxt=sub.length?(()=>{const bad=sub.filter(k=>!ARC_OK.has(k.status)&&!isLive(k)).length,live=sub.filter(isLive).length;
   return `; ${plural(sub.length,'sub-task')}${live?`, ${live} still running`:bad?`, ${bad} did not finish cleanly`:', all done'}`})():'';
- if(t.status==='stalled')return `<b class="neg">Stalled: silent for ${silent(t)}</b>${prog?`, stopped at ${prog} (${(100*pr.done/pr.total).toFixed(0)}%)`:''}.`;
+ if(t.status==='stalled')return `<b class="neg">Stalled: silent for ${silent(t)}</b>${prog?`, stopped at ${prog} (${(100*pr.done/pr.total).toFixed(0)}%)`:''}.${t.kind==='eval'?' Partial observations are unranked.':''}`;
  if(t.status==='running'){
   const run=runScore(t),k=kidOf(t);
   const bits=[prog&&`<b>${prog}</b> done (${(100*pr.done/pr.total).toFixed(0)}%)`,run!=null&&`scoring ${scoreOf(run,slOf(t))} so far${sl?' on '+sl:''}`,t.eta&&(t.health?.state==='over'?`<b class="warn">will not finish in its budget</b>: the estimate is ${wbClock(t.eta.finish_at)}, the budget ends at ${wbClock(t.created+t.budget_s)}`:`finishes in about ${wbSpan(t.eta.eta_s)}, at ${wbClock(t.eta.finish_at)}`),k&&isLive(k)&&`counted live by <a class="ln" href="#task/${enc(k.id)}">${esc(k.title)}</a>`].filter(Boolean);
@@ -59,6 +59,11 @@ function finding(t,d){
  }
  const tk=wbTook(t),took=tk!=null?(B?wbSpanB:wbSpan)(tk):null;
  if(emptyEval(t))return `<b class="neg">No results</b>: no example was scored${sm.missing?` (${sm.missing.toLocaleString()} of ${(pr.total||sm.missing).toLocaleString()} missing)`:''}${sl?` on ${sl}`:''}, so this run measured nothing.`;
+ if(partialEval(t)){
+  const n=sm.n??pr.done??0,total=pr.total||(n+(sm.missing||0));
+  return `<b class="warn">Partial run · unranked</b>: ${esc(wbKind(t.status))} after ${n.toLocaleString()} of ${total.toLocaleString()} examples${sl?` on ${sl}`:''}. These observations do not establish a full-slice result or a promotion verdict.`;
+ }
+ if(wbResultSummary(t))return esc(wbResultSummary(t));
  if(t.kind==='eval'&&sm.score!=null){
   const S_=slOf(t),c=isCont(S_);
   const verb=c&&timedSl(S_)?'took':'scored',av=c&&timedSl(S_)?' a question':'';
@@ -81,10 +86,11 @@ function kpiStrip(t,d){
  const pr=t.progress||{},sm=t.summary||{},vc=d?.vs_champion,live=isLive(t),[bt,bc]=budgetLine(t);
  const items=[];
  if(t.kind==='eval'&&(sm.n||pr.total)){
-  const sc=sm.score??runScore(t),n=sm.n??pr.done,sl=slOf(t),c=isCont(sl);
+  const sc=sm.score??runScore(t),n=sm.n??pr.done,sl=slOf(t),c=isCont(sl),partial=partialEval(t);
+  if(partial)items.push(['Coverage',`${n.toLocaleString()}<small>of ${(pr.total||(n+(sm.missing||0))).toLocaleString()}</small>`,'Unranked partial observations']);
   const mt=c&&timedSl(sl);
-  items.push([live?(mt?'Mean time so far':c?'Mean so far':'Score so far'):(mt?'Mean time':c?'Mean score':'Score'),scoreOf(sc,sl),sc!=null?(c?`over ${n.toLocaleString()}`:`${Math.round(sc*n).toLocaleString()} of ${n.toLocaleString()}`):'']);
-  if(vc&&vc.delta!=null)items.push(['Against the champion',c?`<span class="${tone(vc)}">${cDelta(vc.delta,sl)}</span>`:`<span class="${tone(vc)}">${pts(vc.delta)}</span><small>pts</small>`,c?`${cNum(vc.lo)} to ${cNum(vc.hi)}, 90% CI`:`${pts(vc.lo)} to ${pts(vc.hi)}, 90% CI`]);
+  items.push([partial?'Observed subset':live?(mt?'Mean time so far':c?'Mean so far':'Score so far'):(mt?'Mean time':c?'Mean score':'Score'),scoreOf(sc,sl),sc!=null?(c?`over ${n.toLocaleString()}`:`${Math.round(sc*n).toLocaleString()} of ${n.toLocaleString()}`):'']);
+  if(!partial&&vc&&vc.delta!=null)items.push(['Against the champion',c?`<span class="${tone(vc)}">${cDelta(vc.delta,sl)}</span>`:`<span class="${tone(vc)}">${pts(vc.delta)}</span><small>pts</small>`,c?`${cNum(vc.lo)} to ${cNum(vc.hi)}, 90% CI`:`${pts(vc.lo)} to ${pts(vc.hi)}, 90% CI`]);
   if(live)items.push(['Progress',pr.total?`${pr.done.toLocaleString()}<small>of ${pr.total.toLocaleString()}</small>`:DASH,pr.total?(100*pr.done/pr.total).toFixed(0)+'%':'']);
   if(sm.cost!=null)items.push(['Cost per example',money(sm.cost),sm.cost_total!=null?money(sm.cost_total)+' in all':'']);
   const lat=sm.latency_p50??t.last?.latency_s;
@@ -97,7 +103,7 @@ function kpiStrip(t,d){
   if(!items.length)return '';
  }
  if(t.status==='running')items.push(['Finishes',t.eta?`<span class="${t.health?.state==='over'?'warn':''}">in ${wbSpan(t.eta.eta_s)}</span>`:DASH,t.eta?`at ${wbClock(t.eta.finish_at)}`:'no rate yet']);
- const B=wbBudget(t);if(live?B:wbTook(t)!=null)items.push([live?'Elapsed':'Took',`<span class="${bc}">${(B?wbSpanB:wbSpan)(t.ended?wbTook(t):now()-t.created)}</span>`,B?`of a ${wbSpanB(B)} budget`:'']);
+ const B=wbBudget(t);if(live?B:wbTook(t)!=null)items.push([t.status==='stalled'?'Observed activity':live?'Elapsed':'Took',`<span class="${bc}">${(B?wbSpanB:wbSpan)(t.ended?wbTook(t):wbObservedEnd(t)-t.created)}</span>`,B?`of a ${wbSpanB(B)} budget`:'']);
  return `<div class="section">${kpis(items.slice(0,6))}</div>`;
 }
 
@@ -107,11 +113,11 @@ function vsChamp(vc,t){
  // ciBar titles its interval in points; a continuous slice gets its own units
  const bar=ciBar({...vc,state}).replace(/title="[^"]*"/,`title="${c?`Change ${cDelta(vc.delta,sl).replace(/&nbsp;/g,' ')}, 90% interval ${cNum(vc.lo)} to ${cNum(vc.hi)}`:`Change ${pts(vc.delta)} pts, 90% interval ${pts(vc.lo)} to ${pts(vc.hi)}`}"`);
  const base=vc.runs>1?`Champion's score, ${vc.runs} runs pooled`:`Champion's score`;
- return `<div class="section">${panel(`Against the champion, ${mn(vc.model)}`,`<div class="tk-vc">
+ return `<div class="section">${panel(`${partialEval(t)?'Exploratory subset comparison':'Against the champion'}, ${mn(vc.model)}`,`<div class="tk-vc">
   <div class="tk-vcd"><span class="tk-big ${tone(vc)}">${c?cDelta(vc.delta,sl):pts(vc.delta)}</span><span class="sub">${c?'':'pts, '}${sig(vc)}</span></div>
   <div class="tk-vcb">${bar}<div class="tk-ax"><span>${f(vc.lo)}</span><span class="sub">90% interval</span><span>${f(vc.hi)}</span></div></div>
   <dl class="tk-kv"><div><dt>Wins / losses</dt><dd>${vc.wins} / ${vc.losses}</dd></div><div><dt>${base}</dt><dd><a class="ln" href="#task/${enc(vc.task)}" title="${vc.runs>1?'Its latest run':'Its run'}">${scoreOf(vc.base,sl)}</a></dd></div></dl></div>`,
-  {cls:'tk-vcp',meta:`paired on the same ${vc.n} examples${pooled(vc)}`,right:`<a class="more" href="#task/${enc(vc.task)}">${vc.runs>1?"Champion's latest run":"Champion's run"}</a>`})}</div>`;
+  {cls:'tk-vcp',meta:`${partialEval(t)?'Unranked; ':''}paired on the same ${vc.n} examples${pooled(vc)}`,right:`<a class="more" href="#task/${enc(vc.task)}">${vc.runs>1?"Champion's latest run":"Champion's run"}</a>`})}</div>`;
 }
 
 // ---------- curves: a main chart you pick, small multiples for the rest, all on one crosshair and zoom; other runs of
@@ -216,10 +222,30 @@ function jsonNote(o){
  return `<dl class="tk-jn">${kv.map(([k,x])=>`<div><dt>${esc(word(k))}</dt><dd>${v(k,x)}</dd></div>`).join('')}</dl>`;
 }
 
+// Recorded result schemas remain readable even without metric time-series rows.
+function resultSummary(t){
+ const sm=t.summary||{}, report=sm.benchmark_report, rows=sm.throughput;
+ const value=v=>{if(v==null)return DASH;if(Array.isArray(v))return `<ul>${v.map(x=>`<li>${value(x)}</li>`).join('')}</ul>`;
+  if(typeof v==='object')return `<dl class="tk-result-kv">${Object.entries(v).map(([k,x])=>`<div><dt>${esc(wbMetric(k))}</dt><dd>${value(x)}</dd></div>`).join('')}</dl>`;
+  return esc(String(v))};
+ let h='';
+ if(report&&typeof report==='object')h+=`<div class="section tk-result">${panel('Recorded benchmark findings',value(report))}</div>`;
+ if(Array.isArray(rows)&&rows.length){
+  const columns=['backend','concurrency','tokens_per_second','minimum','maximum','repeats','source_run'];
+  const labels=['Backend','Concurrency','Generated tokens/s','Minimum tokens/s','Maximum tokens/s','Timed repeats','Source run'];
+  const num=v=>typeof v==='number'?v.toLocaleString(undefined,{maximumFractionDigits:1}):esc(v??'—');
+  h+=`<div class="section tk-result">${panel('Measured throughput',`<div class="tk-result-table" tabindex="0" role="region" aria-label="Measured throughput table"><table><thead><tr>${labels.map(x=>`<th scope="col">${x}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${columns.map(k=>`<td>${num(r[k])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`,{meta:`${rows.length} recorded rows; ranges are observed repeat minima and maxima`})}</div>`;
+ }
+ const known=new Set(['benchmark_report','throughput','score','n','errors','missing','cost','cost_total','latency_p50','latency_p95','latency_mean','wall_s']);
+ const extra=Object.fromEntries(Object.entries(sm).filter(([k])=>!known.has(k)));
+ if(Object.keys(extra).length)h+=`<div class="section tk-result">${panel('Recorded summary',value(extra))}</div>`;
+ return h;
+}
+
 // ---------- the log: the notes, oldest first, grouped by day; the latest dozen unless asked for all
 function log(t,d){
  const ev=d.events,cap=S.tkLogAll?ev.length:12,shown=ev.slice(-cap),hidden=ev.length-shown.length;
- if(!ev.length)return t.kind==='eval'?'':`<div class="section">${panel('Log',`<p class="tk-none">No notes were written for this task.</p>`)}</div>`;
+ if(!ev.length)return t.kind==='eval'||Object.keys(t.summary||{}).length?'':`<div class="section">${panel('Log',`<p class="tk-none">No notes were written for this task.</p>`)}</div>`;
  let day='',items='';
  for(const e of shown){
   const dd=wbDay(e.t);if(dd!==day){day=dd;items+=`<li class="tk-day">${dd}</li>`}
@@ -255,7 +281,7 @@ function details(t,d){
  const kv=[['Task id',`<span class="tk-mono">${esc(t.id)}</span>${copyBtn(t.id)}`],
   ['Started',wbWhen(t.created)],
   [t.ended?'Ended':'Last heard',t.ended?wbWhen(t.ended):`${wbAgo(t.heartbeat)} <span class="faint">(${wbClock(t.heartbeat)})</span>`],
-  [t.ended?'Took':'Elapsed',t.ended&&wbTook(t)==null?'Recorded from another run':`${(t.budget_s?wbSpanB:wbSpan)(t.ended?wbTook(t):now()-t.created)}${t.budget_s?` <span class="faint">of a ${wbSpanB(t.budget_s)} budget</span>`:''}`]];
+  [t.ended?'Took':t.status==='stalled'?'Observed activity':'Elapsed',t.ended&&wbTook(t)==null?'Recorded from another run':`${(t.budget_s?wbSpanB:wbSpan)(t.ended?wbTook(t):wbObservedEnd(t)-t.created)}${t.budget_s?` <span class="faint">of a ${wbSpanB(t.budget_s)} budget</span>`:''}`]];
  if(t.model)kv.push(['Model',`<a class="ln" href="#model/${enc(t.model)}">${mn(t.model)}</a>${st.models[t.model]?.title&&st.models[t.model].title!==t.model?` <span class="tk-mono faint">${esc(t.model)}</span>`:''}`]);
  if(t.superseded_by){const by=byId(t.superseded_by);kv.push(['Superseded by',`<a class="ln" href="#task/${enc(t.superseded_by)}">${esc(by?.title||t.superseded_by)}</a> <span class="faint">gates and baselines skip this run</span>`])}
  if(t.slice)kv.push(['Slice',`<a class="ln" href="#slices/${enc(t.slice)}">${esc(t.slice)}</a>${sl?.n?` <span class="faint">${sl.n.toLocaleString()} examples</span>`:''}`]);
@@ -311,7 +337,7 @@ VIEWS.task=(id)=>{
  const pr=t.progress||{};
  if(live&&pr.total)h+=`<div class="tk-prog">${meter(pr.done/pr.total,{cls:t.status==='stalled'?'muted':''})}</div>`;
  if(!d)return h+`<div class="section">${panel('Log','<div class="skel" style="height:96px"></div>')}</div>`+`<div class="section">${panel('Details','<div class="skel" style="height:160px"></div>')}</div>`;
- h+=vsChamp(d.vs_champion,t)+etaCard(t)+curves(t,d)+(d.snapshot_cut&&t.kind==='eval'?empty('Per-example rows are not in this snapshot','The live dashboard has them'):examples(d.rows))+log(t,d)+subTasks(t)+details(t,d);
+ h+=resultSummary(t)+vsChamp(d.vs_champion,t)+etaCard(t)+curves(t,d)+(d.snapshot_cut&&t.kind==='eval'?empty('Per-example rows are not in this snapshot','The live dashboard has them'):examples(d.rows))+log(t,d)+subTasks(t)+details(t,d);
  return h;
 };
 }

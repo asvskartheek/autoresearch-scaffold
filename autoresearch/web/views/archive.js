@@ -33,8 +33,9 @@ const top=t=>!(t.parent&&byId(t.parent))&&!/^historical/.test(t.kind||'');
 function sessions(){
  const st=S.state,ev=[];
  // research work defines a session (a model's runs, evals, trains); answers and chores only fill in around it
- const work=t=>t.model||/^(eval|train|experiment|data)$/.test(t.kind||'');
- for(const t of st.tasks)if(top(t)&&work(t))ev.push([t.created,isLive(t)?now():(t.ended||t.updated||t.created)]);
+ const evidence=t=>t.model||/^(eval|train)$/.test(t.kind||'')||!!wbResultSummary(t);
+ const work=t=>evidence(t)||tree(t.id).some(([k])=>evidence(k));
+ for(const t of st.tasks)if(top(t)&&work(t))ev.push([t.created,wbObservedEnd(t)]);
  for(const m of Object.values(st.models))if(m.created&&m.status!=='historical')ev.push([+m.created,+m.created]);
  for(const d of st.decisions||[])if(d.t&&d.model)ev.push([d.t,d.t]);
  ev.sort((a,b)=>a[0]-b[0]);
@@ -54,6 +55,7 @@ function sessionOf([a,b]){
 // "… Pre-declared: X" → [what changed, what it should move]
 const split=c=>{const s=String(c||''),i=s.search(/pre-?declared\s*:?/i);return i<0?[s,'']:[s.slice(0,i).trim().replace(/[.;,]$/,''),s.slice(i).replace(/^pre-?declared\s*:?\s*/i,'')]};
 const evScore=t=>{const sm=t.summary||{};if(emptyEval(t))return 'no results';if(sm.score==null)return '';
+ if(partialEval(t))return `partial ${sm.n||0}/${t.progress?.total||((sm.n||0)+(sm.missing||0))}, unranked`;
  return S.state.slices[t.slice]?.scale==='continuous'?sv(t.slice,sm.score,sm.n):sm.n?`${Math.round(sm.score*sm.n).toLocaleString()}/${sm.n.toLocaleString()}`:pct(sm.score)};
 const verdict=(m,ds)=>{const d=ds.filter(x=>x.model===m&&/^(rejected|promote|champion)$/.test(x.kind)).at(-1),M=S.state.models[m]||{};
  if(d)return [d.kind==='rejected'?'Rejected':'Promoted',d.kind==='rejected'?'neg':'pos',d.reason||M.reason||''];
@@ -68,14 +70,15 @@ function story(){
  // the track's width in px, to size each label in % of it
  const W=innerWidth,trackPx=Math.max(160,W-(W>1100?260:0)-(W>640?236:0)-(W>640?120:96)-64);
  const lane=(ts,lab,top0=0)=>{const rows=[];let h='';
-  for(const t of ts){const x0=at(t.created),x1=Math.max(x0+.5,at(isLive(t)?now():t.ended||t.updated||t.created)),sc=t.kind==='eval'?evScore(t):'';
+  for(const t of ts){const x0=at(t.created),x1=Math.max(x0+.5,at(wbObservedEnd(t))),sc=t.kind==='eval'?evScore(t):'';
    const lw=lab&&t.kind==='eval'?100*((short(t.slice||'').length+sc.length+1)*7.2+10)/trackPx:0;
    let r=rows.findIndex(e=>e<=x0);if(r<0){r=rows.length;rows.push(0)}rows[r]=x1+lw+.5;
    const [sl,sc_]=wbState(t);
-   h+=`<a class="arc-bar ${esc(sc_)}${isLive(t)?' live':''}" href="#task/${enc(t.id)}" style="left:${x0.toFixed(2)}%;width:${(x1-x0).toFixed(2)}%;top:${top0+r*22}px" title="${esc(t.title)} · ${esc(sl)}${sc?' · '+esc(sc):''}"></a>`
+   h+=`<a class="arc-bar ${esc(sc_)}${t.status==='running'?' live':''}" href="#task/${enc(t.id)}" style="left:${x0.toFixed(2)}%;width:${(x1-x0).toFixed(2)}%;top:${top0+r*22}px" title="${esc(t.title)} · ${esc(sl)}${sc?' · '+esc(sc):''}"></a>`
     +(lw?`<span class="arc-bl" style="left:calc(${x1.toFixed(2)}% + 4px);top:${top0+r*22}px">${esc(short(t.slice||''))} <b>${esc(sc)}</b></span>`:'');}
   return [h,Math.max(1,rows.length)]};
- const seen=new Set(),ticks=[0,.25,.5,.75,1].map(f=>{const c=wbClock(a+f*w);if(seen.has(c))return '';seen.add(c);return `<span style="left:${100*f}%">${c}</span>`}).join('');
+ const multiDay=wbDay(a)!==wbDay(b);
+ const seen=new Set(),ticks=(W<640?[0,1]:[0,.25,.5,.75,1]).map(f=>{const c=multiDay?wbWhen(a+f*w):wbClock(a+f*w);if(seen.has(c))return '';seen.add(c);return `<span style="left:${100*f}%">${c}</span>`}).join('');
  const lanes=X.ms.map(m=>{
   const M=st.models[m]||{},ts=X.tasks.filter(t=>t.model===m),[vl,vc]=verdict(m,X.decs);
   // created and decided marks sit on their own strip above the bars, so they never cover a label
@@ -96,10 +99,14 @@ function story(){
    <div class="arc-f"><div class="arc-fv">${pill(vl,vc)}${chips}${nx?`<span class="arc-nx">next ${esc(short(nx.slice||nx.rung||''))}</span>`:''}</div>${why?`<p class="arc-cl" onclick="this.classList.toggle('open')">${esc(why)}</p>`:''}</div></div>`}).filter(Boolean).join('');
  const nEv=X.tasks.filter(t=>t.kind==='eval').length,nRej=X.decs.filter(d=>d.kind==='rejected').length,nPro=X.decs.filter(d=>d.kind==='promote'||d.kind==='champion').length;
  const meta=[plural(X.ms.length,'model'),plural(nEv,'eval'),nPro&&`${nPro} promoted`,nRej&&`${nRej} rejected`].filter(Boolean).join(' · ');
- const nav=`<span class="arc-sn"><button class="btn" ${i+1>=ss.length?'disabled':''} onclick="S.arcSess=${i+1};render()" aria-label="Older session">‹</button><span>${wbDay(a)}, ${wbClock(a)}–${wbClock(b)} <span class="faint">${span(b-a)}</span></span><button class="btn" ${i?'':'disabled'} onclick="S.arcSess=${i-1};render()" aria-label="Newer session">›</button></span>`;
- return panel(i?'Session':'Latest session',`<div class="arc-story">
+ const nav=`<span class="arc-sn"><button class="btn" ${i+1>=ss.length?'disabled':''} onclick="S.arcSess=${i+1};render()" aria-label="Older session">‹</button><span>${wbDay(a)}, ${wbClock(a)}–${multiDay?wbWhen(b):wbClock(b)} <span class="faint">${span(b-a)}</span></span><button class="btn" ${i?'':'disabled'} onclick="S.arcSess=${i-1};render()" aria-label="Newer session">›</button></span>`;
+ const results=st.tasks.filter(t=>t.created>=a-1&&t.created<=b+1&&wbResultSummary(t));
+ const resultLinks=results.map(t=>`<p><a class="ln" href="#task/${enc(t.id)}">${esc(t.title)}</a>: ${esc(wbResultSummary(t))}</p>`).join('');
+ const stale=X.tasks.filter(t=>t.status==='stalled');
+ const staleNote=stale.length?`<p class="sub">${stale.map(t=>`<a class="ln" href="#task/${enc(t.id)}">${esc(t.title)}</a>: last observed ${wbWhen(wbObservedEnd(t))}, silent for ${silent(t)}`).join('; ')}. Inactivity is excluded from this timeline.</p>`:'';
+ return panel(i?'Research session':'Latest research session',`<div class="arc-story">
   ${lanes||oLane?`<div class="arc-tl"><div class="arc-ln arc-ax"><div class="arc-lh"></div><div class="arc-tk">${ticks}</div></div>${lanes}${oLane}</div>`:''}
-  ${tpf?`<div class="arc-tpf"><div class="arc-r arc-hd"><div>Tried</div><div>Predicted</div><div>Found</div></div>${tpf}</div>`:''}</div>`,{cls:'section arc-st',meta,right:nav});
+  ${staleNote}${resultLinks}${tpf?`<div class="arc-tpf"><div class="arc-r arc-hd"><div>Tried</div><div>Predicted</div><div>Found</div></div>${tpf}</div>`:''}</div>`,{cls:'section arc-st',meta,right:nav});
 }
 
 VIEWS.archive=()=>{

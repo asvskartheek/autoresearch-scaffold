@@ -17,9 +17,12 @@ const emptyEval=t=>t.kind==='eval'&&!isLive(t)&&t.ended&&t.summary&&!t.summary.n
 // how long a finished job ran: an eval recorded from another pass (its rows copied in a moment) has no run time of its
 // own, so it reads its harness's wall time when it has one, else null ("recorded")
 const wbTook=t=>!t.ended?null:t.ended-t.created>=2||t.kind!=='eval'?t.ended-t.created:(t.summary?.wall_s??null);
-const partialEval=t=>t.kind==='eval'&&(t.status==='done'||t.status==='completed')&&t.complete===false;
+const partialEval=t=>t.kind==='eval'&&(t.complete===false||t.summary?.missing>0||(t.progress?.total>0&&(t.summary?.n??t.progress.done??0)<t.progress.total));
+// Observed work ends at the last heartbeat when a process has gone silent.
+const wbObservedEnd=t=>t.ended||(t.status==='running'?now():Math.max(t.created||0,t.heartbeat||t.updated||t.created||0));
+const wbResultSummary=t=>t.result_summary||t.summary?.benchmark_report?.conclusion||(Array.isArray(t.summary?.throughput)?`${t.summary.throughput.length} measured throughput rows`:'');
 // [label, class] for a task's state, sentence case
-const wbState=t=>emptyEval(t)?['No results','failed']:partialEval(t)?['Partial','partial']:({done:['Done','done'],completed:['Done','done'],failed:['Failed','failed'],budget:['Out of time','budget'],stalled:['Stalled','stalled'],running:['Running','running']})[t.status]||[wbKind(t.status),t.status];
+const wbState=t=>emptyEval(t)?['No results','failed']:partialEval(t)&&!isLive(t)?[t.status==='failed'?'Failed · partial':t.status==='budget'?'Out of time · partial':'Partial','partial']:({done:['Done','done'],completed:['Done','done'],failed:['Failed','failed'],budget:['Out of time','budget'],stalled:['Stalled','stalled'],running:['Running','running']})[t.status]||[wbKind(t.status),t.status];
 // a duration next to a budget: to the second under 10 min ("1 min 15 s of a 1 min 15 s budget"), else as span()
 const wbSpanB=s=>{const r=Math.round(s);return r>=60&&r<600&&r%60?`${Math.floor(r/60)} min ${r%60} s`:wbSpan(s)};
 // the budget worth showing: evals get a 1 h deadline by default, which only matters once half of it is used
