@@ -258,6 +258,33 @@ td .trk.strip{width:160px}
 .lane .ev.cseg:hover,.lane .ev.cseg.open{outline:2px solid var(--accent);outline-offset:1px}
 .k-full{--c:var(--chart-1)}.k-random{--c:var(--chart-2)}.k-control{--c:var(--chart-3)}.k-dev{--c:var(--chart-4)}.k-synthetic,.k-other{--c:var(--faint)}
 @media (max-width:560px){.hn{display:none}#results td.id{white-space:normal;word-break:break-all}#results th,#results td{padding:7px 5px}.spine{flex-direction:column;align-items:stretch}.spine .ar{align-self:center;transform:rotate(90deg);line-height:1}}
+/* system: one row per part */
+.sys{display:grid;gap:0;margin-bottom:6px}
+.sy-step{display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px;position:relative;padding-bottom:14px}
+.sy-step:not(:last-child):before{content:"";position:absolute;left:13px;top:28px;bottom:0;width:2px;background:var(--border)}
+.sy-n{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font:600 12px var(--mono);background:var(--raised);border:1px solid var(--border);color:var(--muted)}
+.sy-step.me .sy-n{background:var(--pill-positive-bg);border-color:var(--positive);color:var(--positive)}
+.sy-b{min-width:0;padding-top:3px}
+.sy-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 10px}.sy-h>b{font-size:14px}
+.sy-eff{font:12.5px var(--mono);margin-left:auto}
+.sy-what{font-size:13px;color:var(--muted);margin:3px 0 0}
+.sy-ex{display:grid;grid-template-columns:minmax(0,1.3fr) 16px minmax(0,1fr) 16px minmax(0,1fr);gap:6px;align-items:stretch;margin:8px 0 0}
+.sy-box{border:1px solid var(--rule);background:var(--raised);border-radius:var(--radius-control);padding:6px 8px;font-size:12.5px;min-width:0}
+.sy-box span{display:block;font:500 10.5px var(--mono);color:var(--faint);margin-bottom:2px}
+.sy-box.neg{border-color:color-mix(in srgb,var(--negative) 35%,var(--rule))}.sy-box.neg span{color:var(--negative)}
+.sy-box.pos{border-color:color-mix(in srgb,var(--positive) 35%,var(--rule))}.sy-box.pos span{color:var(--positive)}
+.sy-box div{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.sy-box code{word-break:break-word}
+.sy-ar{font-style:normal;color:var(--faint);align-self:center;text-align:center}
+.sy-cost{margin:8px 0 0;display:grid;gap:3px;max-width:520px}
+.sy-cb{display:grid;grid-template-columns:48px minmax(0,1fr) 56px;gap:8px;align-items:center;font:11.5px var(--mono);color:var(--faint)}
+.sy-cb i{display:block;height:7px;border-radius:3px;background:var(--c)}.sy-cb b{font-weight:500;color:var(--text);text-align:right}
+.sy-cm{font-size:12px}
+.sy-diff{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.sy-chg{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:var(--radius-control);padding:4px 8px;font-size:12.5px;background:var(--raised)}
+.sy-chg code{color:var(--faint)}.sy-chg s{color:var(--negative)}.sy-chg i{font-style:normal;color:var(--faint)}.sy-chg b{color:var(--positive);font-weight:600}
+.sy-more{margin-top:10px}.sy-more summary{cursor:pointer;font:500 12px var(--mono);color:var(--faint)}
+@media (max-width:640px){.sy-ex{grid-template-columns:minmax(0,1fr)}.sy-ar{transform:rotate(90deg)}.sy-eff{margin-left:0}}
 .more-btn{border:1px solid var(--control);background:var(--surface);border-radius:var(--radius-control);padding:4px 10px;font-size:12.5px;margin-top:8px}
 </style></head><body data-keep>
 <div id="app" data-keep><div id="load">loading ledger…</div></div>
@@ -450,14 +477,41 @@ function goalStrips() {
 
 /* ================= 02 system ================= */
 section("system", () => {
-  const chain = D.lineage;
-  const spine = chain.map((s, i) => `${i ? '<div class="arr"><span>→</span></div>' : ""}<div class="stg${s.name === CH ? " chg" : ""}"><div class="k" title="${esc(s.name)}">${i + 1} · ${esc(s.status || "")}</div><div class="v" title="${esc(s.name)}">${esc(mnt(s.name))}</div>${s.title ? "" : `<div class="faint" style="font-size:12px;margin-top:2px">${esc((s.change || "").split(/(?<=\.)\s/)[0].slice(0, 120))}</div>`}${s.delta && s.delta.delta != null ? `<div class="${s.delta.delta > 0 ? "pos" : s.delta.delta < 0 ? "neg" : "faint"}" style="font:600 12px var(--mono);margin-top:4px">${ev(dl(s.delta.delta, RS[s.delta.slice] || { scale: "binary" }), { label: `${mnt(s.name)} vs ${mnt(s.parent)} on ${s.delta.slice}`, slice: s.delta.slice, n: s.delta.n, src: "paired over shared ids", note: `CI ${ciTxt(s.delta, RS[s.delta.slice] || { scale: "binary" })}, ${s.delta.wins} better, ${s.delta.losses} worse` })} <span class="faint" style="font-weight:400">${esc(short(s.delta.slice))}</span></div>` : ""}</div>`).join("");
-  const a = Object.fromEntries(D.base_spec), b = Object.fromEntries(D.spec), keys = [...new Set([...D.base_spec.map(x => x[0]), ...D.spec.map(x => x[0])])];
-  const tbl = keys.length ? `<h3>specification${PV && !D.base_spec.length ? ` <span style="font-weight:400">· ${mn(PV)} has none recorded, so nothing is marked changed</span>` : ""}</h3><div class="tw"><table><thead><tr><th>field</th>${PV && D.base_spec.length ? `<th>${mn(PV)}</th>` : ""}<th>${mn(CH)}</th></tr></thead><tbody>
-    ${keys.map(k => { const chg = PV && D.base_spec.length && String(a[k] ?? "") !== String(b[k] ?? ""); return `<tr${chg ? ' class="me"' : ""}><td class="id">${esc(k)}</td>${PV && D.base_spec.length ? `<td class="mono" style="word-break:break-all">${esc(a[k] ?? "—")}</td>` : ""}<td class="mono" style="word-break:break-all">${chg ? "<b>" + esc(b[k] ?? "—") + "</b>" : esc(b[k] ?? "—")}</td></tr>`; }).join("")}</tbody></table></div>` : "";
-  return `<div class="pipe">${spine}</div>
-  <h3>change, as registered</h3><dl class="f"><dt>change</dt><dd>${esc(M.change || "—")}</dd>${M.hill ? `<dt>hill</dt><dd>${esc(M.hill)}</dd>` : ""}<dt>registered</dt><dd>${dt(M.created)}</dd>${M.promoted ? `<dt>promoted</dt><dd>${dt(M.promoted)}</dd>` : ""}${M.reason ? `<dt>reason</dt><dd>${esc(M.reason)}</dd>` : ""}
-  ${M.links && Object.keys(M.links).length ? `<dt>links</dt><dd>${Object.entries(M.links).map(([k, v]) => /^https?:/.test(v) ? `<a href="${esc(v)}" target="_blank" rel="noopener">${esc(k)}</a>` : `${esc(k)}: <code>${esc(v)}</code>`).join(" · ")}</dd>` : ""}</dl>${tbl}`;
+  // the system as its parts, root first: what each part added, what it did on one example (input, output before,
+  // output after: its hill's example) and what it cost (p50 latency and cost per example against the step before)
+  const chain = D.lineage, first = x => { const t = String(x || "").split(/(?<=[.;])\s/)[0].replace(/;$/, ""); return t.length > 110 ? t.slice(0, 109) + "…" : t; };
+  const costRow = c => {
+    if (!c || (c.latency_p50 == null && c.cost == null)) return "";
+    const ls = [c.latency_p50, c.base_latency_p50].filter(x => x != null), top = Math.max(...ls, 1e-9);
+    const bar = (v, cls, lab) => v == null ? "" : `<div class="sy-cb"><span>${lab}</span><i class="${cls}" style="width:${(v / top * 100).toFixed(1)}%"></i><b>${secs(v)}</b></div>`;
+    const ratio = c.latency_p50 != null && c.base_latency_p50 ? c.latency_p50 / c.base_latency_p50 : null;
+    const one = c.base_latency_p50 == null;
+    const bits = [ratio ? `<span class="${ratio > 1.05 ? "warn" : ratio < .95 ? "pos" : "faint"}">${ratio > 1.05 ? ratio.toFixed(1) + "× slower" : ratio < .95 ? (1 / ratio).toFixed(1) + "× faster" : "same speed"}</span>` : "",
+      c.cost != null ? `$${num(c.cost, 3)}/example${c.base_cost != null ? ` <span class="faint">vs $${num(c.base_cost, 3)}</span>` : ""}` : ""].filter(Boolean);
+    return `<div class="sy-cost">${bar(c.base_latency_p50, "c-mut", "before")}${bar(c.latency_p50, ratio && ratio > 1.05 ? "c-warn" : "c-acc", one ? "p50" : "after")}
+      <div class="sy-cm">${bits.join(" · ")} <span class="faint">${one ? "" : "p50 · "}${esc(short(c.slice))}</span></div></div>`;
+  };
+  const exRow = x => !x ? "" : `<div class="sy-ex">
+    <div class="sy-box"><span>input</span><div>${esc(x.input || "—")}</div></div><i class="sy-ar">→</i>
+    <div class="sy-box neg"><span>before</span><code>${esc(x.wrong || "—")}</code></div><i class="sy-ar">→</i>
+    <div class="sy-box pos"><span>after</span><code>${esc(x.right || "—")}</code></div></div>`;
+  const seenEx = new Set();  // parts from one hill share its example: draw it once
+  const step = (s, i) => {
+    const exK = s.example ? JSON.stringify(s.example) : null, exNew = exK && !seenEx.has(exK); if (exK) seenEx.add(exK);
+    const r = s.delta && RS[s.delta.slice] || { scale: "binary" }, d = s.delta;
+    const eff = d && d.delta != null ? `<span class="${d.lo > 0 ? "pos" : d.hi < 0 ? "neg" : "faint"}">${ev(dl(d.delta, r), { label: `${mnt(s.name)} vs ${mnt(s.parent)} on ${d.slice}`, slice: d.slice, n: d.n, src: "paired over shared ids", note: `CI ${ciTxt(d, r)}, ${d.wins} better, ${d.losses} worse` })}</span> <span class="faint">${esc(short(d.slice))}</span>${d.wins != null ? ` · <span class="pos">${d.wins} fixed</span> <span class="neg">${d.losses} broke</span>` : ""}` : "";
+    return `<div class="sy-step${s.name === CH ? " me" : ""}"><div class="sy-n">${i + 1}</div><div class="sy-b">
+      <div class="sy-h"><b title="${esc(s.name)}">${esc(mnt(s.name))}</b>${stPill(s.status)}<span class="sy-eff">${i ? eff : '<span class="faint">start</span>'}</span></div>
+      ${i && s.change ? `<div class="sy-what">${esc(first(s.change))}</div>` : ""}${i && exNew ? exRow(s.example) : ""}${costRow(s.cost)}</div></div>`;
+  };
+  // what differs from the comparator: the registered spec where both have one, else how each was run
+  const a = Object.fromEntries(D.base_spec), b = Object.fromEntries(D.spec), short8 = v => /^[0-9a-f]{32,}$/.test(String(v)) ? String(v).slice(0, 8) : String(v ?? "—");
+  const specDiff = D.base_spec.length ? [...new Set([...D.base_spec.map(x => x[0]), ...D.spec.map(x => x[0])])].filter(k => String(a[k] ?? "") !== String(b[k] ?? "")).map(k => [k, a[k], b[k], /^[0-9a-f]{32,}$/.test(String(b[k] ?? a[k]))]) : [];
+  const diff = (specDiff.length ? specDiff : D.run_diff || []), shown = diff.filter(x => !x[3]), hashes = diff.length - shown.length;
+  const chips = PV && diff.length ? `<h3>what changed vs ${mn(PV)}</h3><div class="sy-diff">${shown.map(([k, x, y]) => `<span class="sy-chg"><code>${esc(k.split(".").pop())}</code><s>${esc(short8(x))}</s><i>→</i><b>${esc(short8(y))}</b></span>`).join("")}${hashes ? `<span class="faint">${hashes} pinned hash${hashes === 1 ? "" : "es"} differ</span>` : ""}</div>` : "";
+  const specT = D.spec.length ? `<details class="sy-more"><summary>spec · ${D.spec.length} fields</summary><div class="tw"><table><tbody>${D.spec.map(([k, v]) => `<tr><td class="id">${esc(k)}</td><td class="mono" style="word-break:break-all">${esc(short8(v))}</td></tr>`).join("")}</tbody></table></div></details>` : "";
+  const note = M.change ? `<details class="sy-more"><summary>registered note</summary><div class="muted" style="font-size:13px;margin-top:6px">${esc(M.change)}</div></details>` : "";
+  return `<div class="sys">${chain.map(step).join("")}</div>${chips}${specT}${note}`;
 });
 
 /* ================= 03 data ================= */

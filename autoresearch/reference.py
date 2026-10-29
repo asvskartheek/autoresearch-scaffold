@@ -263,6 +263,24 @@ def _promotion(p, ix, model):
     return dict(t=t, replaced=old, rungs=rungs)
 
 
+_HEX = re.compile(r"^[0-9a-f]{32,}$")
+
+
+def _run_diff(ix, model, base, sl):
+    """What differs between the runs being compared on the main slice: [field, before, this, is a hash] from the
+    model's first run config and the comparator's run nearest it. A registered spec can be missing on one side; the run config always says how each was served."""
+    if not (base and sl and ix.has(model, sl) and ix.has(base, sl)):
+        return []
+    mine = ix.runs[(model, sl)][0]  # the run that put the model on this slice, and the comparator's run nearest it
+    theirs = min(ix.runs[(base, sl)], key=lambda t: abs((t.get("ended") or 0) - (mine.get("ended") or 0)))
+    a, b = dict(_flat(theirs.get("config") or {})), dict(_flat(mine.get("config") or {}))
+    out = []
+    for k in [*a, *[k for k in b if k not in a]]:
+        if str(a.get(k)) != str(b.get(k)):
+            out.append([k, a.get(k), b.get(k), bool(_HEX.match(str(a.get(k) or b.get(k) or "")))])
+    return out
+
+
 def _norm(x) -> str:
     return re.sub(r"[^a-z0-9]+", "-", str(x or "").lower()).strip("-")
 
@@ -465,9 +483,19 @@ def _build(p, model, vs):
                 (s for s in ix.slices_of(name) if ix.has(pp, s) and ix.slices[s].get("kind") == "full"), None)
             if sl:
                 step_d = dict(slice=sl, **(_paired(ix, name, pp, sl, sign) or {}))
+        # the part this step added, drawn on one example: its hill's example (input, output before, output after)
+        # and its cost (latency and cost per example on the step's slice, against its parent's)
+        h = hills.get(m.get("hill") or "") or {}
+        ex = next((e for e in h.get("examples") or [] if isinstance(e, dict) and (e.get("input") or e.get("wrong"))), None)
+        csl = (step_d or {}).get("slice") or (main if ix.has(name, main) else None)
+        mine, theirs = ((ix.latest(name, csl) or {}).get("summary") or {}) if csl else {}, \
+            ((ix.latest(pp, csl) or {}).get("summary") or {}) if csl and pp else {}
         lineage.append(dict(name=name, title=_txt(m.get("title")), change=_txt(m.get("change")), status=m.get("status"),
-                            hill=m.get("hill"), reason=_txt(m.get("reason")), created=m.get("created"),
-                            promoted=m.get("promoted"), parent=pp, delta=step_d, siblings=sib))
+                            hill=m.get("hill"), hill_title=_txt(h.get("title")), reason=_txt(m.get("reason")), created=m.get("created"),
+                            promoted=m.get("promoted"), parent=pp, delta=step_d, siblings=sib,
+                            example={f: _txt(ex.get(f)) for f in ("input", "wrong", "right", "why")} if ex else None,
+                            cost=dict(slice=csl, latency_p50=_r(mine.get("latency_p50")), cost=_r(mine.get("cost")),
+                                      base_latency_p50=_r(theirs.get("latency_p50")), base_cost=_r(theirs.get("cost"))) if csl else None))
     children = [dict(name=k, title=_txt(o.get("title")), status=o.get("status"), reason=_txt(o.get("reason")),
                      change=_txt(o.get("change")), hill=o.get("hill"))
                 for k, o in models.items() if o.get("parent") == model and k != model]
@@ -578,6 +606,7 @@ def _build(p, model, vs):
         gallery=gallery, unknown=uniq, decisions=decisions, runs=runs, spec=spec,
         promotion=dict(t=promotion["t"], replaced=promotion["replaced"]) if promotion else None,
         papers=papers_for(p, model),
+        run_diff=_run_diff(ix, model, base, main),
         base_spec=_flat({k: v for k, v in models[base].items() if k not in CORE_FIELDS}) if base in models else [],
         baseline=dict(have=list(plan["have"]), need=plan["need"],
                       meta={sl: dict(kind=ix.slices[sl].get("kind"), n=ix.slices[sl].get("n"), hash=ix.slices[sl].get("hash"),
