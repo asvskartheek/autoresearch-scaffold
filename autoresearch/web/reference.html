@@ -66,7 +66,7 @@ section.s{background:var(--surface);border:1px solid var(--border);border-radius
 .s>.hd .anc:hover{background:var(--raised);color:var(--accent)}
 h3{font:600 13px var(--mono);color:var(--faint);margin:22px 0 8px;letter-spacing:.02em}
 .fig{margin:0 0 14px}
-.fig svg{display:block;width:100%;height:auto;overflow:visible}
+.fig svg{display:block;width:100%;height:auto;overflow:visible}.fig svg[width]{width:auto;max-width:100%}
 .cap{font-size:12.5px;color:var(--muted);margin-top:6px}
 /* labelled facts */
 dl.f{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 16px;margin:0;font-size:14px}
@@ -353,6 +353,7 @@ ${SECS.map(([id, t], i) => sec(i, id, t)).join("")}
 </main></div>
 <div id="pop" role="dialog"></div><div id="tip"></div><div id="toast"></div>`;
 const body = id => $(`[data-body="${id}"]`);
+const FW = id => Math.max(300, Math.min(900, Math.round(body(id)?.clientWidth || 800)));  // charts drawn at their real width, so 12px text stays 12px
 function section(id, fn) { try { const h = fn(); if (typeof h === "string") body(id).innerHTML = h; } catch (e) { console.warn(id, e); body(id).innerHTML = `<div class="empty">This section could not be drawn from the ledger: ${esc(e.message)}</div>`; } }
 
 /* ================= 01 claim ================= */
@@ -366,21 +367,26 @@ section("claim", () => {
   const top = bin ? r.n : Math.max(...vals) * 1.05, span = Math.max(...vals) - Math.min(...vals);
   let lo = bin ? Math.max(0, Math.min(...vals) - Math.max(span * 1.2, r.n * .04)) : Math.min(0, Math.min(...vals));
   lo = bin ? Math.floor(lo / (r.n > 200 ? 50 : 5)) * (r.n > 200 ? 50 : 5) : lo;
-  const W = 800, X = v => 20 + (v - lo) / ((top - lo) || 1) * (W - 60);
-  let s = `<svg viewBox="0 0 ${W} 170" role="img" aria-label="${esc(r.slice)}: before, this model, target">`;
-  const step = bin ? niceStep((top - lo) / 6) : niceStep((top - lo) / 6);
-  for (let v = Math.ceil(lo / step) * step; v <= top + 1e-9; v += step) s += `<line class="grid" x1="${X(v)}" x2="${X(v)}" y1="18" y2="128"/><text class="t-f" x="${X(v)}" y="146" text-anchor="middle">${bin ? N0(v) : num(v, 3)}</text>`;
+  const W = FW("claim"), X = v => 12 + (v - lo) / ((top - lo) || 1) * (W - 24), BH = 26, GAP = 58, Y0 = 34;
+  const yEnd = Y0 + (bars.length - 1) * GAP + BH, H = yEnd + 62, maxCh = Math.max(12, Math.floor((W - 24) / 7));
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" role="img" aria-label="${esc(r.slice)}: before, this model, target">`;
+  const step = niceStep((top - lo) / Math.max(3, Math.min(6, Math.floor(W / 120))));
+  for (let v = Math.ceil(lo / step) * step; v <= top + 1e-9; v += step) s += `<line class="grid" x1="${X(v)}" x2="${X(v)}" y1="${Y0 - 4}" y2="${yEnd + 4}"/><text class="t-f" x="${X(v)}" y="${yEnd + 36}" text-anchor="middle">${bin ? N0(v) : num(v, 3)}</text>`;
   bars.forEach(([lab, v, c], i) => {
-    const y = 26 + i * 50, w = Math.max(2, X(val(v)) - X(lo));
-    s += `<rect class="f-track" x="${X(lo)}" y="${y}" width="${X(top) - X(lo)}" height="34" rx="4"/><rect class="${c}" x="${X(lo)}" y="${y}" width="${w}" height="34" rx="4"/>`;
-    s += `<text x="${X(lo) + 10}" y="${y + 22}" class="t-b" style="fill:${i === bars.length - 1 ? "#fff" : "var(--text)"}">${esc(lab.length > 60 ? lab.slice(0, 58) + "…" : lab)}</text><text x="${Math.min(X(val(v)) + 8, W - 40)}" y="${y + 22}" class="t-big">${bin ? N0(val(v)) : num(v)}</text>`;
+    const y = Y0 + i * GAP, xe = X(val(v)), w = Math.max(2, xe - X(lo)), txt = bin ? N0(val(v)) : sc(v, r), tw = txt.length * 9 + 10;
+    const inside = xe + 8 + tw > W - 2;  // no room after the bar: the value goes inside its end, in a colour that reads on the bar
+    s += `<text x="${X(lo)}" y="${y - 7}" class="t-m">${esc(lab.length > maxCh ? lab.slice(0, maxCh - 1) + "…" : lab)}</text>`;
+    s += `<rect class="f-track" x="${X(lo)}" y="${y}" width="${X(top) - X(lo)}" height="${BH}" rx="4"/><rect class="${c}" x="${X(lo)}" y="${y}" width="${w}" height="${BH}" rx="4"/>`;
+    s += `<text x="${inside ? xe - 8 : xe + 8}" y="${y + 18}" class="t-big"${inside ? ` text-anchor="end" style="fill:${c === "f-pos" ? "var(--on-primary)" : "var(--text)"}"` : ""}>${esc(txt)}</text>`;
   });
   if (tgt != null && bin) {
-    s += `<line class="s-text" x1="${X(tgt)}" x2="${X(tgt)}" y1="14" y2="130" stroke-dasharray="4 3"/><text x="${X(tgt)}" y="10" text-anchor="middle" class="t-b">target ${N0(tgt)}</text>`;
+    const xt = X(tgt), nearR = xt > W - 60;
+    s += `<line class="s-text" x1="${xt}" x2="${xt}" y1="${Y0 - 20}" y2="${yEnd + 6}" stroke-dasharray="4 3"/><text x="${nearR ? xt - 4 : xt}" y="${Y0 - 24}" text-anchor="${nearR ? "end" : "middle"}" class="t-b">target ${N0(tgt)}</text>`;
     const now = val(r.score);
-    if (now < tgt) s += `<path d="M${X(now)} 118 H${X(tgt)}" class="s-neg" stroke-width="2"/><text x="${(X(now) + X(tgt)) / 2}" y="126" text-anchor="middle" class="t-f" style="fill:var(--negative)">${N0(tgt - now)} short</text>`;
+    if (now < tgt) { const cx = Math.min(W - 40, Math.max(X(lo) + 40, (X(now) + xt) / 2));
+      s += `<path d="M${X(now)} ${yEnd + 10} H${xt}" class="s-neg" stroke-width="2"/><text x="${cx}" y="${yEnd + 22}" text-anchor="middle" class="t-f" style="fill:var(--negative)">${N0(tgt - now)} short</text>`; }
   }
-  s += `<text class="t-f" x="${X(lo)}" y="164">${bin ? "right of " + N0(r.n) : esc(r.metric || "mean score")} on ${esc(r.slice)}${bin && lo > 0 ? " · axis starts at " + N0(lo) : ""}</text></svg>`;
+  s += `<text class="t-f" x="${X(lo)}" y="${H - 4}">${bin ? "right of " + N0(r.n) : esc(r.metric || "mean score")} on ${esc(short(r.slice))}${bin && lo > 0 ? " · axis from " + N0(lo) : ""}</text></svg>`;
   const lat = r.latency_p50 != null ? `p50 ${ev(secs(r.latency_p50), { ...evRes(r, "p50 latency on " + r.slice), note: "latest run summary" })}${r.base?.latency_p50 != null ? " vs " + secs(r.base.latency_p50) : ""}` : "";
   const cost = r.cost != null ? `${ev("$" + num(r.cost, 3), evRes(r, "Cost per example on " + r.slice))} per example${r.base?.cost != null ? " vs $" + num(r.base.cost, 3) : ""}` : "";
   return `<div class="fig">${s}</div>
