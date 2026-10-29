@@ -45,16 +45,28 @@ const ARXP=window.ARXP={
   const all=[...new Set([...names,...names.map(n=>n.split(' ')[0]).filter(f=>firsts[f.toLowerCase()]===1),'agent'])].sort((a,b)=>b.length-a.length);
   const re=new RegExp('(^|[\\s(>])@('+all.map(n=>esc(h(n))).join('|')+')(?![\\w-])','gi');
   return String(html).replace(re,(m,pre,n)=>`${pre}<b class="at">@${n}</b>`)}catch(e){return html}},
- complete(ta){if(!ta||ta.dataset.px)return;ta.dataset.px='1';let box=null;
+ // the picker opens above the textarea (below only when there is no room), so the composer's buttons stay
+ // visible; arrows move, Enter or Tab picks, Escape closes it without closing the composer
+ complete(ta){if(!ta||ta.dataset.px)return;ta.dataset.px='1';let box=null,opts=[],sel=0;
   const close=()=>{box?.remove();box=null};
+  const mark=()=>box.querySelectorAll('button').forEach((b,i)=>{b.classList.toggle('on',i===sel);b.setAttribute('aria-selected',i===sel)});
+  const pick=n=>{const s=ta.selectionStart,pre=ta.value.slice(0,s).replace(/@[\w-]*$/,'@'+n+' ');
+   ta.value=pre+ta.value.slice(s);ta.selectionStart=ta.selectionEnd=pre.length;close();ta.focus();ta.dispatchEvent(new Event('input',{bubbles:true}))};
   ta.addEventListener('input',()=>{const v=ta.value.slice(0,ta.selectionStart),m=/(^|\s)@([\w-]{0,20})$/.exec(v);close();if(!m)return;
-   const q=m[2].toLowerCase(),opts=[...Object.entries(roster).filter(([k,p])=>k!==me.id&&p.name&&p.name.toLowerCase().startsWith(q)).map(([k,p])=>[k,p.name]),...('agent'.startsWith(q)?[['agent','agent']]:[])].slice(0,5);
-   if(!opts.length)return;box=document.createElement('div');box.className='px-pick';
-   box.innerHTML=opts.map(([k,n])=>`<button type="button" data-n="${h(n)}">${k==='agent'?'<span class="px-face" style="--pc:var(--px-accent)">AI</span>':ARXP.face(k,n)}${h(n)}</button>`).join('');
-   const r=ta.getBoundingClientRect();Object.assign(box.style,{left:r.left+'px',top:(r.bottom+4)+'px'});document.body.append(box);
-   box.onmousedown=e=>{const b=e.target.closest('button');if(!b)return;e.preventDefault();const s=ta.selectionStart,pre=ta.value.slice(0,s).replace(/@[\w-]*$/,'@'+b.dataset.n+' ');
-    ta.value=pre+ta.value.slice(s);ta.selectionStart=ta.selectionEnd=pre.length;close();ta.focus()}});
-  ta.addEventListener('blur',()=>setTimeout(close,150));ta.addEventListener('keydown',e=>{if(e.key==='Escape')close()})},
+   const q=m[2].toLowerCase();opts=[...Object.entries(roster).filter(([k,p])=>k!==me.id&&p.name&&p.name.toLowerCase().startsWith(q)).map(([k,p])=>[k,p.name]),...('agent'.startsWith(q)?[['agent','agent']]:[])].slice(0,5);
+   if(!opts.length)return;sel=0;box=document.createElement('div');box.className='px-pick';box.setAttribute('role','listbox');
+   box.innerHTML=opts.map(([k,n])=>`<button type="button" role="option" tabindex="-1" data-n="${h(n)}">${k==='agent'?'<span class="px-face" style="--pc:var(--px-accent)">AI</span>':ARXP.face(k,n)}${h(n)}</button>`).join('');
+   document.body.append(box);mark();
+   const r=ta.getBoundingClientRect(),bh=box.offsetHeight,bw=box.offsetWidth,up=r.top-bh-4>=4;
+   Object.assign(box.style,{left:Math.max(8,Math.min(r.left,innerWidth-bw-8))+'px',top:(up?r.top-bh-4:r.bottom+4)+'px'});
+   box.onmousedown=e=>{const b=e.target.closest('button');if(!b)return;e.preventDefault();pick(b.dataset.n)}});
+  ta.addEventListener('blur',()=>setTimeout(close,150));
+  // capture, so the composer's own Enter / Escape handlers on this textarea do not also fire
+  ta.addEventListener('keydown',e=>{if(!box)return;const k=e.key;
+   if(k==='ArrowDown'||k==='ArrowUp'){sel=(sel+(k==='ArrowDown'?1:opts.length-1))%opts.length;mark()}
+   else if((k==='Enter'&&!e.shiftKey&&!e.metaKey&&!e.ctrlKey)||k==='Tab')pick(opts[sel][1]);
+   else if(k==='Escape')close();else return;
+   e.preventDefault();e.stopImmediatePropagation()},true)},
  // who read a thread: faces of everyone in seen (id -> t) except the authors' own last message
  seenFaces(seen,skip){return Object.keys(seen||{}).filter(k=>k!==skip).map(k=>ARXP.face(k,null,'sm')).join('')},
  figs(body){const parts=String(body||'').split(/(<svg[\s\S]*?<\/svg>)/i);
