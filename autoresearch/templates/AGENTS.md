@@ -71,6 +71,9 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
 - The person must understand the project as fast as agents change it. Prefer a figure, a widget or a worked example to
   prose. `/reference/<model>` is the complete paper; an explainer (a paper with `kind: explainer`) uses
   `/explain-kit.js` so it can measure how fast they understood.
+- What each person already knows, across every project, is in learner memory (`~/.arx/memory.sqlite`):
+  `arx memory --viewer <id>` (known, shaky, due), `arx memory due`, `arx memory changed --since 1w`. Build on what
+  they know, bring back what is due, and do not re-teach what is known.
 
 ## Papers
 - One public paper per goal (`/papers/<goal>`, `arx paper new --goal <goal>`): a labelled draft while the goal is
