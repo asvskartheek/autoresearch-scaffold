@@ -92,7 +92,7 @@ kbd{font:11px var(--mono);border:1px solid var(--input);border-bottom-width:2px;
 .ink-svg .v{stroke:#e8590c;stroke-width:2.5}.ink-svg .v.highlight{stroke:#facc15;stroke-width:16;stroke-opacity:.38}
 .ink-svg .hit{stroke:transparent;stroke-width:14;pointer-events:visibleStroke;cursor:pointer}
 .ink-svg g.res .v{stroke-opacity:.35}.ink-svg g.on .v{stroke:var(--ring);stroke-width:3.5}.ink-svg g.on .v.highlight{stroke:#facc15;stroke-opacity:.6;stroke-width:18}
-.ink-svg g.draft .v{stroke-dasharray:5 4}
+.ink-svg g.draft .v{stroke-dasharray:5 4}.ink-svg g.hover .v{stroke:var(--ring);stroke-width:3.5}.ink-svg g.hover .v.highlight{stroke:#facc15;stroke-opacity:.6;stroke-width:18}
 .card.hover{border-color:var(--ring)}
 @media (max-width:900px){.tools{display:none}}
 .shp{width:300px}.shp-u{padding:6px 10px 8px;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted-fg)}
@@ -317,6 +317,7 @@ function prepare(f, ready) {
   d.addEventListener("mouseup", () => f === frame && setTimeout(onSelect, 0));
   d.addEventListener("click", e => f === frame && onPaperClick(e), true);
   d.addEventListener("keydown", onKey);
+  d.addEventListener("pointerover", () => hoverId && setHover(null));  // on the paper itself: no mark or card is under the pointer
 }
 function syncHlVars(d) {
   const cs = getComputedStyle(root);
@@ -457,6 +458,7 @@ function cardFor(t) {
     ta.addEventListener("focus", () => { c.querySelector(".reply").classList.add("typing"); layout(); });
     ta.addEventListener("keydown", e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sendReply(t.id); } if (e.key === "Escape") ta.blur(); });
     c.addEventListener("click", e => onCardClick(e, t.id));
+    c.addEventListener("mouseenter", () => setHover(t.id)); c.addEventListener("mouseleave", () => setHover(null));
     col.appendChild(c); cards.set(t.id, c);
   }
   const s = sig(t);
@@ -700,14 +702,21 @@ function inkG(a, cls, id) {
 }
 function drawInk() {
   if (!frame) return;
-  let out = visible().filter(t => t.anchor && t.anchor.shape).map(t => inkG(t.anchor, (t.id === active ? "on " : "") + (t.resolved ? "res" : ""), t.id)).join("");
+  let out = visible().filter(t => t.anchor && t.anchor.shape).map(t => inkG(t.anchor, (t.id === active ? "on " : "") + (t.id === hoverId ? "hover " : "") + (t.resolved ? "res" : ""), t.id)).join("");
   if (draft && draft.anchor.shape) out += inkG(draft.anchor, "draft", "_draft");
   if (stroke) out += `<g class="draft"><path class="v ${stroke.tool}" d="${shapeD(stroke.tool, stroke.pts)}"/></g>`;
-  inkSvg.innerHTML = out;
+  if (inkSvg._html !== out) inkSvg.innerHTML = inkSvg._html = out;  // the 1.5 s refresh leaves the marks under the pointer alone
+}
+// a mark and its card ring together, whichever one the pointer is on; one at a time, so nothing stays ringed
+let hoverId = null;
+function setHover(id) {
+  if (id === hoverId) return; hoverId = id;
+  for (const [k, c] of cards) c.classList.toggle("hover", k === id);
+  inkSvg.querySelectorAll("g[data-id]").forEach(g => g.classList.toggle("hover", g.dataset.id === id));
 }
 inkSvg.addEventListener("click", e => { const g = e.target.closest("g[data-id]"); if (g && g.dataset.id !== "_draft") { e.stopPropagation(); setActive(g.dataset.id, { scroll: "if-needed" }); } });
-inkSvg.addEventListener("pointerover", e => { const g = e.target.closest("g[data-id]"); const c = g && cards.get(g.dataset.id); c && c.classList.add("hover"); });
-inkSvg.addEventListener("pointerout", e => { const g = e.target.closest("g[data-id]"); const c = g && cards.get(g.dataset.id); c && c.classList.remove("hover"); });
+inkSvg.addEventListener("pointerover", e => { const g = e.target.closest("g[data-id]"); g && g.dataset.id !== "_draft" && setHover(g.dataset.id); });
+inkSvg.addEventListener("pointerout", e => { const g = e.target.closest("g[data-id]"); if (g && !g.contains(e.relatedTarget)) setHover(null); });
 addEventListener("resize", drawInk);
 
 // ---------- share: the paper's link (for others once `arx share on` ran) and the paper as one file ----------
