@@ -299,8 +299,8 @@ function where(a){const el=resolve(a),s=a.shape||null;let r=el&&el.getBoundingCl
 function boxRect(s,r){const [l,t,rr,b]=s.ins;let q=[r.left+l,r.top+t,r.right+rr,r.bottom+b];
  if(q[2]-q[0]<12||q[3]-q[1]<12){const kx=r.width/Math.max(1,s.bw),ky=r.height/Math.max(1,s.bh);q=[r.left+l*kx,r.top+t*ky,r.right+rr*kx,r.bottom+b*ky]}
  q[0]=Math.max(q[0],Math.min(4,r.left));q[2]=Math.min(q[2],Math.max(innerWidth-4,r.right));return q}
-// a pin sits with its point on the corner of what it marks (a quote's first line, a shape's top-left, an arrow's tail),
-// so it never covers the text itself
+// a pin sits with its point on the corner of what it marks (a quote's first line, a shape's top-left, an arrow's tail)
+// and its body up and to the left of that point, so it never covers the text itself (to the right only at the screen edge)
 function pos(c){const a=c.anchor||{},g=where(a),s=a.shape;
  if(g.rg){const q=g.rg.getClientRects()[0];return [q.left,q.top]}
  if(s&&s.mode==='tip')return [g.tx+(s.ax||0)*g.sx,g.ty+(s.ay||0)*g.sy];
@@ -325,7 +325,7 @@ let drawnFor=null;const ready=()=>drawnFor===location.hash;
 function drawPins(){if(draw)return;const ts=ready()?mine():[],openN=mine().filter(t=>!t.resolved).length;
  $c('.cm-lst').textContent=openN?openN+' open':mine().length?mine().length+' resolved':all.length+' elsewhere';$c('.cm-lst').classList.toggle('none',!mine().length&&!all.length);
  pinsEl.innerHTML=ts.map((c,i)=>{const xy=pos(c);if(!xy)return '';const [x,y]=xy;
-  return `<div class="cm-pin ${klass(c)}${c.id===hot?' hot':''}" data-id="${c.id}" style="left:${x}px;top:${y}px" title="${h(c.messages[0].body.slice(0,200))}">${i+1}</div>`}).join('');
+  return `<div class="cm-pin ${klass(c)}${x<28?' r':''}${c.id===hot?' hot':''}" data-id="${c.id}" style="left:${x}px;top:${y}px" title="${h(c.messages[0].body.slice(0,200))}">${i+1}</div>`}).join('');
  const live=shapesEl.querySelector('.live');
  shapesEl.innerHTML=ts.map(c=>shapeSvg(c.anchor||{},klass(c),c.id)).join('')+(pending&&(pending.shape||pending.quote)?shapeSvg(pending,'draft',''):'');if(live)shapesEl.append(live);
  pinsEl.querySelectorAll('.cm-pin').forEach(el=>el.onclick=()=>thread(el.dataset.id));
