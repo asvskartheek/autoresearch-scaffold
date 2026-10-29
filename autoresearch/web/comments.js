@@ -274,7 +274,7 @@ function shapeSvg(a,cl,id){const s=a.shape,g=where(a),cls=`${cl}${id&&id===hot?'
  return `<g class="${cls}" data-id="${h(id||'')}" transform="translate(${r1(g.tx)} ${r1(g.ty)}) scale(${r1(g.sx*1000)/1000} ${r1(g.sy*1000)/1000})"><path class="hit ${t}" d="${d}"/><path class="v ${t}" d="${d}"/></g>`}
 // answer_agent comes with /api/comments: a queued item with no `arx answer` running waits for a person, not the agent
 const working=c=>c.agent&&(c.agent.status==='running'||c.agent.status==='queued'&&agentOn);
-const stranded=c=>c.agent&&c.agent.status==='queued'&&!agentOn;
+const stranded=c=>c.waiting&&c.agent&&c.agent.status==='queued'&&!agentOn;
 const klass=c=>c.resolved?'res':working(c)?'wait':c.messages.some(m=>m.agent)&&!c.waiting?'rep':'';
 function drawPins(){if(draw)return;const ts=mine(),openN=ts.filter(t=>!t.resolved).length;
  $c('.cm-lst').textContent=openN?openN+' open':ts.length?ts.length+' resolved':all.length+' elsewhere';$c('.cm-lst').classList.toggle('none',!ts.length&&!all.length);
