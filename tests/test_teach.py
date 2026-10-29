@@ -48,6 +48,12 @@ class Teach(unittest.TestCase):
         cont = dict(self.gate, viz=dict(self.gate["viz"], unit="ms"))
         self.assertFalse({"spot", "code", "prototype"} & set(teach.methods_for(cont)))
 
+    def test_prototype_is_answerable_on_a_zero_delta_card(self):
+        zero = dict(self.gate, id="rej|zero", viz=dict(self.gate["viz"], delta=0.0, lo=0.0, hi=0.0, wins=0, losses=0))
+        need = teach._n_needed(teach._example(zero))
+        self.assertTrue(4 <= need < float("inf"))
+        self.assertTrue(teach.grade(zero, "prototype", round(need))["hit"])
+
     def test_goal_context_has_no_target_count(self):
         self.p.open_goal("keep", "Keep 28 correct", "full", 0.7)
         g = learn.card(self.p, "goal|keep")
