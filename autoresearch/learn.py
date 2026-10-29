@@ -699,8 +699,8 @@ def concepts(p: Project) -> list[dict]:
             qs.append(dict(q=f"{str(ex.get('input') or h.get('symptom')).rstrip(' ?.:')}. Which is right?", o=[str(ex["right"]), str(ex["wrong"])], a=str(ex["right"])))
         v = _score(p, champ, h["target"]) if champ and h.get("target") else None
         if v is not None:
-            vals = [100 * v, min(100.0, 100 * v + 9), max(0.0, 100 * v - 9)]
-            o = [f"{x:.0f}%" for x in vals]
+            vals = [v, v * 1.25, v * 0.75] if _cont(p, h["target"]) else [v, min(1.0, v + 0.09), max(0.0, v - 0.09)]
+            o = [sv(p, h["target"], x) for x in vals]
             if len(set(o)) == 3:
                 qs.append(dict(q=f"The champion on {_short(h['target'])}?", o=o, a=o[0]))
         if not qs:
