@@ -82,7 +82,7 @@ function pn(t,p,lead){
  const grp=`wb-${t.id}`+(p.x?'-'+p.x:''),ser=p.series?.[0]?.pts||[];
  const sm=p.smooth===true,w=XC.g(grp,{w:.6}).w;
  let big='',sub='',lb=p.title,extra='';
- const f=p.fmt,quiet=Math.max(t.health?.silent_s??0,t.eta?.silent_s??0,t.status==='stalled'?now()-t.heartbeat:0);
+ const f=p.fmt,quiet=Math.max(t.health?.silent_s??0,t.status==='stalled'?now()-t.heartbeat:0);
  if(p.id==='eta'){big=t.status==='stalled'?`<span class="neg">none</span><small>last said ${wbClock(p.value)}</small>`:`${wbClock(p.value)}<small>${p.drift_s>=0?'+':'−'}${span(Math.abs(p.drift_s))} in 5 min</small>`;sub=plural(p.n,'re-estimate')}
  else if(p.id==='gpu'){big=`${Math.round(p.value)}%${p.mem?.[0]!=null?`<small>${p.mem[0].toFixed(1)} of ${p.mem[1]?.toFixed(0)} GB</small>`:''}`;sub=p.gpus>1?`${p.gpus} GPUs`:'';
   if(p.mem?.[1])extra=`<div class="wb-mem">${meter(p.mem[0]/p.mem[1],{cls:'mem'})}</div>`}
