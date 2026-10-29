@@ -32,6 +32,8 @@ a{color:var(--accent)}
 .bar .in{max-width:1240px;margin:0 auto;padding:8px 16px;display:flex;align-items:center;gap:8px}
 .bar .crumb{font:500 12.5px var(--mono);color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
 .bar .crumb b{color:var(--text);font-weight:600}
+.bar a.crumb{color:inherit;text-decoration:none}.bar a.crumb:hover,.bar a.crumb:hover b{color:var(--accent)}
+a.tb{color:inherit;text-decoration:none}
 .tb{border:1px solid var(--control);background:var(--surface);border-radius:var(--radius-control);height:30px;padding:0 10px;font-size:13px;font-weight:500;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
 .tb[hidden]{display:none}
 .tb:hover{border-color:var(--accent)}
@@ -203,7 +205,8 @@ pre{margin:0;background:var(--raised);border:1px solid var(--border);border-radi
  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 /* reference additions */
-@media (max-width:560px){.bar .tb span{display:none}.bar .tb.pri span{display:inline}}
+@media (max-width:1000px){.bar .tb span{display:none}}
+.bar .crumb{min-width:120px}
 section.s,.head{overflow-wrap:anywhere}.tl span,.unk span,.after .stp{min-width:0}
 table{overflow-wrap:normal}
 .ladder{grid-template-columns:repeat(var(--cols,4),minmax(0,1fr))}
@@ -335,9 +338,11 @@ const ICON = {
   link: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6.5 9.5l3-3M7 4.5l1-1a2.5 2.5 0 013.5 3.5l-1 1M9 11.5l-1 1A2.5 2.5 0 014.5 9l1-1"/></svg>',
   down: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 2v8M5 7l3 3 3-3M3 12v2h10v-2"/></svg>',
   print: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6V2h8v4M4 11H2V6h12v5h-2M4 9h8v5H4z"/></svg>',
-  theme: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11A5.5 5.5 0 008 2.5z" fill="currentColor"/></svg>'
+  theme: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11A5.5 5.5 0 008 2.5z" fill="currentColor"/></svg>',
+  paper: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 1.5h5l3 3v10H4z"/><path d="M9 1.5v3h3M6 8h4M6 11h4"/></svg>',
+  cmt: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2.5 3h11v8H7l-3 2.5V11H2.5z"/></svg>'
 };
-const sec = (i, id, title) => `<section class="s" id="${id}"><div class="hd"><b>${String(i + 1).padStart(2, "0")}</b><h2>${title}</h2><button class="anc" data-anchor="${id}" title="Copy link to this section">#</button></div><div data-body="${id}"></div></section>`;
+const sec = (i, id, title) => `<section class="s" id="${id}" data-item><div class="hd"><b>${String(i + 1).padStart(2, "0")}</b><h2>${title}</h2><button class="anc" data-anchor="${id}" title="Copy link to this section">#</button></div><div data-body="${id}"></div></section>`;
 const order = { champion: 0, candidate: 1, retired: 2, historical: 3, rejected: 4, planned: 5 };
 // two models can share a title: the option then also names the id, so no two entries read the same
 const dupT = (c => (D.models.forEach(m => c[mnt(m.name)] = (c[mnt(m.name)] || 0) + 1), c))({});
@@ -348,7 +353,9 @@ const champGoal = gPick.map(f => D.goals.find(g => g.model === CH && f(g))).find
 
 $("#app").innerHTML = `
 <div class="bar"><div class="in">
-  <div class="crumb">${esc(D.project.name || "project")} · paper · <b>${mn(CH)}</b></div>
+  <div class="crumb ttl">${SNAP ? `${esc(D.project.name || "project")} · <b>${mn(CH)}</b>` : `<a class="crumb" href="${BASE}/#overview">${esc(D.project.name || "project")}</a> · <a class="crumb" href="${BASE}/#model/${enc(CH)}"><b>${mn(CH)}</b></a>`} · paper</div>
+  ${(D.papers || []).slice(0, 1).map(x => `<a class="tb" href="${BASE}/papers/${enc(x.name)}" title="${esc(x.title)}">${ICON.paper}<span>${x.kind === "model" ? "Written paper" : "Hill paper"}</span></a>`).join("")}
+  ${SNAP ? "" : `<a class="tb" id="bCmt" href="${D.papers?.length ? `${BASE}/papers/${enc(D.papers[0].name)}` : `${BASE}/#model/${enc(CH)}`}" title="Comment">${ICON.cmt}<span>Comment</span></a>`}
   <button class="tb" id="bLink" title="Copy a link to the section in view" ${window.parent!==window&&window.parent.ARX_SNAP||window.ARX_SNAP?'hidden':''}>${ICON.link}<span>Copy link</span></button>
   <button class="tb pri" id="bDown" title="Download one self-contained HTML file">${ICON.down}<span>Download</span></button>
   <button class="tb" id="bPrint" title="Print or save as PDF">${ICON.print}<span>PDF</span></button>
@@ -356,7 +363,7 @@ $("#app").innerHTML = `
 </div><nav class="chips" id="chips">${SECS.map(([id, t]) => `<a href="#${id}" data-s="${id}">${t}</a>`).join("")}</nav></div>
 <div class="wrap">
 <nav class="toc" id="toc">${SECS.map(([id, t], i) => `<a href="#${id}" data-s="${id}"><b>${String(i + 1).padStart(2, "0")}</b>${t}</a>`).join("")}</nav>
-<main>
+<main id="main">
 <header class="head">
   <div class="kick">${esc(M.status)} · ${esc(D.project.name || "")}${champGoal ? " · goal " + esc(champGoal.name) : ""}</div>
   <h1>${mn(CH)}</h1>${mnt(CH) !== CH ? `<div class="kick" style="margin:-4px 0 10px">${esc(CH)}</div>` : ""}
@@ -770,6 +777,13 @@ document.addEventListener("click", e => {
   if (!e.target.closest("#pop") && !e.target.closest("#grid rect") && !e.target.closest(".idchips button")) closePop();
 });
 addEventListener("keydown", e => { if (e.key === "Escape") closePop(); });
+// the dashboard's keys (keys.js): j / k through the sections, h or Backspace back to the model, g + letter a page, ? the sheet
+if (!SNAP) {
+  const rl = document.createElement("nav"); rl.id = "rail"; rl.hidden = true;
+  rl.innerHTML = ["overview", "learn", "workbench", "goals", "questions", "models", "hills", "papers", "slices", "archive"].map(k => `<a href="${BASE}/#${k}"></a>`).join("");
+  document.body.append(rl);
+  const ks = document.createElement("script"); ks.src = BASE + "/keys.js"; document.body.append(ks);
+}
 addEventListener("scroll", () => { if (popFor && innerWidth > 560) closePop(); }, { passive: true });
 
 /* ---------------- toolbar ---------------- */

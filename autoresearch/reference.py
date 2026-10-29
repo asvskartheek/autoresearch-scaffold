@@ -263,6 +263,25 @@ def _promotion(p, ix, model):
     return dict(t=t, replaced=old, rungs=rungs)
 
 
+def _norm(x) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", str(x or "").lower()).strip("-")
+
+
+def papers_for(p, model: str) -> list[dict]:
+    """The hand-written papers about this model: one named after it (`champion-<model>` too), then its hill's paper."""
+    from . import papers
+    me, hill = _norm(model), (p.models().get(model) or {}).get("hill")
+    out = []
+    for n in papers.names(p):
+        meta = papers._read(papers.pdir(p, n) / "meta.json", {})
+        nn = _norm(n)
+        if meta.get("model") == model or nn == me or nn.endswith("-" + me):
+            out.insert(0, dict(name=n, title=papers.title_of(p, n, meta), kind="model"))
+        elif hill and (meta.get("hill") == hill or (n == hill and not meta.get("goal"))):
+            out.append(dict(name=n, title=papers.title_of(p, n, meta), kind="hill"))
+    return out
+
+
 def _flat(d, pre="", out=None, depth=0):
     out = [] if out is None else out
     for k, v in (d or {}).items():
@@ -304,7 +323,7 @@ def _goal_status(p, ix, name, g, champ):
 def _signature(p) -> tuple:
     """What the paper depends on: the ledger files and every task's task.json, by mtime and size."""
     out = []
-    for f in [p.root / "research.json", *sorted(p.dir.glob("*.json")), p.dir / "decisions.jsonl"]:
+    for f in [p.root / "research.json", *sorted(p.dir.glob("*.json")), p.dir / "decisions.jsonl", p.dir / "papers"]:
         try:
             st = f.stat()
             out.append((f.name, st.st_mtime_ns, st.st_size))
@@ -558,6 +577,7 @@ def _build(p, model, vs):
         main=main, goals=goal_list, results=results, lineage=lineage, children=children, ladder=ladder,
         gallery=gallery, unknown=uniq, decisions=decisions, runs=runs, spec=spec,
         promotion=dict(t=promotion["t"], replaced=promotion["replaced"]) if promotion else None,
+        papers=papers_for(p, model),
         base_spec=_flat({k: v for k, v in models[base].items() if k not in CORE_FIELDS}) if base in models else [],
         baseline=dict(have=list(plan["have"]), need=plan["need"],
                       meta={sl: dict(kind=ix.slices[sl].get("kind"), n=ix.slices[sl].get("n"), hash=ix.slices[sl].get("hash"),
