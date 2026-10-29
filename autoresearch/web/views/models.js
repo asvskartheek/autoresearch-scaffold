@@ -83,9 +83,9 @@ VIEWS.models=()=>{
  const L=S.state,models=L.models,gates=L.gates,champ=L.champion;
  const all=Object.entries(models),by=s=>all.filter(([,m])=>m.status===s);
  const prog=k=>{const r=rungsOf(gates[k]);return r?(gates[k].promotable?99:r.fail?-1:r.done):-2};
- const cands=by('candidate').sort((a,b)=>prog(b[0])-prog(a[0])||b[1].created-a[1].created);
+ const cands=by('candidate').filter(([k])=>!superseded(k)).sort((a,b)=>prog(b[0])-prog(a[0])||b[1].created-a[1].created);
  const rej=by('rejected').sort((a,b)=>b[1].created-a[1].created);
- const other=all.filter(([,m])=>!['champion','candidate','rejected'].includes(m.status)).sort((a,b)=>b[1].created-a[1].created);
+ const other=all.filter(([k,m])=>!['champion','candidate','rejected'].includes(m.status)||m.status==='candidate'&&superseded(k)).sort((a,b)=>b[1].created-a[1].created);
  const fullKey=L.config.primary_dataset+'/full',fullN=L.slices[fullKey]?.n,cf=champ?fullScore(champ):null;
  const promotable=cands.filter(([k])=>gates[k]?.promotable),failing=cands.filter(([k])=>rungsOf(gates[k])?.fail);
  const lead=cands[0],lr=lead&&rungsOf(gates[lead[0]]);
@@ -107,10 +107,10 @@ VIEWS.models=()=>{
   ['Champion',cf?score(cf.score,fullKey,cf.n):DASH,champ?`<a class="ms-kn" href="#model/${enc(champ)}" title="${esc(champ)}">${mn(champ)}</a>${cf?` · ${esc(short(fullKey))}, n ${cf.n.toLocaleString()}`:''}`:'No champion yet'],
   ['Climbing',String(cands.length),cands.length?`${promotable.length} ready to promote · ${failing.length} failing a rung`:'none registered'],
   ['Rejected',String(rej.length),rej.length?'kept with their reasons':'none'],
-  ['Planned or archived',String(other.length),other.length?[...new Set(other.map(([,m])=>m.status))].join(' · '):'none'],
+  ['Planned, superseded or archived',String(other.length),other.length?[...new Set(other.map(([,m])=>m.status))].join(' · '):'none'],
  ]));
 
- const seg=[['all','All',all.length],['ladder','On the ladder',cands.length+(champ?1:0)],['rejected','Rejected',rej.length],['other','Planned or archived',other.length]];
+ const seg=[['all','All',all.length],['ladder','On the ladder',cands.length+(champ?1:0)],['rejected','Rejected',rej.length],['other','Other models',other.length]];
  h.push(`<div id="ms-root"><div class="ms-bar"><input id="ms-q" class="ms-q" type="search" placeholder="Search models, hills, reasons" aria-label="Search models" autocomplete="off" value="${esc(S.msQ||'')}" oninput="msSearch(this)" onfocus="S.msFocus=1" onblur="S.msFocus=0"><div class="seg" role="group" aria-label="Status">${seg.map(([f,l,n])=>`<button type="button" data-f="${f}" onclick="msFilter('${f}')">${l}<small>${n}</small></button>`).join('')}</div></div>`);
 
  const lh=new Set([champ,...cands.map(([k])=>k)].filter(k=>models[k]?.hill).map(k=>models[k].hill)),oneHill=lh.size===1?[...lh][0]:null;
@@ -123,7 +123,7 @@ VIEWS.models=()=>{
  h.push(panel('Rejected',rej.length?table(['Model','Why it was rejected',['Parent','ms-hm'],[fullHead[0],'num ms-hs'],['Δ vs champion','num']],rej.map(([k,m])=>{const f=full(k);
   return row(k,m,[`<td>${nameCell(k,m,false)}</td>`,`<td class="ms-why">${m.reason?reasonHTML(m.reason):'<span class="dash">No reason recorded</span>'}</td>`,`<td class="ms-hm">${parentCell(k,m.parent)}</td>`,`<td class="num ms-hs">${f.v}</td>`,`<td class="num">${f.d}</td>`])})):empty('Nothing rejected','<code>arx reject &lt;name&gt; --reason "…"</code> keeps a failed candidate in the ledger'),{meta:rej.length?plural(rej.length,'model'):'',cls:'section" data-grp="rejected'}));
 
- h.push(panel('Planned or archived',other.length?table(['Model','Status',['Parent','ms-hm'],'Note'],other.map(([k,m])=>row(k,m,[`<td>${nameCell(k,m,false)}</td>`,`<td>${st(m.status)}</td>`,`<td class="ms-hm">${parentCell(k,m.parent)}</td>`,`<td class="ms-why sub">${m.reason?reasonHTML(m.reason):esc(firstLine(m.change||''))||DASH}</td>`]))):empty('None','<code>arx model add &lt;name&gt; --status planned</code> records an idea before it runs'),{meta:other.length?plural(other.length,'model'):'',cls:'section" data-grp="other'}));
+ h.push(panel('Planned, superseded or archived',other.length?table(['Model','Status',['Parent','ms-hm'],'Note'],other.map(([k,m])=>row(k,m,[`<td>${nameCell(k,m,false)}</td>`,`<td>${superseded(k)?pill('Superseded','quiet'):st(m.status)}</td>`,`<td class="ms-hm">${parentCell(k,m.parent)}</td>`,`<td class="ms-why sub">${m.reason?reasonHTML(m.reason):esc(firstLine(m.change||''))||DASH}</td>`]))):empty('None','<code>arx model add &lt;name&gt; --status planned</code> records an idea before it runs'),{meta:other.length?plural(other.length,'model'):'',cls:'section" data-grp="other'}));
 
  h.push(`<section class="card section ms-nomatch" id="ms-nomatch" hidden>${empty('No models match','Clear the search or choose another status')}</section>`);
  const lin=lineage(models,gates);
