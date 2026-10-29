@@ -120,6 +120,8 @@ const ST_LABEL={open:'Open',achieved:'Achieved',abandoned:'Abandoned'};
 const gst=g=>st(g.status,ST_LABEL[g.status]||g.status);
 const ORDER={open:0,achieved:1,abandoned:2};
 // open goals: met first (they wait on a command), then the furthest along
+// a guard (must not regress) or sub-goal serves a main goal: it never leads the list or the headline
+const isMain=g=>!g.role||g.role==='main';
 const rank=g=>g.status!=='open'?0:g.met?2:((p=>p.mode==='rel'?Math.max(-1,Math.min(1,p.p)):-1)(prog(g)));
 
 // ---------- the track: baseline on the left, target on the right, filled to the champion now
@@ -159,10 +161,10 @@ const paperBtn=g=>(g.model?`<a class="btn" href="reference/${enc(g.model)}">Mode
 
 // ---------- list
 VIEWS.goals=()=>{
- const L=S.state,gs=Object.values(L.goals||{}).sort((a,b)=>(ORDER[a.status]??3)-(ORDER[b.status]??3)||rank(b)-rank(a)||(b.created||0)-(a.created||0));
+ const L=S.state,gs=Object.values(L.goals||{}).sort((a,b)=>(ORDER[a.status]??3)-(ORDER[b.status]??3)||isMain(b)-isMain(a)||rank(b)-rank(a)||(b.created||0)-(a.created||0));
  const open=gs.filter(g=>g.status==='open'),done=gs.filter(g=>g.status==='achieved'),gone=gs.filter(g=>g.status!=='open'&&g.status!=='achieved');
- const met=open.filter(g=>g.met&&!g.slice_changed);
- const lead=open.filter(g=>!g.met&&prog(g).mode==='rel').sort((a,b)=>prog(b).p-prog(a).p)[0];
+ const mains=open.filter(isMain),met=mains.filter(g=>g.met&&!g.slice_changed);
+ const lead=mains.filter(g=>!g.met&&prog(g).mode==='rel').sort((a,b)=>prog(b).p-prog(a).p)[0]||mains.find(g=>!g.met&&dist(g));
  const gl=g=>`<a href="#goal/${enc(g.name)}"><b>${esc(g.title)}</b></a>`;
  let finding='';
  if(gs.length){
@@ -170,7 +172,7 @@ VIEWS.goals=()=>{
   else{
    finding=`<b>${plural(open.length,'open goal')}</b>. `;
    if(met.length)finding+=`${gl(met[0])} meets its target and waits to be recorded.`;
-   else if(lead){const d=dist(lead);finding+=`${open.length>1?'Furthest along: ':''}${gl(lead)}, ${d?`${d.v} ${d.s}`:''} to go.`}
+   else if(lead){const d=dist(lead);finding+=`${mains.length>1?'Furthest along: ':''}${gl(lead)}, ${d.v} ${d.s}.`}
    else finding+=open.some(g=>g.value==null)?'The champion has no complete run on a goal slice yet.':'No goal has a baseline to measure progress from.';
   }
  }
@@ -496,3 +498,5 @@ window.Intake={
 // the chart is sized to the sheet in pixels so its labels stay legible; redraw once a resize settles
 let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(route().r==='goal'&&S.state)render(true)},150)});
 }
+// the Overview draws each open goal with these, so a goal reads the same on both pages
+window.GoalUnits={gu,gt,gv,ofP,dist,prog,cmpSym,kpiPre,byN,isMain,slRuns,kpiKey,sgn,disp:(g,v)=>byN(g)?v*g.n:dsg(g)*v};
