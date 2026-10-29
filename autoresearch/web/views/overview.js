@@ -17,6 +17,12 @@ const ovRunning=(m,s)=>active().some(t=>t.kind==='eval'&&t.model===m&&t.slice===
 const runTask=n=>{if(!n?.running)return null;const t=S.state.tasks.find(t=>t.id===n.running)||{id:n.running};return t.status==='stalled'&&now()-(t.heartbeat||t.updated||t.created)>86400?null:t};
 const runChip=n=>{const t=runTask(n);if(!t)return '';const pr=t.progress||{},sl=t.status==='stalled';
  return `<a class="runchip" href="#task/${enc(t.id)}" onclick="event.stopPropagation()" title="${esc(t.title||'Open the running task')}"><span class="st ${sl?'stalled':'running'}">${sl?'silent '+span(now()-(t.heartbeat||t.updated||t.created)):'running'}</span>${pr.total?`<span class="num">${ovN(pr.done)}<span class="faint"> / ${ovN(pr.total)}</span></span>`:''}</a>`};
+// a candidate the champion was built on (in its lineage), or whose every +-part the champion already carries
+// (po4+verify under po4+verify+inv+…): superseded, so it is not climbing and never a next step.
+// Shared by the goal view, which loads after this file.
+const superseded=k=>{const st=S.state,ch=st?.champion;if(!ch||k===ch)return false;
+ for(let c=st.models[ch]?.parent,seen=new Set([ch]);c&&!seen.has(c);seen.add(c),c=st.models[c]?.parent)if(c===k)return true;
+ const a=String(k).split('+'),C=new Set(String(ch).split('+'));return a.length>1&&a.every(x=>C.has(x))};
 const ovRungs=()=>{const st=S.state;return (st.config.ladder||[]).map(r=>r.rung).filter(Boolean).length?st.config.ladder.map(r=>r.rung):(Object.values(st.gates).find(g=>g.rungs?.length)?.rungs||[]).map(r=>r.rung)};
 // a task silent for more than a day is dead: not running, not a live card, one line
 const ovDead=t=>t.status==='stalled'&&now()-(t.heartbeat||t.updated||t.created)>86400;
@@ -77,7 +83,8 @@ VIEWS.overview=()=>{
  const st=S.state,champ=st.champion,ds=Object.keys(st.datasets),hib=st.config.higher_is_better!==false;
  const prim=st.config.primary_dataset||ds[0],fullKey=prim+'/full';
  const cf=champ&&fullScore(champ);
- const cands=Object.entries(st.models).filter(([,m])=>m.status==='candidate')
+ const allC=Object.entries(st.models).filter(([,m])=>m.status==='candidate'),sup=allC.filter(([k])=>superseded(k)).length;
+ const cands=allC.filter(([k])=>!superseded(k))
   .map(([k,m])=>[k,m,st.gates[k]||{}])
   .sort((a,b)=>(b[2].promotable-a[2].promotable)||(!!ovFailedAt(a[2])-!!ovFailedAt(b[2]))||(ovPassed(b[2])-ovPassed(a[2]))||((b[1].created||0)-(a[1].created||0)));
  // research work only: answer agents are not research, and a task silent for over a day is dead, not running
@@ -95,7 +102,7 @@ VIEWS.overview=()=>{
  const cg=!cf&&champ&&gs.find(g=>GU.isMain(g)&&g.model===champ&&g.value!=null);
  h+=`<div class="ov-kpis">${kpis([
   ['Champion',cf?sv(fullKey,cf.score,cf.n):cg?`${GU.gu(cg,cg.value)}${GU.ofP(cg)}`:DASH,champ?`<a href="#model/${enc(champ)}" class="ov-cn" title="${mnt(champ)}">${mn(champ)}</a>${cf?` · ${esc(short(fullKey))}`:cg?` · ${esc(short(cg.slice))}`:''}`:'No champion yet'],
-  ['Candidates',String(cands.length),promotable.length?`<span class="pos">${promotable.length} ready to promote</span>`:cands.length?`${onWay.length} passed a rung · ${failed.length} failed`:'None','#models'],
+  ['Candidates',String(cands.length),(promotable.length?`<span class="pos">${promotable.length} ready to promote</span>`:cands.length?`${onWay.length} passed a rung · ${failed.length} failed`:'None')+(sup?` · ${sup} superseded`:''),'#models'],
   ['Running',String(running.length),stalled.length?`<span class="neg">${stalled.length} stalled</span>`:running.length?'All reporting':'Nothing running','#workbench'],
   ['Open hills',String(open),`${climbed} climbed`,'#hills'],
  ])}</div>`;
@@ -111,10 +118,11 @@ VIEWS.overview=()=>{
   const [lbl,,cls]=ovNextOf(k,g);
   const word={pass:'passed',fail:'failed',pending:'next',locked:'locked',champion:'champion'};
   const cells=RUNGS.map((r,i)=>{const s=by[r]||'locked';return `<td class="ov-rg ${esc(s)} ${i&&by[RUNGS[i-1]]==='pass'?'in':''} ${i<RUNGS.length-1&&s==='pass'?'out':''} ${i?'':'first'} ${i===RUNGS.length-1?'last':''}"><i title="${esc(r)}: ${word[s]||esc(s)}"></i></td>`}).join('');
-  return `<tr class="click" onclick="location.hash='model/${enc(k)}'"><td class="ov-id"><span class="ov-nmr"><a class="ell ov-nm" href="#model/${enc(k)}" title="${esc(m.change||k)}">${mn(k)}</a>${tag?`<span class="mono ov-tell" title="${esc(k)}">${esc(tag)}</span>`:''}</span></td>
+  return `<tr class="click" onclick="location.hash='model/${enc(k)}'"><td class="ov-id"><span class="ov-nmr"><a class="${m.title?'ell ':'ov-pid mono '}ov-nm" href="#model/${enc(k)}" title="${esc(m.change||k)}">${m.title?mn(k):esc(k).replace(/\+/g,'+<wbr>')}</a>${tag?`<span class="mono ov-tell" title="${esc(k)}">${esc(tag)}</span>`:''}</span></td>
    ${cells}<td class="ov-nx"><span class="ell ${cls}">${lbl||DASH}</span></td></tr>`;
  });
- const ladderCard=panel('Ladder',cands.length?`<div class="ov-ladtbl">${table(['Candidate',...RUNGS.map(r=>[`<span class="ov-rgh">${esc(r)}</span>`,'ov-rg']),['<span class="ov-nxh">Next</span>','ov-nx']],ladderRows)}</div>`:
+ const lg=`<div class="ov-lg">${[['pass','passed'],['fail','failed'],['pending','next'],['locked','locked']].map(([c,l])=>`<span class="ov-rg ${c}"><i></i>${l}</span>`).join('')}${sup?`<a class="faint" href="#models">${sup} superseded by the champion</a>`:''}</div>`;
+ const ladderCard=panel('Ladder',cands.length?`<div class="ov-ladtbl">${table(['Candidate',...RUNGS.map(r=>[`<span class="ov-rgh">${esc(r)}</span>`,'ov-rg']),['<span class="ov-nxh">Next</span>','ov-nx']],ladderRows)}</div>${lg}`:
   empty('No candidates climbing',''),
   {meta:champ?`each candidate vs ${st.models[champ]?.title?`champion ${mn(champ)}`:`<a class="ln" href="#model/${enc(champ)}" title="${esc(champ)}">the champion</a>`}`:'',right:cands.length>CAP?`<a class="more" href="#models">All ${cands.length}</a>`:''});
 
