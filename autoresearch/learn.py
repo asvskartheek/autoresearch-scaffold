@@ -687,6 +687,14 @@ def concepts(p: Project) -> list[dict]:
 
 # ---------------------------------------------------------------- routes and CLI
 
+def _why_empty(p: Project) -> str | None:
+    """Why a project has nothing to predict at all, when the reason is in the ledger."""
+    done = any(t.get("slice_hash") == (p.slices().get(t.get("slice")) or {}).get("hash") for t in p.evals())
+    if not p.champion():
+        return "No champion yet, and no finished runs on a current slice." if not done else "No champion yet."
+    return None if done else "No finished runs on a current slice."
+
+
 def brief(p: Project, since: float = 0, viewer: str = "anon") -> dict:
     p._gates = {}
     with p.snapshot():
@@ -697,6 +705,7 @@ def brief(p: Project, since: float = 0, viewer: str = "anon") -> dict:
         extra = [card(p, r["card"]) for r in preds if r.get("truth") is None and not r.get("resolved") and r["card"] not in {c["id"] for c in cs}]
         cs += [c for c in extra if c]
         return dict(now=_now(), since=since, viewer=viewer, cards=[public(c, mine.get(c["id"])) for c in cs],
+                    empty=None if cs else _why_empty(p),
                     concepts=concepts(p), calibration=calibration(preds),
                     understanding=understanding(p, viewer),
                     open=[r for r in preds if r.get("hit") is None])

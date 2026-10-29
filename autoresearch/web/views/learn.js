@@ -193,10 +193,10 @@ VIEWS.learn=()=>{
  if(!c&&L.timer.id){leaveCard();L.timer.id=null}
  if(!c&&b.cards.length&&i>=b.cards.length&&b.cards.every(x=>x.pred))lset(LK(),String(b.now));  // every card answered: next visit starts here
  const pips=b.cards.map((x,k)=>{const p=x.pred;const cl=k===i?'cur':!p?'':p.hit==null?'pend':p.hit?'hit':'miss';return `<button class="pip ${cl}" data-l="go" data-i="${k}" aria-label="card ${k+1}"></button>`}).join('');
- const since=b.since?`since ${stamp(b.since)}`:'all of it';
- const stage=!b.cards.length?`<div class="done-h"><h2>Nothing new ${esc(since)}</h2></div>`:c?cardHTML(c):doneHTML();
+ const since=b.since?`Since ${stamp(b.since)}`:'All time';
+ const stage=!b.cards.length?`<div class="done-h"><h2>${b.since?'Nothing new since '+esc(stamp(b.since)):'Nothing to predict yet'}</h2>${b.empty?`<span class="muted">${esc(b.empty)}</span>`:''}</div>`:c?cardHTML(c):doneHTML();
  return head+`<div class="lrn"><div class="lhead"><span class="muted">${esc(since)} · ${plural(b.cards.length,'card')}</span><div class="pips">${pips}</div></div>
-  <div class="layout"><section class="stage" aria-live="polite">${stage}</section>
+  <div class="layout"><section class="stage${b.cards.length?'':' empty'}" aria-live="polite">${stage}</section>
   <aside class="lside">${panel('How well you know this project',knowHTML())}</aside></div>${conceptsHTML()}</div>`;
 };
 
