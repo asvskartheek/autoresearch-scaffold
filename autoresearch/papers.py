@@ -14,9 +14,10 @@ People comment from the browser; the agent waits on `arx paper poll` and answers
 """
 from __future__ import annotations
 
-import json, os, re, secrets, shutil, time
+import html as _html, json, os, re, secrets, shutil, time
 from pathlib import Path
 
+from . import features
 from .core import Project, _jsonl, _read, _write, now
 
 MENTION = re.compile(r"(?<![\w@])@agent\b", re.I)
@@ -36,12 +37,41 @@ def names(p: Project) -> list[str]:
     return [d.parent.name for d in sorted((p.dir / "papers").glob("*/paper.html"))]
 
 
+H1 = re.compile(r"<h1\b[^>]*>(.*?)</h1>", re.S | re.I)
+_H1: dict = {}  # path -> (mtime_ns, title); papers() runs on every dashboard poll
+
+
+def h1_title(p: Project, name: str) -> str | None:
+    """The paper's own <h1>, as plain text: the title when meta.json has none."""
+    f = pdir(p, name) / "paper.html"
+    try:
+        m = f.stat().st_mtime_ns
+    except OSError:
+        return None
+    hit = _H1.get(str(f))
+    if hit and hit[0] == m:
+        return hit[1]
+    t = H1.search(f.read_text(errors="replace"))
+    t = " ".join(_html.unescape(re.sub(r"<[^>]+>", " ", t.group(1))).split())[:200] if t else None
+    _H1[str(f)] = (m, t or None)
+    return t or None
+
+
+def title_of(p: Project, name: str, meta: dict | None = None) -> str:
+    """How a paper reads: its meta title, else its <h1>, else the goal's or hill's title, else its name."""
+    meta = meta if meta is not None else _read(pdir(p, name) / "meta.json", {})
+    g = (p.goals().get(meta.get("goal")) or {}) if meta.get("goal") else {}
+    h = (p.hills().get(meta.get("hill")) or {}) if meta.get("hill") else {}
+    return meta.get("title") or h1_title(p, name) or g.get("title") or h.get("title") or name
+
+
 def papers(p: Project) -> dict:
     out = {}
     for name in names(p):
         d = pdir(p, name)
         ts = threads(thread(p, name))
-        out[name] = dict(_read(d / "meta.json", {}), name=name, version=version(p, name),
+        meta = _read(d / "meta.json", {})
+        out[name] = dict(meta, title=title_of(p, name, meta), name=name, version=version(p, name),
                          comments=len(ts), open=sum(1 for t in ts if not t["resolved"]),
                          waiting=sum(1 for t in ts if t["waiting"]))
     return out
@@ -306,3 +336,56 @@ def check_goal(html: str, st: dict, hill_papers=()) -> list[tuple[str, str]]:
     if st.get("slice_changed"):
         out.append(("error", f"slice {st['slice']} changed since the goal opened; its numbers do not hold"))
     return out
+
+
+def context(p: Project, name: str) -> dict:
+    """What the reader shows around a paper, from the ledger as it is now: the paper's title, its goal or hill with
+    their titles and current status (an abandoned goal reads as abandoned whatever the paper's text still says),
+    and the current champion."""
+    d = pdir(p, name)
+    if not (d / "paper.html").exists():
+        raise KeyError(name)
+    meta = _read(d / "meta.json", {})
+    out = dict(name=name, title=title_of(p, name, meta), goal=None, hill=None)
+    champ = p.champion()
+    out["champion"] = dict(name=champ, label=features.model_label(p, champ)) if champ else None
+    if meta.get("goal"):
+        g = p.goals().get(meta["goal"])
+        if g:
+            info = dict(name=meta["goal"], title=g.get("title") or meta["goal"], status=g.get("status"),
+                        reason=g.get("reason"), slice=g.get("slice"), n=g.get("n"), target=g.get("target"),
+                        kpi=g.get("kpi", "score"), when=g.get("abandoned") or g.get("achieved"))
+            try:
+                st = p.goal_status(meta["goal"])
+                info |= dict(model=st.get("model"), label=features.model_label(p, st.get("model")) if st.get("model") else None,
+                             value=st.get("value"), met=st.get("met"), scale=st.get("scale"), unit=st.get("unit"))
+            except SystemExit:
+                pass
+            out["goal"] = info
+        else:
+            out["goal"] = dict(name=meta["goal"], title=meta["goal"], status="missing")
+    if meta.get("hill"):
+        h = p.hills().get(meta["hill"])
+        out["hill"] = dict(name=meta["hill"], title=(h or {}).get("title") or meta["hill"], status=(h or {}).get("status", "missing"))
+    return out
+
+
+def missing(p: Project) -> dict:
+    """Goals and live hills with no paper yet (one public paper per goal, one living paper per hill)."""
+    have = [_read(pdir(p, n) / "meta.json", {}) for n in names(p)]
+    goals = {m.get("goal") for m in have} | set(names(p))
+    hills = {m.get("hill") for m in have} | set(names(p))
+    return dict(goals=[dict(name=k, title=g.get("title") or k, status=g.get("status")) for k, g in p.goals().items() if k not in goals],
+                hills=[dict(name=k, title=h.get("title") or k, status=h.get("status")) for k, h in p.hills().items()
+                       if k not in hills and h.get("status") in ("open", "climbed")])
+
+
+@features.get("/api/paper-context/")
+def _context(p, path, q):
+    from urllib.parse import unquote
+    return 200, context(p, unquote(path[len("/api/paper-context/"):]).strip("/"))
+
+
+@features.get("/api/papers-missing")
+def _missing(p, path, q):
+    return 200, missing(p)

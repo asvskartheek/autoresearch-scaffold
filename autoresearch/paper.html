@@ -19,6 +19,14 @@
 .ttl b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .ttl .crumb{color:var(--muted-fg);text-decoration:none;white-space:nowrap}.ttl .crumb:hover{color:var(--foreground)}
 .ttl .sep{color:var(--input)} #hillCrumb{display:contents}
+.ttl .crumb.ell{overflow:hidden;text-overflow:ellipsis;max-width:28ch;min-width:0}
+.lgr{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 16px;font-size:13px;color:var(--muted-fg);border-bottom:1px solid var(--border);background:var(--background)}
+.lgr b{color:var(--foreground);font-weight:600}
+.lgr .tag{font:500 11.5px var(--mono);padding:2px 7px;border-radius:4px;background:var(--muted);color:var(--muted-fg)}
+.lgr .tag.ok{background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)}
+.lgr .tag.bad{background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red)}
+.lgr .tag.warn{background:var(--warn-bg);color:var(--warn-ink)}
+.lgr .why{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 200px}
 .bar .back{display:none}
 .side.rail{position:fixed;left:0;top:0;width:60px;z-index:40;align-items:center;padding:12px 10px}
 .side.rail .brand{padding:0 0 14px}
@@ -156,6 +164,7 @@ kbd{font:11px var(--mono);border:1px solid var(--input);border-bottom-width:2px;
   <button class="me" id="me" title="Your name on comments"><span class="av" id="meAv"></span><span class="nmv" id="meNm"></span></button>
   <span class="live" id="live" title="Live"></span>
 </header>
+<div class="lgr" id="ledger" hidden></div>
 <div id="root"></div>
 </div>
 <div class="toast" id="toast"><span id="toastT"></span><button class="btn sm outline" id="toastB">Show</button></div>
@@ -669,6 +678,33 @@ async function swapPaper(v, prev) {
   toast(changed.length ? `Paper updated · ${leaves.length} passage${leaves.length === 1 ? "" : "s"} changed` : "Paper updated", leaves.length ? () => jumpTo(leaves[0]) : null);
 }
 
+// the paper's title, its goal or hill by title, and where that goal stands in the ledger now: the paper's own text is
+// frozen when it was written (it may still say "draft" after the goal was abandoned)
+let ctx = null, ctxAt = 0;
+const fmtN = x => Number(x).toLocaleString("en-US");
+async function loadContext() {
+  ctxAt = Date.now();
+  try { const r = await fetch(`${BASE}/api/paper-context/${encodeURIComponent(NAME)}`, { cache: "no-store" }); if (!r.ok) return; ctx = await r.json(); } catch { return; }
+  const g = ctx.goal, hl = ctx.hill;
+  $("#title").textContent = ctx.title; document.title = ctx.title + " · paper";
+  $("#hillCrumb").innerHTML = g ? `<a class="crumb ell" href="${BASE}/#goal/${encodeURIComponent(g.name)}" title="${esc(g.title)}">${esc(g.title === ctx.title ? "Goal" : g.title)}</a><span class="sep">/</span>`
+    : hl ? `<a class="crumb ell" href="${BASE}/#hill/${encodeURIComponent(hl.name)}" title="${esc(hl.title)}">${esc(hl.title === ctx.title ? "Hill" : hl.title)}</a><span class="sep">/</span>` : "";
+  let line = "";
+  if (g) {
+    const tag = { open: ["warn", "Draft · goal open"], achieved: ["ok", "Goal achieved"], abandoned: ["bad", "Goal abandoned · negative result"], missing: ["", "Goal not in the ledger"] }[g.status] || ["", g.status];
+    const bin = g.kpi === "score" && (g.scale || "binary") === "binary" && g.n;
+    const val = g.value == null ? "" : bin ? `${fmtN(Math.round(g.value * g.n))} of ${fmtN(g.n)}` : `${+Number(g.value).toPrecision(3)}${g.unit ? " " + g.unit : ""}`;
+    const tgt = g.target == null ? "" : bin ? `${fmtN(Math.ceil(g.target * g.n - 1e-9))} of ${fmtN(g.n)}` : `${g.target}${g.unit ? " " + g.unit : ""}`;
+    const when = g.when ? new Date(g.when * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+    line = `<span class="tag ${tag[0]}">${esc(tag[1])}</span>` + (g.status === "abandoned"
+      ? `<span class="why">${when ? esc(when) + (g.reason ? ": " : "") : ""}${esc(g.reason || "")}</span>`
+      : `<span class="why">${g.label ? `<b>${esc(g.label)}</b> ` : ""}${val ? esc(val) : "no run"}${tgt ? ` · target ${esc(tgt)}` : ""}${g.slice ? ` on ${esc(g.slice)}` : ""}${when && g.status === "achieved" ? ` · ${esc(when)}` : ""}</span>`);
+  } else if (hl) {
+    line = `<span class="tag ${hl.status === "climbed" ? "ok" : hl.status === "open" ? "warn" : ""}">Internal note · hill ${esc(hl.status)}</span>${ctx.champion ? `<span class="why">champion now <b>${esc(ctx.champion.label)}</b></span>` : ""}`;
+  }
+  $("#ledger").innerHTML = line; $("#ledger").hidden = !line;
+}
+
 let busy = false, fails = 0;
 async function refresh() {
   if (busy) return; busy = true;
@@ -677,9 +713,8 @@ async function refresh() {
     if (!r.ok) throw new Error(r.status);
     const d = await r.json(); fails = 0; $("#live").className = "live"; $("#live").title = "Live";
     meta = d.meta || {};
-    $("#title").textContent = document.title = meta.title || NAME;
-    $("#hillCrumb").innerHTML = meta.goal ? `<a class="crumb" href="${BASE}/#goal/${encodeURIComponent(meta.goal)}">${esc(meta.goal)}</a><span class="sep">/</span>`
-      : meta.hill ? `<a class="crumb" href="${BASE}/#hill/${encodeURIComponent(meta.hill)}">${esc(meta.hill)}</a><span class="sep">/</span><span class="crumb">internal</span><span class="sep">/</span>` : "";
+    if (!ctx) { $("#title").textContent = document.title = meta.title || NAME; }
+    if (!ctx || Date.now() - ctxAt > 15000) loadContext();
     if (version === null) { version = d.version; srcTexts(version).catch(() => {}); frame = await loadPaper(version); }
     else if (d.version !== version) { const prev = version; version = d.version; await swapPaper(version, prev); }
     threads = d.threads;
