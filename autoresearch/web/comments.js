@@ -14,7 +14,7 @@ const host=document.createElement('div');host.id='arx-comments';host.className='
 const TOOLS=[['pin','Pin','P'],['box','Box','B'],['arrow','Arrow','A'],['pen','Pen','D'],['highlight','Highlight','H']];
 host.innerHTML=`<svg class="cm-shapes" xmlns="http://www.w3.org/2000/svg"></svg><div class="cm-hl"></div><div class="cm-layer"></div><div class="cm-pins"></div><div class="cm-pops"></div>
 <div class="cm-list"></div><div class="cm-chip"><button class="cm-btn on cmt">Comment</button><button class="cm-btn ask">Ask</button></div>
-<div class="cm-fab"><div class="cm-tools">${TOOLS.map(([k,n,key])=>`<button data-tool="${k}" title="${n} (${key})">${n}<b>${key}</b></button>`).join('')}</div><button class="cm-btn cm-lst" title="Comments">0</button><button class="cm-btn cm-mode">Comment<b>C</b></button></div>`;
+<div class="cm-fab"><div class="cm-tools">${TOOLS.map(([k,n,key])=>`<button data-tool="${k}" data-key-own="${key}" title="${n} (${key})">${n}<b>${key}</b></button>`).join('')}</div><button class="cm-btn cm-lst" title="Comments" aria-label="Comment list">0</button><button class="cm-btn cm-mode" data-key-own="c">Comment<b>C</b></button></div>`;
 const $c=s=>host.querySelector(s),hl=$c('.cm-hl'),pinsEl=$c('.cm-pins'),pops=$c('.cm-pops'),list=$c('.cm-list'),chip=$c('.cm-chip'),layer=$c('.cm-layer'),shapesEl=$c('.cm-shapes'),tools=$c('.cm-tools');
 const h=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let mode=false,tool='pin',all=[],open=null,hot=null,draw=null,pending=null,agentOn=true;
@@ -91,7 +91,7 @@ const isPage=el=>!el||el===document.documentElement||el===document.body||el.id==
 
 /* ---------- mode, tools, keys */
 function setTool(t){tool=t;tools.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.tool===t));if(t!=='pin')hl.style.display='none'}
-function setMode(on){mode=on;$c('.cm-mode').classList.toggle('on',on);tools.classList.toggle('on',on);layer.classList.toggle('on',on);
+function setMode(on){mode=on;document.documentElement.classList.toggle('arx-cm-mode',on);$c('.cm-mode').classList.toggle('on',on);tools.classList.toggle('on',on);layer.classList.toggle('on',on);
  if(!on){hl.style.display='none';cancelDraw()}}
 $c('.cm-mode').onclick=()=>setMode(!mode);
 tools.querySelectorAll('button').forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
