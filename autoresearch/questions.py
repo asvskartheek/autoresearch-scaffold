@@ -701,12 +701,34 @@ def _decisions(p):
 
 # the answer daemon's own notes on every agent task (answer.py): they say nothing about the question
 _LIFECYCLE = re.compile(r"^(Reading the question and the ledger\.|Answered in \d+ s\.)$")
+# work on the project's tooling, papers and dashboard, not on the research: never shown as a question's evidence
+_NOT_RESEARCH = {"answer", "setup", "baseline", "paper", "papers", "docs", "documentation", "fix", "port", "migration",
+                 "reporting", "cleanup", "review", "validation", "install", "protocol", "historical_catalog"}
+_DEVLOG = re.compile(r"\b(paper check|published|light/dark|375 ?px|dashboard|arx (sync|up|paper)|PR #\d+|port(ed)? to arx|"
+                     r"vendored|worktree)\b", re.I)
+
+
+def _research_task(task) -> bool:
+    if str(task.get("kind") or "").lower() in _NOT_RESEARCH:
+        return False
+    return not _DEVLOG.search(f"{task.get('title') or ''} {task.get('description') or ''}")
+
+
+def _prose(msg) -> bool:
+    """A note a person reads: a sentence, not a dict, a list or a dashboard dev-log line."""
+    return isinstance(msg, str) and not msg.lstrip().startswith(("{", "[", "(")) and not _DEVLOG.search(msg)
+
+
+def _clean(msg: str) -> str:
+    """A note without the Python dicts or JSON a script pasted into it ("... rule. {'n': 185, 'delta': ...}")."""
+    return readable(re.sub(r"\s*[{\[]\s*['\"][^{}\[\]]*[}\]]", "", msg).strip())
 
 
 def notes(p, qid: str, cap: int = 60) -> list[dict]:
     """The reading pane: the notes behind this question and the questions under it, newest first. Each decision
     reason and task note is placed on the node it is about: a question's own answering agent and evidence tasks, else
-    the model a task ran, else a model, hill or goal its text names. Notes about other branches are left out."""
+    the model a task ran, else a model, hill or goal its text names. Notes about other branches, tooling and papers
+    are left out. `agent` marks the notes of the agent that answered (or is answering) the question itself."""
     t = tree(p, full=False)["byid"]
     if qid not in t:
         raise KeyError(qid)
@@ -723,7 +745,7 @@ def notes(p, qid: str, cap: int = 60) -> list[dict]:
     by_hill = {n["hill"]: k for k, n in t.items() if n.get("hill")}
     by_goal = {n["goal"]: k for k, n in t.items() if n.get("goal")}
     names = sorted(by_model, key=len, reverse=True)
-    own = {}  # task id -> the question it answers or is evidence for
+    own, agents = {}, set()  # task id -> the question it answers or is evidence for; the answering agents' tasks
     for k in sub:
         for e in t[k].get("evidence") or []:
             if e.get("task"):
@@ -731,12 +753,10 @@ def notes(p, qid: str, cap: int = 60) -> list[dict]:
     for it in features.inbox(p):
         if it.get("kind") == "question" and it.get("ref") in sub and it.get("task"):
             own[it["task"]] = it["ref"]
-    mine = {e.get("model") for e in t[qid].get("evidence") or [] if e.get("model")}
+            agents.add(it["task"])
 
     def place(model, text):
-        if model in mine and by_model.get(model) not in sub:
-            return qid
-        if model in by_model:
+        if model in by_model:  # a run's notes sit on that model's own question, not on every question citing it
             return by_model[model]
         for m in names:
             if m in text:
@@ -752,24 +772,23 @@ def notes(p, qid: str, cap: int = 60) -> list[dict]:
     out = []
     for d in _decisions(p):
         txt = d.get("reason") or d.get("note")
-        if isinstance(txt, str) and len(txt) > 12:
-            out.append(dict(t=d.get("t"), node=place(d.get("model"), txt), src=f"decision {d.get('kind')}", text=readable(txt)))
+        if _prose(txt) and len(txt) > 12:
+            out.append(dict(t=d.get("t"), node=place(d.get("model"), txt), src=f"decision {d.get('kind')}", text=_clean(txt)))
     for task in p.tasks():
         at = own.get(task["id"])
-        if at is None and task.get("kind") in ("answer", "setup", "baseline"):
+        if at is None and not _research_task(task):
             continue
         head = f"{task.get('title') or ''} {task.get('description') or ''}"
         for e in p.events(task["id"])[-(6 if at else 2):]:
             msg = e.get("msg")
-            if isinstance(msg, str) and len(msg) > (12 if at else 40) and not msg.lstrip().startswith(("{", "[")) \
-                    and not _LIFECYCLE.match(msg):
+            if _prose(msg) and len(msg) > (12 if at else 40) and not _LIFECYCLE.match(msg):
                 out.append(dict(t=e.get("t"), node=at or place(task.get("model"), head + " " + msg), src=task["id"],
-                                text=readable(msg)))
+                                text=_clean(msg), agent=task["id"] in agents or None))
     for k in sub:
         if t[k].get("quote"):
             out.append(dict(t=t[k].get("created"), node=k, src="quote", text=t[k]["quote"]))
-    out = [x for x in out if x["node"] in sub]
-    out.sort(key=lambda x: (x["node"] != qid, -(x.get("t") or 0)))
+    out = [{kk: v for kk, v in x.items() if v is not None} for x in out if x["node"] in sub]
+    out.sort(key=lambda x: (x["node"] != qid, not x.get("agent"), -(x.get("t") or 0)))
     return out[:cap]
 
 

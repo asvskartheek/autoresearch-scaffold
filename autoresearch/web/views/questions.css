@@ -87,7 +87,10 @@ a.q-lr:hover,div.q-lr:not(.axis):hover{background:var(--raised)}
 .q-kid:hover{background:var(--raised)}
 .q-kid .q-sh{height:20px}
 
-.q-notes{margin-top:16px}
+.q-notes{margin-top:18px}
+.q-ng+.q-ng{margin-top:12px}
+span.q-at{color:var(--muted)}
+.q-ng:first-child a.q-at+ul .q-note{border-left-color:var(--accent)}
 .q-at{display:inline-block;font-size:12.5px;color:var(--accent);text-decoration:none;margin-bottom:6px}
 .q-notes ul{list-style:none;margin:0;padding:0}
 .q-note{padding:7px 0 7px 12px;border-left:2px solid var(--rule);margin-bottom:4px}

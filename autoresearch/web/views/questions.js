@@ -141,7 +141,6 @@ function qPanel(id,ix){
  const live=n.status==='open'||n.status==='agent';
  if(w&&n.choices?.length)h+=`<div class="q-acts">${n.choices.map((c,i)=>`<button class="btn ${i?'':'q-warn'}" data-qpick="${esc(c)}">${esc(c)}</button>`).join('')}</div>`;
  if(live)h+=`<div class="q-form ${w?'on':''}" id="q-af"><input class="q-in" id="q-ans" aria-label="Your answer" placeholder="Your answer"><button class="btn primary" data-qact="answer">Answer</button><button class="btn" data-qact="dead">Close as dead end</button></div>`;
- h+=qNotesInline(id,ix);
  const ks=ix.kids[id]||[];
  if(ks.length)h+=`<div class="q-kids">${ks.map(k=>{const c=ix.by[k];return `<button class="q-kid" data-qgo="${esc(k)}" data-qnode="${esc(k)}"${c.claim?` data-qtip="${esc(c.claim)}"`:''}><span class="q-sh">${qShape(c)}</span><span>${esc(c.title)}</span></button>`}).join('')}</div>`;
  const open=n.model?['model','#model/'+enc(n.model)]:n.hill?['hill','#hill/'+enc(n.hill)]:n.goal?['goal','#goal/'+enc(n.goal)]:null;
@@ -149,23 +148,26 @@ function qPanel(id,ix){
   (live&&!w?`<button class="btn" data-qact="settle">Answer</button>`:'')+(live?`<button class="btn ${n.needs_human?'on':''}" data-qact="flag" aria-pressed="${!!n.needs_human}">${n.needs_human?'Waiting on a person':'Needs a person'}</button>`:`<button class="btn" data-qact="reopen">Reopen</button>`)+
   `${open?`<a class="btn" href="${open[1]}">Open ${open[0]}</a>`:''}</div>`+
   `<div class="q-form" id="q-bf"><input class="q-in" id="q-bin" aria-label="Follow-up question" placeholder="Your question for an agent" maxlength="120"><button class="btn primary" data-qact="ask">Ask</button></div>`;
+ h+=qNotesInline(id,ix);
  return h;
 }
-// what the ledger says about this question, shown under it: the newest notes on this node (decisions, the answering
-// agent's and the evidence tasks' notes), each with its source; notes on the questions under it fold behind a count
+// what the ledger says about this question, shown under its buttons (so their place never moves when the notes
+// arrive): the answering agent's own notes under its task, then the newest notes on this node from the ledger
+// (decisions, evidence runs), each with its source; notes on the questions under it fold behind a count
 function qNotesInline(id,ix){
  const r=QS.notes[id];
  if(r===undefined)qNotes(id);
- const at=ix.by[id]?.answer_task,tl=at?`<a class="q-at" href="#task/${enc(at)}">The agent's task${byId(at)?.updated?' · '+ago(byId(at).updated):''}</a>`:'';
- if(!r?.length)return tl?`<div class="q-notes">${tl}</div>`:'';
- const own=r.filter(x=>x.node===id),sub=r.filter(x=>x.node!==id);
+ const at=ix.by[id]?.answer_task||ix.by[id]?.live?.task;
  const one=x=>{
-  const src=/^\d{4}-\d{6}-/.test(x.src||'')?`<a href="#task/${enc(x.src)}">${esc(byId(x.src)?.title||x.src)}</a>`:x.src==='quote'?'quote':esc(String(x.src||'').replace(/^decision /,''));
-  const at=x.node!==id?`<a data-qgo="${esc(x.node)}">${esc(ix.by[x.node]?.title||x.node)}</a>`:'';
-  return `<li class="q-note" data-qnode="${esc(x.node)}"><p tabindex="0" data-qclamp>${esc(x.text)}</p><div class="meta">${at}<span>${src}</span><span>${x.t?ago(x.t):''}</span></div></li>`};
+  const src=x.agent?'':/^\d{4}-\d{6}-/.test(x.src||'')?`<a href="#task/${enc(x.src)}">${esc(byId(x.src)?.title||x.src)}</a>`:x.src==='quote'?'quote':esc(String(x.src||'').replace(/^decision /,''));
+  const on=x.node!==id?`<a data-qgo="${esc(x.node)}">${esc(ix.by[x.node]?.title||x.node)}</a>`:'';
+  return `<li class="q-note" data-qnode="${esc(x.node)}"><p tabindex="0" data-qclamp>${esc(x.text)}</p><div class="meta">${on}<span>${src}</span><span>${x.t?ago(x.t):''}</span></div></li>`};
+ const mine=(r||[]).filter(x=>x.agent&&x.node===id),own=(r||[]).filter(x=>!x.agent&&x.node===id),sub=(r||[]).filter(x=>x.node!==id);
+ const agent=at||mine.length?`<div class="q-ng"><a class="q-at" href="#task/${enc(at||mine[0].src)}">How the agent worked${byId(at)?.updated?' · '+ago(byId(at).updated):''}</a>${mine.length?`<ul>${mine.map(one).join('')}</ul>`:''}</div>`:'';
  const head=own.slice(0,3),rest=own.slice(3).concat(sub);
- return `<div class="q-notes">${tl}${head.length?`<ul>${head.map(one).join('')}</ul>`:''}`+
-  (rest.length?`<details class="q-more"><summary>${rest.length} more note${rest.length>1?'s':''}${sub.length?' here and below':''}</summary><ul>${rest.map(one).join('')}</ul></details>`:'')+`</div>`;
+ const ledger=head.length||rest.length?`<div class="q-ng"><span class="q-at">From the ledger</span>${head.length?`<ul>${head.map(one).join('')}</ul>`:''}`+
+  (rest.length?`<details class="q-more"><summary>${rest.length} more note${rest.length>1?'s':''}${sub.length?' here and below':''}</summary><ul>${rest.map(one).join('')}</ul></details>`:'')+`</div>`:'';
+ return agent||ledger?`<div class="q-notes">${agent}${ledger}</div>`:'';
 }
 function qNotes(id){
  if(QS.notes[id]!==undefined)return;QS.notes[id]=null;
