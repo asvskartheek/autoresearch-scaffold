@@ -116,6 +116,13 @@ def _band(n: int, v: float) -> float:
     return max(1.0, round(1.645 * math.sqrt(v * (1 - v) / max(n, 1)) * 100, 1))
 
 
+DEAD_S = 86400  # stalled for longer than this is dead
+
+
+def _dead(t: dict) -> bool:
+    return t.get("status") == "stalled" and _now() - _f(t.get("heartbeat") or t.get("updated")) > DEAD_S
+
+
 def _ci_viz(r: dict) -> dict:
     return dict(kind="ci", delta=r["delta"], lo=r["lo"], hi=r["hi"], wins=r["wins"], losses=r["losses"], n=r["n"])
 
@@ -296,11 +303,12 @@ def _card_run(p: Project, model: str, base: str, sl: str, task: dict | None = No
     if not r and not live:
         return None
     pr = (live or {}).get("progress") or {}
+    stalled = r is None and (live or {}).get("status") == "stalled"
     ctx = f"{pr.get('done', 0):,} of {pr['total']:,} done" if r is None and pr.get("total") else f"n = {(r or {}).get('n') or (p.slices().get(sl) or {}).get('n', 0):,}"
     truth = None if r is None else ("Yes" if r["delta"] > 0 else "No")
-    why = "Logged. Scored when the run lands." if r is None else f"Δ {100 * r['delta']:+.2f} pts: {r['wins']} fixed, {r['losses']} broken."
+    why = ("No heartbeat; scored if the run is restarted and lands." if stalled else "Logged. Scored when the run lands.") if r is None else f"Δ {100 * r['delta']:+.2f} pts: {r['wins']} fixed, {r['losses']} broken."
     return dict(id=f"run|{model}|{base}|{sl}", type="choice", opts=["Yes", "No"], truth=truth,
-                label="Running" if r is None else "Landed", tone="warn" if r is None else "acc",
+                label="Landed" if r else "Stalled" if stalled else "Running", tone="acc" if r else "neg" if stalled else "warn",
                 t=(live or {}).get("created"), q=f"Will {_title(p, model)} beat {_title(p, base)} on {_short(sl)}?",
                 ctx=ctx, ev=(live or {}).get("id") or sl, why=why, w=50, viz=_ci_viz(r) if r else None)
 
@@ -382,8 +390,8 @@ def cards(p: Project, since: float = 0) -> list[dict]:
     for qid, q in (_read(p.dir / "questions.json", {}) or {}).items():
         if isinstance(q, dict) and _f(q.get("answered") or q.get("updated") or q.get("created")) > since:
             add(_card_question(p, qid))
-    for t in p.tasks():
-        if t.get("kind") == "eval" and t.get("status") in ("running", "stalled") and t.get("model") not in (None, champ) \
+    for t in p.tasks():  # a run stalled for more than a day is dead: no card asks about it
+        if t.get("kind") == "eval" and (t.get("status") == "running" or t.get("status") == "stalled" and not _dead(t)) and t.get("model") not in (None, champ) \
                 and champ and t.get("slice") and p.slice_evals(champ, t["slice"]):
             add(_card_run(p, t["model"], champ, t["slice"], t))
     out.sort(key=lambda c: (-c.get("w", 0), -_f(c.get("t"))))
