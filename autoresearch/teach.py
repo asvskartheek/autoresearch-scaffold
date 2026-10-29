@@ -31,6 +31,8 @@ from .core import Project, _append, _jsonl
 
 METHODS = ("predict", "sketch", "spot", "prototype", "code", "explain")
 HARDER = {m: i for i, m in enumerate(METHODS)}  # predict is the easiest to finish, explain the hardest
+# before a person has tried a method: the hands-on, visual ones first (people asked for less text), explain last
+PRIOR = dict(predict=0.30, sketch=0.42, spot=0.40, prototype=0.42, code=0.36, explain=0.22)
 LABEL = dict(predict="Predict", sketch="Sketch", spot="Spot the error", prototype="Prototype", code="Code", explain="Explain back")
 
 
@@ -239,7 +241,7 @@ def score(prof: dict, m: str) -> float:
     s = prof["methods"][m]
     works = (s["hits"] + 1) / (s["n"] + 2) * (s["n"] + 1) / (s["n"] + s["skips"] + 1)  # right, and finished not skipped
     if s["n"] < 2:
-        works += 0.35  # try what they have not tried
+        works += PRIOR[m]  # try what they have not tried
     if len(s["last"]) == 5 and all(s["last"]):
         works *= 0.6  # easy for them now: step up
     if prof["recent"].count(m) == 2:
@@ -247,9 +249,12 @@ def score(prof: dict, m: str) -> float:
     return works
 
 
-def choose(prof: dict, c: dict, viewer: str, avoid: set | None = None) -> str:
+def choose(prof: dict, c: dict, viewer: str, avoid: set | None = None, deck: dict | None = None) -> str:
+    """The method for this card. `deck` counts methods already given to earlier cards in the same Brief, so one deck
+    mixes methods instead of repeating the best one."""
     ms = [m for m in methods_for(c) if m not in (avoid or set())] or ["predict"]
-    return max(ms, key=lambda m: (round(score(prof, m), 3), HARDER[m] * 0.001, _h(viewer, c["id"], m) % 97))
+    used = deck or {}
+    return max(ms, key=lambda m: (round(score(prof, m) * 0.7 ** used.get(m, 0), 3), _h(viewer, c["id"], m) % 97))
 
 
 def attach(p: Project, cards_full: list[dict], public_cards: list[dict], viewer: str, aliases: set) -> dict:
@@ -263,12 +268,14 @@ def attach(p: Project, cards_full: list[dict], public_cards: list[dict], viewer:
     for r in rows:
         if r.get("skip"):
             skipped.setdefault(r.get("card"), set()).add(r.get("method"))
+    deck: dict = {}
     for full, pub in zip(cards_full, public_cards):
         a = done.get(full["id"])
         if a and not pub.get("pred"):  # learned another way: the card is answered, the reveal shows
             pub["pred"] = dict(method=a["method"], hit=a.get("hit"), t=a.get("t"), guess=None, conf=None)
             pub["reveal"] = dict(truth=full.get("truth"), why=full.get("why"), viz=full.get("viz"), show=a.get("show") or {})
-        m = a["method"] if a else ("predict" if pub.get("pred") else choose(prof, full, viewer, skipped.get(full["id"])))
+        m = a["method"] if a else ("predict" if pub.get("pred") else choose(prof, full, viewer, skipped.get(full["id"]), deck))
+        deck[m] = deck.get(m, 0) + 1
         pub["method"] = m
         pub["methods"] = methods_for(full)
         if m != "predict" and not pub.get("pred"):
@@ -281,7 +288,7 @@ def answer(p: Project, body: dict) -> tuple[int, dict]:
     viewer = str(body.get("viewer") or "anon")[:60]
     c = card(p, str(body.get("card") or ""))
     m = body.get("method")
-    if not c or m not in methods_for(c) or m == "predict":
+    if not c or m not in methods_for(c) or m == "predict" and not body.get("skip"):
         return 404, dict(error="unknown card or method")
     ms = max(0, min(int(_f(body.get("ms"), 0) or 0), 3_600_000))
     if body.get("skip"):
