@@ -261,7 +261,7 @@ def _card_goal(p: Project, name: str) -> dict | None:
             traj.append(dict(label=_title(p, m), v=round(v * N), champ=m == g["model"]))
     lo = max(0, int(N * max(0.0, g["target"] - 0.3)) // 10 * 10)
     left = need - have
-    why = (f"{left:,} more to reach {need:,}." if left > 0 else f"{-left:,} past the target of {need:,}.")
+    why = (f"{left:,} more to reach {need:,}." if left > 0 else f"{-left:,} past the target of {need:,}." if left else f"Exactly at the target of {need:,}.")
     vb = g.get("vs_baseline")
     if vb and vb.get("n"):
         why += f" Against the starting champion: {vb['wins']} fixed, {vb['losses']} broken."
