@@ -115,7 +115,8 @@ function qPath(id,ix){const p=[];for(let x=ix.by[ix.by[id]?.parent];x;x=ix.by[x.
 function qPanel(id,ix){
  const n=ix.by[id];if(!n)return empty('No question');
  const w=qWaiting(n),cls=w?'human':n.status;
- let h=`<div class="q-path">${qPath(id,ix).map(p=>`<a data-qgo="${esc(p.id)}">${esc(p.title)}</a><span>/</span>`).join('')}</div>`+
+ const path=qPath(id,ix);
+ let h=(path.length?`<div class="q-path">${path.map(p=>`<a data-qgo="${esc(p.id)}">${esc(p.title)}</a>`).join('<span>/</span>')}</div>`:'')+
   `<div class="q-fq"><span class="q-sh">${qShape(n,18)}</span><h2>${esc(n.title)}</h2></div>`;
  if(n.status==='agent'){
   const L=n.live||{},pr=L.progress,f=pr&&pr.total?Math.min(1,(pr.done||0)/pr.total):null;
@@ -163,6 +164,8 @@ VIEWS.questions=arg=>{
  const focus=qFocus(ix,arg);
  if(!focus)return page({title:'Questions',crumbs:[['Questions']]})+empty('No questions yet','<span>arx q add "&lt;title&gt;"</span>');
  for(let x=ix.by[ix.by[focus].parent];x;x=ix.by[x.parent])QS.closed.delete(x.id);
+ // a deep link on a narrow screen: the panel sits under the tree, so bring it into view once per link
+ if(arg&&QS.deep!==arg){QS.deep=arg;if(innerWidth<=820)setTimeout(()=>document.getElementById('q-panel')?.scrollIntoView({block:'start'}),0)}
  const hs=QS.data.nodes.filter(qWaiting);
  const need=hs.length?`<details class="q-need"><summary class="q-ib">${qShape('human',10)}${hs.length}</summary><div class="q-pop">${hs.map(n=>`<button data-qgo="${esc(n.id)}">${qShape('human',10)}<span>${esc(n.title)}</span></button>`).join('')}</div></details>`:'';
  const key=`<span class="q-ib key" tabindex="0" data-qtip="key"><svg width="14" height="14" viewBox="0 0 14 14" aria-label="Key"><circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="7" cy="4.3" r=".9" fill="currentColor"/><path d="M7 6.5V10.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span>`;
@@ -174,6 +177,7 @@ VIEWS.questions=arg=>{
 
 // ---------- interaction
 function qGo(id){
+ QS.deep=id;
  history.replaceState(null,'','#questions/'+enc(id));
  render(true);
  const p=document.getElementById('q-panel');if(p&&(p.getBoundingClientRect().top<0||innerWidth<=820))p.scrollIntoView({behavior:'smooth',block:'start'});
