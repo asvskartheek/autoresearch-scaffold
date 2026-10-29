@@ -27,6 +27,10 @@ const silent=t=>wbSpan(now()-t.heartbeat);
 const bEnd=t=>t.budget_s?t.created+t.budget_s:null;
 const fin=t=>t.eta&&t.status==='running'?Math.min(t.eta.finish_at,bEnd(t)??Infinity):null;
 const wbFixCmd=t=>`arx task finish ${t.id} --status failed`;
+// failures a viewer has opened (per browser, per project); an unopened failure stays on the Workbench for a day
+const SEEN_K='arx-seen-failed:'+location.pathname;
+const wbSeen=()=>{try{return new Set(JSON.parse(localStorage.getItem(SEEN_K)||'[]'))}catch(e){return new Set()}};
+const wbMarkSeen=id=>{try{const s=wbSeen();if(s.has(id))return;s.add(id);localStorage.setItem(SEEN_K,JSON.stringify([...s].slice(-300)))}catch(e){}};
 // metric keys as words: running_score → Score so far, latency_s → Latency (s), rewards/correctness/mean → Correctness
 const wbMetric=k=>({running_score:'Score so far',score:'Score',latency_s:'Latency (s)',loss:'Loss',reward:'Reward',acc:'Accuracy',accuracy:'Accuracy',lr:'Learning rate',learning_rate:'Learning rate',grad_norm:'Gradient norm',kl:'KL to reference',entropy:'Entropy',mean_token_accuracy:'Token accuracy',reward_std:'Reward spread',gpu_util:'GPU utilisation',gpu_mem_gb:'GPU memory (GB)'})[k]
  ||(/^rewards\/([^/]+)\/mean$/.test(k)?wbKind(k.split('/')[1]):wbKind(String(k).replace(/_s$/,' (s)').replace(/\//g,' · ')));
@@ -110,6 +114,11 @@ function strip(){
   return `<a class="wb-chip" href="#task/${enc(t.id)}" title="${esc(t.title)}"><span class="${ok?'pos':'neg'}">${ok?'✓':'✕'}</span><span class="nm">${t.kind==='eval'&&t.model?mn(t.model):esc(t.title)}</span><span class="res">${esc(res)}</span><span class="at">${ago(t.ended)}</span></a>`}).join('')}</div>`;
 }
 
+// recent failures nobody has opened yet: a red row with the error, until opened or a day old
+const failedJobs=()=>{const seen=wbSeen();return S.state.tasks.filter(t=>t.status==='failed'&&t.ended&&now()-t.ended<86400&&!seen.has(t.id)&&!S.state.tasks.some(k=>k.parent===t.id)).sort((a,b)=>b.ended-a.ended)};
+const failRow=t=>{const e=t.note?.text??t.note?.msg??'';
+ return `<article class="wb-job short failed"><div class="wb-hl"><span class="wb-kind">${esc(wbKind(t.kind))}</span><h2 class="wb-ttl"><a href="#task/${enc(t.id)}">${title(t)}</a></h2><span class="wb-err" title="${esc(e)}">${esc(e)}</span><span class="wb-eta"><small>failed</small>${ago(t.ended)}</span><span class="wb-hp bad">Failed</span></div></article>`};
+
 // stalled for over a day: abandoned. One line for all of them, with one command that closes them all
 const isDead=t=>t.status==='stalled'&&(t.dead||now()-(t.heartbeat||t.created)>86400);
 function deadGroup(ds){
@@ -130,8 +139,10 @@ VIEWS.workbench=()=>{
  if(stalled.length)parts.push(`<b class="neg">${stalled.length} stalled</b>`);
  if(run.length)parts.push(`<b>${run.length} running</b>`+(last?`, ${ends.length<run.length?`${ends.length} with an estimate `:'all '}done by <b>${wbClock(last)}</b>`:''));
  const h=page({title:'Workbench',crumbs:[['Workbench','#workbench']],finding:parts.length?parts.join(' · '):'Nothing running.'});
+ const failed=failedJobs();
+ if(failed.length)parts.unshift(`<b class="neg">${failed.length} failed</b>`);
  if(dead.length)parts.push(`${dead.length} abandoned`);
- const list=[...stalled.map(t=>t.long?card(t):row(t)),...long.map(card),...shortJ.map(row),deadGroup(dead)].filter(Boolean);
+ const list=[...failed.map(failRow),...stalled.map(t=>t.long?card(t):row(t)),...long.map(card),...shortJ.map(row),deadGroup(dead)].filter(Boolean);
  return h+strip()+(list.length?`<div class="wb-jobs section">${list.join('')}</div>`:`<section class="section">${panel('',empty('Nothing running','Start one with <code>arx task start --title …</code> or <code>arx.task(...)</code> in Python.'))}</section>`);
 };
 }

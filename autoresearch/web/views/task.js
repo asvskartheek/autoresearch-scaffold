@@ -259,6 +259,7 @@ VIEWS.task=(id)=>{
  const sx=S.state,d=S.detail&&S.detail.task?.id===id?S.detail:null;
  const t0=byId(id),t=d?{...t0,...d.task,...(t0?.eta!==undefined?{eta:t0.eta,health:t0.health}:{})}:t0;
  CUR=t?slOf(t):null;
+ if(t?.status==='failed')wbMarkSeen(t.id);
  if(!t)return page({title:'Task not found',crumbs:[['Archive','#archive'],['Not found']],finding:`No task <span class="id">${esc(id)}</span> in this ledger.`})+panel('',empty('Nothing to show','<a class="ln" href="#archive">Back to the archive</a>'));
  const live=isLive(t),par=byId(t.parent),hill=hillOf(t);
  const crumbs=[[live?'Workbench':'Archive',live?'#workbench':'#archive'],...(par?[[par.title,'#task/'+enc(par.id)]]:[]),[t.title]];

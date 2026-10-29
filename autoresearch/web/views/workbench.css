@@ -55,6 +55,9 @@
 .wb-pn .xc{margin-top:auto}
 .wb-mem{margin-top:6px}.wb-mem .meter{height:4px;background:var(--active)}.wb-mem .meter i{background:var(--chart-2)}
 
+.wb-job.failed{border-color:color-mix(in srgb,var(--negative) 45%,var(--border))}
+.wb-err{flex:1 1 auto;min-width:0;font:13px var(--mono);color:var(--negative);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
 /* abandoned jobs (stalled over a day): one line, opens to the list and one close command */
 .wb-dead summary{cursor:pointer;list-style:none;padding:11px 16px}.wb-dead summary::-webkit-details-marker{display:none}
 .wb-dn{flex:1 1 auto;min-width:0;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
