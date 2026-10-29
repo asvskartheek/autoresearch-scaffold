@@ -42,5 +42,18 @@ class GoalUnitsTest(unittest.TestCase):
         self.assertEqual((st["scale"], st["unit"]), ("binary", None))
 
 
+
+class EvalTitleTest(unittest.TestCase):
+    def test_default_title_reads_like_the_workbench(self):
+        from autoresearch.core import evaluate
+        p = ledger()
+        p.add_slice("cold/dev2", ["0", "1"])
+        p.add_model("lora-r16", title="LoRA r16", status="champion")
+        t = evaluate(p, "lora-r16", "cold/dev2", lambda i: {"score": 1.0}, workers=1)
+        self.assertEqual(t.meta["title"], "LoRA r16 on dev2")
+        p.add_model("a+b+c+d")
+        self.assertEqual(evaluate(p, "a+b+c+d", "cold/dev2", lambda i: {"score": 1.0}, workers=1).meta["title"], "…+c+d on dev2")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -837,7 +837,10 @@ def evaluate(project: Project, model: str, slice: str, run_one, workers: int = 8
     """
     sl = project.slice(slice)
     ids = [i for i in sl["ids"] for _ in range(repeats)]
-    t = Task(project, "eval", title or f"{model} on {sl['name']}", description, model=model, slice=sl["name"],
+    if not title:  # how the Workbench says it: "LoRA r16 on dev60", not the raw ids
+        from .features import model_label  # features imports nothing from core; imported here to keep core light
+        title = f"{model_label(project, model) or model} on {sl['name'].split('/', 1)[-1]}"
+    t = Task(project, "eval", title, description, model=model, slice=sl["name"],
              agent=agent, total=len(ids), parent=parent, budget_s=deadline_s,
              config=(config or {}) | {"workers": workers, "deadline_s": deadline_s, "repeats": repeats})
     start, done, total_score, stop = now(), 0, 0.0, False
