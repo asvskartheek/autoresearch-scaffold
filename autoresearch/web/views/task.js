@@ -33,6 +33,17 @@ const pooled=vc=>vc.runs>1?`, champion pooled over ${vc.runs} runs`:'';
 // a long local path shows its last three parts; the full path is in the tooltip and on the copy button
 const tail=p=>{const a=String(p).split('/');return a.length>4?'…/'+a.slice(-3).join('/'):String(p)};
 
+// an eval whose harness counts in a sub-task (server: progress_from on the eval, detail_of on the sub-task): that
+// sub-task, and the score it has logged so far (its main metric, when it reads as a share of the slice)
+const kidOf=t=>t.kind!=='eval'?null:byId(t.progress_from)||S.state.tasks.find(k=>k.detail_of===t.id&&isLive(k))||null;
+function runScore(t){
+ if(typeof t.last?.running_score==='number')return t.last.running_score;
+ const k=kidOf(t),l=k?.last||{};if(!k)return null;
+ const key=k.vitals?.find(p=>p.id==='main')?.key||['running_score','score','accuracy','acc'].find(x=>typeof l[x]==='number');
+ const v=l[key];
+ return typeof v==='number'&&(isCont(slOf(t))||(v>=0&&v<=1))?v:null;
+}
+
 // ---------- the finding: what happened, in numbers. Never the last note (that lives in the Log), except a failure's error.
 function finding(t,d){
  const pr=t.progress||{},sm=t.summary||{},vc=d?.vs_champion,sl=t.slice?esc(short(t.slice)):'';
@@ -42,8 +53,8 @@ function finding(t,d){
   return `; ${plural(sub.length,'sub-task')}${live?`, ${live} still running`:bad?`, ${bad} did not finish cleanly`:', all done'}`})():'';
  if(t.status==='stalled')return `<b class="neg">Stalled: silent for ${silent(t)}</b>${prog?`, stopped at ${prog} (${(100*pr.done/pr.total).toFixed(0)}%)`:''}.`;
  if(t.status==='running'){
-  const run=t.last?.running_score;
-  const bits=[prog&&`<b>${prog}</b> done (${(100*pr.done/pr.total).toFixed(0)}%)`,run!=null&&`scoring ${scoreOf(run,slOf(t))} so far${sl?' on '+sl:''}`,t.eta&&(t.health?.state==='over'?`<b class="warn">will not finish in its budget</b>: the estimate is ${wbClock(t.eta.finish_at)}, the budget ends at ${wbClock(t.created+t.budget_s)}`:`finishes in about ${wbSpan(t.eta.eta_s)}, at ${wbClock(t.eta.finish_at)}`)].filter(Boolean);
+  const run=runScore(t),k=kidOf(t);
+  const bits=[prog&&`<b>${prog}</b> done (${(100*pr.done/pr.total).toFixed(0)}%)`,run!=null&&`scoring ${scoreOf(run,slOf(t))} so far${sl?' on '+sl:''}`,t.eta&&(t.health?.state==='over'?`<b class="warn">will not finish in its budget</b>: the estimate is ${wbClock(t.eta.finish_at)}, the budget ends at ${wbClock(t.created+t.budget_s)}`:`finishes in about ${wbSpan(t.eta.eta_s)}, at ${wbClock(t.eta.finish_at)}`),k&&isLive(k)&&`counted live by <a class="ln" href="#task/${enc(k.id)}">${esc(k.title)}</a>`].filter(Boolean);
   return (bits.length?bits.join(', ')+'. ':'')+`Running for ${B?wbSpanB(now()-t.created):wbSpan(now()-t.created)}${budget}${subTxt}.`;
  }
  const took=t.ended?(B?wbSpanB:wbSpan)(t.ended-t.created):null;
@@ -69,7 +80,7 @@ function kpiStrip(t,d){
  const pr=t.progress||{},sm=t.summary||{},vc=d?.vs_champion,live=isLive(t),[bt,bc]=budgetLine(t);
  const items=[];
  if(t.kind==='eval'&&(sm.n||pr.total)){
-  const sc=sm.score??t.last?.running_score,n=sm.n??pr.done,sl=slOf(t),c=isCont(sl);
+  const sc=sm.score??runScore(t),n=sm.n??pr.done,sl=slOf(t),c=isCont(sl);
   const mt=c&&timedSl(sl);
   items.push([live?(mt?'Mean time so far':c?'Mean so far':'Score so far'):(mt?'Mean time':c?'Mean score':'Score'),scoreOf(sc,sl),sc!=null?(c?`over ${n.toLocaleString()}`:`${Math.round(sc*n).toLocaleString()} of ${n.toLocaleString()}`):'']);
   if(vc&&vc.delta!=null)items.push(['Against the champion',c?`<span class="${tone(vc)}">${cDelta(vc.delta,sl)}</span>`:`<span class="${tone(vc)}">${pts(vc.delta)}</span><small>pts</small>`,c?`${cNum(vc.lo)} to ${cNum(vc.hi)}, 90% CI`:`${pts(vc.lo)} to ${pts(vc.hi)}, 90% CI`]);
@@ -266,7 +277,7 @@ function siblings(t){
 VIEWS.task=(id)=>{
  if(S.tkLogFor!==id){S.tkLogFor=id;S.tkLogAll=false;S.tkCfgAll=false}
  const sx=S.state,d=S.detail&&S.detail.task?.id===id?S.detail:null;
- const t0=byId(id),t=d?{...t0,...d.task,...(t0?.eta!==undefined?{eta:t0.eta,health:t0.health}:{})}:t0;
+ const t0=byId(id),t=d?{...t0,...d.task,...(t0?.eta!==undefined?{eta:t0.eta,health:t0.health}:{}),...(t0?.progress_from?{progress:t0.progress,progress_from:t0.progress_from}:{})}:t0;
  CUR=t?slOf(t):null;
  if(t?.status==='failed')wbMarkSeen(t.id);
  if(!t)return page({title:'Task not found',crumbs:[['Archive','#archive'],['Not found']],finding:`No task <span class="id">${esc(id)}</span> in this ledger.`})+panel('',empty('Nothing to show','<a class="ln" href="#archive">Back to the archive</a>'));
