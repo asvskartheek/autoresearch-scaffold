@@ -81,6 +81,10 @@
  .wb-eta{margin-left:0}
 }
 @media (max-width:640px){
+ /* finished chips: one swipeable line, not a stack above the running jobs */
+ .wb-strip{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+ .wb-strip::-webkit-scrollbar{display:none}
+ .wb-chip{flex:none;max-width:78%}
  .wb-vit,.wb-vit.n2{grid-template-columns:1fr}
  .wb-vit .wb-pn{grid-column:auto!important}
  .wb-mini{flex:1 1 100%;order:5}
