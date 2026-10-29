@@ -26,38 +26,70 @@ class Teach(unittest.TestCase):
 
     def test_methods_and_tasks_hide_truth(self):
         self.assertEqual(teach.methods_for(self.gate), ["predict", "sketch"])  # a gate asks pass or fail
-        for m in teach.METHODS[1:]:
-            t = json.dumps(teach.task(self.gate, m))
-            self.assertNotIn('"truth"', t)
-        self.assertNotIn("\"delta\":", json.dumps(teach.task(self.gate, "code")))  # the line to write is the answer
+        self.assertEqual(teach.methods_for(self.ci), list(teach.BEFORE))
+        for c in (self.gate, self.ci):
+            for m in teach.methods_for(c)[1:]:
+                self.assertNotIn('"truth"', json.dumps(teach.task(c, m)))
+                self.assertNotIn('"delta"', json.dumps(teach.task(c, m)))
         b = learn.brief(self.p, 0, "ann")
         g = next(c for c in b["cards"] if c["id"] == self.gate["id"])
-        self.assertIn(g["method"], g["methods"]); self.assertNotIn("reveal", g)
+        self.assertIn(g["method"], g["methods"]); self.assertNotIn("reveal", g); self.assertNotIn("step", g)
         self.assertIn("profile", b["teach"])
 
     def test_no_task_depends_on_the_truth(self):
-        """Change every number the card is graded on: each method's task stays the same, so none can carry it."""
+        """Change every number the card is graded on: each pre-reveal task stays the same, so none can carry it."""
         for c in (self.gate, self.ci):
             other = dict(c, truth="Fail" if c["truth"] == "Pass" else 12.5,
                          viz=dict(c["viz"], delta=-7.5, lo=-9.0, hi=-6.0, wins=1, losses=4))
             for m in teach.methods_for(c)[1:]:
                 self.assertEqual(teach.task(c, m), teach.task(other, m), m)
-        self.assertEqual(teach.methods_for(self.ci), list(teach.METHODS))
         hill = next(x for x in learn.cards(self.p) if x["id"].startswith("hill|"))
-        self.assertNotIn("spot", teach.methods_for(hill))  # a bars figure is its card's answer
+        self.assertEqual(teach.steps_for(hill), [])  # a bars figure has no counts to work on
 
-    def test_counts_methods_only_where_counts_give_the_delta(self):
+    def test_steps_use_the_cards_own_numbers_after_the_reveal(self):
+        v = self.ci["viz"]  # rej1 against base on the target: 0 fixed, 2 broken of 20
+        self.assertIn("code", teach.steps_for(self.ci))
+        self.assertEqual(teach.step_task(self.ci, "code")["vars"], dict(fixed=v["wins"], broken=v["losses"], n=v["n"]))
+        self.assertEqual(self.post(method="code", step=True, answer="100*(fixed-broken)/n")[0], 409)  # answer first
+        code, d = self.post(method="sketch", answer=dict(delta=-10, lo=-25, hi=2))
+        self.assertEqual(code, 200)
+        st = d["card"]["step"]
+        self.assertIn(st["method"], teach.steps_for(self.ci)); self.assertIn("task", st)
+        code, d = self.post(method="code", step=True, answer="100*(fixed-broken)/n")
+        self.assertEqual(code, 200); self.assertTrue(d["step"]["hit"]); self.assertEqual(d["attempt"]["phase"], "step")
+        again = self.post(method="code", step=True, answer="1")[1]
+        self.assertTrue(again["step"]["hit"])  # the first step answer stands
+        b = learn.brief(self.p, 0, "ann")
+        c = next(x for x in b["cards"] if x["id"] == self.ci["id"])
+        self.assertTrue(c["step"]["done"]); self.assertEqual(c["pred"]["method"], "sketch")
+
+    def test_pooled_scores_get_no_counts_step(self):
         pooled = dict(self.ci, viz=dict(self.ci["viz"], delta=self.ci["viz"]["delta"] + 1.5))  # several runs per id
-        self.assertEqual([m for m in teach.methods_for(pooled) if m in ("spot", "code")], [])
-        self.assertIn("prototype", teach.methods_for(pooled))
+        self.assertNotIn("code", teach.steps_for(pooled))
+        self.assertNotIn("counts", teach._spot_parts(pooled))
         cont = dict(self.ci, viz=dict(self.ci["viz"], unit="ms"))
-        self.assertFalse({"spot", "code", "prototype"} & set(teach.methods_for(cont)))
+        self.assertNotIn("code", teach.steps_for(cont))
 
-    def test_prototype_is_answerable_on_a_zero_delta_card(self):
-        zero = dict(self.ci, id="rej|zero", viz=dict(self.gate["viz"], delta=0.0, lo=0.0, hi=0.0, wins=0, losses=0))
-        need = teach._n_needed(teach._example(zero))
-        self.assertTrue(4 <= need < float("inf"))
-        self.assertTrue(teach.grade(zero, "prototype", round(need))["hit"])
+    def test_spot_is_a_variant_of_the_real_figure(self):
+        v, wrong, why = teach._spot(self.ci)
+        self.assertNotIn("delta", teach._spot_parts(self.ci))  # a number card shows its delta in the answer
+        self.assertIn(wrong, teach._spot_parts(self.ci)); self.assertTrue(why)
+        self.assertEqual(v["n"], self.ci["viz"]["n"])
+        g = teach.grade_step(self.ci, "spot", wrong)
+        self.assertTrue(g["hit"]); self.assertEqual(g["show"]["why"], why)
+        q = dict(id="q|x", type="choice", truth="Can't tell yet", viz=dict(kind="ci", unit="pts", delta=1.0, lo=-1.5, hi=2.5, n=100, wins=3, losses=2))
+        self.assertNotIn("delta", teach._spot_parts(q))  # −1 sits inside [−1.5, 2.5]: a flipped delta would not be wrong
+
+    def test_ndrag_finds_when_the_result_stops_being_noise(self):
+        c = dict(self.ci, viz=dict(kind="ci", unit="pts", delta=-3.16, lo=-5.0, hi=-1.32, n=185, wins=12, losses=13, better=1))
+        t = teach.step_task(c, "ndrag")
+        self.assertEqual((t["dir"], t["n"]), ("down", 185))
+        need = teach._n_needed(c["viz"])
+        self.assertTrue(need < 185)
+        self.assertTrue(teach.grade_step(c, "ndrag", need * 1.2)["hit"])
+        self.assertFalse(teach.grade_step(c, "ndrag", 185)["hit"])
+        zero = dict(c, viz=dict(c["viz"], delta=0.0, lo=0.0, hi=0.0))
+        self.assertNotIn("ndrag", teach.steps_for(zero))
 
     def test_sketch_axis_is_the_cards_own_scale(self):
         c = self.gate
@@ -98,73 +130,82 @@ class Teach(unittest.TestCase):
         self.assertEqual(g["truth"], 28); self.assertNotIn("28", g["ctx"])
 
     def test_code_is_graded_safely(self):
-        v = teach._example(self.ci)
-        self.assertTrue(teach.grade(self.ci, "code", "100 * (fixed - broken) / n")["hit"])
-        self.assertFalse(teach.grade(self.ci, "code", "(fixed + broken) / n")["hit"])
+        v = self.ci["viz"]
+        self.assertTrue(teach.grade_step(self.ci, "code", "100 * (fixed - broken) / n")["hit"])
+        self.assertFalse(teach.grade_step(self.ci, "code", "(fixed + broken) / n")["hit"])
         self.assertIsNone(teach.safe_eval("__import__('os').system('true')", dict(n=1)))
         self.assertIsNone(teach.safe_eval("n ** 99999", dict(n=2)))
-        self.assertEqual(teach.safe_eval("(fixed-broken)/n*100", dict(fixed=v["wins"], broken=v["losses"], n=v["n"])), 100 * (v["wins"] - v["losses"]) / v["n"])
-
-    def test_code_refuses_non_finite_and_bare_constants(self):
-        v = teach._example(self.ci)
         for bad in ("1e309", "1e308*10", "0*1e309", "fixed/0"):
             self.assertIsNone(teach.safe_eval(bad, dict(fixed=1, broken=0, n=1)))
-            g = teach.grade(self.ci, "code", bad)
+            g = teach.grade_step(self.ci, "code", bad)
             self.assertFalse(g["hit"]); json.dumps(g, allow_nan=False)
-        const = repr(100 * (v["wins"] - v["losses"]) / v["n"])
-        self.assertFalse(teach.grade(self.ci, "code", const)["hit"])  # the value typed in is not a line
+        const = teach.grade_step(self.ci, "code", repr(100 * (v["wins"] - v["losses"]) / v["n"]))
+        self.assertFalse(const["hit"]); self.assertTrue(const["show"]["const"])  # the value typed in is not a line
         self.assertEqual(teach._f("nan"), None); self.assertEqual(teach._f("inf", 0), 0)
 
-    def test_spot_prototype_explain(self):
-        s, wrong = teach._spot_ci(self.ci)
-        self.assertTrue(teach.grade(self.ci, "spot", wrong)["hit"])
-        self.assertFalse(teach.grade(self.ci, "spot", "nope")["hit"])
-        need = teach._n_needed(teach._example(self.ci))
-        self.assertTrue(teach.grade(self.ci, "prototype", need * 1.2)["hit"])
-        self.assertFalse(teach.grade(self.ci, "prototype", need * 3)["hit"])
+    def test_gate_sketch_needs_the_interval_too(self):
+        g = self.gate  # Pass, and its interval clears zero
+        self.assertTrue(teach.grade(g, "sketch", dict(delta=4, lo=1, hi=8))["hit"])
+        self.assertFalse(teach.grade(g, "sketch", dict(delta=4, lo=-1, hi=8))["hit"])  # right verdict, wrong side of zero
 
-    def test_explain_checks_meaning_not_keywords(self):
-        loss = dict(id="rej|l", truth=-0.46, viz=dict(kind="ci", unit="pts", delta=-0.46, lo=-1.5, hi=0.6, better=1, n=1319, wins=6, losses=12))
-        g = lambda c, s: teach.grade(c, "explain", s)["hit"]
-        self.assertFalse(g(loss, "blah blah so yes"))
-        self.assertFalse(g(loss, "It improved a lot, a clearly significant win, close to perfect."))
-        self.assertFalse(g(loss, "Worse, and clearly significant."))  # the way is right, the noise claim is not
-        self.assertTrue(g(loss, "Slightly worse, but the interval crosses zero, so it could be noise."))
-        self.assertTrue(g(loss, "It fixed 6 and broke 12, within the noise."))
-        gain = dict(loss, viz=dict(loss["viz"], delta=5.2, lo=3.8, hi=6.7))
-        self.assertTrue(g(gain, "A real gain: the interval clears zero."))
-        self.assertFalse(g(gain, "Better, but not significant."))
-        self.assertEqual(teach.task(loss, "explain")["ideas"], list(teach.IDEAS))
+    def test_explain_is_checked_by_the_person_against_the_reveal(self):
+        code, d = self.post(method="explain", answer="It got worse, but it could be noise.")
+        self.assertEqual(code, 200)
+        self.assertIsNone(d["attempt"]["hit"]); self.assertEqual(d["card"]["selfcheck"], list(teach.IDEAS))
+        self.assertNotIn("could be noise", json.dumps(teach.attempts(self.p, "ann")))  # the sentence is not kept
+        self.assertEqual(teach.answer(self.p, {"viewer": "ann", "card": self.ci["id"], "method": "explain", "self": [True]})[0], 400)
+        code, d = teach.answer(self.p, {"viewer": "ann", "card": self.ci["id"], "method": "explain", "self": [True, False]})
+        self.assertEqual(code, 200); self.assertFalse(d["attempt"]["hit"])
+        prof = teach._person(self.p, "ann")[1]
+        self.assertEqual((prof["methods"]["explain"]["n"], prof["methods"]["explain"]["hits"]), (1, 0))
+        b = learn.brief(self.p, 0, "ann")
+        c = next(x for x in b["cards"] if x["id"] == self.ci["id"])
+        self.assertNotIn("selfcheck", c); self.assertFalse(c["pred"]["hit"])
         # writing is never preferred over doing at equal results
-        prof = teach.profile([], [])
-        self.assertLess(teach.score(prof, "explain"), min(teach.score(prof, m) for m in ("sketch", "spot", "prototype", "code")))
-        self.assertNotIn("explain", teach.methods_for(self.gate))
+        p0 = teach.profile([], [])
+        self.assertLess(teach.score(p0, "explain")[0], teach.score(p0, "sketch")[0])
 
     def test_answer_reveals_and_counts(self):
-        code, d = self.post(method="code", answer="100*(fixed-broken)/n", ms=4000)
-        self.assertEqual(code, 200); self.assertTrue(d["attempt"]["hit"]); self.assertIn("reveal", d["card"])
-        again = self.post(method="spot", answer="delta")[1]
-        self.assertEqual(again["attempt"]["method"], "code")  # the first answer stands
+        code, d = self.post(method="sketch", answer=dict(delta=-10, lo=-20, hi=-1), ms=4000)
+        self.assertEqual(code, 200); self.assertIn("reveal", d["card"])
+        again = self.post(method="explain", answer="whatever it was")[1]
+        self.assertEqual(again["attempt"]["method"], "sketch")  # the first answer stands
         b = learn.brief(self.p, 0, "ann")
         g = next(c for c in b["cards"] if c["id"] == self.ci["id"])
-        self.assertEqual(g["pred"]["method"], "code"); self.assertIn("reveal", g)
-        self.assertEqual(b["teach"]["profile"]["methods"]["code"]["hits"], 1)
-        self.assertEqual((b["calibration"]["all_n"], b["calibration"]["all_hits"]), (b["calibration"]["n"] + 1, b["calibration"]["hits"] + 1))
+        self.assertEqual(g["pred"]["method"], "sketch"); self.assertIn("reveal", g)
+        self.assertEqual(b["teach"]["profile"]["methods"]["sketch"]["n"], 1)
+        self.assertEqual(b["calibration"]["all_n"], b["calibration"]["n"] + 1)
 
-    def test_chooser_adapts(self):
-        prof = teach.profile([dict(t=i, method="sketch", hit=True) for i in range(5)], [])
-        self.assertNotEqual(teach.choose(prof, self.ci, "ann"), "sketch")  # easy now and used twice running
-        skip = self.post(method="spot", skip=True)[1]
-        self.assertNotEqual(skip["method"], "spot")
+    def test_two_misses_switch_the_method_and_say_why(self):
+        seq = lambda a, b: [dict(t=0, method="sketch", hit=a), dict(t=1, method="predict", hit=b), dict(t=2, method="sketch", hit=a)]
+        miss, hit = teach.profile(seq(False, True), []), teach.profile(seq(True, False), [])
+        m_miss, why = teach.choose(miss, teach.BEFORE, "ann", "x")
+        m_hit, _ = teach.choose(hit, teach.BEFORE, "ann", "x")
+        self.assertEqual(m_hit, "sketch"); self.assertNotEqual(m_miss, "sketch")
+        self.assertEqual(why, "Sketch missed twice")
+
+    def test_a_deck_adapts_to_misses_and_hits(self):
+        """Two people answer the same nine cards, one always wrong, one always right: their methods part ways."""
+        def deck(right):
+            rows, seq = [], []
+            for i in range(9):
+                prof = teach.profile(rows, [])
+                m, _ = teach.choose(prof, list(teach.BEFORE), "p", f"c{i}", deck={x: seq[-3:].count(x) for x in teach.BEFORE})
+                seq.append(m)
+                rows.append(dict(t=i, method=m, hit=right, phase="answer"))
+            return seq
+        wrong, right = deck(False), deck(True)
+        self.assertNotEqual(wrong, right)
+        self.assertTrue(all(not (a == b == c) for a, b, c in zip(wrong, wrong[1:], wrong[2:])))
 
     def test_steps_up_once_a_method_is_easy(self):
         prof = teach.profile([], [dict(t=i, hit=True) for i in range(5)])  # predict: 5 of the last 5 right
-        base = teach.profile([], [dict(t=i, hit=True) for i in range(3)])
-        for m in ("sketch", "spot", "prototype", "code"):
-            self.assertGreater(teach.score(prof, m), teach.score(base, m), m)
-        self.assertNotEqual(teach.choose(prof, self.ci, "ann"), "predict")
+        self.assertNotEqual(teach.choose(prof, list(teach.BEFORE), "ann", "x")[0], "predict")
+        self.assertGreater(teach.score(prof, "sketch")[0], teach.score(teach.profile([], []), "sketch")[0])
 
-    def test_another_way_ends_when_nothing_is_left(self):
+    def test_another_way(self):
+        skip = self.post(method="sketch", skip=True)[1]
+        self.assertNotEqual(skip["method"], "sketch")
         g = self.gate["id"]  # predict and sketch only
         d = self.post(card=g, method="sketch", skip=True)[1]
         self.assertEqual((d["method"], d["others"]), ("predict", 0))
@@ -174,6 +215,12 @@ class Teach(unittest.TestCase):
         self.assertEqual(len(teach.attempts(self.p, "ann")), n)  # no skip logged
         b = learn.brief(self.p, 0, "ann")
         self.assertEqual(next(c for c in b["cards"] if c["id"] == g)["others"], 0)
+
+    def test_a_prediction_gets_its_step(self):
+        _, r = learn.predict(self.p, dict(viewer="bo", card=self.ci["id"], guess=-5, conf=0.6))
+        self.assertIn(r["card"]["step"]["method"], teach.steps_for(self.ci))
+        code, d = teach.answer(self.p, dict(viewer="bo", card=self.ci["id"], method=r["card"]["step"]["method"], step=True, skip=True))
+        self.assertEqual(code, 200)
 
 
 if __name__ == "__main__":
