@@ -15,13 +15,17 @@ const endLabel=t=>t.status==='completed'?'done':t.status;
 const partialEval=t=>t.kind==='eval'&&(t.status==='done'||t.status==='completed')&&t.complete===false;
 // [label, class] for a task's state, sentence case
 const wbState=t=>partialEval(t)?['Partial','partial']:({done:['Done','done'],completed:['Done','done'],failed:['Failed','failed'],budget:['Out of time','budget'],stalled:['Stalled','stalled'],running:['Running','running']})[t.status]||[wbKind(t.status),t.status];
+// a duration next to a budget: to the second under 10 min ("1 min 15 s of a 1 min 15 s budget"), else as span()
+const wbSpanB=s=>{const r=Math.round(s);return r>=60&&r<600&&r%60?`${Math.floor(r/60)} min ${r%60} s`:wbSpan(s)};
+// the budget worth showing: evals get a 1 h deadline by default, which only matters once half of it is used
+const wbBudget=t=>!t.budget_s?null:t.kind==='eval'&&t.budget_s===3600&&((t.ended||now())-t.created)<1800?null:t.budget_s;
 // elapsed against the time budget: [text, cls]; a live job warns past 80% and goes red past the cap; a finished one is
 // red only when its budget stopped it
 function budgetLine(t){
  const el=(t.ended||now())-t.created;
  if(!t.budget_s)return [wbSpan(el),''];
  const f=el/t.budget_s;
- return [`${wbSpan(el)} of ${wbSpan(t.budget_s)}`,t.ended?(t.status==='budget'?'neg':''):f>=1?'neg':f>=.8?'warn':''];
+ return [`${wbSpanB(el)} of ${wbSpanB(t.budget_s)}`,t.ended?(t.status==='budget'?'neg':''):f>=1?'neg':f>=.8?'warn':''];
 }
 const silent=t=>wbSpan(now()-t.heartbeat);
 // when a job stops: its predicted finish, or the end of its time budget if that comes first
