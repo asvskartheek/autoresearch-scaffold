@@ -80,7 +80,7 @@ def _split(tok: str, min_n: int = 12) -> str:
 def _word(tok: str) -> str:
     if re.fullmatch(r"[0-9a-f]{7,}", tok.lower()) and re.search(r"\d", tok):
         return tok  # a hash
-    if re.search(r"[-_@#]|[A-Za-z][./][A-Za-z]|[a-z][A-Z]", tok) or not re.search(r"[A-Za-z]", tok) or _TECH.fullmatch(tok):
+    if re.search(r"[-_@#]|[A-Za-z0-9][./][A-Za-z]|[a-z][A-Z]", tok) or not re.search(r"[A-Za-z]", tok) or _TECH.fullmatch(tok):
         return tok  # an identifier, a path or slice name, a number, base64
     m = re.fullmatch(r"(\d*)([A-Z]{2,})(\d{2,})?([a-z]{3,})", tok)  # GRPO192steps, 90CInotpositive
     if m and (m.group(3) or _is(m.group(4)) or _split(m.group(4), 7) != m.group(4)):
