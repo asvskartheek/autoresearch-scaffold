@@ -79,6 +79,8 @@ def due(mem: dict) -> list[str]:
 
 def record(p: Project, body: dict) -> tuple[int, dict]:
     item = str(body.get("item") or "")
+    if not isinstance(body.get("hit"), bool):
+        return 400, dict(error="hit must be true or false")
     if item not in IDS:
         return 404, dict(error="unknown lesson")
     viewer = str(body.get("viewer") or "anon")[:60]
@@ -159,7 +161,7 @@ def lesson_goal(p, L, learn):
     else:
         N, have, need = 100, 80, 90
         fig = dict(kind="goal", N=N, have=have, need=need, slice="full", title="Example goal", example=True)
-    left = need - have
+    left = max(0, need - have)
     return dict(say="A goal is one target on one frozen slice. Work counts when it moves that number.", fig=fig,
                 checks=[_check(f"The champion gets {_n(have)} of {_n(N)} right. The goal needs {_n(need)}. How many more?",
                                [left, need, have, left + 10], left, f"{_n(need)} − {_n(have)} = {_n(left)}."),
@@ -284,7 +286,7 @@ def lesson_gate(p, L, learn):
         v = _ci_of(p, learn, c)
         k = 100 if v["unit"] == "pts" else (-1 if learn._neg(p, c["slice"]) else 1)
         fig = dict(kind="gate", rule=c["rule"], bar=k * (c.get("threshold") or 0), delta=v["delta"], unit=v["unit"],
-                   slice=learn._short(c["slice"]), model=learn._title(p, c["model"]), rung=c["rung"])
+                   slice=learn._short(c["slice"]), model=learn._title(p, c["model"]), rung=c["rung"], better=-1 if k < 0 else 1)
         ok = c["state"] == "pass"
         q = f"{fig['model']} on {fig['slice']}: it {learn._rule_text(p, c)}. Δ {learn.sd(p, c['slice'], c['delta'])}. Pass or fail?"
     else:
