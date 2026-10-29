@@ -144,10 +144,12 @@ async function shareMenu(btn){
  document.body.append(pop);const r=btn.getBoundingClientRect();pop.style.top=r.bottom+6+'px';pop.style.right=Math.max(8,innerWidth-r.right)+'px';
  setTimeout(()=>addEventListener('click',function off(e){if(!pop.contains(e.target)){pop.remove();removeEventListener('click',off)}}),0);
 }
-// who else has this project open: their faces, ringed when they are on this same view
+// who else has this project open: their faces, ringed when they are on this same view. Faces overlap (each sits in its
+// own link, so the overlap is set here) and cap at 3 on a phone, 5 wider, then "+N", so they never squeeze the crumbs
 function hereFaces(){
  if(!window.ARXP)return '';const cur=location.hash.slice(1)||'overview',hs=ARXP.here();if(!hs.length)return '';
- return `<span class="px-here" aria-label="${hs.length} more here">${hs.slice(0,5).map(x=>{const pp=(x.route||'').startsWith('papers/');return `<a href="${pp?esc(x.route):'#'+esc(x.route||'overview')}" title="${esc(x.name)} · ${pp?'reading the paper '+esc(x.route.slice(7)):esc(routeLabel((x.route||'overview').split('/')[0]))}">${ARXP.face(x.id,x.name,x.route===cur?'on':'')}</a>`}).join('')}${hs.length>5?`<span class="sub">+${hs.length-5}</span>`:''}</span>`;
+ const cap=innerWidth<600?3:5,shown=hs.length>cap?cap:hs.length;
+ return `<span class="px-here" style="flex:none" aria-label="${hs.length} more here">${hs.slice(0,shown).map((x,i)=>{const pp=(x.route||'').startsWith('papers/');return `<a href="${pp?esc(x.route):'#'+esc(x.route||'overview')}" style="display:inline-flex;position:relative;z-index:${shown-i}${i?';margin-left:-6px':''}" title="${esc(x.name)} · ${pp?'reading the paper '+esc(x.route.slice(7)):esc(routeLabel((x.route||'overview').split('/')[0]))}">${ARXP.face(x.id,x.name,x.route===cur?'on':'')}</a>`}).join('')}${hs.length>shown?`<span class="sub" style="margin-left:4px;font-size:12px" title="${esc(hs.slice(shown).map(x=>x.name).join(', '))}">+${hs.length-shown}</span>`:''}</span>`;
 }
 // light -> dark -> system (follow the OS) -> light
 function toggleTheme(){
