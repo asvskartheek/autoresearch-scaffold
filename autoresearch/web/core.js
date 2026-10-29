@@ -19,7 +19,7 @@ const DASH='<span class="dash">—</span>';
 const pct=x=>x==null?'—':(100*x).toFixed(1)+'%';
 const pts=x=>x==null?'—':(x>0?'+':x<0?'−':'')+Math.abs(100*x).toFixed(1);
 const money=x=>x==null?'—':x===0?'$0':(x<0.01?'$'+x.toFixed(4):'$'+x.toFixed(3));
-const secs=x=>x==null?'—':(x<10?x.toFixed(2):x.toFixed(1))+'s';
+const secs=x=>x==null?'—':(x<10?x.toFixed(2):x.toFixed(1))+' s';
 const now=()=>S.state?.now||Date.now()/1000;
 // one format app-wide: "26 Oct, 04:53", "2 min", "1 h 39 min", "3 d 4 h", "5 min ago"
 const span=s=>{if(s==null||!isFinite(s))return '—';s=Math.max(0,s);
