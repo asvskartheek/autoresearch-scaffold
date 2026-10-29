@@ -56,7 +56,7 @@ class Remote(unittest.TestCase):
         self.assertEqual(self.req("/api/state", host="127.0.0.1")[0], 200)  # loopback keeps full access
 
     def test_writes_same_origin(self):
-        row = dict(kind="comment", body="hi from Bo", author="Bo", anchor=dict(route="overview"))
+        row = dict(kind="comment", body="hi from Bo", author="Bo", by="p-0b0b0b0b", anchor=dict(route="overview"))
         self.assertEqual(self.req(f"/p/{self.ka}/api/comments", row, cookie=self.tok)[0], 403)  # no Origin
         self.assertEqual(self.req(f"/p/{self.ka}/api/comments", row, cookie=self.tok, origin="http://evil.example")[0], 403)
         self.assertEqual(self.req(f"/p/{self.ka}/api/comments", row, cookie=self.tok, origin=f"http://192.168.7.9:{self.port}")[0], 200)
@@ -68,6 +68,21 @@ class Remote(unittest.TestCase):
         self.assertEqual(share.redact("run /Users/me/proj/scratch/gate.json now"), "run …/scratch/gate.json now")
         body = self.req(f"/p/{self.ka}/api/state", cookie=self.tok)[1].decode()
         self.assertNotIn(str(self.a.root), body)
+
+    def test_guest_identity_and_ownership(self):
+        from autoresearch import comments, features, people
+        people.remember("p-0000cafe", "Owner", self.ka)
+        o = f"http://192.168.7.9:{self.port}"
+        row = dict(kind="comment", body="as owner", author="Owner", by="p-0000cafe", anchor=dict(route="overview"))
+        self.assertEqual(self.req(f"/p/{self.ka}/api/comments", row, cookie=self.tok, origin=o)[0], 403)
+        own = comments.post(self.a, "comment", author="Owner", by="p-0000cafe", body="mine", anchor=dict(route="overview"))
+        for k in ("delete", "edit"):
+            self.assertEqual(self.req(f"/p/{self.ka}/api/comments", dict(kind=k, target=own["id"], body="x", by="p-0b0b0b0b"), cookie=self.tok, origin=o)[0], 403)
+        code, b, _ = self.req(f"/p/{self.ka}/api/comments", dict(kind="comment", body="a guest asks", by="p-0b0b0b0b", anchor=dict(route="overview")), cookie=self.tok, origin=o)
+        self.assertEqual(code, 200)
+        self.assertTrue(features.inbox(self.a)[-1].get("guest"))
+        code, b, _ = self.req(f"/p/{self.ka}/api/questions/add", dict(title="Is it fake", by="Kartheek"), cookie=self.tok, origin=o)
+        self.assertTrue(json.loads(b)["by"].startswith("guest: "))
 
     def test_guest_cannot_rename(self):
         from autoresearch import people
