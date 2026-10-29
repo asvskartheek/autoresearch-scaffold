@@ -206,6 +206,16 @@ function subTasks(t){
  return `<div class="section">${panel('Sub-tasks',sub.map(kidRow).join(''),{meta:`${sub.length}${live?` · ${live===sub.length?'all':live} running`:''}`})}</div>`;
 }
 
+// a note that is a JSON object (a harness's closing record) reads as a small grid of its values, never as raw JSON
+const jsonOf=s=>{if(!/^\s*\{[\s\S]*\}\s*$/.test(s||''))return null;try{const o=JSON.parse(s);return o&&typeof o==='object'&&!Array.isArray(o)?o:null}catch(e){return null}};
+function jsonNote(o){
+ const kv=flat(o).filter(([,v])=>v!=null&&v!==''),word=k=>{const a=k.split('.'),l=a.at(-1);return wbMetric(l)};
+ const v=(k,x)=>{const l=k.split('.').at(-1);if(typeof x==='number')return mval(l,x);if(typeof x==='boolean')return x?'yes':'no';
+  const s=String(x);if(/^[0-9a-f]{32,}$/i.test(s))return `<span class="tk-mono" title="${esc(s)}">${esc(s.slice(0,12))}</span>${copyBtn(s)}`;
+  if(s.includes('/')&&!/\s/.test(s))return `<span class="tk-mono" title="${esc(s)}">${esc(tail(s))}</span>`;return esc(s)};
+ return `<dl class="tk-jn">${kv.map(([k,x])=>`<div><dt>${esc(word(k))}</dt><dd>${v(k,x)}</dd></div>`).join('')}</dl>`;
+}
+
 // ---------- the log: the notes, oldest first, grouped by day; the latest dozen unless asked for all
 function log(t,d){
  const ev=d.events,cap=S.tkLogAll?ev.length:12,shown=ev.slice(-cap),hidden=ev.length-shown.length;
@@ -214,7 +224,7 @@ function log(t,d){
  for(const e of shown){
   const dd=wbDay(e.t);if(dd!==day){day=dd;items+=`<li class="tk-day">${dd}</li>`}
   const lv=e.level==='error'?'<span class="pill neg">Error</span>':e.level==='warn'||e.level==='warning'?'<span class="pill warn">Warning</span>':'';
-  items+=`<li class="tk-e ${esc(e.level)}"><time datetime="${new Date(e.t*1000).toISOString()}" title="${esc(wbWhen(e.t))}, ${esc(wbAgo(e.t))}">${wbClock(e.t)}</time><p>${lv}${esc(e.text??e.msg)}</p></li>`;
+  items+=`<li class="tk-e ${esc(e.level)}"><time datetime="${new Date(e.t*1000).toISOString()}" title="${esc(wbWhen(e.t))}, ${esc(wbAgo(e.t))}">${wbClock(e.t)}</time>${(o=>o?`<div>${lv}${jsonNote(o)}</div>`:`<p>${lv}${esc(e.text??e.msg)}</p>`)(jsonOf(e.text??e.msg))}</li>`;
  }
  return `<div class="section">${panel('Log',`${hidden?`<button class="btn tk-all" onclick="S.tkLogAll=true;render()">Show ${plural(hidden,'earlier note')}</button>`:''}<ol class="tk-log">${items}</ol>`,{meta:plural(ev.length,'note')})}</div>`;
 }
