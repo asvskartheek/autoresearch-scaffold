@@ -243,7 +243,7 @@ svg .ax{stroke:var(--grid)}
  .ph{flex-wrap:wrap;row-gap:6px}.ph .r{flex:1 1 auto;justify-content:flex-end;flex-wrap:wrap}
  h1{font-size:20px}
  .live .clk{display:none}
- .side a.nav{height:44px}.iconbtn{width:40px;height:40px}  /* touch targets */
+ .side a.nav{height:44px;flex:none}.iconbtn{width:40px;height:40px}  /* touch targets; flex:none so the drawer scrolls instead of squeezing rows */
 }
 
 /* ---------- copy and commands */
