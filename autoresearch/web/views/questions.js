@@ -121,14 +121,17 @@ function qPanel(id,ix){
   const L=n.live||{},pr=L.progress,f=pr&&pr.total?Math.min(1,(pr.done||0)/pr.total):null;
   const line=L.status==='failed'?('Agent failed'+(L.error?': '+L.error:'')):L.note||(L.status==='running'?'Agent working':'Queued for an agent');
   h+=`<div class="q-claim agent">${esc(line)}${L.task?` <a class="q-tl" href="#task/${enc(L.task)}">${esc(L.task)}</a>`:''}${f!=null?`<div class="pb"><i style="width:${(100*f).toFixed(1)}%"></i></div>`:''}</div>`;
- }else if(n.claim)h+=`<div class="q-claim ${cls}">${esc(n.claim)}</div>`;
+ }else if(n.claim)h+=`<div class="q-claim ${cls}">${esc(n.claim)}${n.settled_by&&n.settled_by!=='agent'?`<span class="q-by">${esc(n.settled_by)}</span>`:''}</div>`;
  if(n.quote)h+=`<div class="q-quote"><mark>${esc(n.quote)}</mark></div>`;
  h+=qEvidence(n);
- if(w)h+=`<div class="q-acts">${(n.choices||[]).map((c,i)=>`<button class="btn ${i?'':'q-warn'}" data-qpick="${esc(c)}">${esc(c)}</button>`).join('')}</div>`+
-  `<div class="q-form on"><input class="q-in" id="q-ans" aria-label="Your answer" placeholder="Your answer"><button class="btn primary" data-qact="answer">Answer</button></div>`;
+ const live=n.status==='open'||n.status==='agent';
+ if(w&&n.choices?.length)h+=`<div class="q-acts">${n.choices.map((c,i)=>`<button class="btn ${i?'':'q-warn'}" data-qpick="${esc(c)}">${esc(c)}</button>`).join('')}</div>`;
+ if(live)h+=`<div class="q-form ${w?'on':''}" id="q-af"><input class="q-in" id="q-ans" aria-label="Your answer" placeholder="Your answer"><button class="btn primary" data-qact="answer">Answer</button><button class="btn" data-qact="dead">Dead end</button></div>`;
  const ks=ix.kids[id]||[];
  if(ks.length)h+=`<div class="q-kids">${ks.map(k=>{const c=ix.by[k];return `<button class="q-kid" data-qgo="${esc(k)}" data-qnode="${esc(k)}"${c.claim?` data-qtip="${esc(c.claim)}"`:''}><span class="q-sh">${qShape(c)}</span><span>${esc(c.title)}</span></button>`}).join('')}</div>`;
- h+=`<div class="q-acts"><button class="btn primary" data-qact="branch">Ask</button><button class="btn ${QS.read?'on':''}" data-qact="read" aria-expanded="${QS.read}">Read</button>`+
+ h+=`<div class="q-acts"><button class="btn primary" data-qact="branch">Ask</button>`+
+  (live&&!w?`<button class="btn" data-qact="settle">Answer</button>`:'')+(live?`<button class="btn ${n.needs_human?'on':''}" data-qact="flag" aria-pressed="${!!n.needs_human}">Needs you</button>`:`<button class="btn" data-qact="reopen">Reopen</button>`)+
+  `<button class="btn ${QS.read?'on':''}" data-qact="read" aria-expanded="${QS.read}">Read</button>`+
   `${n.model?`<a class="btn" href="#model/${enc(n.model)}">Model</a>`:n.hill?`<a class="btn" href="#hill/${enc(n.hill)}">Hill</a>`:n.goal?`<a class="btn" href="#goal/${enc(n.goal)}">Goal</a>`:''}</div>`+
   `<div class="q-form" id="q-bf"><input class="q-in" id="q-bin" aria-label="Question" maxlength="120"><button class="btn primary" data-qact="ask">Ask</button></div>`;
  if(QS.read)h+=qRead(id,ix);
@@ -190,11 +193,19 @@ document.addEventListener('click',async e=>{
  if(g){e.preventDefault();g.closest('details')?.removeAttribute('open');qGo(g.dataset.qgo);return}
  const a=e.target.closest('[data-qact]');
  const pick=e.target.closest('[data-qpick]');
- if(pick||a?.dataset.qact==='answer'){
-  const claim=pick?pick.dataset.qpick:$('#q-ans')?.value.trim();if(!claim)return;
-  try{await qPost('answer',{id:qFocus(qIndex(),route().arg),claim:pick?`${qName()}: ${claim}.`:claim});await qLoad(true)}catch(err){alert(err.message)}
+ const act=a?.dataset.qact,id=()=>qFocus(qIndex(),route().arg);
+ if(pick||act==='answer'||act==='dead'){
+  // the claim is the answer itself; who gave it is stored as settled_by and shown beside it
+  const v=pick?pick.dataset.qpick:$('#q-ans')?.value.trim();if(!v)return;
+  const claim=/[.?!]$/.test(v)?v:v+'.';
+  try{await qPost(act==='dead'?'dead':'answer',{id:id(),claim});await qLoad(true)}catch(err){alert(err.message)}
   return}
  if(!a)return;
+ if(act==='settle'){$('#q-af').classList.toggle('on');$('#q-ans')?.focus();return}
+ if(act==='reopen'||act==='flag'){
+  const n=qIndex().by[id()];
+  try{await qPost(act,{id:id(),on:act==='flag'?!n?.needs_human:undefined});await qLoad(true)}catch(err){alert(err.message)}
+  return}
  if(a.dataset.qact==='branch'){$('#q-bf').classList.add('on');$('#q-bin').focus();return}
  if(a.dataset.qact==='read'){QS.read=!QS.read;render(true);return}
  if(a.dataset.qact==='ask'){
