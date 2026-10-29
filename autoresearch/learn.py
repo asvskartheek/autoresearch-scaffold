@@ -721,20 +721,32 @@ def _why_empty(p: Project) -> str | None:
     return None if done else "No finished runs on a current slice."
 
 
+def aliases(viewer: str) -> set:
+    """A person id (people.py) also owns what they did under their name before ids existed."""
+    from . import people
+    n = (people.roster().get(viewer) or {}).get("name") if people.ID.match(viewer or "") else None
+    return {n} if n else set()
+
+
 def brief(p: Project, since: float = 0, viewer: str = "anon") -> dict:
+    from . import teach
     p._gates = {}
     with p.snapshot():
         cs = cards(p, since)
-        preds = predictions(p, viewer)
+        al = aliases(viewer)
+        preds = [r for v in {viewer} | al for r in predictions(p, v)]
         mine = {r["card"]: r for r in preds}
         # a predicted card that has since dropped out of the window still shows when it is open
         extra = [card(p, r["card"]) for r in preds if r.get("truth") is None and not r.get("resolved") and r["card"] not in {c["id"] for c in cs}]
         cs += [c for c in extra if c]
-        return dict(now=_now(), since=since, viewer=viewer, cards=[public(c, mine.get(c["id"])) for c in cs],
+        pub = [public(c, mine.get(c["id"])) for c in cs]
+        prof = teach.attach(p, cs, pub, viewer, al)
+        return dict(now=_now(), since=since, viewer=viewer, cards=pub,
                     empty=None if cs else _why_empty(p),
                     concepts=concepts(p), calibration=calibration(preds),
                     understanding=understanding(p, viewer),
-                    open=[r for r in preds if r.get("hit") is None])
+                    open=[r for r in preds if r.get("hit") is None],
+                    teach=dict(profile=prof, labels=teach.LABEL))
 
 
 @features.get("/api/brief")

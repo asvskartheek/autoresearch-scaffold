@@ -24,7 +24,7 @@ STATE: list = []
 CLI: list = []
 PROMPTS: dict = {}
 
-MODULES = ("people", "share", "questions", "comments", "learn", "reference", "intake", "vitals", "answer")
+MODULES = ("people", "share", "questions", "comments", "learn", "teach", "reference", "intake", "vitals", "answer")
 
 
 def load() -> None:
