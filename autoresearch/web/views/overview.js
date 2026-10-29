@@ -57,8 +57,18 @@ function ovNextOf(k,g){
  if(f)return [`Failed ${esc(f)}`,`arx reject ${k} --reason "failed the ${f} rung"`,'neg'];
  const r=nx.find(runTask);
  if(r)return [runChip(r),`arx gate ${k}`,''];
- if(nx.length)return [`<span class="mono" title="${esc(nx.map(x=>short(x.slice)).join(', '))}">${esc(short(nx[0].slice))}</span>`,`arx gate ${k}`,''];
+ // who runs next, as on the model page chip: the champion's baseline or this candidate
+ if(nx.length)return [`<span title="${esc(nx.map(x=>(x.model!==k?'champion':'this model')+' on '+short(x.slice)).join(', '))}"><span class="faint">${nx[0].model!==k?'champion':'this'} on </span><span class="mono">${esc(short(nx[0].slice))}</span></span>`,`arx gate ${k}`,''];
+ if(!g.champion&&!S.state.champion)return ['<span class="faint">needs a champion</span>','',''];
  return ['',`arx gate ${k}`,''];
+}
+// what tells one model from others shown under the same name: the parts of its id the others do not share
+// (thinking4b-numeric32768-v1 vs thinking4b-numeric8192-v1 reads numeric32768)
+function ovTell(k,others){
+ const T=x=>String(x).split(/([-_+.])/),a=T(k),bs=others.map(T);
+ let i=0;while(i<a.length&&bs.every(b=>b[i]===a[i]))i++;
+ let j=0;while(j<a.length-i&&bs.every(b=>b.length-j>i&&b[b.length-1-j]===a[a.length-1-j]))j++;
+ return a.slice(i,a.length-j).join('').replace(/^[-_+.]+|[-_+.]+$/g,'')||k;
 }
 function ovSortBy(k){const s=S.ovSort||{k:'score',d:-1};S.ovSort={k,d:s.k===k?-s.d:(k==='ended'||k==='score'?-1:1)};render()}
 function ovPickSlice(name){S.lbSlice=name;S.ovLbAll=false;render()}
@@ -94,18 +104,19 @@ VIEWS.overview=()=>{
  if(gs.length)h+=panel('Goals',`<div class="ov-gl">${gs.map(ovGoal).join('')}</div>`,{cls:'section ov-goals',right:'<a class="more" href="#goals">View goals</a>'});
 
  // the ladder: one column per rung, so each name is said once in the header and the track reads across
- const RUNGS=ovRungs(),CAP=6;
- const ladderRows=cands.slice(0,CAP).map(([k,m,g])=>{
+ const RUNGS=ovRungs(),CAP=6,seen=cands.slice(0,CAP).map(([k])=>mnt(k));
+ const ladderRows=cands.slice(0,CAP).map(([k,m,g],i)=>{
+  const twin=cands.slice(0,CAP).filter(([o],j)=>j!==i&&seen[j]===seen[i]).map(([o])=>o),tag=twin.length?ovTell(k,twin):'';
   const by=Object.fromEntries((g.rungs||[]).map(r=>[r.rung,r.status]));
   const [lbl,,cls]=ovNextOf(k,g);
   const word={pass:'passed',fail:'failed',pending:'next',locked:'locked',champion:'champion'};
   const cells=RUNGS.map((r,i)=>{const s=by[r]||'locked';return `<td class="ov-rg ${esc(s)} ${i&&by[RUNGS[i-1]]==='pass'?'in':''} ${i<RUNGS.length-1&&s==='pass'?'out':''} ${i?'':'first'} ${i===RUNGS.length-1?'last':''}"><i title="${esc(r)}: ${word[s]||esc(s)}"></i></td>`}).join('');
-  return `<tr class="click" onclick="location.hash='model/${enc(k)}'"><td class="ov-id"><a class="ell ov-nm" href="#model/${enc(k)}" title="${esc(m.change||k)}">${mn(k)}</a></td>
+  return `<tr class="click" onclick="location.hash='model/${enc(k)}'"><td class="ov-id"><span class="ov-nmr"><a class="ell ov-nm" href="#model/${enc(k)}" title="${esc(m.change||k)}">${mn(k)}</a>${tag?`<span class="mono ov-tell" title="${esc(k)}">${esc(tag)}</span>`:''}</span></td>
    ${cells}<td class="ov-nx"><span class="ell ${cls}">${lbl||DASH}</span></td></tr>`;
  });
  const ladderCard=panel('Ladder',cands.length?`<div class="ov-ladtbl">${table(['Candidate',...RUNGS.map(r=>[`<span class="ov-rgh">${esc(r)}</span>`,'ov-rg']),['<span class="ov-nxh">Next</span>','ov-nx']],ladderRows)}</div>`:
   empty('No candidates climbing',''),
-  {meta:champ?`each candidate vs champion ${mn(champ)}`:'',right:cands.length>CAP?`<a class="more" href="#models">All ${cands.length}</a>`:''});
+  {meta:champ?`each candidate vs ${st.models[champ]?.title?`champion ${mn(champ)}`:`<a class="ln" href="#model/${enc(champ)}" title="${esc(champ)}">the champion</a>`}`:'',right:cands.length>CAP?`<a class="more" href="#models">All ${cands.length}</a>`:''});
 
  // running now: one compact row each; stalled rows marked; work dead for over a day is one line, not a card
  const RC=6,byNew=(a,b)=>b.created-a.created;

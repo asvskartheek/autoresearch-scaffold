@@ -132,7 +132,3 @@ th.ov-rank,td.ov-rank{width:20px;padding-right:4px}
 a.runchip{display:inline-flex;align-items:center;gap:6px;color:var(--text);white-space:nowrap}
 a.runchip:hover .st{color:var(--accent)}
 a.runchip .num{font-size:12.5px}
-/* a next run that is already running: a live dot, its progress, a link to the task (model, hill, goal views too) */
-a.runchip{display:inline-flex;align-items:center;gap:6px;color:var(--text);white-space:nowrap}
-a.runchip:hover .st{color:var(--accent)}
-a.runchip .num{font-size:12.5px}
