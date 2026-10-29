@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import time
 
 from . import features
@@ -123,17 +124,101 @@ def _dead(t: dict) -> bool:
     return t.get("status") == "stalled" and _now() - _f(t.get("heartbeat") or t.get("updated")) > DEAD_S
 
 
-def _ci_viz(r: dict) -> dict:
-    return dict(kind="ci", delta=r["delta"], lo=r["lo"], hi=r["hi"], wins=r["wins"], losses=r["losses"], n=r["n"])
+# ---------------------------------------------------------------- units (the same rule as sv/sd in web/core.js)
+# A 0/1 slice: scores as "1,224 of 1,319", deltas in points. A continuous slice: its own unit; a "minus ms" metric is
+# stored negated (higher is better) and reads as the plain amount.
+
+def _slc(p: Project, sl: str) -> dict:
+    """The slice with `scale` filled in (read off the newest run's scores for slices frozen before it existed)."""
+    memo = p.__dict__.setdefault("_scales", {})
+    if sl not in memo:
+        s = dict(p.slices().get(sl) or {})
+        if not s.get("scale"):
+            ts = [t for t in p.evals() if t.get("slice") == sl and t.get("ended")]
+            t = max(ts, key=lambda t: _f(t.get("ended")), default=None)
+            vals = {r.get("score") for r in p.rows(t["id"]) if not r.get("error")} if t else set()
+            s["scale"] = "continuous" if vals and not vals <= {0, 1} else "binary"
+        memo[sl] = s
+    return memo[sl]
 
 
-def _delta_card(cid, r, **kw) -> dict:
-    """A number card on a paired delta, in points. A hit is a guess inside the 90% interval (at least ±1 pt)."""
-    d, lo, hi = 100 * r["delta"], 100 * r["lo"], 100 * r["hi"]
+def _cont(p: Project, sl: str) -> bool:
+    return _slc(p, sl).get("scale") == "continuous"
+
+
+def _unit(p: Project, sl: str) -> str:
+    s = _slc(p, sl)
+    return s.get("unit") or ("tok/s" if re.search(r"tokens?\s*/\s*s", s.get("metric") or "", re.I) else "")
+
+
+def _neg(p: Project, sl: str) -> bool:
+    return bool(re.match(r"\s*minus\b", _slc(p, sl).get("metric") or "", re.I))
+
+
+def _grp(x: float) -> str:
+    return f"{x:,.0f}" if abs(x) >= 100 else f"{float(f'{x:.3g}'):,g}"
+
+
+def sv(p: Project, sl: str, v: float | None, n: int | None = None) -> str:
+    """A score in its slice's units."""
+    if v is None:
+        return "—"
+    if _cont(p, sl):
+        return f"{_grp(-v if _neg(p, sl) else v)} {_unit(p, sl)}".strip()
+    n = n or _slc(p, sl).get("n")
+    return f"{round(v * n):,} of {n:,} ({100 * v:.1f}%)" if n else f"{100 * v:.1f}%"
+
+
+def sd(p: Project, sl: str, d: float | None) -> str:
+    """A delta in its slice's units: "+5.2 pts" on a 0/1 slice, "−1,071 ms" on a continuous one."""
+    if d is None:
+        return "—"
+    x = (-d if _neg(p, sl) else d) if _cont(p, sl) else 100 * d
+    sg = "+" if x > 0 else "−" if x < 0 else ""
+    if _cont(p, sl):
+        return f"{sg}{_grp(abs(x))} {_unit(p, sl)}".strip()
+    return f"{sg}{abs(x):.1f}".removesuffix(".0") + (" pt" if round(abs(x), 1) == 1 else " pts")
+
+
+def _ci_viz(r: dict, p: Project = None, sl: str = None, bar: float = None) -> dict:
+    """The interval chart, in display units: points on a 0/1 slice, the slice's unit on a continuous one."""
+    k = (-1 if _neg(p, sl) else 1) if p and sl and _cont(p, sl) else 100
+    lo, hi = sorted((k * r["lo"], k * r["hi"]))
+    out = dict(kind="ci", delta=k * r["delta"], lo=lo, hi=hi, wins=r["wins"], losses=r["losses"], n=r["n"],
+               unit=_unit(p, sl) if k != 100 else "pts", better=-1 if k < 0 else 1)
+    if bar:
+        out["bar"] = k * bar
+    return out
+
+
+def _nice(x: float) -> float:
+    """The smallest of 1, 2, 2.5, 5 × 10^k at or above x."""
+    if x <= 0:
+        return 1.0
+    m = 10 ** math.floor(math.log10(x))
+    return next(c * m for c in (1, 2, 2.5, 5, 10) if c * m >= x - 1e-12)
+
+
+def _delta_card(cid, r, p: Project = None, sl: str = None, sign: int = 1, **kw) -> dict:
+    """A number card on a paired delta. A hit is a guess inside the 90% interval (at least ±1 pt).
+    The axis never depends on the answer: on a 0/1 slice it is the room the comparator leaves (from −its score to
+    +what it misses), on a continuous one ± the comparator's own value."""
+    viz = _ci_viz(r, p, sl)
+    d, lo, hi = viz["delta"], viz["lo"], viz["hi"]
+    base = r.get("base")
+    if viz["unit"] != "pts":
+        span = _nice(abs(base)) if base else _nice(max(abs(lo), abs(hi)) * 4)
+        tol = max(span / 100, round((hi - lo) / 2, 3))
+        return dict(id=cid, type="number", unit=viz["unit"], min=-span, max=span, step=span / 200, start=0, tol=tol,
+                    truth=round(d, 3), viz=viz, **kw)
     tol = max(1.0, round((hi - lo) / 2, 2))
-    span = next(s for s in (5, 10, 20, 50, 100) if abs(d) + tol <= s * 0.9 or s == 100)
-    return dict(id=cid, type="number", unit="pts", min=-span, max=span, step=0.25 if span <= 10 else 0.5, start=0,
-                tol=tol, truth=round(d, 2), viz=_ci_viz(r), **kw)
+    if base is None:
+        a, b = -100, 100
+    else:
+        down, up = (100 * base, 100 * (1 - base)) if sign > 0 else (100 * (1 - base), 100 * base)
+        a, b = -max(5, 5 * math.ceil(down / 5 - 1e-9)), max(5, 5 * math.ceil(up / 5 - 1e-9))
+    return dict(id=cid, type="number", unit="pts", min=a, max=b, step=0.25 if b - a <= 20 else 0.5, start=0,
+                tol=tol, truth=round(d, 2), viz=viz, **kw)
 
 
 # ---------------------------------------------------------------- cards
@@ -154,7 +239,7 @@ def _card_promote(p: Project, model: str, t: float = None) -> dict | None:
         why += " The whole 90% interval is above zero."
     elif c.get("lo") is not None:
         why += " The 90% interval still touches zero."
-    return _delta_card(f"promote|{model}", c, label="Promoted", tone="acc", t=dec.get("t"),
+    return _delta_card(f"promote|{model}", c, p, c["slice"], _sign(p), label="Promoted", tone="acc", t=dec.get("t"),
                        q=f"{_title(p, model)} replaced {_title(p, old) if old else 'the champion'}. Paired change on {_short(c['slice'])}?",
                        ctx=f"n = {c['n']:,}", ev=c.get("cand_task") or model, why=why, w=100)
 
@@ -186,11 +271,12 @@ def _card_goal(p: Project, name: str) -> dict | None:
                 viz=dict(kind="goal", have=have, need=need, N=N, lo=lo, traj=traj))
 
 
-def _rule_text(c: dict) -> str:
-    thr = abs(100 * (c.get("threshold") or 0))
+def _rule_text(p: Project, c: dict) -> str:
+    thr = abs(c.get("threshold") or 0)
+    amt = sd(p, c.get("slice"), thr).lstrip("+")
     if c.get("rule") == "better":
-        return "must be better" + (f" by {thr:g} pts" if thr else "")
-    return f"may lose at most {thr:g} pts" if thr else "must not be worse"
+        return "must be better" + (f" by {amt}" if thr else "")
+    return f"may lose at most {amt}" if thr else "must not be worse"
 
 
 def _card_gate(p: Project, model: str, sl: str) -> dict | None:
@@ -202,16 +288,16 @@ def _card_gate(p: Project, model: str, sl: str) -> dict | None:
         for c in r.get("checks", []):
             if c.get("slice") == sl and c.get("state") in ("pass", "fail") and c.get("delta") is not None:
                 ok = c["state"] == "pass"
-                why = f"Δ {100 * c['delta']:+.2f} pts against a bar of {100 * c['threshold']:+.2f}."
+                why = f"Δ {sd(p, sl, c['delta'])} against a bar of {sd(p, sl, c['threshold'])}."
                 if c.get("noisy"):
                     why += " The interval crosses zero, so the next rung decides."
                 ended = next((t.get("ended") for t in p.evals() if t["id"] == c.get("cand_task")), None)
                 return dict(id=f"gate|{model}|{sl}", type="choice", opts=["Pass", "Fail"], truth="Pass" if ok else "Fail",
                             label=f"Gate · {r['rung']}", tone="pos" if ok else "neg", t=ended,
-                            q=f"{_title(p, model)} on {_short(sl)}: it {_rule_text(c)}. Pass or fail?",
+                            q=f"{_title(p, model)} on {_short(sl)}: it {_rule_text(p, c)}. Pass or fail?",
                             ctx=f"n = {c['n']:,} · against {_title(p, g.get('champion'))}", ev=c.get("cand_task") or sl,
                             why=why, w=85 if r["rung"] != (g["rungs"][0]["rung"] if g["rungs"] else "") else 80,
-                            viz=_ci_viz(c))
+                            viz=_ci_viz(c, p, sl, c.get("threshold")))
     return None
 
 
@@ -239,7 +325,7 @@ def _card_rejected(p: Project, model: str) -> dict | None:
     if not dec or not r:
         return None
     m = p.models().get(model) or {}
-    return _delta_card(f"rej|{model}", r, label="Rejected", tone="neg", t=dec.get("t"),
+    return _delta_card(f"rej|{model}", r, p, sl, _sign(p), label="Rejected", tone="neg", t=dec.get("t"),
                        q=f"{_title(p, model)}: paired change against {_title(p, base)} on {_short(sl)}?",
                        ctx=f"n = {r['n']:,}", ev=(p.latest_eval(model, sl) or {}).get("id", model),
                        why=_first(dec.get("reason") or m.get("reason"), 200) or "Rejected.", w=70)
@@ -266,7 +352,7 @@ def _card_rejected_batch(p: Project, models: list[str]) -> dict | None:
     return dict(id="batch|" + sl + "|" + ",".join(ms), type="choice", opts=[_title(p, m) for m in ms], truth=_title(p, best),
                 label=f"{len(ms)} rejected", tone="neg", t=max(_f((p.latest_eval(m, sl) or {}).get("ended")) for m in ms),
                 q=f"Which of these scored highest on {_short(sl)}?", ctx=f"n = {p.slices()[sl]['n']:,}",
-                ev=sl, why=f"All {len(ms)} were rejected; the best reached {100 * vals[best]:.1f}%.", w=65,
+                ev=sl, why=f"All {len(ms)} were rejected; the best reached {sv(p, sl, vals[best])}.", w=65,
                 viz=dict(kind="bars", rows=rows, ref=ref))
 
 
@@ -306,11 +392,11 @@ def _card_run(p: Project, model: str, base: str, sl: str, task: dict | None = No
     stalled = r is None and (live or {}).get("status") == "stalled"
     ctx = f"{pr.get('done', 0):,} of {pr['total']:,} done" if r is None and pr.get("total") else f"n = {(r or {}).get('n') or (p.slices().get(sl) or {}).get('n', 0):,}"
     truth = None if r is None else ("Yes" if r["delta"] > 0 else "No")
-    why = ("No heartbeat; scored if the run is restarted and lands." if stalled else "Logged. Scored when the run lands.") if r is None else f"Δ {100 * r['delta']:+.2f} pts: {r['wins']} fixed, {r['losses']} broken."
+    why = ("No heartbeat; scored if the run is restarted and lands." if stalled else "Logged. Scored when the run lands.") if r is None else f"Δ {sd(p, sl, r['delta'])}: {r['wins']} fixed, {r['losses']} broken."
     return dict(id=f"run|{model}|{base}|{sl}", type="choice", opts=["Yes", "No"], truth=truth,
                 label="Landed" if r else "Stalled" if stalled else "Running", tone="acc" if r else "neg" if stalled else "warn",
                 t=(live or {}).get("created"), q=f"Will {_title(p, model)} beat {_title(p, base)} on {_short(sl)}?",
-                ctx=ctx, ev=(live or {}).get("id") or sl, why=why, w=50, viz=_ci_viz(r) if r else None)
+                ctx=ctx, ev=(live or {}).get("id") or sl, why=why, w=50, viz=_ci_viz(r, p, sl) if r else None)
 
 
 def _card_question(p: Project, qid: str) -> dict | None:
@@ -333,7 +419,7 @@ def _card_question(p: Project, qid: str) -> dict | None:
                     label="Answered", tone="acc", t=q.get("answered") or q.get("updated") or q.get("created"),
                     q=f"{q.get('title') or qid}: {_title(p, ev['model'])} against {_title(p, base)} on {_short(sl)}?",
                     ctx=f"n = {r['n']:,}", ev=(p.latest_eval(ev["model"], sl) or {}).get("id", sl),
-                    why=_first(q.get("claim"), 200) or truth, w=75, viz=_ci_viz(r))
+                    why=_first(q.get("claim"), 200) or truth, w=75, viz=_ci_viz(r, p, sl))
     return None
 
 
@@ -563,7 +649,8 @@ def concepts(p: Project) -> list[dict]:
                         noisy = c
     qs = []
     if noisy:
-        qs.append(dict(q=f"{100 * noisy['delta']:+.2f} pts, 90% interval [{100 * noisy['lo']:+.2f}, {100 * noisy['hi']:+.2f}]. Is the gain shown?",
+        sl = noisy.get("slice")
+        qs.append(dict(q=f"{sd(p, sl, noisy['delta'])}, 90% interval [{sd(p, sl, noisy['lo'])}, {sd(p, sl, noisy['hi'])}]. Is the gain shown?",
                        o=["Not yet", "Yes"], a="Not yet"))
     qs.append(dict(q="What narrows a paired interval most?", o=["More examples", "Re-running the same greedy eval"], a="More examples"))
     out.append(dict(id="ci", t="Interval crosses zero", viz=dict(kind="ci-mini", rows=rows[:3] or [[0.016, -0.005, 0.037]]), qs=qs))

@@ -7,8 +7,8 @@ const LK=()=>'arx-brief-seen:'+(PKEY||'home');
 const lget=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
 const lset=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
 const viewer=()=>lget('arx-name')||'';
-const lpts=x=>(x>=0?'+':'−')+Math.abs(x).toFixed(2);
-const lfmt=(c,v)=>v==null?'—':c.unit==='pts'?lpts(v):c.int?Math.round(v).toLocaleString():(+v).toFixed(1)+(c.unit||'');
+// a card value: a count, a percentage (hill cards) or a signed delta in the card's unit
+const lfmt=(c,v)=>v==null?'—':c.int?Math.round(v).toLocaleString():c.unit==='%'?(+v).toFixed(1)+'%':lamt(c.unit||'',+v);
 // a stable shuffle per card, so options never sit in the same slot and do not jump between renders
 function shuf(id,arr){let h=2166136261;for(const ch of id)h=Math.imul(h^ch.charCodeAt(0),16777619);const a=arr.slice();
  for(let i=a.length-1;i>0;i--){h=Math.imul(h^(h>>>13),1597334677)>>>0;const j=h%(i+1);[a[i],a[j]]=[a[j],a[i]]}return a}
@@ -48,22 +48,28 @@ function leaveCard(extra={}){
 addEventListener('pagehide',()=>leaveCard({beacon:true}));
 
 // ---------- visuals
+// an axis step near span/k on the 1-2-5 ladder
+const nstep=(span,k)=>{const raw=span/k,mag=10**Math.floor(Math.log10(raw||1));return [1,2,5,10].map(m=>m*mag).find(m=>m>=raw)};
+// a signed amount in a viz's unit: "+5.2 pts" (0/1 slice) or "−1,071 ms" (continuous); 0/1 values come in points
+const lamt=(u,x)=>(x>0?'+':x<0?'−':'')+(u==='pts'?(+Math.abs(x).toFixed(2)).toString():grp(Math.abs(x)))+(u?' '+(u==='pts'&&Math.abs(x)===1?'pt':u):'');
 function vizCI(v){
- const d=100*v.delta,lo=100*v.lo,hi=100*v.hi,W=560,H=128,Lx=16,R=W-16;
- const a=Math.min(-2,Math.floor(lo-1)),b=Math.max(2,Math.ceil(hi+1)),x=q=>Lx+(q-a)/(b-a)*(R-Lx),stp=b-a>40?10:b-a>20?5:b-a>10?2:1;
- let t='';for(let q=Math.ceil(a/stp)*stp;q<=b;q+=stp)t+=`<line x1="${x(q)}" x2="${x(q)}" y1="20" y2="62" stroke="var(--grid)"/><text x="${x(q)}" y="76" text-anchor="middle">${q>0?'+':''}${q}</text>`;
- const col=lo>0?'var(--positive)':hi<0?'var(--negative)':'var(--muted)',cap=60;
- const sq=(k,c,o)=>Array.from({length:Math.min(k,cap)},(_,i)=>`<rect x="${o+i*7}" y="98" width="5" height="9" rx="1" fill="${c}"/>`).join('');
- const o2=Lx+Math.min(v.wins,cap)*7+16;
- return `<svg class="lv" viewBox="0 0 ${W} ${H}" role="img" aria-label="paired delta ${lpts(d)} points, 90% interval ${lpts(lo)} to ${lpts(hi)}">${t}
- <line x1="${x(0)}" x2="${x(0)}" y1="14" y2="66" stroke="var(--text)" stroke-width="1.5"/>
- <line x1="${x(lo)}" x2="${x(hi)}" y1="41" y2="41" stroke="${col}" stroke-width="8" stroke-linecap="round" opacity=".35"/>
- <circle cx="${x(d)}" cy="41" r="6" fill="${col}"/>
- <text x="${Math.min(R-90,Math.max(Lx+90,x(d)))}" y="22" text-anchor="middle" class="mono strong">${lpts(d)} [${lpts(lo)}, ${lpts(hi)}]</text>
- ${sq(v.wins,'var(--positive)',Lx)}${sq(v.losses,'var(--negative)',o2)}
- <text x="${Lx}" y="124">${v.wins} fixed</text><text x="${o2}" y="124">${v.losses} broken</text>
- <text x="${R}" y="10" text-anchor="end">pts · n = ${v.n.toLocaleString()}</text></svg>`;
+ const u=v.unit==null?'pts':v.unit,k=v.unit==null?100:1;  // older payloads carry fractions
+ const d=k*v.delta,lo=k*v.lo,hi=k*v.hi,bar=v.bar!=null?k*v.bar:null,W=LW(),H=136,Lx=16,R=W-16;
+ const ext=Math.max(Math.abs(lo),Math.abs(hi),Math.abs(bar||0)),pad=u==='pts'?1:ext*.12||1;
+ const a=Math.min(u==='pts'?-2:-pad,lo-pad,bar??0),b=Math.max(u==='pts'?2:pad,hi+pad,bar??0),x=q=>Lx+(q-a)/(b-a)*(R-Lx),stp=nstep(b-a,W<420?4:7);
+ let t='';for(let q=Math.ceil(a/stp)*stp;q<=b+1e-9;q+=stp){const qq=+q.toPrecision(6);t+=`<line x1="${x(qq)}" x2="${x(qq)}" y1="26" y2="62" stroke="var(--grid)"/><text x="${x(qq)}" y="78" text-anchor="middle">${qq>0?'+':qq<0?'−':''}${grp(Math.abs(qq))}</text>`}
+ const good=v.better<0?hi<0:lo>0,bad=v.better<0?lo>0:hi<0,col=good?'var(--positive)':bad?'var(--negative)':'var(--muted)',cap=Math.floor((R-Lx-90)/7);
+ const sq=(n,c,y)=>Array.from({length:Math.min(n,cap)},(_,i)=>`<rect x="${Lx+i*7}" y="${y}" width="5" height="9" rx="1" fill="${c}"/>`).join('');
+ const row=(n,c,y,w)=>`${sq(n,c,y)}<text x="${Lx+Math.min(n,cap)*7+(n?6:0)}" y="${y+9}">${n.toLocaleString()} ${w}</text>`;
+ return `<svg class="lv" viewBox="0 0 ${W} ${H}" role="img" aria-label="paired delta ${lamt(u,d)}, 90% interval ${lamt(u,lo)} to ${lamt(u,hi)}">
+ <text x="${Lx}" y="12" class="mono strong">${lamt(u,d)} [${lamt(u,lo)}, ${lamt(u,hi)}]</text><text x="${R}" y="12" text-anchor="end">n = ${v.n.toLocaleString()}</text>${t}
+ <line x1="${x(0)}" x2="${x(0)}" y1="22" y2="66" stroke="var(--text)" stroke-width="1.5"/>
+ ${bar?`<line x1="${x(bar)}" x2="${x(bar)}" y1="22" y2="66" stroke="var(--warning)" stroke-width="2" stroke-dasharray="4 3"/><text x="${x(bar)}" y="92" text-anchor="middle" style="fill:var(--warning)">bar ${lamt(u,bar)}</text>`:''}
+ <line x1="${x(lo)}" x2="${x(hi)}" y1="44" y2="44" stroke="${col}" stroke-width="8" stroke-linecap="round" opacity=".35"/>
+ <circle cx="${x(d)}" cy="44" r="6" fill="${col}"/>
+ ${row(v.wins,'var(--positive)',100,'fixed')}${row(v.losses,'var(--negative)',118,'broken')}</svg>`;
 }
+const LW=()=>Math.round(Math.max(300,Math.min(560,(document.querySelector('.lrn .stage')?.clientWidth||innerWidth)-48)));
 function vizBars(v){
  const rows=v.rows.filter(r=>r.v!=null);if(!rows.length)return '';
  const W=560,rh=28,H=rows.length*rh+22,Lx=200,R=W-50,vals=rows.map(r=>r.v).concat(v.ref!=null?[v.ref]:[]);
