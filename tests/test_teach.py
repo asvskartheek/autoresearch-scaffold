@@ -156,6 +156,17 @@ class Teach(unittest.TestCase):
         skip = self.post(method="spot", skip=True)[1]
         self.assertNotEqual(skip["method"], "spot")
 
+    def test_another_way_ends_when_nothing_is_left(self):
+        g = self.gate["id"]  # predict and sketch only
+        d = self.post(card=g, method="sketch", skip=True)[1]
+        self.assertEqual((d["method"], d["others"]), ("predict", 0))
+        n = len(teach.attempts(self.p, "ann"))
+        d = self.post(card=g, method="predict", skip=True)[1]
+        self.assertEqual((d["method"], d["others"]), ("predict", 0))
+        self.assertEqual(len(teach.attempts(self.p, "ann")), n)  # no skip logged
+        b = learn.brief(self.p, 0, "ann")
+        self.assertEqual(next(c for c in b["cards"] if c["id"] == g)["others"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

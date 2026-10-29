@@ -132,7 +132,7 @@ function cardHTML(c){
   reveal=`<div class="reveal"><div class="verdict">${verdict}${truth!=null?`<b>${c.type==='choice'?esc(truth):lfmt(c,truth)}</b>`:''}<span class="you">you: ${yours} at ${Math.round(p.conf*100)}%</span></div>${viz(rv.viz)}<p class="why">${esc(rv.why||'')}</p></div>`;
  }
  const n=L.b.cards.length,i=L.cur,ready=c.type==='number'||u.choice!=null;
- const other=!p&&(c.methods||[]).length>1;
+ const other=!p&&(c.others??((c.methods||[]).length-1))>0;  // the server counts the methods not yet skipped
  return `<div class="kind">${pill(c.label,c.tone)}<span>${i+1} of ${n}</span>${c.t?`<span>${ago(c.t)}</span>`:''}</div>
   <p class="q">${esc(c.q)}</p>${c.ctx?`<p class="ctx">${esc(c.ctx)}</p>`:''}${body}${reveal}
   <div class="actions">${p?`<button class="btn primary" data-l="next">${i===n-1?'Finish':'Next'} <kbd>space</kbd></button>`:`<button class="btn primary" data-l="commit" ${ready?'':'disabled'}>Reveal <kbd>space</kbd></button>${other?'<button class="btn" data-t="skip" title="Learn this card another way">Another way</button>':''}`}

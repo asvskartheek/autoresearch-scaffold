@@ -154,7 +154,7 @@ function card(c){
   reveal=`<div class="reveal">${own}<div class="verdict">${verdict}${rv.truth!=null?`<b>${c.type==='choice'?esc(rv.truth):lfmt(c,rv.truth)}</b>`:''}</div>${c.method==='sketch'?'':viz(rv.viz)}<p class="why">${esc(rv.why||'')}</p></div>`}
  return `<div class="kind">${pill(c.label,c.tone)}<span>${i+1} of ${n}</span>${c.t?`<span>${ago(c.t)}</span>`:''}${strip(c)}</div>
   <p class="q">${esc(q)}</p>${c.ctx&&c.method!=='spot'?`<p class="ctx">${esc(c.ctx)}</p>`:''}${body(c)}${reveal}
-  <div class="actions">${p?`<button class="btn primary" data-l="next">${i===n-1?'Finish':'Next'} <kbd>space</kbd></button>`:`<button class="btn primary" data-t="go" ${ready?'':'disabled'}>Check <kbd>space</kbd></button><button class="btn" data-t="skip" title="Learn this card another way">Another way</button>`}
+  <div class="actions">${p?`<button class="btn primary" data-l="next">${i===n-1?'Finish':'Next'} <kbd>space</kbd></button>`:`<button class="btn primary" data-t="go" ${ready?'':'disabled'}>Check <kbd>space</kbd></button>${(c.others??1)>0?'<button class="btn" data-t="skip" title="Learn this card another way">Another way</button>':''}`}
   ${i>0?'<button class="btn" data-l="prev">Back</button>':''}</div>`;
 }
 
@@ -171,7 +171,7 @@ async function submit(c){
 async function skip(c){
  try{const r=await fetch('api/teach',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({viewer:viewer()||'anon',card:c.id,method:c.method,skip:true,ms:Math.round(performance.now()-st(c).t0)})});
   const d=await r.json();if(!r.ok)throw new Error(d.error||r.status);delete ST[c.id];
-  L.b.cards[L.cur]={...c,method:d.method,task:d.task||undefined};render(true);
+  L.b.cards[L.cur]={...c,method:d.method,task:d.task||undefined,others:d.others};render(true);
  }catch(e){alert('Could not switch: '+(e.message||e))}
 }
 

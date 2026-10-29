@@ -401,12 +401,17 @@ def choose(prof: dict, c: dict, viewer: str, avoid: set | None = None, deck: dic
     return max(ms, key=lambda m: (round(score(prof, m) * 0.7 ** used.get(m, 0), 3), _h(viewer, c["id"], m) % 97))
 
 
+def _person(p: Project, viewer: str, aliases: set | None = None) -> tuple[list[dict], dict]:
+    """A person's attempts (under their id and their older names) and their profile, predictions included."""
+    from .learn import aliases as names, predictions
+    al = names(viewer) if aliases is None else aliases
+    rows = attempts(p, viewer, al)
+    return rows, profile(rows, [r for a in {viewer} | al for r in predictions(p, a)])
+
+
 def attach(p: Project, cards_full: list[dict], public_cards: list[dict], viewer: str, aliases: set) -> dict:
     """Give each public card its method and task (the reveal waits for an answer), and return the profile."""
-    rows = attempts(p, viewer, aliases)
-    from .learn import predictions
-    preds = [r for a in {viewer} | aliases for r in predictions(p, a)]
-    prof = profile(rows, preds)
+    rows, prof = _person(p, viewer, aliases)
     done = {r["card"]: r for r in rows if not r.get("skip") and r.get("card")}
     skipped: dict = {}
     for r in rows:
@@ -422,6 +427,7 @@ def attach(p: Project, cards_full: list[dict], public_cards: list[dict], viewer:
         deck[m] = deck.get(m, 0) + 1
         pub["method"] = m
         pub["methods"] = methods_for(full)
+        pub["others"] = 0 if a or pub.get("pred") else len(set(pub["methods"]) - skipped.get(full["id"], set()) - {m})
         if m != "predict" and not pub.get("pred"):
             pub["task"] = task(full, m)
     return prof
@@ -436,12 +442,14 @@ def answer(p: Project, body: dict) -> tuple[int, dict]:
         return 404, dict(error="unknown card or method")
     ms = max(0, min(int(_f(body.get("ms"), 0) or 0), 3_600_000))
     if body.get("skip"):
+        rows, prof = _person(p, viewer)
+        avoid = {r["method"] for r in rows if r.get("card") == c["id"] and r.get("skip")} | {m}
+        left = [x for x in methods_for(c) if x not in avoid]
+        if not left:  # nothing else fits this card: stay, and log no skip (it would count against this method)
+            return 200, dict(method=m, task=task(c, m) if m != "predict" else None, others=0)
         _append(_log(p), dict(t=time.time(), viewer=viewer, card=c["id"], method=m, skip=True, ms=ms))
-        rows = attempts(p, viewer)
-        prof = profile(rows, [])
-        avoid = {r["method"] for r in rows if r.get("card") == c["id"] and r.get("skip")}
         nxt = choose(prof, c, viewer, avoid)
-        return 200, dict(method=nxt, task=task(c, nxt) if nxt != "predict" else None)
+        return 200, dict(method=nxt, task=task(c, nxt) if nxt != "predict" else None, others=len(left) - 1)
     have = next((r for r in attempts(p, viewer) if r.get("card") == c["id"] and not r.get("skip")), None)
     g = grade(c, m, body.get("answer")) if not have else dict(hit=have.get("hit"), err=have.get("err"), show=have.get("show") or {})
     rec = have or dict(t=time.time(), viewer=viewer, card=c["id"], method=m, hit=g["hit"], err=g["err"], ms=ms, show=g["show"])
