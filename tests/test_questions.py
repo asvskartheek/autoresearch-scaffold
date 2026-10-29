@@ -52,8 +52,8 @@ class Questions(unittest.TestCase):
         self.assertEqual(t["m:base+hint"]["status"], "open")
         self.assertIn("14 of 20", t["g:ninety"]["claim"])
         self.assertFalse((self.p.dir / "questions.json").exists())
-        for n in t.values():
-            self.assertLessEqual(len(n["title"].split()), 6, n["title"])
+        for n in t.values():  # goal questions carry the target in units ("to 1,267 of 1,319"), so they get more room
+            self.assertLessEqual(len(n["title"].split()), 14 if n.get("seed") == "goal" else 6, n["title"])
 
     def test_evidence_is_paired_against_the_parent(self):
         ev = self.by()["m:worse"]["ev"]
