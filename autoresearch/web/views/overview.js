@@ -80,7 +80,8 @@ function ovSortBy(k){const s=S.ovSort||{k:'score',d:-1};S.ovSort={k,d:s.k===k?-s
 function ovPickSlice(name){S.lbSlice=name;S.ovLbAll=false;render()}
 
 VIEWS.overview=()=>{
- const st=S.state,champ=st.champion,ds=Object.keys(st.datasets),hib=st.config.higher_is_better!==false;
+ // datasets: the configured ones plus any a frozen slice names (a project whose research.json lists none still has slices)
+ const st=S.state,champ=st.champion,ds=[...new Set([...Object.keys(st.datasets||{}),...Object.values(st.slices).map(s=>s.dataset).filter(Boolean)])],hib=st.config.higher_is_better!==false;
  const prim=st.config.primary_dataset||ds[0],fullKey=prim+'/full';
  const cf=champ&&fullScore(champ);
  const allC=Object.entries(st.models).filter(([,m])=>m.status==='candidate'),sup=allC.filter(([k])=>superseded(k)).length;
@@ -142,7 +143,7 @@ VIEWS.overview=()=>{
  }
 
  // leaderboard: dataset tabs, slice control, paired deltas vs the champion on the same slice
- if(!S.lbDataset||!st.datasets[S.lbDataset])S.lbDataset=prim;
+ if(!S.lbDataset||!ds.includes(S.lbDataset))S.lbDataset=ds.includes(prim)?prim:ds[0];
  const sl=Object.values(st.slices).filter(s=>s.dataset===S.lbDataset);
  const order={full:0,random:1,control:2,dev:3,synthetic:4};
  sl.sort((a,b)=>((order[a.kind]??9)-(order[b.kind]??9))||(b.n-a.n)||a.name.localeCompare(b.name));
@@ -156,7 +157,7 @@ VIEWS.overview=()=>{
  const has=f=>entries.some(([,r])=>r[f]!=null);
  const hasCost=has('cost'),hasLat=has('latency_p50'),hasP95=has('latency_p95');
  const LB=10,shown=S.ovLbAll?board:board.slice(0,LB);
- const tabs=`<div class="tabs ov-tabs" role="tablist">${ds.map(d=>`<button role="tab" aria-selected="${d===S.lbDataset}" class="${d===S.lbDataset?'on':''}" onclick="S.lbDataset=${esc(JSON.stringify(d))};S.lbSlice=null;S.ovLbAll=false;render()">${esc(d)}<small>${ovN(st.datasets[d].size)}</small></button>`).join('')}</div>`;
+ const tabs=`<div class="tabs ov-tabs" role="tablist">${ds.map(d=>`<button role="tab" aria-selected="${d===S.lbDataset}" class="${d===S.lbDataset?'on':''}" onclick="S.lbDataset=${esc(JSON.stringify(d))};S.lbSlice=null;S.ovLbAll=false;render()">${esc(d)}<small>${ovN(st.datasets[d]?.size??Object.values(st.slices).filter(s=>s.dataset===d).reduce((a,s)=>Math.max(a,s.n||0),0))}</small></button>`).join('')}</div>`;
  const opt=s=>`<option value="${esc(s.name)}" ${s.name===S.lbSlice?'selected':''}>${esc(short(s.name))} · n ${ovN(s.n)}${st.leaderboard[s.name]?` · ${plural(Object.keys(st.leaderboard[s.name]).length,'model')}`:' · no runs'}</option>`;
  const kinds=[...new Set(sl.map(s=>s.kind))];
  const sel=`<label class="ov-pickl"><span>Slice</span><select class="ov-sel" onchange="ovPickSlice(this.value)">${kinds.map(k=>`<optgroup label="${esc(ovKind[k]||k)}">${sl.filter(s=>s.kind===k).map(opt).join('')}</optgroup>`).join('')}</select></label><span class="faint ov-pickn">${plural(sl.length,'slice')}</span>`;
