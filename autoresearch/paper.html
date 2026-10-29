@@ -759,6 +759,13 @@ function hitThread(e) {
   const hits = visible().filter(t => { const r = ranges.get(t.id); try { return r && r.range && r.range.isPointInRange(node, off) && [...r.range.getClientRects()].some(b => e.clientX >= b.left - 1 && e.clientX <= b.right + 1 && e.clientY >= b.top - 1 && e.clientY <= b.bottom + 1); } catch { return false; } });
   return hits.length ? hits.sort((a, b) => ranges.get(a.id).range.toString().length - ranges.get(b.id).range.toString().length)[0] : null;
 }
+// a click inside a drawn box opens its comment (the smallest box, when boxes nest); the text under it stays selectable
+function boxAt(e) {
+  const f = frame.getBoundingClientRect(), x = e.clientX + f.left, y = e.clientY + f.top;
+  const hits = [...inkSvg.querySelectorAll("g[data-id]:not(.draft) .v.box")].map(p => [p.closest("g").dataset.id, p.getBoundingClientRect()])
+    .filter(([, r]) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom).sort((a, b) => a[1].width * a[1].height - b[1].width * b[1].height);
+  return hits.length ? threads.find(t => t.id === hits[0][0]) : null;
+}
 function onPaperClick(e) {
   const a = e.target.closest && e.target.closest("a[href]");
   if (a) { // links inside the paper: in-page jumps scroll this page; anything else opens a new tab
@@ -767,7 +774,7 @@ function onPaperClick(e) {
     if (!a.target) { e.preventDefault(); open(a.href, "_blank", "noopener"); return; }
   }
   const s = paperDoc().getSelection(); if (s && !s.isCollapsed) return;
-  const t = hitThread(e);
+  const t = hitThread(e) || boxAt(e);
   if (t) setActive(t.id, { scroll: false });
   else if (active && !e.target.closest("button,input,select,textarea,label,a")) setActive(null);
 }
