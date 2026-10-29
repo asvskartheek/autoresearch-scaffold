@@ -167,7 +167,7 @@ def _post(p, path, d):
         a = d.get("anchor") if isinstance(d.get("anchor"), dict) else {}
         anchor = {x: a[x] for x in ANCHOR_KEYS if x in a}
         anchor["route"] = str(anchor.get("route") or "overview").lstrip("#")[:300]
-        ev = post(p, "comment", author=author, by=by, body=body, anchor=anchor, mentions=people.mentioned(body) or None)
+        ev = post(p, "comment", author=author, by=by, body=body, anchor=anchor, mentions=people.mentioned(body, people.members(p)) or None)
         if not for_people(ev):
             features.enqueue(p, "comment", dict(thread=ev["id"], message=ev["id"]), ref=ev["id"])
         return 200, ev
@@ -180,7 +180,7 @@ def _post(p, path, d):
     if k == "reply":
         if not body.strip():
             return 400, dict(error="empty reply")
-        ev = post(p, "reply", parent=th["id"], body=body, author=author, by=by, agent=False, mentions=people.mentioned(body) or None)
+        ev = post(p, "reply", parent=th["id"], body=body, author=author, by=by, agent=False, mentions=people.mentioned(body, people.members(p)) or None)
         if not for_people(ev):
             features.enqueue(p, "comment", dict(thread=th["id"], message=ev["id"]), ref=th["id"])
         return 200, ev

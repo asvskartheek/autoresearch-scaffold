@@ -31,6 +31,11 @@ class People(unittest.TestCase):
         self.assertEqual(v["people"]["p-b0000002"]["name"], "Bo")
         self.assertEqual(call(features.POST, "/api/people", self.p, dict(id="bob", name="x"))[0], 400)  # not a person id
 
+    def test_roster_is_per_project(self):
+        people.remember("p-d0000004", "Dee", "elsewhere-key")
+        self.assertNotIn("p-d0000004", call(features.GET, "/api/people", self.p, {})[1]["people"])
+        self.assertEqual(people.mentioned("@bo hi", {"p-1": dict(name="Bo"), "p-2": dict(name="Bo")}), [])  # two Bos: nobody is guessed
+
     def test_mentions(self):
         r = people.roster()
         self.assertEqual(people.mentioned("ping @bo please", r), ["p-b0000002"])
