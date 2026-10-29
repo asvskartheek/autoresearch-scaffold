@@ -99,13 +99,10 @@ a.q-lr:hover,div.q-lr:not(.axis):hover{background:var(--raised)}
 .q-tip .lg{display:grid;grid-template-columns:auto auto;gap:4px 8px;align-items:center}
 .q-tip svg{display:block}
 
-/* the select-text chip, on every view */
+/* the ask box window.qAsk opens from selected text, on every view */
 .q-chip{position:absolute;z-index:55;display:none}
 .q-chip.on{display:block}
-.q-chipb{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px;border-radius:13px;background:var(--primary);color:var(--on-primary);font-size:12.5px;font-weight:600;box-shadow:0 4px 14px -6px rgba(0,0,0,.4)}
-.q-chipb svg{width:14px;height:14px}
 .q-askf,.q-done{display:none}
-.q-chip.form .q-chipb,.q-chip.sent .q-chipb,.q-chip.sent .q-askf{display:none}
 .q-chip.form .q-askf{display:flex;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);box-shadow:0 12px 32px -12px rgba(19,20,22,.3);padding:8px;width:min(380px,calc(100vw - 16px))}
 .q-chip.sent .q-done{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:13px;background:var(--pill-positive-bg);color:var(--pill-positive-ink);font-size:12.5px;font-weight:600}
 

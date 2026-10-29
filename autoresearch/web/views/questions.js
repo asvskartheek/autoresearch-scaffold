@@ -1,8 +1,8 @@
 'use strict';
 // Questions: the project as a tree of questions (seeded from goals, hills and models; see autoresearch/questions.py).
 // Left: the outline, claims on hover. Right: the focused question, its claim and its evidence as paired-delta dots
-// with CI and fixed/broke squares. "Ask" under any node, or from selected text on any view (the chip), sends a
-// question to an agent (status agent, inbox kind=question).
+// with CI and fixed/broke squares. "Ask" under any node, or window.qAsk(text) from selected text on any view (the
+// comments chip's Ask button), sends a question to an agent (status agent, inbox kind=question).
 const QS={data:null,at:0,busy:false,closed:null,read:false,notes:{},fresh:new Set(),err:null};
 const qName=()=>{try{return localStorage.getItem('arx-name')||'you'}catch(e){return 'you'}};
 
@@ -193,7 +193,7 @@ function qGo(id){
  render(true);
  const p=document.getElementById('q-panel');if(p&&(p.getBoundingClientRect().top<0||innerWidth<=820))p.scrollIntoView({behavior:'smooth',block:'start'});
 }
-async function qAsk(title,parent,quote){
+async function qAskPost(title,parent,quote){
  const q=await qPost('ask',{title,parent,quote,route:location.hash});
  QS.fresh.add(q.id);setTimeout(()=>QS.fresh.delete(q.id),1500);
  QS.closed?.delete(parent);
@@ -225,7 +225,7 @@ document.addEventListener('click',async e=>{
  if(a.dataset.qact==='read'){QS.read=!QS.read;render(true);return}
  if(a.dataset.qact==='ask'){
   const v=$('#q-bin').value.trim();if(!v)return;a.disabled=true;
-  try{const q=await qAsk(v,qFocus(qIndex(),route().arg));qGo(q.id)}catch(err){a.disabled=false;alert(err.message)}
+  try{const q=await qAskPost(v,qFocus(qIndex(),route().arg));qGo(q.id)}catch(err){a.disabled=false;alert(err.message)}
  }
 });
 document.addEventListener('keydown',e=>{
@@ -251,47 +251,50 @@ document.addEventListener('focusin',e=>{const el=e.target.closest?.('[data-qtip]
 addEventListener('scroll',qTipHide,true);
 addEventListener('hashchange',()=>{qTipHide();if(route().r==='questions')qLoad(true)});
 
-// ---------- select text on any view: a small "Ask" chip; the question lands under the node the text is about
-const qChip=(()=>{const d=document.createElement('div');d.className='q-chip';d.innerHTML=`<button class="q-chipb" type="button">${ICON.questions}<span>Ask</span></button><div class="q-askf"><input class="q-in" maxlength="120" aria-label="Question"><button class="btn primary" type="button">Ask</button></div><a class="q-done"></a>`;document.body.append(d);return d})();
-let qSel=null;
+// ---------- ask from selected text: comments.js's selection chip calls window.qAsk(text); a small ask box opens next to
+// where the text was, prefilled with whole words, and the question lands under the node the text is about
+const qChip=(()=>{const d=document.createElement('div');d.className='q-chip';d.innerHTML=`<div class="q-askf"><input class="q-in" maxlength="120" aria-label="Question"><button class="btn primary" type="button">Ask</button></div><a class="q-done"></a>`;document.body.append(d);return d})();
+let qSel=null,qLast=null;
 function qParentFor(node){
  const own=node?.closest?.('[data-qnode]');if(own)return own.dataset.qnode;
  const {r,arg}=route();
  if(r==='questions')return arg||null;
  return {hill:'h:',model:'m:',goal:'g:'}[r]&&arg?{hill:'h:',model:'m:',goal:'g:'}[r]+arg:null;
 }
-function qChipHide(){qChip.className='q-chip';qSel=null}
-function qChipCheck(){
- if(qChip.contains(document.activeElement))return;
- const s=getSelection();if(!s||s.isCollapsed||!s.rangeCount){if(!qChip.classList.contains('form'))qChipHide();return}
- const txt=s.toString().replace(/\s+/g,' ').trim(),an=s.anchorNode?.nodeType===3?s.anchorNode.parentElement:s.anchorNode;
- if(txt.length<3||!an||!$('#main').contains(an)||an.closest('input,textarea,[contenteditable],.q-form'))return;
- const rc=s.getRangeAt(0).getBoundingClientRect();
- qSel={quote:txt.slice(0,400),parent:qParentFor(an)};
- qChip.className='q-chip on';
- qChip.style.left=Math.max(8,Math.min(innerWidth-120,rc.left+scrollX))+'px';
- qChip.style.top=Math.max(8,rc.top+scrollY-34)+'px';
-}
-document.addEventListener('mouseup',()=>setTimeout(qChipCheck,0));
-document.addEventListener('touchend',()=>setTimeout(qChipCheck,250));
-document.addEventListener('mousedown',e=>{if(!qChip.contains(e.target))qChipHide()});
-qChip.querySelector('.q-chipb').addEventListener('click',()=>{
- if(!qSel)return;const q=qSel.quote,inp=qChip.querySelector('input');
- inp.value=`Why "${q.length>60?q.slice(0,58)+'…':q}"?`;
- qChip.className='q-chip on form';
- qChip.style.left=Math.max(8,Math.min(innerWidth-Math.min(380,innerWidth-16)-8,parseFloat(qChip.style.left)))+'px';
- inp.focus();inp.select();
+// remember the last selection's place; the chip clears the selection before calling qAsk
+document.addEventListener('selectionchange',()=>{
+ const s=getSelection();if(!s||s.isCollapsed||!s.rangeCount)return;
+ const an=s.anchorNode?.nodeType===3?s.anchorNode.parentElement:s.anchorNode;
+ if(!an||qChip.contains(an))return;
+ qLast={rect:s.getRangeAt(0).getBoundingClientRect(),node:an};
 });
+function qHide(){qChip.className='q-chip';qSel=null}
+function qWords(t,max=60){
+ t=String(t||'').replace(/\s+/g,' ').trim().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}%)]+$/gu,'');
+ if(t.length<=max)return t;
+ const cut=t.slice(0,max+1).replace(/\s+\S*$/,'');return (cut||t.slice(0,max)).replace(/[\s,;:.-]+$/,'')+'…';
+}
+window.qAsk=text=>{
+ const quote=String(text||'').replace(/\s+/g,' ').trim().slice(0,400);if(!quote)return;
+ const rc=qLast?.rect,node=qLast?.node;
+ qSel={quote,parent:qParentFor(node&&document.contains(node)?node:null)};
+ const inp=qChip.querySelector('input'),w=Math.min(380,innerWidth-16);
+ inp.value=`Why "${qWords(quote)}"?`;
+ qChip.className='q-chip on form';
+ qChip.style.left=Math.max(8,Math.min(innerWidth-w-8,(rc?rc.left:innerWidth/2-w/2)+scrollX))+'px';
+ qChip.style.top=Math.max(8,(rc?rc.bottom+8:120)+scrollY)+'px';
+ inp.focus();inp.select();
+};
+document.addEventListener('mousedown',e=>{if(!qChip.contains(e.target)&&!e.target.closest?.('.ask'))qHide()});
 async function qChipSubmit(){
  const inp=qChip.querySelector('input'),v=inp.value.trim();if(!v||!qSel)return;
  const sel=qSel;
  try{
   const q=await qPost('ask',{title:v,parent:sel.parent,quote:sel.quote,route:location.hash});
-  getSelection().removeAllRanges();
   const done=qChip.querySelector('.q-done');done.href='#questions/'+enc(q.id);done.textContent='Asked';
-  qChip.className='q-chip on sent';QS.at=0;setTimeout(qChipHide,2500);
+  qChip.className='q-chip on sent';QS.at=0;setTimeout(qHide,2500);
  }catch(err){alert(err.message)}
 }
 qChip.querySelector('.q-askf .btn').addEventListener('click',qChipSubmit);
-qChip.querySelector('input').addEventListener('keydown',e=>{if(e.key==='Enter')qChipSubmit();if(e.key==='Escape')qChipHide()});
-qChip.querySelector('.q-done').addEventListener('click',()=>setTimeout(qChipHide,0));
+qChip.querySelector('input').addEventListener('keydown',e=>{if(e.key==='Enter')qChipSubmit();if(e.key==='Escape')qHide()});
+qChip.querySelector('.q-done').addEventListener('click',()=>setTimeout(qHide,0));
