@@ -72,6 +72,7 @@ svg .lab{fill:var(--text);font-size:12px}
 svg .mono{font-family:var(--mono);font-size:10.5px}
 svg .hit{cursor:pointer}
 svg .hit:hover{opacity:.75}
+html.marquee,html.marquee *{user-select:none!important;-webkit-user-select:none!important;cursor:crosshair}
 svg .sel{fill:var(--accent);fill-opacity:.08;stroke:var(--accent);stroke-width:1;stroke-dasharray:3 2;pointer-events:none}
 svg .picked{stroke:var(--text);stroke-width:2}
 .pin circle{fill:var(--primary)}
@@ -363,10 +364,16 @@ function wireFigure(el, k) {
   const s = $("svg", el); let start = null, rect = null, moved = false;
   s.addEventListener("pointerdown", e => {
     if (e.pointerType === "touch") return;  // touch: tap points; dragging scrolls
+    if (e.button !== 0) return;
+    e.preventDefault();  // a marquee, not a text selection
     start = svgPt(s, e); moved = false;
+    getSelection().removeAllRanges(); document.documentElement.classList.add("marquee");
     rect = document.createElementNS(NS, "rect"); rect.setAttribute("class", "sel"); s.appendChild(rect);
     s.setPointerCapture(e.pointerId);
   });
+  const stop = () => document.documentElement.classList.remove("marquee");
+  s.addEventListener("pointercancel", () => { if (start) { start = null; rect.remove(); } stop(); });
+  s.addEventListener("selectstart", e => { if (start) e.preventDefault(); });
   s.addEventListener("pointermove", e => {
     if (!start) return; const p = svgPt(s, e);
     if (Math.abs(p.x - start.x) + Math.abs(p.y - start.y) > 6) moved = true;
@@ -374,7 +381,7 @@ function wireFigure(el, k) {
     rect.setAttribute("width", Math.abs(p.x - start.x)); rect.setAttribute("height", Math.abs(p.y - start.y));
   });
   const end = e => {
-    if (!start) return; const p = svgPt(s, e), a = start; start = null;
+    if (!start) return; const p = svgPt(s, e), a = start; start = null; stop();
     if (!moved) { rect.remove(); const t = (document.elementFromPoint(e.clientX, e.clientY) || {closest: () => null}).closest(".hit"); return t ? choose(k, t, e) : null; }
     const r = rect.getBoundingClientRect(), hits = [...s.querySelectorAll(".hit")].filter(h => { const b = h.getBoundingClientRect(); return b.right > r.left && b.left < r.right && b.bottom > r.top && b.top < r.bottom; });
     const pt = {x: (p.x + a.x) / 2, y: (p.y + a.y) / 2};
