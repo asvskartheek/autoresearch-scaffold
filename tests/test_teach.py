@@ -41,6 +41,13 @@ class Teach(unittest.TestCase):
         hill = next(x for x in learn.cards(self.p) if x["id"].startswith("hill|"))
         self.assertNotIn("spot", teach.methods_for(hill))  # a bars figure is its card's answer
 
+    def test_counts_methods_only_where_counts_give_the_delta(self):
+        pooled = dict(self.gate, viz=dict(self.gate["viz"], delta=self.gate["viz"]["delta"] + 1.5))  # several runs per id
+        self.assertEqual([m for m in teach.methods_for(pooled) if m in ("spot", "code")], [])
+        self.assertIn("prototype", teach.methods_for(pooled))
+        cont = dict(self.gate, viz=dict(self.gate["viz"], unit="ms"))
+        self.assertFalse({"spot", "code", "prototype"} & set(teach.methods_for(cont)))
+
     def test_goal_context_has_no_target_count(self):
         self.p.open_goal("keep", "Keep 28 correct", "full", 0.7)
         g = learn.card(self.p, "goal|keep")

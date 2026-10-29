@@ -61,12 +61,21 @@ def methods_for(c: dict) -> list[str]:
     if v.get("kind") == "ci":
         out.append("sketch")
         if v.get("unit") == "pts" and v.get("n"):
-            out += ["spot", "prototype", "code"]
+            # spot and code teach delta = (fixed - broken) / n: only where that is how this card's delta was made (one
+            # 0/1 run per example). Pooled or fractional scores make it the mean difference, which the counts miss.
+            out += ["spot", "prototype", "code"] if counts_give_delta(v) else ["prototype"]
     elif v.get("kind") == "bars" and any(r.get("v") is not None for r in v.get("rows") or []):
         out.append("sketch")
     if c.get("why") or v:
         out.append("explain")
     return out
+
+
+def counts_give_delta(v: dict) -> bool:
+    try:
+        return abs(100 * (v["wins"] - v["losses"]) / v["n"] - v["delta"]) <= 0.005
+    except (KeyError, TypeError, ZeroDivisionError):
+        return False
 
 
 # ---------------------------------------------------------------- the task each method shows (never the answer)
