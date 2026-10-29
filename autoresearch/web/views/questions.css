@@ -49,6 +49,11 @@ ul.q-t ul.q-t{margin-left:11px;padding-left:12px;border-left:1px solid var(--rul
 .q-claim .q-tl{font-family:var(--mono);font-size:11.5px;color:var(--accent);margin-left:4px}
 .q-claim .pb{height:3px;border-radius:2px;background:var(--rule);margin-top:8px;overflow:hidden}
 .q-claim .pb i{display:block;height:100%;background:var(--accent);transition:width .4s}
+.q-doc{display:block;margin-top:12px;border:1px solid var(--border);border-radius:var(--radius-card);padding:12px;color:inherit;text-decoration:none}
+.q-doc:hover{border-color:var(--control)}
+.q-doc .fig svg{display:block;width:100%;height:auto;max-height:260px;color:var(--text)}
+.q-doc .btn{margin-top:10px}
+.q-reader{display:block;width:100%;height:calc(100vh - 150px);min-height:480px;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface)}
 .q-quote{margin:12px 0 0;font-size:13.5px;color:var(--muted)}
 .q-quote mark{background:rgba(217,164,65,.26);color:inherit;border-radius:2px}
 

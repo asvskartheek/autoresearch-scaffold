@@ -135,6 +135,7 @@ function qPanel(id,ix){
   const line=L.status==='failed'?('Agent failed'+(L.error?': '+L.error:'')):L.note||(L.status==='running'?'Agent working':'Queued for an agent');
   h+=`<div class="q-claim agent">${esc(line)}${L.task?` <a class="q-tl" href="#task/${enc(L.task)}">${esc(L.task)}</a>`:''}${f!=null?`<div class="pb"><i style="width:${(100*f).toFixed(1)}%"></i></div>`:''}</div>`;
  }else if(n.claim)h+=`<div class="q-claim ${cls}">${esc(n.claim)}${n.settled_by&&!['agent','you'].includes(n.settled_by)?`<span class="q-by">${esc(n.settled_by)}</span>`:''}</div>`;
+ if(n.doc)h+=qDocCard(n.doc,n.fig);
  if(n.quote)h+=`<div class="q-quote"><mark>${esc(n.quote)}</mark></div>`;
  h+=qEvidence(n);
  const live=n.status==='open'||n.status==='agent';
@@ -170,6 +171,43 @@ function qNotes(id){
  if(QS.notes[id]!==undefined)return;QS.notes[id]=null;
  fetch('api/questions/notes?id='+enc(id),{cache:'no-store'}).then(r=>r.json()).then(d=>{QS.notes[id]=d.notes||[];render()}).catch(()=>{QS.notes[id]=[]});
 }
+// ---------- long answers: an HTML document per answer (.research/answers/<id>.html, comments.py save_doc). The thread or
+// the question shows its first figure and Open; #answer/<id> reads it full width in a sandboxed frame.
+const Q_SVG=new Set(['svg','g','path','rect','circle','ellipse','line','text','tspan','polyline','polygon','title']);
+const Q_ATTR=/^(viewbox|width|height|x|y|x1|y1|x2|y2|dx|dy|cx|cy|r|rx|ry|d|points|fill|stroke|stroke-width|stroke-dasharray|stroke-linecap|stroke-linejoin|opacity|fill-opacity|stroke-opacity|transform|font-size|font-weight|text-anchor|dominant-baseline|xmlns|preserveaspectratio)$/i;
+function qCleanSvg(src){
+ const t=document.createElement('template');t.innerHTML=String(src||'');const svg=t.content.querySelector('svg');if(!svg)return '';
+ const walk=el=>{for(const a of [...el.attributes])if(!Q_ATTR.test(a.name)||/url\s*\(|javascript:|expression|&#|\\/i.test(a.value))el.removeAttribute(a.name);
+  for(const c of [...el.childNodes]){if(c.nodeType===3)continue;if(c.nodeType!==1||!Q_SVG.has(c.localName)){c.remove();continue}walk(c)}};
+ walk(svg);
+ if(!svg.getAttribute('viewBox')){const w=parseFloat(svg.getAttribute('width')),ht=parseFloat(svg.getAttribute('height'));if(w&&ht)svg.setAttribute('viewBox',`0 0 ${w} ${ht}`)}
+ svg.removeAttribute('width');svg.removeAttribute('height');
+ return svg.outerHTML;
+}
+function qDocCard(did,fig){
+ const f=fig?qCleanSvg(fig):'';
+ return `<a class="q-doc" href="#answer/${enc(did)}">${f?`<div class="fig">${f}</div>`:''}<span class="btn">Open the full answer</span></a>`;
+}
+const qTheme=()=>document.documentElement.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+// the document arrives as text and runs in a sandboxed srcdoc frame (opaque origin: its widgets run, but it cannot
+// read the ledger or post as the viewer); the dashboard's theme goes on its <html> as data-theme
+function qDocLoad(id){
+ QS.docs[id]=null;
+ const u='api/answers/'+enc(id);
+ Promise.all([fetch(u+'?meta=1',{cache:'no-store'}),fetch(u,{cache:'no-store'})])
+  .then(async([m,h])=>{QS.docs[id]=m.ok&&h.ok?{...await m.json(),html:await h.text()}:{error:1};render()})
+  .catch(()=>{QS.docs[id]={error:1};render()});
+}
+const qThemed=(html,t)=>/<html\b/i.test(html)?html.replace(/<html\b/i,`<html data-theme="${t}"`):`<html data-theme="${t}">${html}</html>`;
+VIEWS.answer=arg=>{
+ if((QS.docs??={})[arg]===undefined)qDocLoad(arg);
+ const d=QS.docs[arg],title=d?.title||'Answer',crumbs=[['Questions','#questions'],[title]];
+ if(d?.error)return page({title,crumbs})+empty('No such answer');
+ if(!d)return page({title,crumbs})+empty('Reading the answer…');
+ return page({title,crumbs})+`<iframe class="q-reader" title="${esc(title)}" sandbox="allow-scripts allow-popups" srcdoc="${esc(qThemed(d.html,qTheme()))}"></iframe>`;
+};
+addEventListener('hashchange',()=>{const {r,arg}=route();if(r==='answer'&&QS.docs)delete QS.docs[arg]});  // reopening reads the latest version
+
 function qFocus(ix,arg){
  if(arg&&ix.by[arg])return arg;
  // the open goal with the most work under it
