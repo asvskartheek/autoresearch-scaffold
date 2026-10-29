@@ -131,11 +131,66 @@ def _hill_title(k, h) -> str:
     return alt if len(alt.split()) <= 6 else _short(t or k)
 
 
-def _goal_title(g, k) -> str:
-    t = (g.get("title") or k).strip().rstrip("?.")
-    if re.match(r"(?i)(no|zero|reach|get|make|keep|cut|beat)\b", t) or len(t.split()) > 5:
-        return _short(t[:1].upper() + t[1:]) + "?"  # already a verb phrase or a negation: "Reach No …" reads badly
-    return f"Reach {t[:1].lower() + t[1:] if t[1:2].islower() else t}?"
+_VERBS = ("keep", "reach", "get", "make", "cut", "beat", "hit", "hold", "stay", "match", "stop", "reduce", "raise",
+          "halve", "double", "fix", "pass", "ship", "close")
+_AFTER_VERB = {"in", "like", "at", "under", "within", "on", "as", "to", "for", "with", "without", "below", "above",
+               "before", "after", "by", "from", "every", "faster", "slower", "correctly", "reliably", "instantly"}
+
+
+def _lower1(t: str) -> str:
+    """Lower the first letter unless the first word is an acronym or a name with inner capitals (GSM8K, P&ID, vLLM)."""
+    w = t.split(" ", 1)[0]
+    return t if not w[:1].isupper() or any(c.isupper() or c.isdigit() for c in w[1:]) or "&" in w else t[:1].lower() + t[1:]
+
+
+def _base_verb(v: str) -> str:
+    if v.endswith("ies"):
+        return v[:-3] + "y"
+    if v.endswith(("shes", "ches", "xes", "sses", "zes")):
+        return v[:-2]
+    return v[:-1]
+
+
+def _title_units(t: str, g, sl) -> str:
+    """Bare percentages in a goal title become the amount they stand for, the percentage in brackets after it:
+    "GSM8K at 96%" -> "GSM8K at 1,267 of 1,319 (96%)"; "throughput +3%" -> "throughput to 322 tok/s (+3%)"."""
+    target, kpi = g.get("target"), g.get("kpi", "score")
+    if target is None or "%" not in t:
+        return t
+    n = g.get("n") or (sl or {}).get("n")
+    if kpi == "score" and (sl or {}).get("scale") != "continuous" and n:
+        need = -(-round(target * n * 1e6) // 10**6)
+
+        def cnt(m):
+            return f"{need:,} of {n:,} ({m.group(1)}%)" if abs(float(m.group(1)) - 100 * target) < 0.51 else m.group(0)
+        return re.sub(r"(?<![+\d.])(\d+(?:\.\d+)?)\s*%", cnt, t)
+    u = _goal_units_of(g, sl)
+    return re.sub(r"\s*\+(\d+(?:\.\d+)?)\s*%", lambda m: f" to {_amt(u, target)} (+{m.group(1)}%)", t, count=1)
+
+
+def _goal_title(g, k, sl=None) -> str:
+    """A goal as a question that reads naturally: "Can we get GSM8K to 1,267 of 1,319 (96%)?", "Can we keep 1,224
+    correct?", "Can we get to zero open review findings?", "Can we make Home appear in under a second?"."""
+    t = re.sub(r"\s+", " ", (g.get("title") or k.replace("-", " ")).strip().rstrip("?.!")).strip()
+    t = _title_units(t, g, sl)
+    w = t.split(" ")
+    first = w[0].lower()
+    lower = (not g.get("higher_is_better", True)) != bool(_goal_units_of(g, sl)["neg"])
+    if first in _VERBS:
+        q = "Can we " + first + (" " + " ".join(w[1:]) if w[1:] else "")
+    elif first in ("no", "zero") and len(w) > 1:
+        q = "Can we get to zero " + " ".join(w[1:])
+    else:
+        verb = next((i for i in range(1, min(4, len(w) - 1)) if re.fullmatch(r"[a-z]{4,}s", w[i])
+                     and not w[i].endswith(("ss", "us", "is")) and w[i + 1].lower() in _AFTER_VERB), None)
+        if verb is not None:
+            subj = [x.lower() if x in ("The", "A", "An", "Our", "Its") else x for x in w[:verb]]
+            q = "Can we make " + " ".join(subj + [_base_verb(w[verb])] + w[verb + 1:])
+        else:
+            low = _lower1(t)
+            the = "the " if low[:1].islower() and not low.startswith(("the ", "a ", "an ", "our ")) else ""
+            q = "Can we get " + the + re.sub(r"\bat (?=[\d$])", "under " if lower else "to ", low, count=1)
+    return " ".join(q.split()[:14]) + "?"
 
 
 def _model_title(k, m) -> str:
@@ -153,12 +208,12 @@ def _model_title(k, m) -> str:
 
 def seeded(p) -> dict:
     """id -> node, derived from goals, hills and models. Nothing here is written."""
-    goals, hills, models, champ = p.goals(), p.hills(), p.models(), p.champion()
+    goals, hills, models, champ, slices = p.goals(), p.hills(), p.models(), p.champion(), p.slices()
     out = {}
     for k, g in goals.items():
         st = {"achieved": "answered", "abandoned": "dead"}.get(g.get("status"), "open")
         claim = _line((g.get("evidence") or {}).get("note")) if st == "answered" else _line(g.get("reason")) if st == "dead" else None
-        out[f"g:{k}"] = dict(title=_goal_title(g, k), parent=None, status=st, claim=claim, created=g.get("created"),
+        out[f"g:{k}"] = dict(title=_goal_title(g, k, slices.get(g.get("slice") or "")), parent=None, status=st, claim=claim, created=g.get("created"),
                              evidence=[dict(goal=k)], goal=k, seed="goal")
     loose = None
     for k, h in hills.items():
@@ -375,9 +430,13 @@ def _grp(x: float) -> str:
 
 
 def _goal_units(p, g) -> dict:
+    return _goal_units_of(g, (p.slices().get(g.get("slice") or "") or {}) if g.get("slice") else {})
+
+
+def _goal_units_of(g, sl) -> dict:
     """How a goal's numbers read: counts "c of n" on a 0/1 slice, else an amount in the slice's or KPI's unit.
     Metrics that start "minus ..." are stored negated (higher is better); they read as the positive amount."""
-    sl = (p.slices().get(g.get("slice") or "") or {}) if g.get("slice") else {}
+    sl = sl or {}
     kpi, hib = g.get("kpi", "score"), g.get("higher_is_better", True)
     if kpi == "score" and sl.get("scale") != "continuous":
         return dict(count=True, n=g.get("n") or sl.get("n"), neg=False, unit="", lower=not hib)

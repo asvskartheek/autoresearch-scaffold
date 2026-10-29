@@ -55,5 +55,29 @@ class GoalUnits(unittest.TestCase):
         self.assertEqual((g["value_txt"], g["target_txt"], g["gap_txt"]), ("14 of 20", "18 of 20 (90%)", "4 more of 20"))
 
 
+class GoalTitles(unittest.TestCase):
+    def t(self, title, target=0.9, kpi="score", hib=True, n=None, sl=None):
+        return q._goal_title(dict(title=title, target=target, kpi=kpi, higher_is_better=hib, n=n), "k", sl)
+
+    def test_every_real_goal_title_reads_as_a_question(self):
+        ms = dict(scale="continuous", unit="ms", metric="minus ms to paint")
+        cases = [
+            (self.t("GSM8K at 96%", 0.96, n=1319), "Can we get GSM8K to 1,267 of 1,319 (96%)?"),
+            (self.t("P&ID accuracy at 84%", 0.84, n=183), "Can we get P&ID accuracy to 154 of 183 (84%)?"),
+            (self.t("P&ID median latency at 45 s", 45, "latency_p50", False), "Can we get P&ID median latency under 45 s?"),
+            (self.t("Median under 10 s", 10, "latency_p50", False), "Can we get the median under 10 s?"),
+            (self.t("Keep 1,224 correct", 0.928, n=1319), "Can we keep 1,224 correct?"),
+            (self.t("No open review findings", 0, hib=False, sl=dict(scale="continuous", unit="findings")),
+             "Can we get to zero open review findings?"),
+            (self.t("Single-sequence vLLM throughput +3%", 322, "tokens_per_second_c1"),
+             "Can we get the single-sequence vLLM throughput to 322 tok/s (+3%)?"),
+            (self.t("Home appears in under a second", -1000, sl=ms), "Can we make Home appear in under a second?"),
+            (self.t("The projector behaves like plain Android", 1.0, n=13),
+             "Can we make the projector behave like plain Android?"),
+        ]
+        for got, want in cases:
+            self.assertEqual(got, want)
+
+
 if __name__ == "__main__":
     unittest.main()
