@@ -729,7 +729,7 @@ def aliases(viewer: str) -> set:
 
 
 def brief(p: Project, since: float = 0, viewer: str = "anon") -> dict:
-    from . import teach
+    from . import memory, teach
     p._gates = {}
     with p.snapshot():
         cs = cards(p, since)
@@ -743,7 +743,7 @@ def brief(p: Project, since: float = 0, viewer: str = "anon") -> dict:
         prof = teach.attach(p, cs, pub, viewer, al)
         return dict(now=_now(), since=since, viewer=viewer, cards=pub,
                     empty=None if cs else _why_empty(p),
-                    concepts=concepts(p), calibration=calibration(preds),
+                    concepts=memory.order(p, concepts(p), viewer), calibration=calibration(preds),
                     understanding=understanding(p, viewer),
                     open=[r for r in preds if r.get("hit") is None],
                     teach=dict(profile=prof, labels=teach.LABEL))

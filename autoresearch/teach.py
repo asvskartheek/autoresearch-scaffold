@@ -263,6 +263,8 @@ def attach(p: Project, cards_full: list[dict], public_cards: list[dict], viewer:
     from .learn import predictions
     preds = [r for a in {viewer} | aliases for r in predictions(p, a)]
     prof = profile(rows, preds)
+    from . import memory
+    prof = memory.blend(p, prof, viewer, aliases)  # what worked for this person in other projects counts too
     done = {r["card"]: r for r in rows if not r.get("skip") and r.get("card")}
     skipped: dict = {}
     for r in rows:
