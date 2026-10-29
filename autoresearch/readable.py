@@ -55,10 +55,12 @@ def _is(w: str) -> bool:
 
 
 @lru_cache(maxsize=4096)
-def _split(tok: str) -> str:
-    """Split a run of letters into dictionary words, fewest and longest pieces first; unchanged if it can't."""
+def _split(tok: str, min_n: int = 12) -> str:
+    """Split a run of letters into dictionary words, fewest and longest pieces first; unchanged if it can't.
+    Only long runs (12+ letters) split: a shorter token is far likelier one word the dictionary lacks (Bluetooth)
+    than several squeezed together. Text glued to a number or an acronym passes a lower `min_n`."""
     W, low, n = _words(), tok.lower(), len(tok)
-    if not W or n < 7 or _is(low):
+    if not W or n < min_n or _is(low):
         return tok
     best = [None] * (n + 1)
     best[0] = (0, 0, [])
@@ -81,8 +83,8 @@ def _word(tok: str) -> str:
     if re.search(r"[-_@#]|[A-Za-z][./][A-Za-z]|[a-z][A-Z]", tok) or not re.search(r"[A-Za-z]", tok) or _TECH.fullmatch(tok):
         return tok  # an identifier, a path or slice name, a number, base64
     m = re.fullmatch(r"(\d*)([A-Z]{2,})(\d{2,})?([a-z]{3,})", tok)  # GRPO192steps, 90CInotpositive
-    if m and (m.group(3) or _is(m.group(4)) or _split(m.group(4)) != m.group(4)):
-        return " ".join(x for x in (m.group(1), m.group(2), m.group(3), _word(m.group(4))) if x)
+    if m and (m.group(3) or _is(m.group(4)) or _split(m.group(4), 7) != m.group(4)):
+        return " ".join(x for x in (m.group(1), m.group(2), m.group(3), _split(m.group(4), 7)) if x)
     if "/" in tok:
         return "/".join(_word(p) for p in tok.split("/"))
     tok = re.sub(r"(?<=[a-z]{2})(?=\d{2,})", " ", tok)      # audit1319 -> audit 1319, vs150 -> vs 150; keeps gsm8k

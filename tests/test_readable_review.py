@@ -7,7 +7,7 @@ from autoresearch.readable import readable
 class Readable(unittest.TestCase):
     def test_words_stay_whole(self):
         for w in ("planned", "readouts", "handoff", "inlines", "base64", "getApps()", "drawing(s)", "bf16 sha256",
-                  "HTTPServer", "4B and 10k gsm8k"):
+                  "HTTPServer", "4B and 10k gsm8k", "dropped", "Bluetooth", "Launcher as shipped, with Bluetooth button"):
             self.assertEqual(readable(w), w)
 
     def test_run_together_splits(self):
