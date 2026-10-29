@@ -282,7 +282,11 @@ const scopeOf=el=>{const c=el.closest('section,article,.card,dialog');if(!c)retu
  const hd=[...c.querySelectorAll('h1,h2,h3,h4,.q,header')].find(fx),cx=[...c.querySelectorAll('.ctx')].find(fx);
  return [hd,cx].filter(Boolean).map(x=>textOf(x,80)).join(' · ')};
 const words=t=>squash(t).replace(/[\d.,%+\u2212-]/g,'');
-function anchorFor(el){const [key,node]=keyOf(el);const rel=node?relPath(node,el):null;
+function anchorFor(el){
+ const card=el.closest('[data-card]');
+ if(card?.dataset.card){const key={sel:`[data-card="${CSS.escape(card.dataset.card)}"]`,context:card.dataset.card};
+  return {key,rel:relPath(card,el),sel:cssPath(el),text:label(el)}}
+ const [key,node]=keyOf(el);const rel=node?relPath(node,el):null;
  if(key&&key.sel&&node){const w=scopeOf(node);if(w)key.within=w}
  return key&&rel!=null?{key,rel,sel:cssPath(el),text:label(el)}:{sel:cssPath(el),text:label(el)}}
 function keyNode(k){
@@ -292,7 +296,8 @@ function keyNode(k){
  for(const l of ls){const c=l.closest(k.card);if(c)return c}
  return null}
 function resolve(a){
- if(a.key){const n=keyNode(a.key);if(n&&a.key.within&&words(scopeOf(n))!==words(a.key.within))return false;  // another card: no pin here
+ if(a.key){const n=keyNode(a.key);if(a.key.context&&!n)return false;  // the Brief has moved to another card
+  if(n&&a.key.within&&words(scopeOf(n))!==words(a.key.within))return false;  // another card: no pin here
   if(n){if(!a.rel)return n;try{return n.querySelector(':scope>'+a.rel)||n}catch(e){return n}}}
  let el=null;try{el=a.sel&&document.querySelector(a.sel)}catch(e){}
  if(a.text&&(!el||squash(el.textContent)!==squash(a.text))){  // the element moved or the anchor came from the CLI: find it by its text

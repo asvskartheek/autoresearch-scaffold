@@ -103,6 +103,27 @@ class Keyboard(unittest.TestCase):
         self.page.keyboard.press('Escape')
         self.assertEqual(self.page.locator('.kh-ov').count(), 0)
 
+    def test_comment_pin_stays_on_its_brief_card(self):
+        self.load('''<main id="main"><section data-card="goal:first"><h2>The same question</h2>
+          <svg id="lnl" width="300" height="100"><circle cx="80" cy="50" r="12"/></svg></section></main>
+          <script>window.S={afterRender:[]};window.saved=[];window.fetch=async (url,opts={})=>{
+            if(opts.method==='POST'){const row=JSON.parse(opts.body);if(row.kind==='comment')saved.push({id:'test-pin',route:'overview',anchor:row.anchor,resolved:false,waiting:false,last_t:1,messages:[{body:row.body,author:'Tester',t:1}]});
+              return {ok:true,json:async()=>({id:'test-pin'})}};
+            return {ok:true,json:async()=>({threads:saved})}};</script>''')
+        self.page.add_style_tag(path=str(KEYS.with_name('comments.css')))
+        self.page.add_script_tag(path=str(KEYS.with_name('comments.js')))
+        self.page.evaluate("S.afterRender.forEach(f=>f());ARXC.comment(document.querySelector('circle'))")
+        self.page.keyboard.press('Enter')
+        self.page.locator('.cm-pop textarea').fill('This guess belongs to the first card')
+        self.page.locator('.cm-pop .go').click()
+        self.page.wait_for_function("saved.length===1")
+        self.assertEqual(self.page.evaluate("saved[0].anchor.key.context"), 'goal:first')
+        self.page.keyboard.press('Escape')
+        self.page.evaluate("document.querySelector('[data-card]').dataset.card='goal:second';S.afterRender.forEach(f=>f())")
+        self.assertEqual(self.page.locator('.cm-pin[data-id="test-pin"]').count(), 0)
+        self.page.evaluate("document.querySelector('[data-card]').dataset.card='goal:first';S.afterRender.forEach(f=>f())")
+        self.assertEqual(self.page.locator('.cm-pin[data-id="test-pin"]').count(), 1)
+
     def test_project_number_includes_current_project(self):
         self.load('''<aside id="nav"><a class="nav proj" href="#project/one">One</a>
           <a class="nav proj on" href="#project/two">Two</a>
