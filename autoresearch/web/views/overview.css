@@ -142,3 +142,6 @@ a.ov-pid{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;ov
 .ov-lg .ov-rg::before,.ov-lg .ov-rg::after{display:none}
 .ov-lg a{margin-left:auto}
 .ov-lg a:hover{color:var(--accent)}
+/* a rejected model on the board: its figures stay ledger-true but read as out of the running */
+.ov-lb tr.ov-rej td:not(:first-child){opacity:.62}
+.ov-lb tr.ov-rej .pill{opacity:1}

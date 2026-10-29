@@ -165,9 +165,9 @@ VIEWS.overview=()=>{
  const rows=shown.map(([m,r])=>{
   const d=cs!=null&&r.score!=null?r.score-cs:null;
   const good=d!=null&&d!==0&&(hib?d>0:d<0)?'pos':'';
-  const about=ovAbout(m,st.models[m]);
-  return `<tr class="click" onclick="location.hash='task/${enc(r.task)}'"><td class="num faint ov-rank">${rank.get(m)}</td>
-   <td class="ov-id"><div class="two"><span class="row"><a class="ell ov-nm" href="#model/${enc(m)}" onclick="event.stopPropagation()" title="${esc(m)}">${mn(m)}</a>${m===champ?`<span class="ov-hide-s">${pill('champion','champion')}</span>`:''}</span><span class="sub ell ov-show-s">${m===champ?'Champion · ':''}n ${ovN(r.n)}${r.errors?' · '+plural(r.errors,'error'):''}</span></div></td>
+  const about=ovAbout(m,st.models[m]),rej=st.models[m]?.status==='rejected';
+  return `<tr class="click${rej?' ov-rej':''}" title="${rej?esc('Rejected: '+firstLine(st.models[m].reason||'')):''}" onclick="location.hash='task/${enc(r.task)}'"><td class="num faint ov-rank">${rank.get(m)}</td>
+   <td class="ov-id"><div class="two"><span class="row"><a class="ell ov-nm" href="#model/${enc(m)}" onclick="event.stopPropagation()" title="${esc(m)}">${mn(m)}</a>${m===champ?`<span class="ov-hide-s">${pill('champion','champion')}</span>`:rej?pill('rejected','rejected'):''}</span><span class="sub ell ov-show-s">${m===champ?'Champion · ':''}n ${ovN(r.n)}${r.errors?' · '+plural(r.errors,'error'):''}</span></div></td>
    ${bin?`<td class="ov-bar ov-hide-s">${meter(r.score,{cls:m===champ?'':'muted'})}</td>`:''}
    <td class="num"><b class="ov-sc">${cur?sv(cur.name,r.score,r.n):ovScore(r.score,cur)}</b></td>
    <td class="num ov-hide-s">${ovN(r.n)}</td>
