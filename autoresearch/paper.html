@@ -469,7 +469,7 @@ function cardFor(t) {
     const r = ranges.get(t.id), msgs = t.messages, hidden = msgs.length - 2;
     c.querySelector(".content").innerHTML =
       (r && !r.exact ? `<span class="tag">${r.block ? "Text changed since this comment" : "Original text was removed"}</span>` : "") +
-      (t.anchor && t.anchor.shape ? `<div class="quote">${TOOLN[t.anchor.shape.tool] || "Drawing"}${t.anchor.quote ? ` on <q>${esc(t.anchor.quote.slice(0, 80))}</q>` : ""}</div>`
+      (t.anchor && t.anchor.shape ? `<div class="quote"><span style="white-space:nowrap">${TOOLN[t.anchor.shape.tool] || "Drawing"}${t.anchor.quote ? " on" : ""}</span>${t.anchor.quote ? `<q>${esc(t.anchor.quote.slice(0, 80))}</q>` : ""}</div>`
         : t.anchor && t.anchor.quote ? `<div class="quote"><q>${esc(t.anchor.quote)}</q></div>` : "") +
       msgs.map((m, i) => msgHtml(m, i, t)).join("") +
       (hidden > 0 ? `<div class="collapsed">${hidden} more ${hidden === 1 ? "reply" : "replies"}</div>` : "") +
