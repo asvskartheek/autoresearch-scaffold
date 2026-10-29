@@ -4,7 +4,7 @@
 // which view they are on, the roster for @mentions, and the face chips that show who else is here.
 //   ARXP.me()                 {id, name}
 //   ARXP.setName(n)           rename (the roster follows on the next beat)
-//   ARXP.start(api, routeFn)  beat to `api` (…/api/people) every 20 s and on hashchange; ARXP.on(fn) hears each answer
+//   ARXP.start(api, routeFn)  beat to `api` (…/api/people) every 4 s and on hashchange; ARXP.on(fn) hears each answer
 //   ARXP.face(id|name, name)  a round initials chip in the person's colour
 //   ARXP.at(html[, also])     @mentions of known people (and names they had before a rename), wrapped in <b class="at">
 //   ARXP.complete(textarea)   @ + letters offers matching names
@@ -38,7 +38,7 @@ const ARXP=window.ARXP={
  me:()=>me,
  named:()=>!!me.name,
  setName(n){n=String(n||'').replace(/\s+/g,' ').trim().slice(0,40);if(!n)return;me={...me,name:n};put(K,JSON.stringify(me));beat()},
- start(url,fn){api=url;if(fn)routeFn=fn;beat();clearInterval(timer);timer=setInterval(()=>{if(!document.hidden)beat()},20000);
+ start(url,fn){api=url;if(fn)routeFn=fn;beat();clearInterval(timer);timer=setInterval(()=>{if(!document.hidden)beat()},4000);
   addEventListener('hashchange',beat);document.addEventListener('visibilitychange',()=>{if(!document.hidden)beat()})},
  on(fn){subs.push(fn)},
  roster:()=>roster,here:()=>here,

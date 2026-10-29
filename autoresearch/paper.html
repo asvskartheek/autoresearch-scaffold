@@ -100,7 +100,7 @@ kbd{font:11px var(--mono);border:1px solid var(--input);border-bottom-width:2px;
 .tools button.pk{width:auto;padding:0 10px 0 8px;gap:6px;grid-auto-flow:column;font-size:12.5px;color:var(--foreground)}.tools button.pk.on{color:var(--primary-fg,#fff)}
 @media (max-width:520px){.tools button.pk span{display:none}.tools button.pk{padding:0 6px}}
 .ink.pick{cursor:default}
-.ink-svg .v.pk{stroke:var(--ring);stroke-width:2;stroke-opacity:0}.ink-svg g.on .v.pk,.ink-svg g.hover .v.pk,.ink-svg g.draft .v.pk{stroke-opacity:1}
+.ink-svg .v.pk{stroke:var(--ring);stroke-width:2;stroke-opacity:.35}.ink-svg g.on .v.pk,.ink-svg g.hover .v.pk,.ink-svg g.draft .v.pk{stroke-opacity:1}
 .shp{width:300px}.shp-u{padding:6px 10px 8px;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted-fg)}
 .shp-u b{font-weight:600;color:var(--foreground)}.shp .shp-x{margin-left:auto;font-size:11.5px;color:var(--muted-fg)}.shp code{font:12px var(--mono)}
 .shp a{display:block;padding:7px 10px;border-radius:6px;color:inherit;text-decoration:none;font-size:13px}.shp a:hover{background:var(--muted)}
@@ -255,7 +255,11 @@ $("#me").onclick = () => { const n = prompt("Your name on comments", me); if (n 
 paintMe();
 
 // ---------- the dashboard's nav, as a rail ----------
-const NAV = [["overview", "Overview", '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>'],
+const NAV = [["start", "Start", '<path d="M5 20V4h12l-3 4 3 4H5"/>'],
+  ["learn", "Brief", '<path d="M4 4h7v16H4zM13 4h7v16h-7z"/>'],
+  ["course", "101", '<path d="M3 8l9-5 9 5-9 5zM6 10v7c4 3 8 3 12 0v-7"/>'],
+  ["questions", "Questions", '<circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 1 1 4 3v2M12 17h.01"/>'],
+  ["overview", "Overview", '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>'],
   ["workbench", "Workbench", '<path d="M4 12h3l2-6 4 12 2-6h5"/>'],
   ["goals", "Goals", '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="0.6" fill="currentColor"/>'],
   ["models", "Models", '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M8.3 7l7.5 4M8.3 17l7.5-4"/>'],
@@ -456,7 +460,7 @@ function markSeen(t) {
   const last = t.messages.at(-1); if (!PX || !myId() || !last || last.by === myId() || ((t.seen_by || {})[myId()] || 0) >= last.t) return;
   t.seen_by = { ...(t.seen_by || {}), [myId()]: last.t }; api("seen", { parent: t.id });
 }
-function sig(t) { return JSON.stringify([t.messages, t.resolved, t.thinking, t.waiting, me, readers(t), !!(ranges.get(t.id) || {}).exact, Math.floor(Date.now() / 60000)]); }
+function sig(t) { return JSON.stringify([t.messages, t.resolved, t.thinking, t.waiting, me, readers(t), Object.keys(readers(t)).map(id => PX?.name(id)), !!(ranges.get(t.id) || {}).exact, Math.floor(Date.now() / 60000)]); }
 function cardFor(t) {
   let c = cards.get(t.id);
   if (!c) {
@@ -1028,7 +1032,7 @@ async function refresh() {
   const h0 = decodeURIComponent(location.hash.slice(1));
   if (h0) setTimeout(() => jumpTo(h0), 150);
   setInterval(refresh, 1500);
-  PX && PX.start(BASE + "/api/people", () => "papers/" + NAME);
+  if (PX) { PX.on(() => { me = PX.me().name; paintMe(); renderAll(); }); PX.start(BASE + "/api/people", () => "papers/" + NAME); }
   document.fonts && document.fonts.ready.then(layout);
 })();
 })();
