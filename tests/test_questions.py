@@ -53,7 +53,8 @@ class Questions(unittest.TestCase):
         self.assertIn("14 of 20", t["g:ninety"]["claim"])
         self.assertFalse((self.p.dir / "questions.json").exists())
         for n in t.values():  # goal questions carry the target in units ("to 1,267 of 1,319"), so they get more room
-            self.assertLessEqual(len(n["title"].split()), 14 if n.get("seed") == "goal" else 6, n["title"])
+            # a model with no title asks with its change sentence ("Drop the system prompt: does it help?")
+            self.assertLessEqual(len(n["title"].split()), {"goal": 14, "model": 12}.get(n.get("seed"), 6), n["title"])
 
     def test_evidence_is_paired_against_the_parent(self):
         ev = self.by()["m:worse"]["ev"]

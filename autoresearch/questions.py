@@ -246,23 +246,38 @@ def _model_change(k, m) -> str | None:
 
 
 def _model_title(k, m, models=None, label=None) -> str:
-    """"Does +hint help?" for a model named after its parent plus a change; a repeat run asks whether the base holds;
-    otherwise the model's readable label (its title, else its id cut to its tail)."""
+    """"Does <title> help?" for a model with a title of its own; "Does +hint help?" for one named after its parent plus
+    a change; else its change sentence as the question ("Persist encoded icons…: does it help?"); a repeat run asks
+    whether the base holds; the raw id only when nothing else names it."""
     rr = _rerun(k, models or {})
     if rr:
-        return f"Does {_tail(rr[0])} hold on rerun {rr[1]}?"
+        base = re.sub(r"\s+", " ", str(((models or {}).get(rr[0]) or {}).get("title") or "")).strip()
+        return f"Does {_short(base, 8) if base else _tail(rr[0])} hold on rerun {rr[1]}?"
+    t = re.sub(r"\s+", " ", str(m.get("title") or "")).strip()
+    if t and t != k:
+        words = sum(1 for w in t.split() if re.search(r"\w", w))
+        return f"{_short(t, 8)}: does it help?" if ":" in t or words > 6 else f"Does {t} help?"
     what = _model_change(k, m)
     if what:
         return f"Does {what} help?"
-    t = re.sub(r"\s+", " ", str(m.get("title") or "")).strip()
-    if t and t != k:
-        return f"Does {_short(t, 10)} help?"
+    ch = re.sub(r"^built on [\w.+-]+[.;:,]?\s*", "", re.sub(r"\s+", " ", readable(str(m.get("change") or ""))).strip(), flags=re.I)
+    ch = re.split(r"(?<=[.;:])\s", ch, maxsplit=1)[0]
+    ch = ch.rstrip(".;: ")
+    if ch and not ch.lower().startswith(("baseline", "historical import")):
+        return f"{_short(ch, 7)}: does it help?"
     return f"Does {label or _tail(k)} help?"
+
+
+def _differs(ids) -> dict:
+    """What tells a few ids apart: each id's tokens that not all of them share ("numeric32768" vs "numeric8192")."""
+    toks = {k: [x for x in re.split(r"[-_+.:/]", k) if x] for k in ids}
+    common = set.intersection(*(set(v) for v in toks.values())) if toks else set()
+    return {k: " ".join(x for x in v if x not in common) for k, v in toks.items()}
 
 
 def _distinct_siblings(out, models):
     """Siblings with the same title ("Does +count help?" twice) say what each change was made on; if that still
-    collides (two models with one title), each names its id."""
+    collides (two models with one title), each adds the part of its id that differs."""
     def groups():
         seen = {}
         for k, n in out.items():
@@ -270,13 +285,18 @@ def _distinct_siblings(out, models):
                 seen.setdefault((n["parent"], n["title"]), []).append(k)
         return [ks for ks in seen.values() if len(ks) > 1]
     for ks in groups():
+        pars = {(models.get(out[k]["model"]) or {}).get("parent") for k in ks}
+        if len(pars) < 2:
+            continue
         for k in ks:
             par = (models.get(out[k]["model"]) or {}).get("parent")
             if par and out[k]["title"].endswith(" help?"):
                 out[k]["title"] = out[k]["title"][:-len(" help?")] + f" help on {_tail(par)}?"
     for ks in groups():
+        diff = _differs([out[k]["model"] for k in ks])
         for k in ks:
-            out[k]["title"] = f"Does {_tail(out[k]['model'])} help?"
+            d = diff[out[k]["model"]] or _tail(out[k]["model"])
+            out[k]["title"] = out[k]["title"].rstrip("?") + f" ({d})?"
 
 
 def seeded(p) -> dict:

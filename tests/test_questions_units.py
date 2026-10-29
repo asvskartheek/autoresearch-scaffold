@@ -98,7 +98,7 @@ class ModelTitles(unittest.TestCase):
         self.assertEqual(t["m:po4+inv+trace+count"], "Does +count help on po4+inv+trace?")
         self.assertEqual(t["m:po4+inv.r4"], "Does po4+inv hold on rerun 4?")
         self.assertEqual(t["m:sft-v1"], "Does Percentage SFT · 1 epoch · 1e-6 help?")
-        self.assertEqual((t["m:twin-a"], t["m:twin-b"]), ("Does twin-a help?", "Does twin-b help?"))
+        self.assertEqual((t["m:twin-a"], t["m:twin-b"]), ("Does Same idea help (a)?", "Does Same idea help (b)?"))
 
 
 class ReadPane(unittest.TestCase):

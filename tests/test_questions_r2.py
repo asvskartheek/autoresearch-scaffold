@@ -99,3 +99,17 @@ class R2(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Titles(unittest.TestCase):
+    def test_model_questions_read_without_raw_ids(self):
+        ms = {"v0": {}, "v1": dict(parent="v0", change="Persist encoded icons to files keyed by version, so a cold start skips it."),
+              "a-32768-v1": dict(title="Universal numeric line"), "a-8192-v1": dict(title="Universal numeric line"),
+              "base.r2": {}, "base": dict(title="Plain base")}
+        self.assertEqual(q._model_title("v1", ms["v1"], ms), "Persist encoded icons to files keyed by…: does it help?")
+        self.assertEqual(q._model_title("base.r2", {}, ms), "Does Plain base hold on rerun 2?")
+        out = {f"m:{k}": dict(seed="model", parent="h:x", model=k, title=q._model_title(k, ms[k], ms))
+               for k in ("a-32768-v1", "a-8192-v1")}
+        q._distinct_siblings(out, ms)
+        self.assertEqual(out["m:a-32768-v1"]["title"], "Does Universal numeric line help (32768)?")
+        self.assertEqual(out["m:a-8192-v1"]["title"], "Does Universal numeric line help (8192)?")
