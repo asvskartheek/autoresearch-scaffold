@@ -271,7 +271,9 @@ VIEWS.task=(id)=>{
  if(t?.status==='failed')wbMarkSeen(t.id);
  if(!t)return page({title:'Task not found',crumbs:[['Archive','#archive'],['Not found']],finding:`No task <span class="id">${esc(id)}</span> in this ledger.`})+panel('',empty('Nothing to show','<a class="ln" href="#archive">Back to the archive</a>'));
  const live=isLive(t),par=byId(t.parent),hill=hillOf(t);
- const crumbs=[[live?'Workbench':'Archive',live?'#workbench':'#archive'],...(par?[[par.title,'#task/'+enc(par.id)]]:[]),[t.title]];
+ // an eval titled by default ("lora-r16 on toy/dev60") reads with the model's label and the short slice
+ const ttl=t.kind==='eval'&&t.model&&t.slice&&t.title===`${t.model} on ${t.slice}`?`${sx.models[t.model]?.title||t.model} on ${short(t.slice)}`:t.title;
+ const crumbs=[[live?'Workbench':'Archive',live?'#workbench':'#archive'],...(par?[[par.title,'#task/'+enc(par.id)]]:[]),[ttl]];
  const [sl,sc]=wbState(t);
  const meta=[esc(wbKind(t.kind)),t.agent&&`by ${esc(t.agent)}`,
   t.model&&`<a class="ln" href="#model/${enc(t.model)}" title="${esc(t.model)}">${mn(t.model)}</a>`,
@@ -279,7 +281,7 @@ VIEWS.task=(id)=>{
   hill&&`hill <a class="ln" href="#hill/${enc(hill)}">${esc(sx.hills[hill].title||hill)}</a>`,
   par&&`part of <a class="ln" href="#task/${enc(par.id)}">${esc(par.title)}</a>`,
   ...Object.entries(t.links||{}).filter(([,v])=>isUrl(v)).map(([k,v])=>`<a class="ln" href="${esc(v)}" target="_blank" rel="noopener">${esc(k)} ${ICON.ext}</a>`)].filter(Boolean);
- let h=page({title:t.title,crumbs,finding:finding(t,d),acts:siblings(t)});
+ let h=page({title:ttl,crumbs,finding:finding(t,d),acts:siblings(t)});
  h+=`<div class="tk-meta">${t.status==='running'?st('running','Running'):pill(sl,sc)}${t.superseded_by?pill('Superseded','ghost'):''}<span class="tk-mi">${meta.map(m=>`<span>${m}</span>`).join('')}</span></div>`;
  if(t.description)h+=`<p class="tk-desc">${esc(t.description)}</p>`;
  if(t.status==='stalled')h+=`<div class="tk-fix"><span>No heartbeat for ${silent(t)}. If its process is gone, end it:</span>${cmd(wbFixCmd(t))}</div>`;
