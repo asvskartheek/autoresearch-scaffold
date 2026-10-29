@@ -11,9 +11,11 @@ the goal it serves. Nothing here writes to the ledger.
 """
 from __future__ import annotations
 
+import ast
 import json
 import math
 import os
+import re
 import random
 import threading
 import time
@@ -37,6 +39,39 @@ def _r(x, d=6):
 
 def _txt(s):
     return readable(s) if isinstance(s, str) else s
+
+
+_PATH = re.compile(r"(?<![\w:/.~])(?:~/|/)(?:[^\s/'\"]+/)+([^\s/'\",;)]+)")
+_DICT = re.compile(r"\{'[^{}]*\}")
+
+
+def _num(v):
+    return f"{v:.4g}" if isinstance(v, float) else str(v)
+
+
+def _short_dict(m):
+    """A Python dict pasted into a note, as a short phrase: a paired result reads as delta, CI and n."""
+    try:
+        d = ast.literal_eval(m.group(0))
+    except (ValueError, SyntaxError):
+        return "{…}"
+    if not isinstance(d, dict):
+        return "{…}"
+    if all(isinstance(d.get(k), (int, float)) for k in ("delta", "lo", "hi")):
+        pts = all(abs(d[k]) <= 1 for k in ("delta", "lo", "hi"))
+        f = (lambda x: f"{x * 100:+.1f}".replace("-", "−")) if pts else (lambda x: f"{x:+.4g}".replace("-", "−"))
+        out = f"{f(d['delta'])}{' pts' if pts else ''} (90% CI {f(d['lo'])} to {f(d['hi'])})"
+        return out + (f", n {d['n']}" if d.get("n") else "")
+    items = [f"{k} {_num(v)}" for k, v in d.items() if isinstance(v, (int, float, str)) and len(str(v)) < 40][:4]
+    return ", ".join(items) or "{…}"
+
+
+def clean_note(s, cap=240):
+    """A ledger note fit to share: local paths cut to their file name, dict dumps to a phrase, length capped."""
+    if not isinstance(s, str):
+        return s
+    s = _DICT.sub(_short_dict, _PATH.sub(lambda m: m.group(1), s))
+    return s if len(s) <= cap else s[:cap - 1].rstrip() + "…"
 
 
 class _Index:
@@ -435,7 +470,9 @@ def _build(p, model, vs):
             except ValueError:
                 continue
             if d.get("model") in touch or d.get("goal") in goals:
-                decisions.append({k: _txt(v) if k in ("reason", "note") else v for k, v in d.items() if k not in ("gate", "runs")})
+                decisions.append({k: _txt(clean_note(v)) if k in ("reason", "note") else clean_note(v, 120)
+                                  for k, v in d.items() if k not in ("gate", "runs", "evidence", "vs_baseline")
+                                  and not isinstance(v, (dict, list))})
     decisions = decisions[-200:]
 
     # reproduce: the spec on the model record, the runs behind every number, the commands

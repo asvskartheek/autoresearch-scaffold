@@ -41,6 +41,17 @@ class ReferenceReview(unittest.TestCase):
         self.assertIsNot(d2, d1)
         self.assertEqual(d2["model"]["status"], "rejected")
 
+    def test_decisions_drop_local_paths_and_dict_dumps(self):
+        self.p.set_model_status("a+b+c+d+e", "rejected",
+                                reason="Failed gate. /Users/me/proj/scratch/x/gate.json {'n': 40, 'delta': 0.025, 'lo': -0.05, 'hi': 0.1}")
+        d = reference.build(self.p, "a+b+c+d+e", cache=False)
+        why = [x for x in d["decisions"] if x.get("kind") == "rejected"][-1]["reason"]
+        self.assertNotIn("/Users", why)
+        self.assertIn("gate.json", why)
+        self.assertIn("n 40", why)
+        self.assertNotIn("{", why)
+        self.assertEqual(reference.clean_note("see https://hf.co/datasets/a/b"), "see https://hf.co/datasets/a/b")
+
 
 if __name__ == "__main__":
     unittest.main()

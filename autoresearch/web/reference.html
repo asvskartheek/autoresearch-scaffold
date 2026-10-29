@@ -563,14 +563,17 @@ section("lineage", () => {
   if (D.children.length) groups.push({ parent: CH, kept: null, sib: D.children });
   const counts = {}; groups.forEach(g => g.sib.forEach(v => counts[v.status] = (counts[v.status] || 0) + 1));
   const axis = vals.length ? `<div class="lrow" style="cursor:default"><div class="nm faint">${esc(short(ref.slice))}</div><div></div><svg viewBox="0 0 300 18" preserveAspectRatio="none"><text x="6" y="12" class="t-f">${sc(lo, ref)}</text><text x="294" y="12" text-anchor="end" class="t-f">${sc(hi, ref)}</text></svg></div>` : "";
-  const tl = D.decisions.slice(-40).reverse();
+  const tl = D.decisions.slice().reverse(), TLN = 12, kinds = {};
+  tl.forEach(d => kinds[d.kind] = (kinds[d.kind] || 0) + 1);
+  const tlRow = d => `<div><span class="k">${dt(d.t)}</span><span>${stPill(d.kind)}</span><span>${d.model ? mn(d.model) : esc(d.goal || "")}${d.reason || d.note ? ` <span class="muted">· ${esc(d.reason || d.note)}</span>` : ""}</span></div>`;
   setTimeout(() => { const l = $(".lin"); if (l) l.onclick = e => { if (e.target.closest(".ev")) return; const r = e.target.closest(".lrow[data-k]"); if (r) r.classList.toggle("open"); }; });
   return `<div class="spine">${spine}</div>
   ${Object.keys(counts).length ? `<div class="facts" style="margin-bottom:10px">${Object.entries(counts).map(([k, n]) => `<span class="st ${esc(k)}">${n} ${esc(k)}</span>`).join("")}</div>` : ""}
   <div class="lin">${axis}
   ${groups.map(g => `<div class="grp">tried after ${mn(g.parent)}${g.kept ? ` · kept ${mn(g.kept.name)}` : " · this model"}</div>${g.kept ? row(g.kept) : ""}${g.sib.map(row).join("") || '<div class="empty">no other tries</div>'}`).join("")}
   </div><div class="leg"><span><i style="background:var(--control)"></i>dashed: before</span><span><i style="background:var(--positive)"></i>dashed: this</span></div>
-  ${tl.length ? `<h3>decisions</h3><div class="tl">${tl.map(d => `<div><span class="k">${dt(d.t)}</span><span>${stPill(d.kind)}</span><span>${esc(d.model || d.goal || "")}${d.reason || d.note ? ` <span class="muted">· ${esc(d.reason || d.note)}</span>` : ""}</span></div>`).join("")}</div>` : ""}`;
+  ${tl.length ? `<h3>decisions · ${N0(tl.length)}</h3><div class="facts" style="margin-bottom:8px">${Object.entries(kinds).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<span class="st ${esc(k)}">${n} ${esc(k)}</span>`).join("")}</div>
+  <div class="tl">${tl.slice(0, TLN).map(tlRow).join("")}</div>${tl.length > TLN ? `<details class="noprint"><summary class="more-btn" style="display:inline-block;cursor:pointer">${tl.length - TLN} earlier</summary><div class="tl">${tl.slice(TLN).map(tlRow).join("")}</div></details>` : ""}` : ""}`;
 });
 
 /* ================= 09 cost ================= */
