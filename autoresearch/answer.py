@@ -68,9 +68,18 @@ Reporting rules (PROTOCOL.md):
 
 
 def _paper_where(a: dict) -> str:
-    """The anchor in words: the block, and for a drawn mark what it covers (a box or pen around, an arrow pointing at)."""
+    """The anchor in words: the block, a picked element (its kind and words), and for a drawn mark what it covers (a box
+    or pen around, an arrow pointing at)."""
     sh = a.get("shape") if isinstance(a.get("shape"), dict) else None
     q = a.get("quote") or ""
+    pk = a.get("pick") if isinstance(a.get("pick"), dict) else None
+    if pk:  # picked with the element picker (paper.html pickEl): say which element, its words and the block around it
+        kind, text = pk.get("kind") or "element", pk.get("text") or ""
+        out = f"the {kind} " + (f"\"{text}\"" if text else f"(no words of its own; the words around it: \"{q}\")")
+        out += f", picked in block {a['block']!r}" if a.get("block") else ", picked on the page (outside any block)"
+        if pk.get("path"):
+            out += f" (path inside the block: {pk['path']})"
+        return out + (f"; the block reads: \"{pk['ctx']}\"" if pk.get("ctx") else "")
     if not sh:
         return f"block {a.get('block')!r}, quoted text: \"{q}\""
     tool = sh.get("tool")
