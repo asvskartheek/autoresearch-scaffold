@@ -122,7 +122,7 @@ tr.me td{background:color-mix(in srgb,var(--accent) 6%,transparent)}
 .chk:first-of-type{border-top:0;padding-top:0;margin-top:0}
 .chk .rl{font:500 11.5px var(--mono);color:var(--faint);word-break:break-word}
 .chk .ob{font-size:13px;margin:3px 0 4px}
-.chk svg{width:100%;height:30px}
+.chk .trk{margin-top:2px}
 @media (max-width:760px){.ladder{grid-template-columns:minmax(0,1fr)}.rung{margin-left:0!important}}
 .after{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .after .stp{flex:1 1 200px;border:1px dashed var(--control);border-radius:var(--radius-card);padding:9px 12px;font-size:13px}
@@ -193,9 +193,12 @@ pre{margin:0;background:var(--raised);border:1px solid var(--border);border-radi
  main{padding:0}
  section.s{border:0;border-top:1px solid #ccc;border-radius:0;padding:14px 0 6px;margin:0;break-inside:auto}
  .fig,.rung,.hc,.exm,tr,pre,.stg{break-inside:avoid}
- #flips,#lineage,#results,#failures{break-before:page}
  .ev{border-bottom:0}
- .ldet{display:block!important}
+ .tw{overflow:visible;margin:0}
+ table{font-size:10px}th,td{padding:4px 5px}td .trk.strip{width:96px}
+ .lrow:not(.open)+.ldet{display:none!important}
+ h3{break-after:avoid}
+ .trk,.trk *{print-color-adjust:exact}
  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 /* reference additions */
@@ -215,14 +218,14 @@ table{overflow-wrap:normal}
 .goal .trk{grid-column:1/-1}
 .goal .gt{font-weight:500;font-size:13.5px;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .goal .gv{font:600 13px var(--mono);white-space:nowrap}
-td svg.strip{width:160px;height:18px;display:block}
+td .trk.strip{width:160px}
 .sz{height:6px;border-radius:3px;background:var(--chart-1);opacity:.8;min-width:2px}
 .szw{width:90px;background:var(--rule);border-radius:3px}
 .empty{color:var(--faint);font-size:13px;padding:6px 0}
 .tl{display:grid;gap:2px;font-size:13px}
 .tl div{display:grid;grid-template-columns:130px 90px minmax(0,1fr);gap:8px;padding:4px 0;border-bottom:1px solid var(--rule)}
 .tl .k{font:500 12px var(--mono);color:var(--faint)}
-@media (max-width:560px){.tl div{grid-template-columns:minmax(0,1fr)}td svg.strip{width:110px}.goal{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:560px){.tl div{grid-template-columns:minmax(0,1fr)}td .trk.strip{width:110px}.goal{grid-template-columns:minmax(0,1fr)}}
 .unk{display:grid;gap:6px}
 .unk div{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;font-size:13px;align-items:baseline}
 .unk b{font:500 11.5px var(--mono);padding:2px 7px;border-radius:999px;background:var(--pill-warning-bg);color:var(--warning);text-align:center}
@@ -506,7 +509,7 @@ section("results", () => {
     const f = r.field.filter(x => x[1] != null); if (f.length < 2) return "";
     const vs = f.map(x => x[1]), a = Math.min(...vs), b = Math.max(...vs), X = v => 6 + (b > a ? (v - a) / (b - a) : .5) * 148;
     const rank = 1 + f.filter(x => (D.project.higher_is_better ? x[1] > r.score : x[1] < r.score) && x[0] !== CH).length;
-    return `<svg class="strip" viewBox="0 0 160 18" preserveAspectRatio="none"><line class="grid" x1="6" x2="154" y1="9" y2="9"/>${f.map(x => `<circle cx="${X(x[1])}" cy="9" r="${x[0] === CH ? 5 : 3}" class="${x[0] === CH ? "f-pos" : x[0] === PV ? "f-acc" : "f-mut"}"><title>${esc(mnt(x[0]))} · ${sc(x[1], r)}</title></circle>`).join("")}</svg><span class="faint" style="font:11px var(--mono)">rank ${rank} of ${f.length}</span>`;
+    return `${trk([tLine(), ...f.filter(x => x[0] !== CH && x[0] !== PV).map(x => tDot(X(x[1]) / 160, "c-mut", 3, mnt(x[0]) + " · " + sc(x[1], r))), ...f.filter(x => x[0] === PV).map(x => tDot(X(x[1]) / 160, "c-acc", 3.5, mnt(x[0]) + " · " + sc(x[1], r))), ...f.filter(x => x[0] === CH).map(x => tDot(X(x[1]) / 160, "c-pos", 5, mnt(x[0]) + " · " + sc(x[1], r)))], 18, "strip")}<span class="faint" style="font:11px var(--mono)">rank ${rank} of ${f.length}</span>`;
   };
   return `${fig}<div class="tw"><table><thead><tr><th>slice</th><th class="n hn">n</th><th class="n">this</th><th class="n hn">before</th><th class="n">Δ</th><th class="n">90% CI</th><th class="n hn">fixed / broken</th><th class="n hn">runs</th><th class="hn">every try</th></tr></thead><tbody>
   ${R.map(r => { const p = r.vs; return `<tr${r.slice === D.main ? ' class="me"' : ""}><td class="id">${esc(short(r.slice))}</td><td class="n hn">${N0(r.n)}</td>
@@ -525,9 +528,9 @@ section("gates", () => {
   const rule = c => c.rule === "better" ? `better > ${pts(c.threshold, 0).replace("+", "")} pts` : c.rule === "manual" ? "signed off by a person" : `not worse ≥ ${pts(c.threshold, 0)} pts`;
   const mini = c => {
     if (c.delta == null) return "";
-    const ext = Math.max(4, Math.abs(c.threshold * 100) + 2, Math.abs((c.lo ?? c.delta) * 100), Math.abs((c.hi ?? c.delta) * 100)), lo = -ext, hi = ext, X = v => 6 + (v - lo) / (hi - lo) * 188, thr = c.threshold * 100;
-    const ok = c.state === "pass";
-    return `<svg viewBox="0 0 200 30" preserveAspectRatio="none"><line class="grid" x1="6" x2="194" y1="15" y2="15"/><line class="s-mut" x1="${X(0)}" x2="${X(0)}" y1="6" y2="24"/><rect x="${X(lo)}" y="9" width="${Math.max(0, X(thr) - X(lo))}" height="12" style="fill:var(--negative);opacity:.12"/><line class="s-neg" x1="${X(thr)}" x2="${X(thr)}" y1="5" y2="25" stroke-dasharray="2 2"/>${c.lo != null ? `<line class="${ok ? "s-pos" : "s-neg"}" stroke-width="3" stroke-linecap="round" x1="${X(c.lo * 100)}" x2="${X(c.hi * 100)}" y1="15" y2="15"/>` : ""}<circle class="${ok ? "f-pos" : "f-neg"}" cx="${X(c.delta * 100)}" cy="15" r="4.5"/></svg>`;
+    const ext = Math.max(4, Math.abs(c.threshold * 100) + 2, Math.abs((c.lo ?? c.delta) * 100), Math.abs((c.hi ?? c.delta) * 100)), X = v => .03 + (v + ext) / (2 * ext) * .94, thr = c.threshold * 100;
+    const ok = c.state === "pass", k = ok ? "c-pos" : "c-neg";
+    return trk([tLine(), `<i class="tzone" style="left:0;width:${pc(X(thr))}"></i>`, tMark(X(0), "c-faint", true), tMark(X(thr), "c-neg"), c.lo != null ? tBar(X(c.lo * 100), X(c.hi * 100), k, 3) : "", tDot(X(c.delta * 100), k, 4.5)], 26);
   };
   const stateTxt = { need_run: `${mnt(CH)} not run`, need_baseline: `${PV ? mnt(PV) : "comparator"} not run`, no_comparator: "no comparator", needs_review: "needs a person" };
   const rungs = L.map((rg, i) => {
@@ -614,7 +617,7 @@ section("failures", () => {
   const still = MAIN && MAIN.cells && isBin(MAIN) ? MAIN.ids.map((id, i) => ({ id, c: MAIN.cells.m[i], b: MAIN.cells.b?.[i] })).filter(x => x.c != null && x.c < .5).sort((a, b) => a.c - b.c) : [];
   setTimeout(() => { const ic = $("#still"); if (ic) ic.onclick = e => { const b = e.target.closest("button"); if (!b) return; const x = still[+b.dataset.i]; openPop(b, { v: "wrong", label: "Example " + x.id, slice: MAIN.slice, hash: MAIN.hash, n: MAIN.n, runs: MAIN.run_ids || [MAIN.task], src: "rows.jsonl, mean per id", note: `this right in ${Math.round(x.c * MAIN.runs)} of ${MAIN.runs} runs · before ${x.b == null ? "—" : x.b >= .5 ? "right" : "wrong"}` }); }; });
   const first = G.slice(0, 9), rest = G.slice(9);
-  return `${bar}<div class="hills">${first.map(card).join("")}</div>${rest.length ? `<details class="noprint-open"><summary class="more-btn" style="display:inline-block;cursor:pointer">${rest.length} more hills</summary><div class="hills" style="margin-top:12px">${rest.map(card).join("")}</div></details>` : ""}
+  return `${bar}<div class="hills">${first.map(card).join("")}</div>${rest.length ? `<details class="print-open"><summary class="more-btn" style="display:inline-block;cursor:pointer">${rest.length} more hills</summary><div class="hills" style="margin-top:12px">${rest.map(card).join("")}</div></details>` : ""}
   ${still.length ? `<h3>still wrong on ${esc(short(MAIN.slice))} · ${N0(still.length)} of ${N0(MAIN.n)}${MAIN.runs > 1 ? ` · right in k of ${MAIN.runs} runs` : ""}</h3><div class="idchips" id="still">${still.slice(0, 240).map((x, i) => `<button data-i="${i}">${esc(String(x.id).slice(0, 10))}${MAIN.runs > 1 ? " · " + Math.round(x.c * MAIN.runs) + "/" + MAIN.runs : ""}${x.b >= .5 ? " · was right" : ""}</button>`).join("")}${still.length > 240 ? `<span class="faint">+${still.length - 240}</span>` : ""}</div>` : ""}`;
 });
 
@@ -756,8 +759,11 @@ const linkTo = id => location.href.split("#")[0] + "#" + id;
 $("#bLink").onclick = () => copy(linkTo(cur), "Link to " + SECS.find(s => s[0] === cur)[1] + " copied");
 $$(".anc").forEach(b => b.onclick = () => { copy(linkTo(b.dataset.anchor), "Link copied"); history.replaceState(null, "", "#" + b.dataset.anchor); });
 $$(".cp").forEach(b => b.onclick = () => copy($("#" + b.dataset.c).textContent, "Copied"));
-$("#bPrint").onclick = () => { $$(".lrow").forEach(r => r.classList.add("open")); $$("details").forEach(d => d.open = true); print(); };
-addEventListener("afterprint", () => $$(".lrow").forEach(r => r.classList.remove("open")));
+$("#bPrint").onclick = () => print();
+// in print, folded hill cards open (Ctrl+P too); lineage details print only where someone opened them
+let printOpened = [];
+addEventListener("beforeprint", () => { printOpened = $$("details.print-open:not([open])"); printOpened.forEach(d => d.open = true); });
+addEventListener("afterprint", () => { printOpened.forEach(d => d.open = false); printOpened = []; });
 $("#bTheme").onclick = () => { const r = document.documentElement, dark = r.dataset.theme ? r.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches; r.dataset.theme = dark ? "light" : "dark"; try { localStorage.setItem("arx-theme", r.dataset.theme); } catch {} };
 try { const t = localStorage.getItem("arx-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
 $("#bDown").onclick = () => {
