@@ -258,10 +258,27 @@ const _b=navigator.sendBeacon&&navigator.sendBeacon.bind(navigator);
 try{navigator.sendBeacon=(u,d)=>key(u)?true:_b(u,d)}catch(_){}
 addEventListener('keydown',e=>{const t=e.composedPath()[0]||{};if(/INPUT|TEXTAREA|SELECT/.test(t.tagName)||t.isContentEditable)return;
  if(!e.metaKey&&!e.ctrlKey&&!e.altKey&&e.key.toLowerCase()==='c')e.stopImmediatePropagation()},true);
-// papers open as embedded pages
-document.addEventListener('click',e=>{const a=e.target.closest&&e.target.closest('a[href]');if(!a)return;
- const m=a.getAttribute('href').match(/papers\/([^/?#]+)/);if(!m||!S.papers[decodeURIComponent(m[1])])return;e.preventDefault();
- const w=window.open(URL.createObjectURL(new Blob([S.papers[decodeURIComponent(m[1])]],{type:'text/html'})),'_blank');},true);
+// papers and model papers open over the dashboard, in a frame; Back or the close button returns
+const SNAPTAG='<script id="snap" type="application/json" data-keep></'+'script>';
+const refPage=d=>{const j=JSON.stringify(d).replace(/</g,'\\u003c');return S.ref.tpl.replace(SNAPTAG,()=>SNAPTAG.replace('><',()=>'>'+j+'<'))};
+const target=(href,inner)=>{let m=href.match(/(?:^|\/)papers\/([^/?#]+)/);
+ if(!m&&inner)m=href.match(/^(?:\.{1,2}\/)?([\w.+-]+?)(?:\.html)?(?:[?#].*)?$/);
+ if(m){const n=decodeURIComponent(m[1]);if(S.papers[n]!=null)return {html:S.papers[n]};if(!inner||/papers\//.test(href))return {miss:'paper'};return null}
+ m=href.match(/(?:^|\/)reference(?:\/([^/?#]*))?\/?(?:[?#].*)?$/);
+ if(m){const n=decodeURIComponent(m[1]||'')||(S.ref&&S.ref.champion),d=S.ref&&S.ref.models[n];return d?{html:refPage(d)}:{miss:'model paper'}}
+ return null};
+const shut=()=>{const o=document.querySelector('.arx-ov');if(o){o.remove();document.documentElement.style.overflow=''}};
+const back=()=>{if(history.state&&history.state.arxov)history.back();else shut()};
+addEventListener('popstate',shut);
+const go=(e,inner)=>{const a=e.target.closest&&e.target.closest('a[href]');if(!a)return;const h=a.getAttribute('href');if(!h||h[0]==='#')return;
+ const t=target(h,inner);if(!t)return;e.preventDefault();e.stopPropagation();if(t.miss)return note(`That ${t.miss} is not in this snapshot`);view(t.html)};
+const view=html=>{let o=document.querySelector('.arx-ov');
+ if(!o){o=document.createElement('div');o.className='arx-ov';o.innerHTML='<iframe title="Paper"></iframe><button class="arx-x" aria-label="Close">×</button>';
+  document.body.append(o);o.lastChild.onclick=back;document.documentElement.style.overflow='hidden';try{history.pushState({arxov:1},'')}catch(_){}}
+ const f=o.firstChild;f.onload=()=>{try{const d=f.contentDocument;d.addEventListener('click',e=>go(e,true),true);
+  d.addEventListener('keydown',e=>{if(e.key==='Escape')back()})}catch(_){}};f.srcdoc=html};
+document.addEventListener('click',e=>go(e,false),true);
+addEventListener('keydown',e=>{if(e.key==='Escape'&&document.querySelector('.arx-ov'))back()});
 addEventListener('DOMContentLoaded',()=>{const b=document.createElement('div');b.className='arx-snap';
  b.textContent='Snapshot · '+new Date(S.taken*1000).toLocaleString();document.body.append(b);
  const c=new URLSearchParams(location.search).get('c'),ts=(S.data['api/comments']||{}).threads||[];
@@ -274,11 +291,33 @@ SNAP_CSS = """.arx-snap{position:fixed;left:12px;bottom:12px;z-index:50;padding:
 background:var(--surface,#fff);color:var(--muted,#666);box-shadow:0 0 0 1px var(--border,#ddd)}
 .arx-note{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:3000;padding:8px 14px;border-radius:8px;font-size:13px;
 background:var(--text,#222);color:var(--surface,#fff);opacity:0;pointer-events:none;transition:opacity .2s}.arx-note.on{opacity:1}
+.arx-ov{position:fixed;inset:0;z-index:2500;background:var(--ground,#fff)}.arx-ov iframe{display:block;width:100%;height:100%;border:0}
+.arx-x{position:fixed;right:16px;bottom:16px;z-index:2501;width:40px;height:40px;border:0;border-radius:50%;font-size:22px;line-height:1;
+cursor:pointer;background:var(--text,#222);color:var(--surface,#fff);box-shadow:0 2px 8px rgba(0,0,0,.25)}
 .cm-fab .cm-mode,.cm-chip,.top .live,.top [aria-label=Share]{display:none!important}
 .cm-pop textarea,.cm-pop .cm-name,.cm-pop .rs,.cm-pop .go,.cm-me .cm-name,.cm-list .cm-it:not([data-id]),
 .gi,.q-form,.q-acts [data-qact]:not([data-qact=read]),.q-askf,
 .lrn [data-l=commit],.lrn [data-t=go],.lrn [data-t=skip]{display:none!important}"""
 # a snapshot is read-only: every control that writes is hidden (above), C (comment mode) does nothing
+
+
+SNAP_TAG = '<script id="snap" type="application/json" data-keep></script>'
+
+
+def _refs(p) -> dict | None:
+    """Every model's paper (web/reference.html reads its data from #snap when that is filled): the page once, the data
+    per model, so a "Paper" link on a model opens in the snapshot."""
+    from . import reference
+    tpl = (WEB / "reference.html").read_text()
+    if SNAP_TAG not in tpl:
+        return None
+    models = {}
+    for m in p.models():
+        try:
+            models[m] = scrub(json.loads(json.dumps(reference.build(p, m), default=str)))
+        except Exception:  # a model the paper cannot be built for stays out; its link says so
+            pass
+    return dict(tpl=tpl, models=models, champion=p.champion())
 
 
 def export_dashboard(p, key: str | None = None) -> str:
@@ -290,7 +329,7 @@ def export_dashboard(p, key: str | None = None) -> str:
     page = re.sub(r'<script src="([^"]+)"></script>',
                   lambda m: f"<script>{_inline((WEB / m.group(1)).read_text())}</script>", page)
     snap = dict(taken=time.time(), project=key or "", data=snapshot_data(p, key),
-                papers={n: export_paper(p, n) for n in papers.names(p)})
+                papers={n: export_paper(p, n) for n in papers.names(p)}, ref=_refs(p))
     head = (f"<script>window.ARX_SNAP={_js(snap)};</script>"
             f"<script>{_inline(SHIM)}</script><style>{SNAP_CSS}</style>")
     return page.replace("<head>", "<head>\n" + head, 1)

@@ -95,8 +95,10 @@ class Export(unittest.TestCase):
         html = share.export_dashboard(p, "gamma")
         self.assertIn("window.ARX_SNAP=", html); self.assertNotIn('<script src="', html); self.assertNotIn('<link rel="stylesheet"', html)
         snap = json.loads(html.split("window.ARX_SNAP=", 1)[1].split(";</script>", 1)[0])
+        self.assertIn("base", snap["ref"]["models"]); self.assertEqual(snap["ref"]["champion"], "base")  # model papers open
+        self.assertIn(share.SNAP_TAG, snap["ref"]["tpl"])
         self.assertIn("demo", snap["papers"]); self.assertIn("api/state", snap["data"]); self.assertEqual(snap["data"]["api/projects"][0]["key"], "gamma")
-        self.assertNotIn("</script>", json.dumps(snap).replace("<\\/script", ""))
+        self.assertNotIn("</script", html.split("window.ARX_SNAP=", 1)[1].split(";</script>", 1)[0])
         for write in (".cm-pop textarea", ".cm-pop .go", ".gi,", ".q-form", "[data-t=go]"):  # read-only: no write control shows
             self.assertIn(write, html)
 
