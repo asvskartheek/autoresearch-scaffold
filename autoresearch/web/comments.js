@@ -142,22 +142,42 @@ const ctxOf=(el,text)=>{for(let a=el.parentElement,i=0;a&&!isPage(a)&&i<8;a=a.pa
 function caret(x,y){host.style.display='none';let r=null;
  try{if(document.caretRangeFromPoint)r=document.caretRangeFromPoint(x,y);else if(document.caretPositionFromPoint){const c=document.caretPositionFromPoint(x,y);if(c){r=document.createRange();r.setStart(c.offsetNode,c.offset)}}}catch(e){}
  host.style.display='';return r&&r.startContainer.nodeType===3&&!host.contains(r.startContainer)?r:null}
-function strokeRange(pts){const xs=pts.map(p=>p.x),y0=pts[0].y,y1=pts[pts.length-1].y;
+// the text node after / before n inside the same block (a caret in the gap between two spans lands at the end of the
+// left one: the stroke starts at the next node, never on the last letter of the text before it)
+const textStep=(n,fwd)=>{const w=document.createTreeWalker(n.parentElement?.closest('p,li,td,th,a,div,section,article,h1,h2,h3,h4')||document.body,NodeFilter.SHOW_TEXT);w.currentNode=n;
+ for(let t;(t=fwd?w.nextNode():w.previousNode());)if(t.nodeValue.trim())return t;return null};
+function strokeRange(pts){const xs=pts.map(p=>p.x);
  const a=caret(Math.min(...xs)+1,pts[xs.indexOf(Math.min(...xs))].y),b=caret(Math.max(...xs)-1,pts[xs.indexOf(Math.max(...xs))].y);if(!a||!b)return null;
  const rg=document.createRange();let s=[a.startContainer,a.startOffset],e=[b.startContainer,b.startOffset];
  if(a.compareBoundaryPoints(Range.START_TO_START,b)>0)[s,e]=[e,s];
+ if(s[0]!==e[0]){let n;if(!s[0].nodeValue.slice(s[1]).trim()&&(n=textStep(s[0],true)))s=[n,0];
+  if(!e[0].nodeValue.slice(0,e[1]).trim()&&(n=textStep(e[0],false)))e=[n,n.nodeValue.length]}
  const word=/[\w%.,+\u2212-]/;  // grow both ends to whole words
  while(s[1]>0&&word.test(s[0].nodeValue[s[1]-1]))s[1]--;while(e[1]<e[0].nodeValue.length&&word.test(e[0].nodeValue[e[1]]))e[1]++;
  rg.setStart(...s);rg.setEnd(...e);return String(rg).trim()?rg:null}
 const squash=t=>String(t||'').replace(/\s+/g,'');
-function flatText(root){const map=[];let flat='';const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let t;
- while((t=w.nextNode())&&flat.length<200000){const v=t.nodeValue;for(let i=0;i<v.length;i++){const ch=/\s/.test(v[i])?' ':v[i];if(ch===' '&&(!flat||flat.endsWith(' ')))continue;flat+=ch;map.push([t,i])}}
+// two text nodes read as separate words when they sit in different elements and apart on screen (as in textOf)
+const apart=(p,t)=>{if(p.parentElement===t.parentElement)return false;const r=document.createRange();r.selectNodeContents(p);const a=[...r.getClientRects()].at(-1);
+ r.selectNodeContents(t);const b=r.getClientRects()[0];return !!(a&&b)&&(b.left-a.right>1.5||Math.abs(b.top-a.top)>4)};
+// the root's text with whitespace folded; sep: a space between nodes that are apart. map[i] = [text node, offset]
+function flatText(root,sep=true){const map=[];let flat='',prev=null;const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let t;
+ while((t=w.nextNode())&&flat.length<200000){const v=t.nodeValue;
+  if(sep&&prev&&flat&&!flat.endsWith(' ')&&v&&!/^\s/.test(v)&&apart(prev,t)){flat+=' ';map.push([t,0])}
+  for(let i=0;i<v.length;i++){const ch=/\s/.test(v[i])?' ':v[i];if(ch===' '&&(!flat||flat.endsWith(' ')))continue;flat+=ch;map.push([t,i])}
+  if(v.trim())prev=t}
  return [flat,map]}
-function findRange(root,quote,qn=0){const q=String(quote||'').replace(/\s+/g,' ').trim();if(!root||!q)return null;const [flat,map]=flatText(root);
- let at=-1,from=0;for(let k=0;k<=qn;k++){at=flat.indexOf(q,from);if(at<0)return null;from=at+1}
- const [sn,so]=map[at],[en,eo]=map[at+q.length-1];const r=document.createRange();r.setStart(sn,so);r.setEnd(en,eo+1);return r}
+function findRange(root,quote,qn=0){const q=String(quote||'').replace(/\s+/g,' ').trim();if(!root||!q)return null;
+ for(const sep of [true,false]){const [flat,map]=flatText(root,sep);  // quotes saved before the separators: matched as they were
+  let at=-1,from=0;for(let k=0;k<=qn;k++){at=flat.indexOf(q,from);if(at<0)break;from=at+1}if(at<0)continue;
+  const [sn,so]=map[at],[en,eo]=map[at+q.length-1];const r=document.createRange();r.setStart(sn,so);r.setEnd(en,eo+1);return r}
+ return null}
+// a range's text exactly as findRange will look for it: the flat text of its element between the range's ends
+function rangeText(el,rg){const [flat,map]=flatText(el);let i=-1,j=-1;
+ map.forEach(([n,o],k)=>{const p=document.createRange();p.setStart(n,o);p.setEnd(n,Math.min(n.nodeValue.length,o+1));
+  if(rg.compareBoundaryPoints(Range.START_TO_START,p)<=0&&rg.compareBoundaryPoints(Range.END_TO_END,p)>=0){if(i<0)i=k;j=k}});
+ return i<0?String(rg).replace(/\s+/g,' ').trim():flat.slice(i,j+1).trim()}
 function quoteAnchor(rg){  // a text range -> {anchor fields}: the element holding it, the quote and which occurrence it is
- let el=rg.commonAncestorContainer;if(el.nodeType!==1)el=el.parentElement;const quote=String(rg).replace(/\s+/g,' ').trim().slice(0,500);
+ let el=rg.commonAncestorContainer;if(el.nodeType!==1)el=el.parentElement;const quote=rangeText(el,rg).slice(0,500);
  let qn=0;for(let k=0;k<50;k++){const r=findRange(el,quote,k);if(!r)break;if(r.compareBoundaryPoints(Range.START_TO_START,rg)<=0)qn=k;else break}
  return {...anchorFor(el),quote,qn,ctx:ctxOf(el,label(el))}}
 function finish(e){if(!draw||e.pointerId!==draw.id)return;e.preventDefault();e.stopPropagation();
