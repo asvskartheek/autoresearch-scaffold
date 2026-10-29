@@ -342,13 +342,20 @@ const nextPanel=function(g){
  else if(g.met)items.push([`The champion meets the target. Record it; the paper reports the paired delta.`,`arx goal achieve ${g.name}`]);
  else if(g.value==null&&g.model)items.push([`The champion needs a run on ${esc(short(g.slice))}.`,`arx gate ${g.model}`]);
  if(!g.met&&!g.slice_changed){
-  const cands=Object.entries(L.models).filter(([m,o])=>hs.includes(o.hill)&&m!==ch&&(o.status==='candidate'||o.status==='planned'))
-   .map(([m,o])=>({m,o,next:L.gates?.[m]?.next||[]})).filter(c=>c.next.length).sort((a,b)=>(b.o.created||0)-(a.o.created||0));
+  // the candidates nearest the goal first (most rungs passed), never one the champion already supersedes
+  const passed=m=>(L.gates?.[m]?.rungs||[]).filter(r=>r.status==='pass').length;
+  const cands=Object.entries(L.models).filter(([m,o])=>hs.includes(o.hill)&&m!==ch&&(o.status==='candidate'||o.status==='planned')&&!superseded(m))
+   .map(([m,o])=>({m,o,next:L.gates?.[m]?.next||[]})).filter(c=>c.next.length).sort((a,b)=>passed(b.m)-passed(a.m)||(b.o.created||0)-(a.o.created||0));
   // a next run already in progress: what it covers and its live chip, in place of a command
   const ms=a=>a.map(n=>`<span class="mono">${esc(short(n.slice))}</span>`).join(', ');
+  const rung=m=>(L.gates?.[m]?.rungs||[]).find(r=>r.status==='pending')?.rung;
   for(const c of cands.slice(0,3)){const run=c.next.find(runTask),rest=c.next.filter(n=>!runTask(n));
-   items.push(run?[`${mLink(c.m)} on ${hLink(c.o.hill)} is running on <span class="mono">${esc(short(runTask(run).slice||run.slice))}</span>${rest.length?`, then needs ${rest.map(n=>(n.model!==c.m?'champion on ':'')+ms([n])).join(', ')}`:''}.`,null,runChip(run)]
-    :[`${mLink(c.m)} on ${hLink(c.o.hill)} needs ${ms(c.next)}.`,`arx gate ${c.m}`]);}
+   // a run the gate still counts as started, whose task went silent for over a day: dead, so it is run again
+   const dead=!run&&c.next.find(n=>n.running);
+   const dt=dead&&byId(dead.running),at=rung(c.m)?` (${esc(rung(c.m))} rung)`:'';
+   items.push(dead?[`${mLink(c.m)}${at}: its run on <span class="mono">${esc(short(dead.slice))}</span> went silent${dt?` ${ago(dt.heartbeat||dt.updated||dt.created)}`:''}${dt?.progress?.total?` at <a class="ln" href="#task/${enc(dt.id)}">${N(dt.progress.done||0)} of ${N(dt.progress.total)}</a>`:''}. Fail it and run it again.`,`arx gate ${c.m}`]
+    :run?[`${mLink(c.m)} on ${hLink(c.o.hill)} is running on <span class="mono">${esc(short(runTask(run).slice||run.slice))}</span>${rest.length?`, then needs ${rest.map(n=>(n.model!==c.m?'champion on ':'')+ms([n])).join(', ')}`:''}.`,null,runChip(run)]
+    :[`${mLink(c.m)}${at} on ${hLink(c.o.hill)} needs ${ms(c.next)}.`,`arx gate ${c.m}`]);}
   if(!cands.length){const oh=goalHills(g).find(([,s])=>s==='open');
    if(oh)items.push([`No candidate is climbing ${hLink(oh[0])}. Register one from the champion.`,`arx model add <name> --parent ${ch||'<champion>'} --hill ${oh[0]} --change "…"`]);
    else items.push([`No open hill serves this goal. Find the next failure mode and open one.`,`arx hill open <name> --goal ${g.name} --title "…" --target <dev slice>`]);}
