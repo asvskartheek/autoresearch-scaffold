@@ -288,13 +288,23 @@ function where(a){const el=resolve(a),s=a.shape||null;let r=el&&el.getBoundingCl
  if(a.quote&&el&&(!s||s.mode==='text')){const rg=findRange(el,a.quote,a.qn||0)||findRange(el,a.quote,0);if(rg&&rg.getClientRects().length)g.rg=rg}
  if(s){if(s.mode==='tip'){if(r){g.tx=r.left+s.tx*r.width;g.ty=r.top+s.ty*r.height}else{g.tx=s.ox-scrollX;g.ty=s.oy-scrollY}}
   else{g.tx=s.ox-scrollX;g.ty=s.oy-scrollY;if(r){g.tx=r.left;g.ty=r.top;if(s.fit){g.sx=r.width/Math.max(1,s.bw);g.sy=r.height/Math.max(1,s.bh)}}}}
+ // the card reflowed (a row of tiles stacked on a phone): one scale for both axes, never a tall thin box
+ if(s&&s.fit&&!s.ins&&Math.max(g.sx/g.sy,g.sy/g.sx)>1.6)g.sx=g.sy=Math.min(g.sx,g.sy);
+ // an arrow whose tail would leave the screen is drawn shorter, still pointing at the same spot
+ if(s&&s.mode==='tip'){const ex=g.tx+(s.ax||0),lim=ex<4?(g.tx-4)/-(s.ax||1):ex>innerWidth-4?(innerWidth-4-g.tx)/(s.ax||1):1;g.sx=g.sy=Math.max(.2,Math.min(1,lim))}
+ if(s&&s.ins&&r)g.box=boxRect(s,r);
  return g}
+// a box kept at its px distance from the element's edges; when the element shrank under it (a phone), the distances
+// scale with the element instead; never wider than the screen
+function boxRect(s,r){const [l,t,rr,b]=s.ins;let q=[r.left+l,r.top+t,r.right+rr,r.bottom+b];
+ if(q[2]-q[0]<12||q[3]-q[1]<12){const kx=r.width/Math.max(1,s.bw),ky=r.height/Math.max(1,s.bh);q=[r.left+l*kx,r.top+t*ky,r.right+rr*kx,r.bottom+b*ky]}
+ q[0]=Math.max(q[0],Math.min(4,r.left));q[2]=Math.min(q[2],Math.max(innerWidth-4,r.right));return q}
 // a pin sits with its point on the corner of what it marks (a quote's first line, a shape's top-left, an arrow's tail),
 // so it never covers the text itself
 function pos(c){const a=c.anchor||{},g=where(a),s=a.shape;
  if(g.rg){const q=g.rg.getClientRects()[0];return [q.left,q.top]}
- if(s&&s.mode==='tip')return [g.tx+(s.ax||0),g.ty+(s.ay||0)];
- if(s&&s.ins&&g.r)return [g.r.left+s.ins[0],g.r.top+s.ins[1]];
+ if(s&&s.mode==='tip')return [g.tx+(s.ax||0)*g.sx,g.ty+(s.ay||0)*g.sy];
+ if(g.box)return [g.box[0],g.box[1]];
  if(s&&s.bx!=null&&(g.r||s.mode!=='text'))return [g.tx+s.bx*g.sx,g.ty+s.by*g.sy];
  if(g.r)return g.r.height<=48&&g.r.width<=360?[g.r.left,g.r.top]:[g.r.left+(a.rx??.5)*g.r.width,g.r.top+(a.ry??.5)*g.r.height];  // a word or a line: its corner
  return a.px!=null?[a.px-scrollX,a.py-scrollY]:null}
@@ -302,15 +312,18 @@ function shapeSvg(a,cl,id){const s=a.shape,g=where(a),cls=`${cl}${id&&id===hot?'
  if(g.rg){const rs=[...g.rg.getClientRects()].filter(q=>q.width>.5);
   return `<g class="${cls} q" data-id="${h(id||'')}">${rs.map(q=>`<rect class="v q" x="${r1(q.left)}" y="${r1(q.top)}" width="${r1(q.width)}" height="${r1(q.height)}" rx="2"/>`).join('')}</g>`}
  if(!s||!s.d)return '';const d=h(s.d),t=h(s.tool);
- if(s.ins&&g.r){const [l,t2,rr,b]=s.ins,q=g.r,bd=`M${r1(q.left+l)} ${r1(q.top+t2)}H${r1(q.right+rr)}V${r1(q.bottom+b)}H${r1(q.left+l)}Z`;
+ if(g.box){const [l,t2,rr,b]=g.box,bd=`M${r1(l)} ${r1(t2)}H${r1(rr)}V${r1(b)}H${r1(l)}Z`;
   return `<g class="${cls}" data-id="${h(id||'')}"><path class="hit box" d="${bd}"/><path class="v box" d="${bd}"/></g>`}
  return `<g class="${cls}" data-id="${h(id||'')}" transform="translate(${r1(g.tx)} ${r1(g.ty)}) scale(${r1(g.sx*1000)/1000} ${r1(g.sy*1000)/1000})"><path class="hit ${t}" d="${d}"/><path class="v ${t}" d="${d}"/></g>`}
 // answer_agent comes with /api/comments: a queued item with no `arx answer` running waits for a person, not the agent
 const working=c=>c.agent&&(c.agent.status==='running'||c.agent.status==='queued'&&agentOn);
 const stranded=c=>c.waiting&&c.agent&&c.agent.status==='queued'&&!agentOn;
 const klass=c=>c.resolved?'res':working(c)?'wait':c.messages.some(m=>m.agent)&&!c.waiting?'rep':'';
-function drawPins(){if(draw)return;const ts=mine(),openN=ts.filter(t=>!t.resolved).length;
- $c('.cm-lst').textContent=openN?openN+' open':ts.length?ts.length+' resolved':all.length+' elsewhere';$c('.cm-lst').classList.toggle('none',!ts.length&&!all.length);
+// the view under the pins has drawn (S.afterRender ran for this route): before that, "Reading the ledger…" has none of
+// the anchors and every pin would fall back to its old page coordinates
+let drawnFor=null;const ready=()=>drawnFor===location.hash;
+function drawPins(){if(draw)return;const ts=ready()?mine():[],openN=mine().filter(t=>!t.resolved).length;
+ $c('.cm-lst').textContent=openN?openN+' open':mine().length?mine().length+' resolved':all.length+' elsewhere';$c('.cm-lst').classList.toggle('none',!mine().length&&!all.length);
  pinsEl.innerHTML=ts.map((c,i)=>{const xy=pos(c);if(!xy)return '';const [x,y]=xy;
   return `<div class="cm-pin ${klass(c)}${c.id===hot?' hot':''}" data-id="${c.id}" style="left:${x}px;top:${y}px" title="${h(c.messages[0].body.slice(0,200))}">${i+1}</div>`}).join('');
  const live=shapesEl.querySelector('.live');
@@ -360,7 +373,7 @@ async function load(){try{const r=await fetch(API,{cache:'no-store'});if(!r.ok)r
 document.body.append(host);
 addEventListener('scroll',drawPins,{passive:true,capture:true});addEventListener('resize',drawPins);
 addEventListener('hashchange',()=>{closePop();setMode(false);chip.style.display='none';setTimeout(()=>{drawPins();drawList()},0)});
-(S.afterRender=S.afterRender||[]).push(drawPins);
+(S.afterRender=S.afterRender||[]).push(()=>{drawnFor=location.hash;drawPins()});
 setInterval(()=>{if(!draw&&mine().length)drawPins()},1000);setInterval(()=>{if(!document.hidden)load()},4000);
 // a shared thread link (?c=<id>): open that thread once the comments are in, then drop it from the address
 const c0=new URLSearchParams(location.search).get('c');
