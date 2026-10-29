@@ -19,7 +19,8 @@ if(!me||!/^p-[0-9a-f]{6,16}$/.test(me.id||'')){me={id:'p-'+hex(),name:(get('arx-
 addEventListener('storage',e=>{if(e.key===K)try{const m=JSON.parse(e.newValue);if(m&&m.id===me.id){me=m;tell()}}catch(_){}});
 const COLORS=['#2563eb','#db2777','#059669','#d97706','#0891b2','#dc2626','#4f46e5','#65a30d'];
 const color=s=>COLORS[[...String(s)].reduce((a,c)=>(a*31+c.charCodeAt(0))>>>0,7)%COLORS.length];
-const initials=n=>String(n||'').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase()||'?';
+// words split on spaces, hyphens, dots and underscores: "tester-1a" reads T1, "Ann Lee" AL
+const initials=n=>String(n||'').trim().split(/[\s._-]+/).filter(Boolean).map(w=>[...w][0]).slice(0,2).join('').toUpperCase()||'?';
 const esc=s=>String(s).replace(/[.*+?^${}()|[\]\\\/-]/g,'\\$&');
 const h=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let roster={},here=[],api=null,routeFn=()=>location.hash.slice(1),subs=[],timer=null;
