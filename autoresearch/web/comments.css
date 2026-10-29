@@ -84,6 +84,8 @@
 @media (max-width:600px){.cm-btn b{display:none}.cm-tools button:not(.pk){padding:0 5px}.cm-mode span{display:none}  /* a phone: the icon alone, */
  .top .right{gap:6px}.top .live{font-size:0;gap:0}}  /* and the bar's own items closer (Live keeps its dot), so the crumb keeps its room */
 .cm-btn{white-space:nowrap}
+/* the menu drawer on a phone covers the page, and the pins, marks and threads drawn over the page with it */
+.app.nav-open~.cm-host>:not(.cm-fab){visibility:hidden}
 @media print{.cm-host,.cm-fab{display:none}}
 /* people: faces on messages, who has read the thread, threads for you */
 .cm-who{display:flex;align-items:center;gap:6px}
