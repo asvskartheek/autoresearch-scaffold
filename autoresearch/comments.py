@@ -216,8 +216,18 @@ FIG_MAX = 12_000
 _DOC_ID = re.compile(r"^[a-z0-9][a-z0-9-]{1,47}$")
 # a question that asks to explain, introduce or walk through something, rather than for one fact or number
 _LONG = re.compile(r"\b(explain|explanation|intro|introduce|introduction|overview|walk (me )?through|walkthrough|"
-                   r"how (does|do|did|is|are) .{2,}\b(work|works|built|made|set up|run)|teach|tour|deep dive|in detail|"
+                   r"how (does|do|did|is|are|was|were|can|would) .{2,}\b(work|works|worked|built|made|set up|run|decide|"
+                   r"decides|decided|choose|chooses|chose|pick|picks|picked|judge|judged|score|scores|scored|pass|"
+                   r"passes|passed|fail|fails|failed|compute|computed|count|counted|measure|measured|tell)|"
+                   r"what does .{2,} (do|mean)|teach|tour|deep dive|in detail|"
                    r"describe|primer|guide|onboard)\b", re.I)
+
+
+# how a figure in an answer is built: it renders about 310 px wide on a phone, so its text stays readable there
+FIGURE_RULE = ("An inline <svg viewBox=\"0 0 320 H\" width=\"320\"> (H at most 220): it renders at about 1:1 on a "
+               "phone, so text at font-size 13 or more stays readable; text and axes in currentColor; one accent colour "
+               "(#3b82f6, or #22c55e / #ef4444 for better / worse). A bar's length encodes the number its label states "
+               "(a score, not the slice size); label the axis with its unit.")
 
 
 def wants_long(text: str) -> bool:
@@ -307,10 +317,9 @@ def answer_rules(ask: str, short: str, long: str) -> str:
   the agent work", "walk me through the ladder") gets a LONG answer: one HTML document.{hint}
 
 Short answer
-- Visual first. When the answer has two or more numbers, lead with one figure: an inline
-  <svg viewBox="0 0 400 H" width="400"> (H at most 240) built only from svg, g, path, rect, circle, line, polyline and
-  text. Text at font-size 12 or more; text and axes in currentColor; one accent colour (#3b82f6, or #22c55e / #ef4444
-  for better / worse). No scripts, styles or links inside it. The page shows the figure first, at full width.
+- Visual first. When the answer has two or more numbers, lead with one figure. {FIGURE_RULE}
+  Built only from svg, g, path, rect, circle, line, polyline and text; no scripts, styles or links inside it. The
+  page shows the figure first, at full width.
 - Then at most one or two short plain sentences. No headings, no lists.
 - Post it with: {short}
 
@@ -319,11 +328,12 @@ Long answer
   beside the dashboard. Follow PROTOCOL.md's paper non-negotiables where they apply:
   - sections (<section data-block="<id>">), each with a heading and at most 100 words of prose; prose captions,
     the figures carry the argument. A long document is fine; a wall of text is not.
-  - a figure (inline SVG) for every section that states a number. The FIRST <svg> in the document is the summary
-    figure shown in the thread, so make it stand alone and build it like the short answer's figure above.
+  - a figure (inline SVG) for every section that states a number, before its prose. The FIRST <svg> in the
+    document is the summary figure shown in the thread, so make it stand alone and build it like the short answer's.
+  - a <title>; the reader shows it as the page heading, so no <h1> that repeats it.
   - at least one small widget the reader drives (a slider, a select, buttons that step through an example).
   - ledger numbers only, each naming its slice and n; paired deltas vs the champion with the 90% interval.
-  - dark mode under :root[data-theme="dark"] (the dashboard sets it); sans-serif fonts; a <title>.
+  - dark mode under :root[data-theme="dark"] (the dashboard sets it); sans-serif fonts.
   - no client text, answers or traces: ids, categories and paraphrase only.
 - You cannot write files: pass the document on stdin with a heredoc, exactly once:
     {long}
@@ -404,8 +414,9 @@ How to answer
   goals.json, tasks/*/task.json, decisions), and use read-only commands (arx status, arx gate <model>,
   arx goal status, arx comment show {th['id']}). Never change models, slices, hills, goals, tasks or files.
 - Name models by their titles (below), never by raw ids. Link views as #route (e.g. #model/v3, #hill/please,
-  #task/<id>); they become links.
+  #task/<id>); they become links. Write the title first and the route after it ("Fresh LoRA SFT #model/v3").
 - If the ledger cannot answer it, say what is missing and which run would answer it.
+- A question about how or why something decides gets the rule itself first, then the numbers that applied it.
 
 {rules}
 
@@ -414,7 +425,14 @@ Model titles (id: title):
 
 Reporting rules (PROTOCOL.md):
 {_rules(p)}
+{_numbers(p)}
 """
+
+
+def _numbers(p: Project) -> str:
+    """The pooled numbers the dashboard shows (questions.ledger_brief), so an answer never disagrees with the page."""
+    from . import questions  # questions imports this module
+    return questions.ledger_brief(p)
 
 
 def _titles(p: Project, limit: int = 40) -> str:
