@@ -23,9 +23,10 @@
 .cm-shapes g.hot .v{stroke-width:4}.cm-shapes g.hot .v.highlight{stroke-width:20;stroke-opacity:.5}
 .cm-shapes .hit{stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer}
 .cm-shapes .hit.highlight{stroke-width:20}
+.cm-shapes rect.v.q{fill:var(--c);fill-opacity:.28;stroke:none}.cm-shapes g.hot rect.v.q{fill-opacity:.45}.cm-shapes g.res rect.v.q{fill-opacity:.15}
 .cm-shapes g.draft .v{stroke-dasharray:6 4}.cm-shapes g.draft .v.highlight{stroke-dasharray:none}
 .cm-hl{position:fixed;border:2px solid var(--cm-open);border-radius:4px;background:color-mix(in srgb,var(--cm-open) 8%,transparent);pointer-events:none;display:none}
-.cm-pin{position:fixed;width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:12px 12px 12px 2px;background:var(--cm-open);color:#16181a;
+.cm-pin{position:fixed;width:24px;height:24px;margin:-24px 0 0 0;border-radius:12px 12px 12px 2px;background:var(--cm-open);color:#16181a;
  font:600 11px var(--mono);display:flex;align-items:center;justify-content:center;pointer-events:auto;cursor:pointer;border:2px solid var(--surface);transition:transform .12s}
 .cm-pin.rep{background:var(--cm-rep);color:var(--on-primary)}.cm-pin.res{background:var(--cm-res);opacity:.55;color:var(--on-primary)}
 .cm-pin.wait{background:var(--cm-rep);color:var(--on-primary);animation:cm-pulse 1.4s ease-in-out infinite}
@@ -58,5 +59,5 @@
 .cm-it{padding:8px 10px;border-bottom:1px solid var(--rule);cursor:pointer}.cm-it:hover,.cm-it.hot{background:var(--raised)}
 .cm-it.res{opacity:.6}
 .cm-n{font:600 11px var(--mono);color:var(--warning);margin-right:6px}
-.cm-chip{position:fixed;pointer-events:auto;display:none}
+.cm-chip{position:fixed;pointer-events:auto;display:none;gap:4px}
 @media print{.cm-host{display:none}}

@@ -13,7 +13,7 @@ const API='api/comments';
 const host=document.createElement('div');host.id='arx-comments';host.className='cm-host';
 const TOOLS=[['pin','Pin','P'],['box','Box','B'],['arrow','Arrow','A'],['pen','Pen','D'],['highlight','Highlight','H']];
 host.innerHTML=`<svg class="cm-shapes" xmlns="http://www.w3.org/2000/svg"></svg><div class="cm-hl"></div><div class="cm-layer"></div><div class="cm-pins"></div><div class="cm-pops"></div>
-<div class="cm-list"></div><div class="cm-chip"><button class="cm-btn on">Comment</button></div>
+<div class="cm-list"></div><div class="cm-chip"><button class="cm-btn on cmt">Comment</button><button class="cm-btn ask">Ask</button></div>
 <div class="cm-fab"><div class="cm-tools">${TOOLS.map(([k,n,key])=>`<button data-tool="${k}" title="${n} (${key})">${n}<b>${key}</b></button>`).join('')}</div><button class="cm-btn cm-lst" title="Comments">0</button><button class="cm-btn cm-mode">Comment<b>C</b></button></div>`;
 const $c=s=>host.querySelector(s),hl=$c('.cm-hl'),pinsEl=$c('.cm-pins'),pops=$c('.cm-pops'),list=$c('.cm-list'),chip=$c('.cm-chip'),layer=$c('.cm-layer'),shapesEl=$c('.cm-shapes'),tools=$c('.cm-tools');
 const h=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -28,16 +28,21 @@ const uniq=sel=>{try{return document.querySelectorAll(sel).length===1}catch(e){r
 const hrefs=el=>new Set([...(el.matches('a[href]')?[el]:[]),...el.querySelectorAll('a[href]')].map(a=>a.getAttribute('href')).filter(x=>ENT.test(x)));
 const CARD=/^(ARTICLE|LI|TR)$/;
 const sig=el=>el.tagName.toLowerCase()+(el.classList[0]?'.'+CSS.escape(el.classList[0]):'');
-function keyOf(el){
- for(let a=el;a&&a.nodeType===1&&a!==document.body&&a!==host;a=a.parentElement){
+function keyOf(el){let fall=null;
+ // every candidate must resolve back to this very element: an entity link that appears twice on the view is not a key
+ const ok=(k,a)=>keyNode(k)===a?[k,a]:null;
+ for(let a=el;a&&a.nodeType===1&&a!==document.body&&a!==host;a=a.parentElement){let hit=null;
   if(a.id&&!/^\d/.test(a.id)&&uniq('#'+CSS.escape(a.id)))return [{sel:'#'+CSS.escape(a.id)},a];
-  if(a.tagName==='A'&&ENT.test(a.getAttribute('href')||''))return [{href:a.getAttribute('href')},a];
+  if(a.tagName==='A'&&ENT.test(a.getAttribute('href')||'')){const href=a.getAttribute('href');
+   if((hit=ok({href},a)))return hit;
+   const ls=[...document.querySelectorAll('a[href]')].filter(x=>x.getAttribute('href')===href&&!host.contains(x));
+   fall=fall||[{href,n:ls.indexOf(a)},a]}
   for(const at of a.attributes){if(at.name.startsWith('data-')){const s=`[${at.name}="${CSS.escape(at.value)}"]`;if(uniq(s))return [{sel:s},a]}}
   const hs=hrefs(a);
   // a card: holds exactly one entity link and is a list item (article, li, tr, .card...) or sits among other entities
-  if(hs.size===1&&a.parentElement&&(CARD.test(a.tagName)||/card|job|row|item/.test(a.getAttribute("class")||"")||hrefs(a.parentElement).size>1))return [{href:[...hs][0],card:sig(a)},a];
+  if(hs.size===1&&a.parentElement&&(CARD.test(a.tagName)||/card|job|row|item/.test(a.getAttribute("class")||"")||hrefs(a.parentElement).size>1)&&(hit=ok({href:[...hs][0],card:sig(a)},a)))return hit;
  }
- return [null,null]}
+ return fall||[null,null]}
 function relPath(from,el){const parts=[];
  while(el&&el!==from){let i=1,s=el;while((s=s.previousElementSibling))if(s.tagName===el.tagName)i++;
   parts.unshift(el.tagName.toLowerCase()+`:nth-of-type(${i})`);el=el.parentElement}
@@ -63,14 +68,14 @@ function anchorFor(el){const [key,node]=keyOf(el);const rel=node?relPath(node,el
 function keyNode(k){
  if(k.sel){try{return document.querySelector(k.sel)}catch(e){return null}}
  const ls=[...document.querySelectorAll('a[href]')].filter(a=>a.getAttribute('href')===k.href&&!host.contains(a));
- if(!k.card)return ls[0]||null;
+ if(!k.card)return ls[k.n||0]||null;
  for(const l of ls){const c=l.closest(k.card);if(c)return c}
  return null}
 function resolve(a){
  if(a.key){const n=keyNode(a.key);if(n){if(!a.rel)return n;try{return n.querySelector(':scope>'+a.rel)||n}catch(e){return n}}}
  let el=null;try{el=a.sel&&document.querySelector(a.sel)}catch(e){}
- if(a.text&&(!el||label(el)!==a.text)){  // the element moved or the anchor came from the CLI: find it by its text
-  const same=[...(document.querySelector('#main')?.querySelectorAll(el?el.tagName.toLowerCase():'h1,h2,h3,a,b,th,td,span,p')||[])].find(x=>label(x)===a.text);if(same)return same}
+ if(a.text&&(!el||squash(el.textContent)!==squash(a.text))){  // the element moved or the anchor came from the CLI: find it by its text
+  const same=[...(document.querySelector('#main')?.querySelectorAll(el?el.tagName.toLowerCase():'h1,h2,h3,a,b,th,td,span,p')||[])].find(x=>squash(x.textContent)===squash(a.text));if(same)return same}
  return el}
 const target=(x,y)=>{host.style.display='none';const el=document.elementFromPoint(x,y);host.style.display='';return el};
 const isPage=el=>!el||el===document.documentElement||el===document.body||el.id==='app';
@@ -114,25 +119,68 @@ layer.addEventListener('pointermove',e=>{e.preventDefault();
  if(draw.tool!=='pin')renderDraft()});
 function renderDraft(){if(!draw)return;const d=shapePath(draw.tool,draw.pts);
  shapesEl.querySelector('.live')?.remove();shapesEl.insertAdjacentHTML('beforeend',`<g class="draft live"><path class="v ${draw.tool}" d="${d}"/></g>`)}
+// what a shape is about: an arrow -> the element under its tip (kept at the same spot inside it, the tail at the same
+// offset); a box or pen mark -> the element it encloses best (highest IoU), stretched with it; a highlight -> the text
+// range under the stroke, found again by its text on every render
+const under=(x,y)=>{host.style.display='none';const els=document.elementsFromPoint(x,y);host.style.display='';return els.filter(e=>!isPage(e)&&!host.contains(e))};
+const iou=(r,B)=>{const ix=Math.max(0,Math.min(r.right,B.right)-Math.max(r.left,B.left)),iy=Math.max(0,Math.min(r.bottom,B.bottom)-Math.max(r.top,B.top)),i=ix*iy;
+ return i/Math.max(1,r.width*r.height+(B.right-B.left)*(B.bottom-B.top)-i)};
+function bestFit(B){const w=B.right-B.left,ht=B.bottom-B.top,cx=B.left+w/2,cy=B.top+ht/2,seen=new Set();let best=null,bs=0;
+ for(const [x,y] of [[cx,cy],[B.left+w/4,cy],[B.right-w/4,cy],[cx,B.top+ht/4],[cx,B.bottom-ht/4]])
+  for(let el of under(x,y))for(;el&&!isPage(el)&&!seen.has(el);el=el.parentElement){seen.add(el);const v=iou(el.getBoundingClientRect(),B);if(v>bs){bs=v;best=el}}
+ return best}
+// the nearest enclosing element whose text says more than the element's own (the card or row it sits in)
+const ctxOf=(el,text)=>{for(let a=el.parentElement,i=0;a&&!isPage(a)&&i<8;a=a.parentElement,i++){if(a.id==='main')break;const t=textOf(a,80);if(t&&t!==text)return t}return undefined};
+function caret(x,y){host.style.display='none';let r=null;
+ try{if(document.caretRangeFromPoint)r=document.caretRangeFromPoint(x,y);else if(document.caretPositionFromPoint){const c=document.caretPositionFromPoint(x,y);if(c){r=document.createRange();r.setStart(c.offsetNode,c.offset)}}}catch(e){}
+ host.style.display='';return r&&r.startContainer.nodeType===3&&!host.contains(r.startContainer)?r:null}
+function strokeRange(pts){const xs=pts.map(p=>p.x),y0=pts[0].y,y1=pts[pts.length-1].y;
+ const a=caret(Math.min(...xs)+1,pts[xs.indexOf(Math.min(...xs))].y),b=caret(Math.max(...xs)-1,pts[xs.indexOf(Math.max(...xs))].y);if(!a||!b)return null;
+ const rg=document.createRange();let s=[a.startContainer,a.startOffset],e=[b.startContainer,b.startOffset];
+ if(a.compareBoundaryPoints(Range.START_TO_START,b)>0)[s,e]=[e,s];
+ const word=/[\w%.,+\u2212-]/;  // grow both ends to whole words
+ while(s[1]>0&&word.test(s[0].nodeValue[s[1]-1]))s[1]--;while(e[1]<e[0].nodeValue.length&&word.test(e[0].nodeValue[e[1]]))e[1]++;
+ rg.setStart(...s);rg.setEnd(...e);return String(rg).trim()?rg:null}
+const squash=t=>String(t||'').replace(/\s+/g,'');
+function flatText(root){const map=[];let flat='';const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let t;
+ while((t=w.nextNode())&&flat.length<200000){const v=t.nodeValue;for(let i=0;i<v.length;i++){const ch=/\s/.test(v[i])?' ':v[i];if(ch===' '&&(!flat||flat.endsWith(' ')))continue;flat+=ch;map.push([t,i])}}
+ return [flat,map]}
+function findRange(root,quote,qn=0){const q=String(quote||'').replace(/\s+/g,' ').trim();if(!root||!q)return null;const [flat,map]=flatText(root);
+ let at=-1,from=0;for(let k=0;k<=qn;k++){const i=flat.indexOf(q,from);if(i<0)break;at=i;from=i+1}if(at<0)return null;
+ const [sn,so]=map[at],[en,eo]=map[at+q.length-1];const r=document.createRange();r.setStart(sn,so);r.setEnd(en,eo+1);return r}
+function quoteAnchor(rg){  // a text range -> {anchor fields}: the element holding it, the quote and which occurrence it is
+ let el=rg.commonAncestorContainer;if(el.nodeType!==1)el=el.parentElement;const quote=String(rg).replace(/\s+/g,' ').trim().slice(0,500);
+ let qn=0;for(let k=0;k<50;k++){const r=findRange(el,quote,k);if(!r)break;if(r.compareBoundaryPoints(Range.START_TO_START,rg)<=0)qn=k;else break}
+ return {...anchorFor(el),quote,qn,ctx:ctxOf(el,label(el))}}
 function finish(e){if(!draw||e.pointerId!==draw.id)return;e.preventDefault();e.stopPropagation();
  const d=draw;draw=null;try{layer.releasePointerCapture(e.pointerId)}catch(err){}document.documentElement.style.userSelect='';
  shapesEl.querySelector('.live')?.remove();
- const a=d.pts[0];
+ const a=d.pts[0],b=d.pts[d.pts.length-1];
  if(d.tool==='pin'||!d.moved){const el=target(a.x,a.y);if(isPage(el)&&d.tool!=='pin'){drawPins();return}
   if(!el||isPage(el)){setMode(false);return}const r=el.getBoundingClientRect();
-  compose({...anchorFor(el),rx:(a.x-r.left)/Math.max(1,r.width),ry:(a.y-r.top)/Math.max(1,r.height),px:a.x+scrollX,py:a.y+scrollY},a.x,a.y);
+  compose({...anchorFor(el),ctx:ctxOf(el,label(el)),rx:(a.x-r.left)/Math.max(1,r.width),ry:(a.y-r.top)/Math.max(1,r.height),px:a.x+scrollX,py:a.y+scrollY},a.x,a.y);
   setMode(false);return}
- const B=bbox(d.pts,d.tool),el0=target(a.x,a.y);
- // anchor: the element under the start point, widened to the nearest ancestor that contains the whole shape
- let el=el0,fit=false;
- while(el&&!isPage(el)){const r=el.getBoundingClientRect();if(r.left<=B.left&&r.top<=B.top&&r.right>=B.right&&r.bottom>=B.bottom){fit=true;break}el=el.parentElement}
- if(!fit)el=isPage(el0)?null:el0;
- const r=el?el.getBoundingClientRect():{left:0,top:0,width:innerWidth,height:innerHeight};
- const rel=d.pts.map(p=>({x:p.x-r.left,y:p.y-r.top}));
- const shape={tool:d.tool,d:shapePath(d.tool,rel),bw:r1(r.width),bh:r1(r.height),fit,ox:r1(r.left+scrollX),oy:r1(r.top+scrollY)};
- const an=el?anchorFor(el):{sel:'',text:'page'};
- compose({...an,rx:(a.x-r.left)/Math.max(1,r.width),ry:(a.y-r.top)/Math.max(1,r.height),px:a.x+scrollX,py:a.y+scrollY,shape},
-  Math.min(B.right,innerWidth-20),Math.min(B.bottom,innerHeight-20));
+ const B=bbox(d.pts,d.tool),at={x:(B.right+B.left)/2,y:Math.min(B.bottom,innerHeight-20)};
+ let an,shape;
+ if(d.tool==='arrow'){const el=under(b.x,b.y)[0]||null,tail=under(a.x,a.y)[0];
+  const r=el?el.getBoundingClientRect():{left:0,top:0,width:innerWidth,height:innerHeight};
+  const tx=(b.x-r.left)/Math.max(1,r.width),ty=(b.y-r.top)/Math.max(1,r.height);
+  shape={tool:'arrow',mode:'tip',d:shapePath('arrow',d.pts.map(p=>({x:p.x-b.x,y:p.y-b.y}))),tx:r1(tx*1e4)/1e4,ty:r1(ty*1e4)/1e4,
+   ax:r1(a.x-b.x),ay:r1(a.y-b.y),bw:r1(r.width),bh:r1(r.height),ox:r1(b.x+scrollX),oy:r1(b.y+scrollY)};
+  an=el?{...anchorFor(el),what:sig(el),ctx:ctxOf(el,label(el)),from:tail&&tail!==el&&!tail.contains(el)?label(tail).slice(0,80):undefined}:{sel:'',text:'page'};
+  Object.assign(an,{rx:tx,ry:ty,px:b.x+scrollX,py:b.y+scrollY})}
+ else{const rg=d.tool==='highlight'?strokeRange(d.pts):null;
+  const el=rg?(rg.commonAncestorContainer.nodeType===1?rg.commonAncestorContainer:rg.commonAncestorContainer.parentElement):bestFit(B);
+  const r=el?el.getBoundingClientRect():{left:0,top:0,width:innerWidth,height:innerHeight};
+  const rel=d.pts.map(p=>({x:p.x-r.left,y:p.y-r.top}));
+  shape={tool:d.tool,d:shapePath(d.tool,rel),bw:r1(r.width),bh:r1(r.height),fit:!rg&&!!el,ox:r1(r.left+scrollX),oy:r1(r.top+scrollY),
+   bx:r1(B.left-r.left),by:r1(B.top-r.top)};
+  if(d.tool==='box'&&el){const xs=[a.x,b.x],ys=[a.y,b.y];  // a box keeps its edges' px distance to the element's edges
+   shape.ins=[Math.min(...xs)-r.left,Math.min(...ys)-r.top,Math.max(...xs)-r.right,Math.max(...ys)-r.bottom].map(r1)}
+  if(rg){shape.mode='text';an=quoteAnchor(rg)}
+  else an=el?{...anchorFor(el),what:sig(el),ctx:ctxOf(el,label(el))}:{sel:'',text:'page'};
+  Object.assign(an,{rx:(a.x-r.left)/Math.max(1,r.width),ry:(a.y-r.top)/Math.max(1,r.height),px:a.x+scrollX,py:a.y+scrollY})}
+ compose({...an,shape},Math.min(B.right,innerWidth-20),at.y);
  setMode(false)}
 layer.addEventListener('pointerup',finish);layer.addEventListener('pointercancel',e=>{if(draw&&e.pointerId===draw.id)cancelDraw()});
 layer.addEventListener('lostpointercapture',e=>{if(draw&&e.pointerId===draw.id)cancelDraw()});
@@ -142,15 +190,16 @@ layer.addEventListener('wheel',e=>{let el=target(e.clientX,e.clientY);
  while(el&&!isPage(el)){const s=getComputedStyle(el);if(/(auto|scroll)/.test(s.overflowY+s.overflowX)&&(el.scrollHeight>el.clientHeight||el.scrollWidth>el.clientWidth)){el.scrollBy(e.deltaX,e.deltaY);e.preventDefault();return}el=el.parentElement}
  scrollBy(e.deltaX,e.deltaY);e.preventDefault()},{passive:false});
 
-/* ---------- selected text -> a "Comment" chip next to it */
+/* ---------- selected text -> one chip next to it: Comment (anchored to the quoted range) or Ask (questions.js qAsk) */
 document.addEventListener('mouseup',e=>{if(mode||host.contains(e.target))return;setTimeout(()=>{const s=getSelection();
- if(!s||s.isCollapsed||!String(s).trim()||host.contains(s.anchorNode)){chip.style.display='none';return}
- const r=s.getRangeAt(0).getBoundingClientRect(),quote=String(s).trim();
- const el=s.anchorNode.nodeType===1?s.anchorNode:s.anchorNode.parentElement;
- Object.assign(chip.style,{display:'block',left:Math.min(innerWidth-110,r.left)+'px',top:Math.min(innerHeight-40,r.bottom+6)+'px'});
- chip.onclick=()=>{const er=el.getBoundingClientRect();
-  compose({...anchorFor(el),quote:quote.slice(0,500),rx:(r.left-er.left)/Math.max(1,er.width),ry:(r.top-er.top)/Math.max(1,er.height),
-   px:r.left+scrollX,py:r.top+scrollY},r.right,r.bottom);chip.style.display='none'}},0)});
+ if(!s||s.isCollapsed||!String(s).trim()||host.contains(s.anchorNode)||/INPUT|TEXTAREA/.test(document.activeElement?.tagName||'')){chip.style.display='none';return}
+ const rg=s.getRangeAt(0).cloneRange(),r=rg.getBoundingClientRect(),quote=String(s).trim();
+ chip.querySelector('.ask').style.display=typeof window.qAsk==='function'?'':'none';
+ Object.assign(chip.style,{display:'flex',left:Math.max(8,Math.min(innerWidth-170,r.left))+'px',top:Math.min(innerHeight-40,r.bottom+6)+'px'});
+ chip.querySelector('.cmt').onclick=()=>{const an=quoteAnchor(rg),el=resolve(an)||document.body,er=el.getBoundingClientRect();
+  getSelection()?.removeAllRanges();chip.style.display='none';
+  compose({...an,rx:(r.left-er.left)/Math.max(1,er.width),ry:(r.top-er.top)/Math.max(1,er.height),px:r.left+scrollX,py:r.top+scrollY},r.right,r.bottom)};
+ chip.querySelector('.ask').onclick=()=>{chip.style.display='none';getSelection()?.removeAllRanges();window.qAsk(quote.slice(0,500))}},0)});
 
 /* ---------- reply bodies: text with links, plus one sanitised inline SVG */
 const SVG_OK=new Set(['svg','g','path','rect','circle','line','text','polyline']);
@@ -169,11 +218,12 @@ const focusLater=ta=>{ta.focus({preventScroll:true});setTimeout(()=>{ta.focus({p
 const nameField=()=>me()?'':'<input class="cm-name" placeholder="Your name" maxlength="60">';
 function takeName(p){const n=p.querySelector('.cm-name');if(!n)return me()||'you';const v=n.value.trim();if(v)setMe(v);return v||'you'}
 const shapeName={box:'Box',arrow:'Arrow',pen:'Drawing',highlight:'Highlight'};
-const anchorText=a=>a.quote?'“'+a.quote.slice(0,120)+'”':(a.shape?shapeName[a.shape.tool]+' on ':'')+(a.text||'page');
+const anchorText=a=>{const bare=a.what&&a.text&&a.what.split('.')[0]===a.text;  // an element with no text of its own: name its card
+ return a.quote?'“'+a.quote.slice(0,120)+'”':(a.shape?shapeName[a.shape.tool]+' on ':'')+(bare&&a.ctx?a.ctx:a.text||'page')};
 function compose(a,x,y){closePop();a.route=here();a.vw=innerWidth;const p=document.createElement('div');p.className='cm-pop';
  p.innerHTML=`<div class="cm-anchor">${h(anchorText(a))}</div>${nameField()}<textarea placeholder="Comment"></textarea><div class="cm-row"><span class="cm-sp">⌘↵</span><button class="cm-sm x">Cancel</button><button class="cm-sm pri go">Comment</button></div>`;
  pops.append(p);place(p,x,y);const ta=p.querySelector('textarea');focusLater(p.querySelector('.cm-name')||ta);
- if(a.shape){pending=a;drawPins()}
+ if(a.shape||a.quote){pending=a;drawPins()}
  const send=async()=>{const body=ta.value.trim();if(!body)return;const author=takeName(p);
   const ev=await post({kind:'comment',anchor:a,body,author});closePop();if(ev&&ev.id)thread(ev.id)};
  p.querySelector('.go').onclick=send;p.querySelector('.x').onclick=closePop;
@@ -181,13 +231,29 @@ function compose(a,x,y){closePop();a.route=here();a.vw=innerWidth;const p=docume
 
 const mine=()=>all.filter(t=>t.route===here());
 const anchorEl=c=>resolve(c.anchor||{});
-function pos(c){const a=c.anchor||{},el=anchorEl(c);
- if(el){const r=el.getBoundingClientRect();if(r.width||r.height)return [r.left+(a.rx??.5)*r.width,r.top+(a.ry??.5)*r.height]}
+// where an anchor sits now: its element's box, the shape's transform and, for a quote, the text range
+function where(a){const el=resolve(a),s=a.shape||null;let r=el&&el.getBoundingClientRect();if(r&&!r.width&&!r.height)r=null;
+ const g={el,r,rg:null,tx:0,ty:0,sx:1,sy:1};
+ if(a.quote&&el&&(!s||s.mode==='text')){const rg=findRange(el,a.quote,a.qn||0);if(rg&&rg.getClientRects().length)g.rg=rg}
+ if(s){if(s.mode==='tip'){if(r){g.tx=r.left+s.tx*r.width;g.ty=r.top+s.ty*r.height}else{g.tx=s.ox-scrollX;g.ty=s.oy-scrollY}}
+  else{g.tx=s.ox-scrollX;g.ty=s.oy-scrollY;if(r){g.tx=r.left;g.ty=r.top;if(s.fit){g.sx=r.width/Math.max(1,s.bw);g.sy=r.height/Math.max(1,s.bh)}}}}
+ return g}
+// a pin sits with its point on the corner of what it marks (a quote's first line, a shape's top-left, an arrow's tail),
+// so it never covers the text itself
+function pos(c){const a=c.anchor||{},g=where(a),s=a.shape;
+ if(g.rg){const q=g.rg.getClientRects()[0];return [q.left,q.top]}
+ if(s&&s.mode==='tip')return [g.tx+(s.ax||0),g.ty+(s.ay||0)];
+ if(s&&s.ins&&g.r)return [g.r.left+s.ins[0],g.r.top+s.ins[1]];
+ if(s&&s.bx!=null&&(g.r||s.mode!=='text'))return [g.tx+s.bx*g.sx,g.ty+s.by*g.sy];
+ if(g.r)return g.r.height<=48&&g.r.width<=360?[g.r.left,g.r.top]:[g.r.left+(a.rx??.5)*g.r.width,g.r.top+(a.ry??.5)*g.r.height];  // a word or a line: its corner
  return a.px!=null?[a.px-scrollX,a.py-scrollY]:null}
-function shapeSvg(a,cl,id){const s=a.shape;if(!s||!s.d)return '';const el=resolve(a);let tx=s.ox-scrollX,ty=s.oy-scrollY,sx=1,sy=1;
- if(el){const r=el.getBoundingClientRect();if(r.width||r.height){tx=r.left;ty=r.top;if(s.fit){sx=r.width/Math.max(1,s.bw);sy=r.height/Math.max(1,s.bh)}}}
- const d=h(s.d),t=h(s.tool);
- return `<g class="${cl}${id&&id===hot?' hot':''}" data-id="${h(id||'')}" transform="translate(${r1(tx)} ${r1(ty)}) scale(${r1(sx*1000)/1000} ${r1(sy*1000)/1000})"><path class="hit ${t}" d="${d}"/><path class="v ${t}" d="${d}"/></g>`}
+function shapeSvg(a,cl,id){const s=a.shape,g=where(a),cls=`${cl}${id&&id===hot?' hot':''}`;
+ if(g.rg){const rs=[...g.rg.getClientRects()].filter(q=>q.width>.5);
+  return `<g class="${cls} q" data-id="${h(id||'')}">${rs.map(q=>`<rect class="v q" x="${r1(q.left)}" y="${r1(q.top)}" width="${r1(q.width)}" height="${r1(q.height)}" rx="2"/>`).join('')}</g>`}
+ if(!s||!s.d)return '';const d=h(s.d),t=h(s.tool);
+ if(s.ins&&g.r){const [l,t2,rr,b]=s.ins,q=g.r,bd=`M${r1(q.left+l)} ${r1(q.top+t2)}H${r1(q.right+rr)}V${r1(q.bottom+b)}H${r1(q.left+l)}Z`;
+  return `<g class="${cls}" data-id="${h(id||'')}"><path class="hit box" d="${bd}"/><path class="v box" d="${bd}"/></g>`}
+ return `<g class="${cls}" data-id="${h(id||'')}" transform="translate(${r1(g.tx)} ${r1(g.ty)}) scale(${r1(g.sx*1000)/1000} ${r1(g.sy*1000)/1000})"><path class="hit ${t}" d="${d}"/><path class="v ${t}" d="${d}"/></g>`}
 const working=c=>c.agent&&(c.agent.status==='queued'||c.agent.status==='running');
 const klass=c=>c.resolved?'res':working(c)?'wait':c.messages.some(m=>m.agent)&&!c.waiting?'rep':'';
 function drawPins(){if(draw)return;const ts=mine(),openN=ts.filter(t=>!t.resolved).length;
@@ -195,7 +261,7 @@ function drawPins(){if(draw)return;const ts=mine(),openN=ts.filter(t=>!t.resolve
  pinsEl.innerHTML=ts.map((c,i)=>{const xy=pos(c);if(!xy)return '';const [x,y]=xy;
   return `<div class="cm-pin ${klass(c)}${c.id===hot?' hot':''}" data-id="${c.id}" style="left:${x}px;top:${y}px" title="${h(c.messages[0].body.slice(0,200))}">${i+1}</div>`}).join('');
  const live=shapesEl.querySelector('.live');
- shapesEl.innerHTML=ts.map(c=>shapeSvg(c.anchor||{},klass(c),c.id)).join('')+(pending?shapeSvg(pending,'draft',''):'');if(live)shapesEl.append(live);
+ shapesEl.innerHTML=ts.map(c=>shapeSvg(c.anchor||{},klass(c),c.id)).join('')+(pending&&(pending.shape||pending.quote)?shapeSvg(pending,'draft',''):'');if(live)shapesEl.append(live);
  pinsEl.querySelectorAll('.cm-pin').forEach(el=>el.onclick=()=>thread(el.dataset.id));
  if(open){const c=ts.find(t=>t.id===open),p=pops.firstChild;if(c&&p&&!p.contains(document.activeElement)){const [x,y]=pos(c)||[innerWidth-360,innerHeight-120];place(p,x,y)}}}
 function setHot(id){if(hot===id)return;hot=id;host.querySelectorAll('[data-id]').forEach(e=>e.classList.toggle('hot',!!id&&e.dataset.id===id))}
