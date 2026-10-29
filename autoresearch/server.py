@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlencode, urlsplit
 
 from . import features, papers, people, projects, share
-from .core import Project, _read, paired, per_id
+from .core import Project, _read, paired, per_id, summarize
 from .readable import readable
 
 WEB = Path(__file__).with_name("web")
@@ -200,12 +200,17 @@ def _state(p: Project) -> dict:
     models, tasks = p.models(), p.tasks()
     champ = p.champion()
     board, newest = {}, {}
-    for t in p.evals():
-        cur = board.setdefault(t["slice"], {}).get(t["model"])
-        if t.get("slice_hash") == slices.get(t["slice"], {}).get("hash") and (not cur or t["ended"] > cur["ended"]):
-            board[t["slice"]][t["model"]] = dict(task=t["id"], ended=t["ended"], **t.get("summary", {}))
-            if t["ended"] > newest.get(t["slice"], (0, 0))[0]:
-                newest[t["slice"]] = (t["ended"], t["id"])
+    for sl, model in {(t["slice"], t["model"]) for t in p.evals()}:
+        runs = p.slice_evals(model, sl)
+        if not runs:
+            continue
+        latest = runs[-1]
+        scores = p.pooled_scores(model, sl)
+        summary = summarize([r for t in runs for r in p.rows(t["id"])])
+        summary.update(n=len(scores), score=sum(scores.values()) / len(scores) if scores else None)
+        board.setdefault(sl, {})[model] = dict(task=latest["id"], ended=latest["ended"], runs=len(runs), **summary)
+        if latest["ended"] > newest.get(sl, (0, 0))[0]:
+            newest[sl] = (latest["ended"], latest["id"])
     for name, sl in slices.items():  # slices frozen before `scale` existed: read it off the scores
         if not sl.get("scale") and name in newest:
             vals = {r.get("score") for r in p.rows(newest[name][1]) if not r.get("error")}

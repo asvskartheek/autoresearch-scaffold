@@ -29,6 +29,39 @@ class R2(unittest.TestCase):
         with self.assertRaises(SystemExit):
             q.number_lines(self.p, ["nope"])
 
+    def test_leaderboard_and_answer_agree_after_repeats_and_supersession(self):
+        from autoresearch import server
+        p = self.p
+        latest = run(p, "base", [1] * 6 + [0] * 4, "ds/hard")
+        row = server.state(p)["leaderboard"]["ds/hard"]["base"]
+        self.assertAlmostEqual(row["score"], sum(p.pooled_scores("base", "ds/hard").values()) / 10)
+        self.assertEqual((row["n"], row["runs"]), (10, 3))
+        p.supersede("base", "ds/hard", latest.id)
+        row = server.state(p)["leaderboard"]["ds/hard"]["base"]
+        self.assertEqual((row["score"], row["runs"]), (0.6, 1))
+
+    def test_half_counts_match_browser_rounding(self):
+        p = self.p
+        p.add_model("half", parent="", title="Half")
+        run(p, "half", [1] * 4 + [0] * 6, "ds/hard")
+        run(p, "half", [1] * 5 + [0] * 5, "ds/hard")
+        text = "\n".join(q.number_lines(p, ["half"]))
+        self.assertIn("ds/hard: 5 of 10", text)  # Math.round(4.5), not Python's round-to-even 4
+
+    def test_continuous_evidence_keeps_subunit_precision(self):
+        p = self.p
+        p.add_slice("ds/seconds", list(range(2)), scale="continuous", unit="s")
+        run(p, "base", [-0.21, -0.23], "ds/seconds")
+        run(p, "base+hint", [-0.11, -0.13], "ds/seconds")
+        node = q.add(p, "Faster?", evidence=[dict(model="base+hint", slice="ds/seconds")])
+        ev = next(n for n in q.tree(p)["nodes"] if n["id"] == node["id"])["ev"][0]
+        self.assertAlmostEqual(ev["c"] / ev["n"], -0.12)
+        self.assertAlmostEqual(ev["bc"] / ev["n"], -0.22)
+        text = "\n".join(q.number_lines(p, ["base+hint"], ["ds/seconds"]))
+        self.assertIn("n = 2", text)
+        self.assertIn("0.1 s (90% CI", text)
+        self.assertNotIn("fixed", text)
+
     def test_every_prompt_carries_the_pooled_numbers_and_titles(self):
         brief = q.ledger_brief(self.p)
         self.assertIn("arx q numbers", brief)

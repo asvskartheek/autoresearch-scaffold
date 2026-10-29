@@ -13,6 +13,7 @@ POST /api/questions/{ask,add,answer,dead,reopen,flag}. Asking enqueues inbox kin
 from __future__ import annotations
 
 import json
+import math
 import re
 import sys
 import time
@@ -447,10 +448,10 @@ def resolve(p, e: dict, node: dict, ctx: dict) -> dict | None:
         g = ctx["goal_status"].get(e["goal"]) or {}
         vs = g.get("vs_baseline")
         if vs and vs.get("n"):
-            return _pd(vs, g.get("model"), g.get("baseline"), g.get("slice"), "goal", runs=g.get("runs"))
+            return _pd(vs, g.get("model"), g.get("baseline"), g.get("slice"), "goal", continuous=p.slices().get(g.get("slice"), {}).get("scale") == "continuous", runs=g.get("runs"))
         if g.get("value") is not None and g.get("kpi", "score") == "score":
             return dict(kind="raw", role="goal", model=g.get("model"), slice=g.get("slice"), n=g.get("n"),
-                        c=round(g["value"] * g["n"]))
+                        c=_evidence_sum(g["value"] * g["n"], p, g.get("slice")))
         return None
     if e.get("task"):
         try:
@@ -460,7 +461,7 @@ def resolve(p, e: dict, node: dict, ctx: dict) -> dict | None:
         s = t.get("summary") or {}
         n, sc = s.get("n"), s.get("score")
         return dict(kind="raw", role=(t.get("slice") or "task").split("/")[-1], task=t["id"], label=t.get("title"),
-                    model=t.get("model"), slice=t.get("slice"), n=n, c=round(sc * n) if n and sc is not None else None)
+                    model=t.get("model"), slice=t.get("slice"), n=n, c=_evidence_sum(sc * n, p, t.get("slice")) if n and sc is not None else None)
     model, sl = e.get("model"), e.get("slice")
     if not model or not sl:
         return None
@@ -473,13 +474,13 @@ def resolve(p, e: dict, node: dict, ctx: dict) -> dict | None:
     base = next((b for b in cands if b and b != model and _runs(p, b, sl)), None)
     if not base:
         sc = p.pooled_scores(model, sl)
-        return dict(kind="raw", role=role, model=model, slice=sl, n=len(sc), c=round(sum(sc.values())), runs=len(mine))
+        return dict(kind="raw", role=role, model=model, slice=sl, n=len(sc), c=_evidence_sum(sum(sc.values()), p, sl), runs=len(mine))
     theirs = _runs(p, base, sl)
     key = (model, base, sl, mine, theirs)
     if key not in _PAIRED:
         sign = 1 if p.config.get("higher_is_better", True) else -1
         _PAIRED[key] = paired(p.pooled_scores(model, sl), p.pooled_scores(base, sl), sign)
-    return _pd(_PAIRED[key], model, base, sl, role, runs=len(mine), base_runs=len(theirs))
+    return _pd(_PAIRED[key], model, base, sl, role, continuous=p.slices().get(sl, {}).get("scale") == "continuous", runs=len(mine), base_runs=len(theirs))
 
 
 def _dedupe(ev, p) -> list[dict]:
@@ -496,12 +497,22 @@ def _dedupe(ev, p) -> list[dict]:
     return out
 
 
-def _pd(r, model, base, sl, role, **kw):
+def _count(value):
+    """Match the dashboard's half-up rounding for binary pooled expected counts."""
+    return math.floor(value + 0.5)
+
+
+def _evidence_sum(value, p, sl):
+    return value if p.slices().get(sl, {}).get("scale") == "continuous" else _count(value)
+
+
+def _pd(r, model, base, sl, role, continuous=False, **kw):
     n = r.get("n") or 0
     out = dict(kind="paired", role=role, model=model, base=base, slice=sl, n=n, delta=r.get("delta"), lo=r.get("lo"),
                hi=r.get("hi"), wins=r.get("wins"), losses=r.get("losses"), **kw)
     if n and r.get("cand") is not None:
-        out |= dict(c=round(r["cand"] * n), bc=round(r["base"] * n))
+        out |= dict(c=r["cand"] * n if continuous else _count(r["cand"] * n),
+                    bc=r["base"] * n if continuous else _count(r["base"] * n))
     return out
 
 
@@ -541,7 +552,7 @@ def number_lines(p, models=None, slices=None) -> list[str]:
                     if cont:
                         sc = p.pooled_scores(m, sl)
                         unit = (sls.get(sl) or {}).get("unit") or ""
-                        val = f"mean {_grp(sum(sc.values()) / len(sc))} {unit}".rstrip() if sc else "—"
+                        val = f"mean {_grp(sum(sc.values()) / len(sc))} {unit}, n = {len(sc):,}".strip() if sc else "—"
                     else:
                         val = f"{r['c']:,} of {r['n']:,}" if r.get("c") is not None and r.get("n") else "—"
                     line = f"  {sl}: {val} ({pooled})"
@@ -550,7 +561,9 @@ def number_lines(p, models=None, slices=None) -> list[str]:
                         ci = (f"{_grp(r['lo'])} to {_grp(r['hi'])}" if cont else f"{_pts(r['lo'])} to {_pts(r['hi'])}")
                         line += (f"; vs {features.model_label(p, r['base'])} [{r['base']}]"
                                  + ("" if cont else f" {r['bc']:,} of {r['n']:,}")
-                                 + f": {d} (90% CI {ci}), {r.get('wins') or 0} fixed, {r.get('losses') or 0} broke")
+                                 + f": {d}{' ' + unit if cont and unit else ''} (90% CI {ci}), "
+                                 + (f"{r.get('wins') or 0} better, {r.get('losses') or 0} worse" if cont else
+                                    f"{r.get('wins') or 0} fixed, {r.get('losses') or 0} broke"))
                     out.append(line)
             return out
         finally:
@@ -708,7 +721,7 @@ def _amt(u, v) -> str:
     if v is None:
         return "—"
     if u["count"] and u["n"]:
-        return f"{round(v * u['n']):,} of {u['n']:,}"
+        return f"{_count(v * u['n']):,} of {u['n']:,}"
     if u["count"]:
         return f"{100 * v:.1f}%"
     return f"{_grp(-v if u['neg'] else v)} {u['unit']}".strip()
@@ -724,7 +737,7 @@ def _goal_text(p, g) -> dict:
             need = -(-round(t * u["n"] * 1e6) // 10**6)
             out["target_txt"] = f"{need:,} of {u['n']:,} ({f'{100 * t:.1f}'.rstrip('0').rstrip('.')}%)"
             if g.get("value") is not None:
-                out["gap_txt"] = f"{max(0, need - round(g['value'] * u['n'])):,} more of {u['n']:,}"
+                out["gap_txt"] = f"{max(0, need - _count(g['value'] * u['n'])):,} more of {u['n']:,}"
         else:
             out["target_txt"] = ("at most " if u["lower"] else "at least ") + _amt(u, t)
             if g.get("gap") is not None and g["gap"] > 0:
