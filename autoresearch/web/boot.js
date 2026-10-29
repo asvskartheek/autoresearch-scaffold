@@ -81,5 +81,7 @@ addEventListener('hashchange',async()=>{
  render(true);if(p){await p;render(true)}
 });
 addEventListener('keydown',e=>{if(e.key==='Escape')$('#app').classList.remove('nav-open')});
+// a person's first visit to a project lands on Start (views/start.js keeps the visits); after that a bare URL is the Overview
+if(!location.hash&&window.START?.first)history.replaceState(null,'','#start');
 placeholder();tick();setInterval(()=>{if(!document.hidden)tick()},4000);
 if(window.ARXP){ARXP.on(()=>{if(S.state)renderTop()});ARXP.start('api/people',()=>location.hash.slice(1)||'overview')}
