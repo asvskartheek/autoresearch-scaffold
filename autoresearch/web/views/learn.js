@@ -145,7 +145,7 @@ function doneHTML(){
  const skip=L.b.cards.map((c,k)=>c.pred?-1:k).filter(k=>k>=0);
  if(skip.length)return `<div class="done-h"><h2>${plural(skip.length,'card')} skipped</h2></div>
   <div class="actions"><button class="btn primary" data-l="go" data-i="${skip[0]}">Card ${skip[0]+1} <kbd>space</kbd></button></div>`;
- return `<div class="done-h"><h2>You're caught up</h2><span class="muted">${L.b.calibration.n} scored · ${open.length} open</span></div>
+ return `<div class="done-h"><h2>You're caught up</h2><span class="muted">${L.b.calibration.all_n??L.b.calibration.n} scored · ${open.length} open</span></div>
   ${jobs?`<div class="jobs">${jobs}</div>`:''}
   ${open.length?`<div class="pend">${open.map(r=>`<div>${pill('Open','warn')}<span class="pq">${esc(r.q||r.card)}</span><span class="mono">${esc(typeof r.guess==='number'?(+r.guess).toFixed(1):r.guess)} · ${Math.round(r.conf*100)}%</span></div>`).join('')}</div>`:''}
   <div class="actions">${L.b.cards.length?'<button class="btn" data-l="prev">Back</button>':''}</div>`;
@@ -167,7 +167,7 @@ function knowHTML(){
  const missed=(u.missed||[]).filter(m=>m.doc!=='brief').map(m=>{const id=m.doc.startsWith('concept:')?m.doc.slice(8):null,c=id&&b.concepts.find(x=>x.id===id);return c?{t:c.t,id}:{t:m.doc}});
  const uniq=[...new Map(missed.map(m=>[m.t,m])).values()];
  const v=viewerName();
- return `<div class="score"><div><b>${cal.hits}/${cal.n}</b><span>right</span></div><div><b>${cal.brier==null?'–':cal.brier.toFixed(2)}</b><span>Brier</span></div><div><b>${catchMs?span(catchMs/1000):'–'}</b><span>to catch up</span></div></div>
+ return `<div class="score"><div><b>${cal.all_hits??cal.hits}/${cal.all_n??cal.n}</b><span>right</span></div><div title="${plural(cal.n,'prediction')} with a stated confidence"><b>${cal.brier==null?'–':cal.brier.toFixed(2)}</b><span>Brier</span></div><div><b>${catchMs?span(catchMs/1000):'–'}</b><span>to catch up</span></div></div>
   ${calChart(cal)}${typeof TEACH!=='undefined'?TEACH.profile():''}
   ${uniq.length?`<div class="missed"><span class="muted">Missed</span>${uniq.map(m=>m.id?`<button class="chip" data-l="concept" data-id="${esc(m.id)}">${esc(m.t)}</button>`:`<span class="chip">${esc(m.t)}</span>`).join('')}</div>`:''}
   <div class="who"><span class="muted">${v?esc(v):'No name set'}</span><button class="linkbtn" data-l="name">${v?'Change':'Set your name'}</button></div>`;

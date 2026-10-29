@@ -149,6 +149,7 @@ class Teach(unittest.TestCase):
         g = next(c for c in b["cards"] if c["id"] == self.ci["id"])
         self.assertEqual(g["pred"]["method"], "code"); self.assertIn("reveal", g)
         self.assertEqual(b["teach"]["profile"]["methods"]["code"]["hits"], 1)
+        self.assertEqual((b["calibration"]["all_n"], b["calibration"]["all_hits"]), (b["calibration"]["n"] + 1, b["calibration"]["hits"] + 1))
 
     def test_chooser_adapts(self):
         prof = teach.profile([dict(t=i, method="sketch", hit=True) for i in range(5)], [])

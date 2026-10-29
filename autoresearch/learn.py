@@ -757,9 +757,13 @@ def brief(p: Project, since: float = 0, viewer: str = "anon") -> dict:
         cs += [c for c in extra if c]
         pub = [public(c, mine.get(c["id"])) for c in cs]
         prof = teach.attach(p, cs, pub, viewer, al)
+        cal = calibration(preds)
+        # "right" counts every answered card, predictions and the other methods alike; Brier is predictions only
+        done = [r for r in teach.attempts(p, viewer, al) if not r.get("skip") and r.get("hit") is not None]
+        cal |= dict(all_n=cal["n"] + len(done), all_hits=cal["hits"] + sum(bool(r["hit"]) for r in done))
         return dict(now=_now(), since=since, viewer=viewer, cards=pub,
                     empty=None if cs else _why_empty(p),
-                    concepts=concepts(p), calibration=calibration(preds),
+                    concepts=concepts(p), calibration=cal,
                     understanding=understanding(p, viewer),
                     open=[r for r in preds if r.get("hit") is None],
                     teach=dict(profile=prof, labels=teach.LABEL))
