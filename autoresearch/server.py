@@ -4,7 +4,7 @@ from __future__ import annotations
 import ast, copy, gzip, hashlib, json, mimetypes, os, re, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qsl, unquote, urlsplit
+from urllib.parse import parse_qsl, unquote, urlencode, urlsplit
 
 from . import features, papers, people, projects, share
 from .core import Project, _read, paired, per_id
@@ -396,14 +396,14 @@ def human_event(p: Project, name: str, kind: str, d: dict) -> dict | None:
         anchor = {k: str(a[k])[:600] for k in ("block", "quote", "prefix", "suffix") if a and a.get(k)} or None
         if anchor and isinstance(a.get("shape"), dict):  # a drawn comment: the shape, relative to its block (paper.html)
             anchor["shape"] = clean_shape(a["shape"])
-        return papers.post(p, name, "comment", body=body, anchor=anchor, mentions=people.mentioned(body) or None, **who) if body and anchor else None
+        return papers.post(p, name, "comment", body=body, anchor=anchor, mentions=people.mentioned(body, people.members(p)) or None, **who) if body and anchor else None
     ref = str(d.get("parent" if kind in ("reply", "resolve", "reopen", "seen") else "target") or "")
     if ref not in ids or (kind in ("reply", "edit") and not body):
         return None
     if kind == "seen":  # a person read the thread; the agent's own "seen" carries no `by`
         return papers.post(p, name, "seen", parent=ref, by=by) if by and log[ref]["kind"] == "comment" else None
     if kind == "reply":
-        return papers.post(p, name, "reply", parent=ref, body=body, mentions=people.mentioned(body) or None, **who)
+        return papers.post(p, name, "reply", parent=ref, body=body, mentions=people.mentioned(body, people.members(p)) or None, **who)
     if kind in ("resolve", "reopen"):
         return papers.post(p, name, kind, parent=ref, **who)
     t = log[ref]  # edit / delete: only your own message, never the agent's
@@ -452,6 +452,8 @@ def serve(port: int = 8890, root=None):
             pass
 
         def _send(self, code, body: bytes, ctype, extra=None):
+            if getattr(self, "_remote", False) and (ctype.startswith(("application/json", "text/html"))):
+                body = share.redact(body.decode("utf-8", "replace")).encode()  # no paths on this machine leave it
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Cache-Control", "no-store")
@@ -494,19 +496,25 @@ def serve(port: int = 8890, root=None):
 
         def _local(self) -> bool:
             # loopback only: a DNS-rebound page carries a foreign Host; a cross-site POST carries a foreign Origin
+            # and the connection itself must come from this machine: headers alone are the sender's to choose
+            peer = (self.client_address or ("",))[0]
+            if peer not in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+                return False
             host = urlsplit("//" + (self.headers.get("Host") or "")).hostname
             origin = self.headers.get("Origin")
             return host in LOCAL and (not origin or urlsplit(origin).hostname in LOCAL)
 
         def do_GET(self):
             path = self.path.split("?")[0]
-            remote = not self._local()
+            remote = self._remote = not self._local()
             if remote and not self._remote_ok(path):
                 return self._send(403, b'{"error":"not shared"}', "application/json")
             q0 = dict(parse_qsl(urlsplit(self.path).query))
             if remote and q0.get("k"):  # the link's token becomes a cookie; the address bar loses it
-                rest = "&".join(f"{k}={v}" for k, v in q0.items() if k != "k")
+                rest = urlencode([(k, v) for k, v in q0.items() if k != "k"])  # re-encoded: no CR/LF reaches the header
                 self.send_response(302); self.send_header("Location", path + ("?" + rest if rest else ""))
+                if not re.fullmatch(r"[\w-]{8,64}", q0["k"]):
+                    return self._send(403, b'{"error":"not shared"}', "application/json")
                 self.send_header("Set-Cookie", f"arx_k={q0['k']}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000")
                 self.end_headers(); return
             if path.startswith("/p/") and path.count("/") == 2:  # /p/<key> -> /p/<key>/ so relative fetches resolve
@@ -567,7 +575,8 @@ def serve(port: int = 8890, root=None):
             self._send(404, b"not found", "text/plain")
 
         def do_POST(self):
-            if not self._local() and not self._remote_ok(self.path.split("?")[0], write=True):
+            self._remote = not self._local()
+            if self._remote and not self._remote_ok(self.path.split("?")[0], write=True):
                 return self._send(403, b'{"error":"cross-origin"}', "application/json")
             try:
                 p, path = pick(self.path.split("?")[0])
@@ -577,6 +586,8 @@ def serve(port: int = 8890, root=None):
                     if not 0 <= n <= 1_000_000:
                         return self._send(413, b'{"error":"too large"}', "application/json")
                     d = json.loads(self.rfile.read(n) or b"{}")
+                    if isinstance(d, dict):  # a feature may treat someone on another machine differently (people.py)
+                        d["_remote"] = self._remote
                     return self._send(*_feature(features.POST, p, path, d))
                 if parts[:2] == ["api", "paper"] and len(parts) == 4 and parts[3] in HUMAN_KINDS:
                     n = int(self.headers.get("Content-Length") or 0)
