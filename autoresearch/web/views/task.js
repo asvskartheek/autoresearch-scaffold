@@ -233,7 +233,7 @@ function details(t,d){
  const kv=[['Task id',`<span class="tk-mono">${esc(t.id)}</span>${copyBtn(t.id)}`],
   ['Started',wbWhen(t.created)],
   [t.ended?'Ended':'Last heard',t.ended?wbWhen(t.ended):`${wbAgo(t.heartbeat)} <span class="faint">(${wbClock(t.heartbeat)})</span>`],
-  [t.ended?'Took':'Elapsed',`${wbSpanB((t.ended||now())-t.created)}${t.budget_s?` <span class="faint">of a ${wbSpanB(t.budget_s)} budget</span>`:''}`]];
+  [t.ended?'Took':'Elapsed',`${(t.budget_s?wbSpanB:wbSpan)((t.ended||now())-t.created)}${t.budget_s?` <span class="faint">of a ${wbSpanB(t.budget_s)} budget</span>`:''}`]];
  if(t.model)kv.push(['Model',`<a class="ln" href="#model/${enc(t.model)}">${mn(t.model)}</a>${st.models[t.model]?.title&&st.models[t.model].title!==t.model?` <span class="tk-mono faint">${esc(t.model)}</span>`:''}`]);
  if(t.superseded_by){const by=byId(t.superseded_by);kv.push(['Superseded by',`<a class="ln" href="#task/${enc(t.superseded_by)}">${esc(by?.title||t.superseded_by)}</a> <span class="faint">gates and baselines skip this run</span>`])}
  if(t.slice)kv.push(['Slice',`<a class="ln" href="#slices/${enc(t.slice)}">${esc(t.slice)}</a>${sl?.n?` <span class="faint">${sl.n.toLocaleString()} examples</span>`:''}`]);
