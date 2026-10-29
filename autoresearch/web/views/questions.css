@@ -40,6 +40,7 @@ ul.q-t ul.q-t{margin-left:11px;padding-left:12px;border-left:1px solid var(--rul
 .q-fq{display:flex;gap:10px;align-items:flex-start}
 .q-fq h2{font-size:22px;line-height:1.25;font-weight:600;letter-spacing:-.01em;margin:0;overflow-wrap:anywhere}
 .q-fq .q-sh{padding-top:5px;height:auto}
+.q-claim.agent.idle{border-left-color:var(--chart-3)}
 .q-why{margin:10px 0 0;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
 .q-why a,.q-claim a{color:var(--accent);text-decoration:none}
 .q-claim{margin:12px 0 0;font-size:15px;padding:8px 12px;border-radius:var(--radius-card);background:var(--raised);border-left:3px solid var(--control);overflow-wrap:anywhere}
@@ -55,7 +56,12 @@ ul.q-t ul.q-t{margin-left:11px;padding-left:12px;border-left:1px solid var(--rul
 .q-doc:hover{border-color:var(--control)}
 .q-doc .fig svg{display:block;width:100%;height:auto;max-height:260px;color:var(--text)}
 .q-doc .btn{margin-top:10px}
-.q-reader{display:block;width:100%;height:calc(100vh - 150px);min-height:480px;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface)}
+.q-rwrap{position:relative}
+.q-reader{display:block;width:100%;height:calc(100dvh - 120px);min-height:420px;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface);opacity:0;transition:opacity .15s}
+.q-rwrap.ok .q-reader{opacity:1}
+.q-rload{position:absolute;inset:0 0 auto;padding:40px 0;text-align:center;color:var(--faint);font-size:13.5px}
+.q-rwrap.ok .q-rload{display:none}
+.title .tt h1:empty{display:none}
 .q-quote{margin:12px 0 0;font-size:13.5px;color:var(--muted)}
 .q-quote mark{background:rgba(217,164,65,.26);color:inherit;border-radius:2px}
 

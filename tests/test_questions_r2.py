@@ -67,6 +67,20 @@ class R2(unittest.TestCase):
         n = {x["id"]: x for x in q.tree(self.p)["nodes"]}[a["id"]]
         self.assertEqual([e["kind"] for e in n["ev"]], ["paired"])
 
+    def test_comment_answers_show_in_questions(self):
+        p = self.p
+        th = comments.post(p, "comment", body="Why is the hint better here?", author="Ann", anchor=dict(route="hill/hard"))
+        comments.reply(p, th["id"], '<svg viewBox="0 0 10 10"></svg>\nIt fixes 3 of 10. More here.\n#answer/a-12345678')
+        comments.post(p, "comment", body="Ping @Bob", author="Ann", anchor=dict(route="overview"), mentions=["bob"])
+        wait = comments.post(p, "comment", body="And on the full set?", author="Ann", anchor=dict(route="overview"))
+        t = {n["id"]: n for n in q.tree(p)["nodes"]}
+        n = t["c:" + th["id"]]
+        self.assertEqual((n["parent"], n["status"], n["claim"], n.get("doc"), n["thread"]),
+                         ("h:hard", "answered", "It fixes 3 of 10.", None, th["id"]))  # no such doc file: dropped
+        self.assertEqual((t["c:" + wait["id"]]["parent"], t["c:" + wait["id"]]["status"]), ("x:comments", "agent"))
+        self.assertEqual(sum(1 for k in t if k.startswith("c:")), 2)  # people talking to people stay in comments
+        self.assertIn("running", q.tree(p)["answer_agent"])
+
     def test_notes_leave_out_tooling_dicts_and_other_questions_evidence(self):
         p = self.p
         t = Task(p, "paper", "Port the goal paper", model="base")

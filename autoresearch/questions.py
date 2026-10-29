@@ -328,7 +328,51 @@ def seeded(p) -> dict:
     _distinct_siblings(out, models)
     if other:
         out[other] = dict(title="Changes outside any hill", parent=None, status="open", created=None, evidence=[], seed="group")
+    _comment_nodes(p, out)
     return out
+
+
+_ROUTE_NODE = {"model": "m:", "hill": "h:", "goal": "g:"}
+
+
+def _plain(body: str) -> str:
+    """A reply as one line of text: no figure, no markup, no #answer link."""
+    t = re.sub(r"<svg\b.*?</svg>", " ", str(body or ""), flags=re.S | re.I)
+    t = re.sub(r"<[^>]+>", " ", t)
+    return re.sub(r"\s+", " ", re.sub(r"(^|\s)#answer/[a-z0-9-]+", " ", t)).strip()
+
+
+def _comment_nodes(p, out) -> None:
+    """Every comment thread the agent was asked to answer, as a question under the node its view is about (a model,
+    hill or goal page), else under "Comments on the dashboard": one place to look for every answer. The thread itself
+    stays where it was left; the node links back to it."""
+    try:
+        ts = comments.threads(comments.events(p))
+    except Exception:  # a broken comment log never takes Questions down
+        return
+    group = None
+    for th in ts:
+        ms = th["messages"]
+        said = [m for m in ms if m.get("agent") and not m.get("error")]
+        if not said and not th["waiting"]:
+            continue  # people talking to people
+        route = str(th.get("route") or "overview").lstrip("#")
+        kind, _, arg = route.partition("/")
+        par = _ROUTE_NODE.get(kind, "") + arg if kind in _ROUTE_NODE and arg else route[10:] if kind == "questions" and arg else None
+        if par not in out:
+            group = group or "x:comments"
+            par = group
+        last = said[-1]["body"] if said else ""
+        doc = re.search(r"#answer/([a-z0-9][a-z0-9-]{1,47})", last)
+        title = _short(_plain(ms[0]["body"]), 10) or "A comment"
+        out[f"c:{th['id']}"] = dict(
+            title=title if len(title) <= 120 else title[:119] + "…", parent=par,
+            status="agent" if th["waiting"] else "answered", claim=_line(_plain(last), 200) if said else None,
+            created=th.get("t"), evidence=[], seed="comment", thread=th["id"], route=route, by=ms[0].get("author"),
+            doc=doc.group(1) if doc else None, quote=(th.get("anchor") or {}).get("quote") or None)
+    if group:
+        out[group] = dict(title="Comments on the dashboard", parent=None, status="open", created=None, evidence=[],
+                          seed="group")
 
 
 def _model_evidence(p, k, m, hills, goals) -> list[dict]:
@@ -603,8 +647,14 @@ def _tree(p, full: bool) -> dict:
                     n["fig"] = comments.first_figure(comments.doc_path(p, n["doc"]).read_text())
                 except (KeyError, OSError):
                     n.pop("doc")
+        try:
+            from . import answer  # answer imports comments, which this module imports
+            agent = answer.agent_state(p)
+        except Exception:
+            agent = dict(running=True)  # unknown: never claim that nobody will answer
         return dict(nodes=sorted(nodes.values(), key=lambda n: (n.get("seed") == "group", n.get("created") or 0)), goals=_trajectories(p, ctx),
-                    champion=ctx["champion"], needs_human=sum(1 for n in nodes.values() if _waiting(n)), now=time.time())
+                    champion=ctx["champion"], needs_human=sum(1 for n in nodes.values() if _waiting(n)), now=time.time(),
+                    answer_agent=agent)
 
 
 def _grp(x: float) -> str:

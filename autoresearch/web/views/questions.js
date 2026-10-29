@@ -141,21 +141,22 @@ function qPanel(id,ix){
   `<div class="q-fq"><span class="q-sh">${qShape(n,18)}</span><h2>${esc(n.title)}</h2></div>`;
  if(n.status==='agent'){
   const L=n.live||{},pr=L.progress,f=pr&&pr.total?Math.min(1,(pr.done||0)/pr.total):null;
-  const line=L.status==='failed'?('Agent failed'+(L.error?': '+L.error:'')):L.note||(L.status==='running'?'Agent working':'Queued for an agent');
-  h+=`<div class="q-claim agent">${esc(line)}${L.task?` <a class="q-tl" href="#task/${enc(L.task)}">${esc(L.task)}</a>`:''}${f!=null?`<div class="pb"><i style="width:${(100*f).toFixed(1)}%"></i></div>`:''}</div>`;
+  const idle=L.status!=='running'&&QS.data.answer_agent&&!QS.data.answer_agent.running;
+  const line=L.status==='failed'?('Agent failed'+(L.error?': '+L.error:'')):L.note||(L.status==='running'?'Agent working':idle?'No agent running · arx answer':'Queued for an agent');
+  h+=`<div class="q-claim agent${idle?' idle':''}">${esc(line)}${L.task?` <a class="q-tl" href="#task/${enc(L.task)}">${esc(L.task)}</a>`:''}${f!=null?`<div class="pb"><i style="width:${(100*f).toFixed(1)}%"></i></div>`:''}</div>`;
  }else if(n.claim)h+=`<div class="q-claim ${cls}">${qLinky(n.claim)}${n.settled_by&&!['agent','you'].includes(n.settled_by)?`<span class="q-by">${esc(n.settled_by)}</span>`:''}</div>`;
  if(n.why&&n.status!=='answered'&&n.status!=='dead')h+=`<div class="q-why">${qLinky(n.why)}</div>`;
  if(n.doc)h+=qDocCard(n.doc,n.fig);
  if(n.quote)h+=`<div class="q-quote"><mark>${esc(n.quote)}</mark></div>`;
  h+=qEvidence(n);
- const live=n.status==='open'||n.status==='agent';
+ const thr=n.seed==='comment',live=!thr&&(n.status==='open'||n.status==='agent');
  if(w&&n.choices?.length)h+=`<div class="q-acts">${n.choices.map((c,i)=>`<button class="btn ${i?'':'q-warn'}" data-qpick="${esc(c)}">${esc(c)}</button>`).join('')}</div>`;
  if(live)h+=`<div class="q-form ${w?'on':''}" id="q-af"><input class="q-in" id="q-ans" aria-label="Your answer" placeholder="Your answer"><button class="btn primary" data-qact="answer">Answer</button><button class="btn" data-qact="dead">Close as dead end</button></div>`;
  const ks=ix.kids[id]||[];
  if(ks.length)h+=`<div class="q-kids">${ks.map(k=>{const c=ix.by[k];return `<button class="q-kid" data-qgo="${esc(k)}" data-qnode="${esc(k)}"${c.claim?` data-qtip="${esc(qPlain(c.claim))}"`:''}><span class="q-sh">${qShape(c)}</span><span>${esc(c.title)}</span></button>`}).join('')}</div>`;
  const open=n.model?['model','#model/'+enc(n.model)]:n.hill?['hill','#hill/'+enc(n.hill)]:n.goal?['goal','#goal/'+enc(n.goal)]:null;
  h+=`<div class="q-acts"><button class="btn primary" data-qact="branch">Ask a follow-up</button>`+
-  (live&&!w?`<button class="btn" data-qact="settle">Answer</button>`:'')+(live?`<button class="btn ${n.needs_human?'on':''}" data-qact="flag" aria-pressed="${!!n.needs_human}">${n.needs_human?'Waiting on a person':'Needs a person'}</button>`:`<button class="btn" data-qact="reopen">Reopen</button>`)+
+  (live&&!w?`<button class="btn" data-qact="settle">Answer</button>`:'')+(thr?`<a class="btn" href="${qThreadHref(n)}">Open the thread</a>`:live?`<button class="btn ${n.needs_human?'on':''}" data-qact="flag" aria-pressed="${!!n.needs_human}">${n.needs_human?'Waiting on a person':'Needs a person'}</button>`:`<button class="btn" data-qact="reopen">Reopen</button>`)+
   `${open?`<a class="btn" href="${open[1]}">Open ${open[0]}</a>`:''}</div>`+
   `<div class="q-form" id="q-bf"><input class="q-in" id="q-bin" aria-label="Follow-up question" placeholder="Your question for an agent" maxlength="120"><button class="btn primary" data-qact="ask">Ask</button></div>`;
  h+=qNotesInline(id,ix);
@@ -211,12 +212,21 @@ function qDocLoad(id){
   .catch(()=>{QS.docs[id]={error:1};render()});
 }
 const qThemed=(html,t)=>/<html\b/i.test(html)?html.replace(/<html\b/i,`<html data-theme="${t}"`):`<html data-theme="${t}">${html}</html>`;
+// the question or comment thread a document answers: its crumbs lead back there, and a thread's answer opens the thread
+const qThreadHref=n=>n?.thread?`?c=${enc(n.thread)}#${String(n.route||'overview').replace(/^#/,'')}`:'';
+function qFit(){const f=document.querySelector('.q-reader');if(f)f.style.height=Math.max(420,innerHeight-f.getBoundingClientRect().top-scrollY-12)+'px'}
+addEventListener('resize',()=>{if(route().r==='answer')qFit()});
 VIEWS.answer=arg=>{
+ qLoad();
  if((QS.docs??={})[arg]===undefined)qDocLoad(arg);
- const d=QS.docs[arg],title=d?.title||'Answer',crumbs=[['Questions','#questions'],[title]];
+ const d=QS.docs[arg],title=d?.title||'Answer',owner=QS.data?.nodes?.find(n=>n.doc===arg);
+ const crumbs=[['Questions','#questions'],...(owner?[[owner.title,'#questions/'+enc(owner.id)]]:[]),[title]];
+ const acts=owner?.thread?`<a class="btn" href="${qThreadHref(owner)}">Open the thread</a>`:'';
+ // the document's own heading names it, so the page shows only the crumbs (no second title)
  if(d?.error)return page({title,crumbs})+empty('No such answer');
- if(!d)return page({title,crumbs})+empty('Reading the answer…');
- return page({title,crumbs})+`<iframe class="q-reader" title="${esc(title)}" sandbox="allow-scripts allow-popups" srcdoc="${esc(qThemed(d.html,qTheme()))}"></iframe>`;
+ if(!d)return page({title:'',crumbs,acts})+`<div class="q-rwrap"><div class="q-rload">Reading the answer…</div></div>`;
+ setTimeout(qFit,0);
+ return page({title:'',crumbs,acts})+`<div class="q-rwrap"><div class="q-rload">Reading the answer…</div><iframe class="q-reader" title="${esc(title)}" sandbox="allow-scripts allow-popups" onload="this.parentNode.classList.add('ok')" srcdoc="${esc(qThemed(d.html,qTheme()))}"></iframe></div>`;
 };
 addEventListener('hashchange',()=>{const {r,arg}=route();if(r==='answer'&&QS.docs)delete QS.docs[arg]});  // reopening reads the latest version
 
@@ -286,8 +296,8 @@ document.addEventListener('click',async e=>{
   return}
  if(a.dataset.qact==='branch'){$('#q-bf').classList.add('on');$('#q-bin').focus();return}
  if(a.dataset.qact==='ask'){
-  const v=$('#q-bin').value.trim();if(!v)return;a.disabled=true;
-  try{const q=await qAskPost(v,qFocus(qIndex(),route().arg));qGo(q.id)}catch(err){a.disabled=false;alert(err.message)}
+  const v=$('#q-bin').value.trim();if(!v)return;a.disabled=true;a.textContent='Asking…';$('#q-bin').disabled=true;
+  try{const q=await qAskPost(v,qFocus(qIndex(),route().arg));qGo(q.id)}catch(err){a.disabled=false;a.textContent='Ask';$('#q-bin').disabled=false;alert(err.message)}
  }
 });
 document.addEventListener('keydown',e=>{
