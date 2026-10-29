@@ -101,5 +101,26 @@ class ModelTitles(unittest.TestCase):
         self.assertEqual((t["m:twin-a"], t["m:twin-b"]), ("Does twin-a help?", "Does twin-b help?"))
 
 
+class ReadPane(unittest.TestCase):
+    def test_answer_agent_notes_show_and_other_branches_do_not(self):
+        from autoresearch import features
+        p = ledger()
+        p.add_model("base", parent="", status="champion")
+        p.open_goal("g1", "Ninety", "full", 0.9)
+        p.open_hill("h1", "Hard ones", "ds/full", goal="g1")
+        p.open_hill("h2", "Other ones", "ds/full", goal="g1")
+        other = Task(p, "eval", "h2 lesson building", description="work on h2")
+        other.note("A long note about the other hill h2 and its lesson building from days ago.")
+        other.finish()
+        qq = q.ask(p, "Why do hard ones fail?", parent="h:h1")
+        agent = Task(p, "answer", "Answer the question")
+        agent.note("Read the hard slice: units are lost in step two.")
+        agent.finish()
+        features.update(p, qq["inbox"], task=agent.id)
+        texts = [n["text"] for n in q.notes(p, qq["id"])]
+        self.assertTrue(any("units are lost" in x for x in texts), texts)
+        self.assertFalse(any("lesson building" in x for x in texts), texts)
+
+
 if __name__ == "__main__":
     unittest.main()

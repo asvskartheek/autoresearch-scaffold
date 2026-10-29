@@ -572,8 +572,9 @@ def _decisions(p):
 
 
 def notes(p, qid: str, cap: int = 60) -> list[dict]:
-    """The reading pane: decision reasons and task notes, each placed on the node it is about (the model a task ran,
-    else a model or hill its title names, else the goal). The focus's own subtree first, newest first, then the rest."""
+    """The reading pane: the notes behind this question and the questions under it, newest first. Each decision
+    reason and task note is placed on the node it is about: a question's own answering agent and evidence tasks, else
+    the model a task ran, else a model, hill or goal its text names. Notes about other branches are left out."""
     t = tree(p, full=False)["byid"]
     if qid not in t:
         raise KeyError(qid)
@@ -586,14 +587,23 @@ def notes(p, qid: str, cap: int = 60) -> list[dict]:
             if k not in sub:
                 sub.add(k)
                 stack.append(k)
-    root = qid
-    while t[root].get("parent"):
-        root = t[root]["parent"]
     by_model = {n["model"]: k for k, n in t.items() if n.get("model")}
     by_hill = {n["hill"]: k for k, n in t.items() if n.get("hill")}
+    by_goal = {n["goal"]: k for k, n in t.items() if n.get("goal")}
     names = sorted(by_model, key=len, reverse=True)
+    own = {}  # task id -> the question it answers or is evidence for
+    for k in sub:
+        for e in t[k].get("evidence") or []:
+            if e.get("task"):
+                own.setdefault(e["task"], k)
+    for it in features.inbox(p):
+        if it.get("kind") == "question" and it.get("ref") in sub and it.get("task"):
+            own[it["task"]] = it["ref"]
+    mine = {e.get("model") for e in t[qid].get("evidence") or [] if e.get("model")}
 
     def place(model, text):
+        if model in mine and by_model.get(model) not in sub:
+            return qid
         if model in by_model:
             return by_model[model]
         for m in names:
@@ -602,7 +612,10 @@ def notes(p, qid: str, cap: int = 60) -> list[dict]:
         for h, k in by_hill.items():
             if h in text:
                 return k
-        return root
+        for g, k in by_goal.items():
+            if g in text:
+                return k
+        return None
 
     out = []
     for d in _decisions(p):
@@ -610,17 +623,20 @@ def notes(p, qid: str, cap: int = 60) -> list[dict]:
         if isinstance(txt, str) and len(txt) > 12:
             out.append(dict(t=d.get("t"), node=place(d.get("model"), txt), src=f"decision {d.get('kind')}", text=readable(txt)))
     for task in p.tasks():
-        if task.get("kind") in ("answer", "setup", "baseline"):
+        at = own.get(task["id"])
+        if at is None and task.get("kind") in ("answer", "setup", "baseline"):
             continue
         head = f"{task.get('title') or ''} {task.get('description') or ''}"
-        for e in p.events(task["id"])[-2:]:
+        for e in p.events(task["id"])[-(6 if at else 2):]:
             msg = e.get("msg")
-            if isinstance(msg, str) and len(msg) > 40 and not msg.lstrip().startswith(("{", "[")):
-                out.append(dict(t=e.get("t"), node=place(task.get("model"), head + " " + msg), src=task["id"], text=readable(msg)))
-    for k, n in t.items():
-        if n.get("quote"):
-            out.append(dict(t=n.get("created"), node=k, src="quote", text=n["quote"]))
-    out.sort(key=lambda x: (x["node"] not in sub, -(x.get("t") or 0)))
+            if isinstance(msg, str) and len(msg) > (12 if at else 40) and not msg.lstrip().startswith(("{", "[")):
+                out.append(dict(t=e.get("t"), node=at or place(task.get("model"), head + " " + msg), src=task["id"],
+                                text=readable(msg)))
+    for k in sub:
+        if t[k].get("quote"):
+            out.append(dict(t=t[k].get("created"), node=k, src="quote", text=t[k]["quote"]))
+    out = [x for x in out if x["node"] in sub]
+    out.sort(key=lambda x: (x["node"] != qid, -(x.get("t") or 0)))
     return out[:cap]
 
 
