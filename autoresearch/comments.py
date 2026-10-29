@@ -162,8 +162,11 @@ ANCHOR_KEYS = ("route", "key", "rel", "sel", "text", "quote", "qn", "what", "ctx
 def _post(p, path, d):
     if not isinstance(d, dict) or d.get("kind") not in KINDS:
         return 400, dict(error="bad request")
-    k, author = d["kind"], str(d.get("author") or "you")[:60]
-    by = str(d.get("by") or "") if people.ID.match(str(d.get("by") or "")) else None
+    k = d["kind"]
+    by, author = people.who(d)
+    if author is None:
+        return 403, dict(error="not yours to act as")
+    remote = bool(d.get("_remote"))
     body = str(d.get("body") or "")[:MAX_BODY]
     if k == "comment":
         if not body.strip():
@@ -189,10 +192,16 @@ def _post(p, path, d):
             features.enqueue(p, "comment", dict(thread=th["id"], message=ev["id"]), ref=th["id"])
         return 200, ev
     if k in ("resolve", "reopen"):
+        if remote and th["messages"][0].get("by") != by:
+            return 403, dict(error="only the thread's author resolves it from a share link")
         return 200, post(p, k, parent=th["id"], author=author, by=by)
     if k == "seen":
         return (200, post(p, k, parent=th["id"], by=by)) if by else (400, dict(error="seen needs by"))
-    return 200, post(p, k, target=str(d.get("target") or ""), body=body or None, author=author, by=by)
+    # edit / delete: only a person's own message, never the agent's
+    tgt = next((e for e in events(p) if e["id"] == str(d.get("target") or "") and e["kind"] in ("comment", "reply")), None)
+    if not tgt or tgt.get("agent") or (tgt.get("by") or None) != by or not by and tgt.get("author") != author:
+        return 403, dict(error="only your own message")
+    return 200, post(p, k, target=tgt["id"], body=body or None, author=author, by=by)
 
 
 @features.STATE.append
