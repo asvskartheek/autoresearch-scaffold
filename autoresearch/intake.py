@@ -33,7 +33,7 @@ PROPOSAL = """{
      "options": [{"label": "Accuracy", "sub": "correct of 1,319", "value": "score"}, ...]}  // 2 to 4 one-tap options
   ],
   "goal": {
-    "name": "gsm8k-96", "title": "GSM8K at 96%",
+    "name": "gsm8k-1267", "title": "GSM8K 1,267 correct",  // titles in units, never percentages
     "kpi": "score",                   // score | cost | latency_p50 | latency_p95
     "slice": "gsm8k-test/full",       // an existing slice, usually a full one
     "count": 1267,                    // score goals: the target as a count of N (rounded up, so rounding can't meet it)
@@ -95,7 +95,7 @@ def open_goal(p, g: dict) -> dict:
     if kpi not in KPIS:
         raise SystemExit(f"unknown KPI {kpi}")
     sl = p.slice(g.get("slice") or "")
-    target = _target(g, kpi, sl["n"])
+    target = _target(g, kpi, sl["n"], sl.get("scale") == "continuous")
     parent, role = g.get("parent") or None, g.get("role") or ("sub" if g.get("parent") else "main")
     _check_meta(p, name, parent, role)
     rec = p.open_goal(name, g["title"], sl["name"], target, kpi=kpi, problem=g.get("problem") or None,
@@ -103,7 +103,10 @@ def open_goal(p, g: dict) -> dict:
     return set_meta(p, name, parent, role, g.get("constraints")) | rec | {"name": name}
 
 
-def _target(g, kpi, n) -> float:
+def _target(g, kpi, n, continuous=False) -> float:
+    """A score target on a 0/1 slice is a count of n (or a fraction); on a continuous slice it is the amount itself."""
+    if kpi == "score" and continuous:
+        g = {k: v for k, v in g.items() if k != "count"}
     if kpi == "score" and g.get("count") is not None:
         c = int(g["count"])
         if not 0 < c <= n:
@@ -113,7 +116,7 @@ def _target(g, kpi, n) -> float:
         t = float(g.get("target"))
     except (TypeError, ValueError):
         raise SystemExit("the goal needs a target")
-    if not math.isfinite(t) or (kpi == "score" and not 0 <= t <= 1):
+    if not math.isfinite(t) or (kpi == "score" and not continuous and not 0 <= t <= 1):
         raise SystemExit("a score target is a fraction between 0 and 1, or give count")
     return t
 
@@ -151,9 +154,15 @@ def _clean_goal(p, g, related=False) -> dict:
     if sl:
         out["slice"] = out["slice"] if out["slice"] in p.slices() else f"{p.config.get('primary_dataset')}/{out['slice']}"
         out["n"] = sl["n"]
-        if out["kpi"] == "score" and out.get("count") is None:
+        if out["kpi"] == "score" and sl.get("scale") == "continuous":  # an amount in the slice's unit, never a count
+            out.pop("count", None)
+            if out.get("target") is None:
+                raise SystemExit(f"goal {out['name']}: {out['slice']} is continuous; give target in {sl.get('unit') or 'its unit'}")
+            out["target"] = float(out["target"])
+            out["scale"], out["unit"] = "continuous", sl.get("unit")
+        elif out["kpi"] == "score" and out.get("count") is None:
             out["count"] = math.ceil(float(out["target"]) * sl["n"] - 1e-9)
-        if out["kpi"] == "score":
+        if out["kpi"] == "score" and out.get("count") is not None:
             out["count"] = int(out["count"])
             if not 0 < out["count"] <= sl["n"]:
                 raise SystemExit(f"goal {out['name']}: count {out['count']} is not between 1 and {sl['n']}")
@@ -201,6 +210,7 @@ def prompt(p, it) -> str:
         "   so in `why` and propose the related goal with its slice anyway; the dashboard marks it as not yet runnable.",
         "3. The goal: one KPI on one frozen slice (usually the full slice). A score target is a count of N, rounded up",
         "   (96% of 1,319 is 1,266.2, so the target is 1,267). Latency targets are seconds, cost targets dollars.",
+        "   On a continuous slice (scale continuous in slices.json) the target is the amount as stored, in its unit.",
         "   Read constraints from the ask and research.json (open weights, model size, hardware).",
         "4. Questions: at most 3, only where the answer would change the goal (the KPI, what it is compared to, when it",
         "   is done). Each has 2 to 4 one-tap options with a short sub-line that shows the number. Skip anything the",
@@ -208,7 +218,8 @@ def prompt(p, it) -> str:
         "5. Related goals: guards (do not get slower, cheaper or less accurate than the champion now), held-out",
         "   robustness (the same score on unseen examples) and sub-goals from open hills whose target slices sit inside",
         "   the goal slice. Each with its own name, slice and target.",
-        "6. Text is read on a small card: titles of 2 to 6 words, each `why` one plain sentence with the numbers.",
+        "6. Text is read on a small card: titles of 2 to 6 words in units (\"1,267 correct\", \"under 1 s\"), never a",
+        "   bare percentage; each `why` one plain sentence with the numbers.",
         "",
         f"When done, run exactly once: arx goal propose {it['id']} --json '<the JSON>'",
         "(or write the JSON to a scratch file and pass --json @path). Schema, comments are not part of the JSON:",
@@ -314,6 +325,29 @@ def _read_json(v: str):
     return json.loads(v)
 
 
+def _n(k, word) -> str:
+    return f"{k} {word}{'' if k == 1 else 's'}"
+
+
+def target_text(p, g) -> str:
+    """A proposed goal's target as a person reads it: "≥ 1,267 of 1,319 correct", "≤ 10 s median", "≤ 1,000 ms"."""
+    kpi, t = g.get("kpi") or "score", g.get("target")
+    sl = p.slices().get(g.get("slice") or "") or {}
+    if kpi == "score" and sl.get("scale") != "continuous" and g.get("count") is not None and g.get("n"):
+        return f"≥ {int(g['count']):,} of {int(g['n']):,} correct"
+    if t is None:
+        return "no target"
+    t = float(t)
+    amt = lambda x: f"{x:,.0f}" if abs(x) >= 100 else f"{x:.3g}"
+    if kpi == "score":  # continuous: a "minus ms" metric is stored negated, so its target reads as the plain amount
+        neg = str(sl.get("metric") or "").strip().lower().startswith("minus")
+        up = (g.get("higher_is_better", True) is not False) != neg
+        return f"{'≥' if up else '≤'} {amt(-t if neg else t)}{(' ' + sl['unit']) if sl.get('unit') else ''}"
+    if kpi == "cost":
+        return f"≤ ${t:.4g} per answer"
+    return f"≤ {amt(t)} s {dict(latency_p50='median', latency_p95='p95', latency_mean='mean').get(kpi, '')}".rstrip()
+
+
 def _cli(sp):
     gp = sp.choices.get("goal")
     if gp is None:
@@ -341,9 +375,8 @@ def _cli(sp):
                 raise SystemExit(f"could not read the proposal JSON: {e}")
             prop = propose(Project(), a.name, data)
             g = prop["goal"]
-            tgt = f">= {g['count']:,} of {g['n']:,}" if g["kpi"] == "score" and g.get("n") else f"{g.get('target')}"
-            return print(f"proposal for {a.name}: {g['name']} ({g['kpi']} {tgt} on {g['slice']}), "
-                         f"{len(prop['questions'])} questions, {len(prop['related'])} related goals")
+            return print(f"proposal for {a.name}: {g['name']} ({target_text(Project(), g)} on {g['slice']}), "
+                         f"{_n(len(prop['questions']), 'question')}, {_n(len(prop['related']), 'related goal')}")
         if a.verb == "link":  # set parent/role/constraints on a goal that is already open
             if not a.name:
                 raise SystemExit("usage: arx goal link <goal> --parent <goal> --role guard|sub [--constraint ...]")
