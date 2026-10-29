@@ -499,7 +499,8 @@ def _build(p, model, vs):
                               model=g.get("model"), met=g.get("met"), need=need, have=have, baseline=g.get("baseline"),
                               vs_baseline={k: _r(v) for k, v in (g.get("vs_baseline") or {}).items()} or None,
                               higher_is_better=g.get("higher_is_better", True), problem=_txt(g.get("problem")),
-                              hills=g.get("hills"), task=g.get("task")))
+                              hills=g.get("hills"), task=g.get("task"), scale=g.get("scale"), unit=g.get("unit"),
+                              metric=g.get("metric")))
 
     return dict(
         generated=time.time(), project=dict(name=cfg.get("name"), higher_is_better=cfg.get("higher_is_better", True),

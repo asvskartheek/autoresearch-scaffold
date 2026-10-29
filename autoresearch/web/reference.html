@@ -212,7 +212,7 @@ table{overflow-wrap:normal}
 .pickers select{height:28px;border:1px solid var(--control);background:var(--surface);color:var(--text);border-radius:var(--radius-control);font:12.5px var(--mono);max-width:min(320px,70vw);padding:0 6px}
 .goals{display:grid;gap:8px;margin-top:14px}
 .goal{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;border:1px solid var(--rule);border-radius:var(--radius-control);padding:8px 10px;background:var(--raised)}
-.goal svg{grid-column:1/-1;height:14px;width:100%}
+.goal .trk{grid-column:1/-1}
 .goal .gt{font-weight:500;font-size:13.5px;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .goal .gv{font:600 13px var(--mono);white-space:nowrap}
 td svg.strip{width:160px;height:18px;display:block}
@@ -228,6 +228,16 @@ td svg.strip{width:160px;height:18px;display:block}
 .unk b{font:500 11.5px var(--mono);padding:2px 7px;border-radius:999px;background:var(--pill-warning-bg);color:var(--warning);text-align:center}
 .unk b.neg{background:var(--pill-negative-bg);color:var(--negative)}.unk b.mut{background:var(--pill-neutral-bg);color:var(--muted)}
 @media (max-width:560px){.unk div{grid-template-columns:minmax(0,1fr)}.unk b{justify-self:start}}
+.trk{position:relative;width:100%;min-width:60px}
+.trk>i{position:absolute;display:block;top:50%}
+.trk .tline{left:0;right:0;height:1px;background:var(--grid)}
+.trk .tmark{top:0;bottom:0;width:0;border-left:1.5px dashed var(--c,var(--faint))}.trk .tmark.solid{border-left-style:solid}
+.trk .tdot{transform:translate(-50%,-50%);border-radius:50%;background:var(--c,var(--control))}
+.trk .tbar{transform:translateY(-50%);border-radius:3px;background:var(--c,var(--control))}
+.trk .tzone{top:20%;bottom:20%;background:var(--negative);opacity:.12}
+.trk .ttxt{position:absolute;left:4px;top:50%;transform:translateY(-50%);font:11px var(--mono);color:var(--faint);white-space:nowrap}
+.c-pos{--c:var(--positive)}.c-neg{--c:var(--negative)}.c-mut{--c:var(--control)}.c-acc{--c:var(--accent)}.c-warn{--c:var(--warning)}.c-text{--c:var(--text)}.c-trk{--c:var(--pill-neutral-bg)}.c-faint{--c:var(--faint)}
+.goal.dim{opacity:.6}
 .more-btn{border:1px solid var(--control);background:var(--surface);border-radius:var(--radius-control);padding:4px 10px;font-size:12.5px;margin-top:8px}
 </style></head><body data-keep>
 <div id="app" data-keep><div id="load">loading ledger…</div></div>
@@ -272,13 +282,25 @@ const mnt = k => k == null || k === "" ? "—" : LB[k] || (String(k).split("+").
 const mn = k => { const t = mnt(k); return t === String(k ?? "—") ? esc(t) : `<span title="${esc(k)}">${esc(t)}</span>`; };
 const isBin = r => (r?.scale || "binary") === "binary";
 const unit = r => r?.unit ? " " + r.unit : "";
-const sc = (v, r) => v == null ? "—" : isBin(r) ? pct(v) : num(v) + unit(r);
-const dl = (v, r) => v == null ? "—" : isBin(r) ? pts(v) + " pts" : sgn(v, Math.abs(v) < 1 ? 3 : 1) + unit(r);
+// a score in its slice's units: "1,224 of 1,319" on 0/1 slices, "387 ms" on continuous ones; a "minus ..." metric is
+// stored negated (higher is better) and reads as the plain amount
+const negR = r => /^\s*minus\b/i.test(r?.metric || "");
+const grp = x => Math.abs(x) >= 100 ? fmt.format(Math.round(x)) : (+x.toPrecision(3)).toLocaleString("en-US");
+const sc = (v, r) => v == null ? "—" : isBin(r) ? (r?.n ? `${N0(v * r.n)} of ${N0(r.n)}` : pct(v)) : grp(negR(r) ? -v : v) + unit(r);
+const sdc = (x, r) => (x > 0 ? "+" : x < 0 ? "−" : "") + grp(Math.abs(x)) + unit(r);
+const dl = (v, r) => v == null ? "—" : isBin(r) ? pts(v) + " pts" : sdc(negR(r) ? -v : v, r);
 const cnt = (v, r) => v == null ? "—" : isBin(r) ? N0(v * r.n) : num(v);
 const short = s => { const p = String(s || "").split("/"); return p.length > 1 && p[0] === D.project.primary_dataset ? p.slice(1).join("/") : String(s || ""); };
-const ciTxt = (p, r) => p && p.lo != null ? `[${isBin(r) ? pts(p.lo) : sgn(p.lo, 3)}, ${isBin(r) ? pts(p.hi) : sgn(p.hi, 3)}]` : "—";
+const ciTxt = (p, r) => p && p.lo != null ? (isBin(r) ? `[${pts(p.lo)}, ${pts(p.hi)}]` : negR(r) ? `[${sdc(-p.hi, r)}, ${sdc(-p.lo, r)}]` : `[${sdc(p.lo, r)}, ${sdc(p.hi, r)}]`) : "—";
 const runsTxt = r => `${r.runs} run${r.runs === 1 ? "" : "s"}`;
 const stPill = s => `<span class="st ${esc(s || "")}">${esc(s || "—")}</span>`;
+// strips drawn in HTML, positions in % of the width: dots stay round at any width and in print (no stretched SVG)
+const trk = (parts, h = 18, cls = "") => `<div class="trk ${cls}" style="height:${h}px">${parts.join("")}</div>`;
+const pc = x => (Math.max(0, Math.min(1, x)) * 100).toFixed(2) + "%";
+const tMark = (x, c, solid) => `<i class="tmark ${c}${solid ? " solid" : ""}" style="left:${pc(x)}"></i>`;
+const tDot = (x, c, r = 5, tip) => `<i class="tdot ${c}" style="left:${pc(x)};width:${2 * r}px;height:${2 * r}px"${tip ? ` title="${esc(tip)}"` : ""}></i>`;
+const tBar = (a, b, c, h = 3) => `<i class="tbar ${c}" style="left:${pc(Math.min(a, b))};width:calc(${pc(Math.max(a, b))} - ${pc(Math.min(a, b))});height:${h}px"></i>`;
+const tLine = () => `<i class="tline"></i>`;
 
 /* ---------------- evidence registry ---------------- */
 const EV = {}; let evN = 0;
@@ -375,13 +397,17 @@ section("claim", () => {
 function niceStep(raw) { if (!(raw > 0)) return 1; const e = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / e; return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * e; }
 function goalStrips() {
   if (!D.goals.length) return "";
-  return `<div class="goals">${D.goals.map(g => {
+  const ord = { open: 0, achieved: 1, abandoned: 2 };
+  return `<div class="goals">${[...D.goals].sort((a, b) => (ord[a.status] ?? 3) - (ord[b.status] ?? 3)).map(g => {
     const v = g.value, t = g.target, hib = g.higher_is_better !== false, isS = g.kpi === "score";
-    const fmtv = x => x == null ? "—" : isS ? pct(x) : g.kpi.startsWith("latency") ? secs(x) : num(x);
-    const top = Math.max(v ?? 0, t ?? 0) * (isS ? 1 : 1.15) || 1, hi = isS ? 1 : top, X = x => 2 + Math.max(0, Math.min(1, x / hi)) * 296;
-    const dist = g.met ? '<span class="pos">met</span>' : g.need != null && g.have != null ? `${N0(g.need - g.have)} more of ${N0(g.n)}` : v != null ? `${fmtv(Math.abs(t - v))} to go` : "no run";
-    return `<div class="goal"><div class="gt">${esc(g.title || g.name)} <span class="faint mono" style="font-size:11.5px">${esc(g.status)} · ${esc(short(g.slice))}${g.model && g.model !== CH ? " · " + mn(g.model) : ""}</span></div><div class="gv">${fmtv(v)} <span class="faint">${hib ? "≥" : "≤"} ${fmtv(t)}</span> · ${dist}</div>
-    <svg viewBox="0 0 300 14" preserveAspectRatio="none"><rect class="f-track" x="2" y="3" width="296" height="8" rx="3"/>${v != null ? `<rect class="${g.met ? "f-pos" : "f-acc"}" x="2" y="3" width="${X(v) - 2}" height="8" rx="3"/>` : ""}<line class="s-text" x1="${X(t)}" x2="${X(t)}" y1="0" y2="14" stroke-width="1.5"/></svg></div>`;
+    const r = RS[g.slice] || { slice: g.slice, scale: g.scale || "binary", n: g.n, unit: g.unit, metric: g.metric }, bin = isS && isBin(r);
+    const fmtv = x => x == null ? "—" : isS ? sc(x, r) : g.kpi.startsWith("latency") ? secs(x) : num(x);
+    const now = bin && g.have != null ? `${N0(g.have)} of ${N0(g.n)} <span class="faint">(${pct(v)})</span>` : fmtv(v);
+    const goal = bin && g.need != null ? N0(g.need) : isS && !bin ? fmtv(t) : fmtv(t);
+    const dist = g.met ? '<span class="pos">met</span>' : g.need != null && g.have != null ? `<b>${N0(g.need - g.have)} more</b>` : v != null && isS && !bin ? `${grp(Math.abs(t - v))}${unit(r)} to go` : v != null ? `${fmtv(Math.abs(t - v))} to go` : "no run";
+    const top = Math.max(v ?? 0, t ?? 0) * (isS && !bin ? 1.15 : isS ? 1 : 1.15) || 1, hi = bin ? 1 : top, X = x => Math.max(0, Math.min(1, x / hi));
+    return `<div class="goal${g.status === "abandoned" ? " dim" : ""}"><div class="gt">${esc(g.title || g.name)} <span class="faint mono" style="font-size:11.5px">${esc(g.status)} · ${esc(short(g.slice))}${g.model && g.model !== CH ? " · " + mn(g.model) : ""}</span></div><div class="gv">${g.status === "abandoned" ? now : `${now} <span class="faint">${hib ? "≥" : "≤"} ${goal}</span> · ${dist}`}</div>
+    ${trk([`<i class="tbar c-trk" style="left:0;width:100%;height:8px"></i>`, v != null ? `<i class="tbar ${g.met ? "c-pos" : "c-acc"}" style="left:0;width:${X(v) * 100}%;height:8px"></i>` : "", t != null ? tMark(X(t), "c-text", true) : ""], 14)}</div>`;
   }).join("")}</div>`;
 }
 
