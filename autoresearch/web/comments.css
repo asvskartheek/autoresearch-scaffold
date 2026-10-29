@@ -69,3 +69,13 @@
 .cm-chip{position:fixed;pointer-events:auto;display:none;gap:4px}
 #main::after{content:"";display:block;height:56px}  /* room under the last card for the Comment button */
 @media print{.cm-host{display:none}#main::after{display:none}}
+/* people: faces on messages, who has read the thread, threads for you */
+.cm-who{display:flex;align-items:center;gap:6px}
+.cm-seen{display:flex;align-items:center;gap:6px;padding:4px 2px 0;font-size:11px;color:var(--muted)}
+.cm-seen .px-face+.px-face{margin-left:-5px}
+.cm-me{display:flex;align-items:center;gap:8px}
+.cm-sec{padding:8px 12px 2px;font-size:11px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.04em}
+.cm-it.you{box-shadow:inset 3px 0 0 var(--accent)}
+.cm-it .px-face{vertical-align:middle;margin-right:6px}
+.cm-lst.you{position:relative}
+.cm-lst.you::after{content:attr(data-you);position:absolute;top:-6px;right:-6px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--accent);color:#fff;font-size:10px;line-height:16px;text-align:center}

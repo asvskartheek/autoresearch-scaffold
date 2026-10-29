@@ -19,8 +19,12 @@ const $c=s=>host.querySelector(s),hl=$c('.cm-hl'),pinsEl=$c('.cm-pins'),pops=$c(
 const h=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let mode=false,tool='pin',all=[],open=null,hot=null,draw=null,pending=null,agentOn=true;
 const here=()=>location.hash.slice(1)||'overview';
-const me=()=>{try{return localStorage.getItem('arx-name')||''}catch(e){return ''}};
-const setMe=n=>{try{localStorage.setItem('arx-name',n)}catch(e){}};
+// the person (people.js): one id per browser, a name they can change; every event carries both
+const P=window.ARXP,me=()=>P?P.me().name:'',myId=()=>P?P.me().id:'',setMe=n=>P&&P.setName(n);
+const at=html=>P?P.at(html):html,face=(m)=>m.agent?'<span class="px-face sm" style="--pc:var(--accent,#3b82f6)">AI</span>':P?P.face(m.by||m.author,m.author,'sm'):'';
+// a thread is for you when it @mentions you, or you are in it and someone else wrote since you last read it
+const unread=c=>{const s=(c.seen||{})[myId()]||0;return c.last_t>s&&c.messages.at(-1).by!==myId()};
+const forMe=c=>!c.resolved&&((c.mentions||[]).includes(myId())||(c.people||[]).includes(myId())&&unread(c));
 
 /* ---------- anchors: stable keys first, cssPath last */
 const ENT=/^#[a-z]+\/./;
@@ -241,7 +245,7 @@ const anchorText=a=>{const bare=a.what&&a.text&&a.what.split('.')[0]===a.text;  
  return a.quote?'“'+a.quote.slice(0,120)+'”':(a.shape?shapeName[a.shape.tool]+' on ':'')+(bare&&a.ctx?a.ctx:a.text||'page')};
 function compose(a,x,y){closePop();a.route=here();a.vw=innerWidth;const p=document.createElement('div');p.className='cm-pop';
  p.innerHTML=`<div class="cm-anchor">${h(anchorText(a))}</div><textarea placeholder="Comment"></textarea><div class="cm-row">${nameField()}<button class="cm-sm x">Cancel</button><button class="cm-sm pri go" title="⌘↵">Comment</button></div>`;
- pops.append(p);place(p,x,y);const ta=p.querySelector('textarea');focusLater(ta);
+ pops.append(p);place(p,x,y);const ta=p.querySelector('textarea');focusLater(ta);P&&P.complete(ta);
  if(a.shape||a.quote){pending=a;drawPins()}
  const send=async()=>{if(p.dataset.busy)return;const body=ta.value.trim();if(!body)return needText(ta);const author=takeName(p);busy(p,true,'Sending…');
   const ev=await post({kind:'comment',anchor:a,body,author});if(!ev||!ev.id)return p.isConnected&&failed(p);
@@ -296,12 +300,14 @@ function thread(id){const c=all.find(t=>t.id===id);if(!c)return;
  if(c.route!==here()){location.hash='#'+c.route;setTimeout(()=>thread(id),400);return}
  const ta0=pops.querySelector('textarea'),draft=open===id&&ta0?ta0.value:'';
  closePop();open=id;const p=document.createElement('div');p.className='cm-pop';
- const msg=m=>`<div class="cm-m"><div class="cm-who">${h(m.agent?'Agent':m.author)} · ${when(m.t)}</div><div class="cm-msg ${m.agent?'agent':''}${m.error?' err':''}">${m.agent?rich(m.body):linky(m.body)}</div></div>`;
+ const msg=m=>`<div class="cm-m"><div class="cm-who">${face(m)}${h(m.agent?'Agent':m.author)} · ${when(m.t)}</div><div class="cm-msg ${m.agent?'agent':''}${m.error?' err':''}">${m.agent?rich(m.body):at(linky(m.body))}</div></div>`;
+ const seenBy=P?P.seenFaces(Object.fromEntries(Object.entries(c.seen||{}).filter(([k,t])=>t>=c.last_t)),myId()):'';
  const ag=stranded(c)?`<div class="cm-m"><div class="cm-who">Agent</div><div class="cm-msg cm-idle">No agent running · <code>arx answer</code></div></div>`:working(c)?`<div class="cm-m"><div class="cm-who">Agent</div><div class="cm-msg agent cm-busy"><span class="cm-dot"></span>${h(c.agent.note||(c.agent.status==='queued'?'Queued':'Working'))}${c.agent.task?` <a href="#task/${encodeURIComponent(c.agent.task)}">task</a>`:''}</div></div>`:'';
- p.innerHTML=`<div class="cm-anchor">${mine().indexOf(c)+1} · ${h(anchorText(c.anchor||{}))}</div><div class="cm-msgs">${c.messages.map(msg).join('')}${ag}</div>
+ p.innerHTML=`<div class="cm-anchor">${mine().indexOf(c)+1} · ${h(anchorText(c.anchor||{}))}</div><div class="cm-msgs">${c.messages.map(msg).join('')}${ag}</div>${seenBy?`<div class="cm-seen" title="Read the latest message">Seen ${seenBy}</div>`:''}
  <textarea placeholder="Reply"></textarea><div class="cm-row">${nameField()}<button class="cm-sm rs">${c.resolved?'Reopen':'Resolve'}</button><button class="cm-sm pri go">Reply</button></div>`;
  if(p.querySelector('.cm-fig'))p.classList.add('wide');pops.append(p);fitFigs(p);const [x,y]=pos(c)||[innerWidth-360,innerHeight-120];place(p,x,y);const ta=p.querySelector('textarea');ta.value=draft;
- const ms=p.querySelector('.cm-msgs');ms.scrollTop=ms.scrollHeight;
+ const ms=p.querySelector('.cm-msgs');ms.scrollTop=ms.scrollHeight;P&&P.complete(ta);
+ if(myId()&&unread(c)){c.seen={...(c.seen||{}),[myId()]:c.last_t};post({kind:'seen',parent:id})}  // you read it as it stands
  const send=async()=>{if(p.dataset.busy)return;const body=ta.value.trim();if(!body)return needText(ta);busy(p,true,'Sending…');
   const ev=await post({kind:'reply',parent:id,body,author:takeName(p)});if(!ev)return p.isConnected&&failed(p);
   if(p.isConnected&&open===id){ta.value='';thread(id)}};
@@ -309,14 +315,15 @@ function thread(id){const c=all.find(t=>t.id===id);if(!c)return;
  p.querySelector('.rs').onclick=async()=>{if(p.dataset.busy)return;busy(p,true,'Reply');const ev=await post({kind:c.resolved?'reopen':'resolve',parent:id,author:me()||'you'});
   if(!ev)return p.isConnected&&failed(p);if(p.isConnected&&open===id)closePop()};
  p.querySelectorAll('textarea,input').forEach(f=>f.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))send();if(e.key==='Escape')closePop()})}
-function drawList(){if(!list.classList.contains('on'))return;const ts=[...mine(),...all.filter(t=>t.route!==here())];
- const item=c=>{const i=mine().indexOf(c);return `<div class="cm-it ${klass(c)}" data-id="${c.id}"><span class="cm-n">${i>=0?i+1:'#'+h(c.route)}</span>${h(c.messages[0].body.slice(0,140))}<div class="cm-who">${h(anchorText(c.anchor||{}))} · ${c.messages.length-1} ${c.messages.length===2?'reply':'replies'}${c.resolved?' · resolved':stranded(c)?' · no agent running':!working(c)?'':c.agent.status==='running'?' · agent working':' · queued'}</div></div>`};
- list.innerHTML=`<div class="cm-me"><input class="cm-name" placeholder="Your name" maxlength="60" value="${h(me())}"></div>`+(ts.length?ts.map(item).join(''):'<div class="cm-it">Press C</div>');
+function drawList(){const you=all.filter(forMe);$c('.cm-lst').classList.toggle('you',!!you.length);$c('.cm-lst').dataset.you=you.length||'';
+ if(!list.classList.contains('on'))return;const ts=[...you,...mine().filter(c=>!forMe(c)),...all.filter(t=>t.route!==here()&&!forMe(t))];
+ const item=c=>{const i=mine().indexOf(c);return `<div class="cm-it ${klass(c)}${forMe(c)?' you':''}" data-id="${c.id}" ${forMe(c)?'title="For you: it mentions you, or there is a reply you have not read"':''}><span class="cm-n">${i>=0?i+1:'#'+h(c.route)}</span>${face(c.messages[0])}${at(h(c.messages[0].body.slice(0,140)))}<div class="cm-who">${h(anchorText(c.anchor||{}))} · ${c.messages.length-1} ${c.messages.length===2?'reply':'replies'}${c.resolved?' · resolved':stranded(c)?' · no agent running':!working(c)?'':c.agent.status==='running'?' · agent working':' · queued'}</div></div>`};
+ list.innerHTML=`<div class="cm-me">${P?P.face(myId(),me()||'?'):''}<input class="cm-name" placeholder="Your name" maxlength="60" value="${h(me())}"></div>`+(you.length?`<div class="cm-sec">For you · ${you.length}</div>`:'')+(ts.length?ts.map(item).join(''):'<div class="cm-it">Press C</div>');
  const nf=list.querySelector('.cm-name');nf.onchange=()=>setMe(nf.value.trim());nf.onkeydown=e=>e.stopPropagation();
  list.querySelectorAll('.cm-it[data-id]').forEach(el=>el.onclick=()=>{const c=all.find(t=>t.id===el.dataset.id);
   if(c.route!==here())return thread(c.id);const n=anchorEl(c);if(n)n.scrollIntoView({block:'center'});setTimeout(()=>thread(c.id),300)})}
 
-async function post(row){let ev=null;try{const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(row)});if(r.ok)ev=await r.json()}catch(e){}await load();return ev}
+async function post(row){let ev=null;row.by=myId();try{const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(row)});if(r.ok)ev=await r.json()}catch(e){}await load();return ev}
 async function load(){try{const r=await fetch(API,{cache:'no-store'});if(!r.ok)return;const d=await r.json();all=d.threads||[];agentOn=!d.answer_agent||!!d.answer_agent.running;
  const p=pops.firstChild,reopen=open&&p&&!p.dataset.busy&&!p.contains(document.activeElement);drawPins();drawList();if(reopen)thread(open)}catch(e){}}
 document.body.append(host);
