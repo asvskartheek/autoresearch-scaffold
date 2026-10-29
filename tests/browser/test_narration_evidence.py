@@ -50,6 +50,17 @@ class EvidenceFlows(unittest.TestCase):
   details=self.page.locator('.md-mobile-evidence').first;details.locator('summary').click()
   self.assertIn('Better than champion',details.inner_text());self.assertIn('9 of 10',details.inner_text());self.assertIn('4 of 10',details.inner_text())
   details.locator('a').click();self.page.wait_for_url('**/#task/*');self.assertIn('Controlled observation',self.page.locator('#main').inner_text())
+ def test_incompatible_baseline_does_not_imply_progress(self):
+  for model,contract in [('base','old'),('winner','new')]:
+   for t in self.p.slice_evals(model,'ds/full'):
+    f=self.p.task_dir(t['id'])/'task.json';data=json.loads(f.read_text());data['config']={'baseline_contract':contract};f.write_text(json.dumps(data))
+  self.p.set_model_status('base','retired');self.p.set_model_status('winner','champion')
+  self.go('#goal/g');text=self.page.locator('#main').inner_text()
+  self.assertIn('no matching comparison under the current harness',text)
+  self.assertNotIn('latest runs, unpaired',text)
+  self.assertNotIn('+5 against',text)
+  self.assertEqual(self.page.locator('.gl-prog .gl-trk.abs').count(),1)
+
  def test_measurement_action_names_actual_slice_and_stalled_attempt(self):
   self.p.add_dataset('other',list(range(2)));self.p.open_goal('unmeasured','Other goal','other/full',1)
   t=Task(self.p,'eval','Interrupted full audit',model='winner',slice='ds/full');t.add_row(dict(id='0',score=1))

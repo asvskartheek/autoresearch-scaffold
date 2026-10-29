@@ -335,13 +335,16 @@ def _goal_status(p, ix, name, g, champ):
         vs = _pair(ix, model, g["baseline"], sl, sign)
     slr = ix.slices.get(sl) or {}
     cur = slr.get("hash")
-    return dict(g, name=name, model=model, value=value, task=ev["id"] if ev else None,
-                runs=len(ix.runs.get((model, sl), [])) if model else 0,
+    status = dict(g, name=name, model=model, value=value, task=ev["id"] if ev else None,
+                runs=len(ix.compatible(model, sl)) if model else 0,
                 met=value is not None and sign * (value - g["target"]) >= 0,
                 gap=None if value is None else sign * (g["target"] - value), vs_baseline=vs,
                 hills={k: h.get("status") for k, h in p.hills().items() if h.get("goal") == name},
                 slice_changed=bool(cur and g.get("slice_hash") and cur != g["slice_hash"]),
                 scale=slr.get("scale") or "binary", unit=slr.get("unit"), metric=slr.get("metric"))
+
+    from .core import goal_evidence_status
+    return goal_evidence_status(status, ix.has(g.get("baseline"), sl))
 
 
 def _signature(p) -> tuple:

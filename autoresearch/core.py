@@ -295,26 +295,7 @@ class Project:
                     # how the slice's score reads: 0/1 per example (counts of n) or a continuous amount in `unit`
                     scale=slr.get("scale") or "binary", unit=slr.get("unit"), metric=slr.get("metric"))
 
-        if g.get("status") == "achieved" and g.get("evidence"):
-            frozen = g["evidence"]
-            status["current_observation"] = {key: status[key] for key in
-                                             ("model", "value", "task", "runs", "met", "gap", "vs_baseline")}
-            for key in ("model", "value", "task", "runs", "n", "vs_baseline"):
-                status[key] = frozen.get(key)
-            value = frozen.get("value")
-            status["met"] = value is not None and sign * (value - g["target"]) >= 0
-            status["gap"] = None if value is None else sign * (g["target"] - value)
-        if status.get("model") == g.get("baseline"):
-            status["comparison_state"] = "same_model"
-        elif status.get("vs_baseline", None) and status["vs_baseline"].get("n"):
-            status["comparison_state"] = "paired"
-        elif not self.latest_eval(g.get("baseline"), sl):
-            status["comparison_state"] = "missing_baseline"
-        elif value is None:
-            status["comparison_state"] = "missing_measurement"
-        else:
-            status["comparison_state"] = "different_harness"
-        return status
+        return goal_evidence_status(status, bool(self.latest_eval(g.get("baseline"), sl)))
 
     def achieve_goal(self, name, force=False, note=None) -> dict:
         st = self.goal_status(name)
@@ -945,3 +926,28 @@ def _timed(fn, i):
         return dict(id=str(i), latency_s=round(time.time() - t0, 3)) | out | {"id": str(i)}
     except Exception as e:  # an example that crashes is wrong, never skipped
         return dict(id=str(i), score=0.0, error=f"{type(e).__name__}: {e}"[:300], latency_s=round(time.time() - t0, 3))
+
+
+def goal_evidence_status(status, baseline_exists):
+    """One frozen achievement and explicit comparison scope for dashboard and references."""
+    sign = 1 if status.get("higher_is_better", True) else -1
+    if status.get("status") == "achieved" and status.get("evidence"):
+        frozen = status["evidence"]
+        status["current_observation"] = {key: status[key] for key in
+                                         ("model", "value", "task", "runs", "met", "gap", "vs_baseline")}
+        for key in ("model", "value", "task", "runs", "n", "vs_baseline"):
+            status[key] = frozen.get(key)
+        value = frozen.get("value")
+        status["met"] = value is not None and sign * (value - status["target"]) >= 0
+        status["gap"] = None if value is None else sign * (status["target"] - value)
+    if status.get("model") == status.get("baseline"):
+        status["comparison_state"] = "same_model"
+    elif status.get("vs_baseline", None) and status["vs_baseline"].get("n"):
+        status["comparison_state"] = "paired"
+    elif not baseline_exists:
+        status["comparison_state"] = "missing_baseline"
+    elif status.get("value") is None:
+        status["comparison_state"] = "missing_measurement"
+    else:
+        status["comparison_state"] = "different_harness"
+    return status
