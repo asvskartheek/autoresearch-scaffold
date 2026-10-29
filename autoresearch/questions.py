@@ -961,9 +961,9 @@ def _cmd(a):
         q = add(p, title, parent=a.parent, needs_human=a.needs_human, by=a.by or "agent", choices=a.choice,
                 why=a.why, evidence=parse_evidence(p, a.evidence))
         if len(title.split()) > 8:
-            print("note: keep titles to 8 words or fewer", flush=True)
+            print("note: keep titles to 8 words or fewer", file=sys.stderr)
         if a.needs_human and (not a.choice or not a.why):
-            print("note: a person answers fastest with --choice options and a --why", flush=True)
+            print("note: a person answers fastest with --choice options and a --why", file=sys.stderr)
         return print(q["id"])
     if a.verb in ("answer", "dead"):
         if len(a.args) < 2:
