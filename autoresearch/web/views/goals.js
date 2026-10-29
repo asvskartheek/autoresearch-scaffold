@@ -342,7 +342,7 @@ const nextPanel=function(g){
   // a next run already in progress: what it covers and its live chip, in place of a command
   const ms=a=>a.map(n=>`<span class="mono">${esc(short(n.slice))}</span>`).join(', ');
   for(const c of cands.slice(0,3)){const run=c.next.find(runTask),rest=c.next.filter(n=>!runTask(n));
-   items.push(run?[`${mLink(c.m)} on ${hLink(c.o.hill)} is running on <span class="mono">${esc(short(runTask(run).slice||run.slice))}</span>${rest.length?`, then needs ${ms(rest)}`:''}.`,null,runChip(run)]
+   items.push(run?[`${mLink(c.m)} on ${hLink(c.o.hill)} is running on <span class="mono">${esc(short(runTask(run).slice||run.slice))}</span>${rest.length?`, then needs ${rest.map(n=>(n.model!==c.m?'champion on ':'')+ms([n])).join(', ')}`:''}.`,null,runChip(run)]
     :[`${mLink(c.m)} on ${hLink(c.o.hill)} needs ${ms(c.next)}.`,`arx gate ${c.m}`]);}
   if(!cands.length){const oh=goalHills(g).find(([,s])=>s==='open');
    if(oh)items.push([`No candidate is climbing ${hLink(oh[0])}. Register one from the champion.`,`arx model add <name> --parent ${ch||'<champion>'} --hill ${oh[0]} --change "…"`]);

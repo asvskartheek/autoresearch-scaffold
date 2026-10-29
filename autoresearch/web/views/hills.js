@@ -326,7 +326,7 @@ function hState(m,o,g){
  const sl=a=>a.map(n=>`<span class="mono" title="${esc(n.slice)}">${esc(short(n.slice))}</span>`).join(', ');
  // a next run already in progress: its live chip in place of a command
  const run=nx.find(runTask);
- if(run){const rest=nx.filter(n=>!runTask(n));return {k:'live',say:`${run.model!==m?'champion run':'running'} on ${(t=>`<span class="mono" title="${esc(t.slice||run.slice)}">${esc(short(t.slice||run.slice))}</span>`)(runTask(run))}${rest.length?`, then ${sl(rest)}`:''}`,chip:runChip(run)};}
+ if(run){const rest=nx.filter(n=>!runTask(n));return {k:'live',say:`${run.model!==m?'champion run':'running'} on ${(t=>`<span class="mono" title="${esc(t.slice||run.slice)}">${esc(short(t.slice||run.slice))}</span>`)(runTask(run))}${rest.length?`, then ${rest.map(n=>(n.model!==m?'champion on ':'')+sl([n])).join(', ')}`:''}`,chip:runChip(run)};}
  if(ch.length)return {k:'base',say:`waiting on a champion run on ${sl(ch)}`,cmd:`arx gate ${m}`};
  if(me.length)return {k:'run',say:`needs ${sl(me)}`,cmd:`arx gate ${m}`};
  return {k:'run',say:'nothing to run',cmd:`arx gate ${m}`};
