@@ -81,9 +81,27 @@ def version(p: Project, name: str) -> float:
     return (pdir(p, name) / "paper.html").stat().st_mtime
 
 
+def owner(p: Project, hill: str = None, goal: str = None, but: str = None) -> str | None:
+    """The paper that already covers this hill or goal (by its meta, or by being named after it), other than `but`."""
+    for n in names(p):
+        if n == but:
+            continue
+        meta = _read(pdir(p, n) / "meta.json", {})
+        if (hill and (meta.get("hill") == hill or (n == hill and not meta.get("goal")))) or \
+           (goal and (meta.get("goal") == goal or (n == goal and not meta.get("hill")))):
+            return n
+    return None
+
+
 def add(p: Project, name: str, src: Path, title: str = None, hill: str = None, goal: str = None) -> Path:
-    """Publish or republish a paper. Open pages swap the new version in place."""
+    """Publish or republish a paper. Open pages swap the new version in place. A hill or a goal has one paper:
+    publishing a second one under another name is refused (republish the first instead)."""
     d = pdir(p, name)
+    if hill or goal:
+        other = owner(p, hill=hill, goal=goal, but=name)
+        if other:
+            raise ValueError(f"{'hill ' + hill if hill else 'goal ' + goal} already has the paper {other!r}: "
+                             f"republish it (arx paper edit {other} --file ...) rather than start a second one")
     d.mkdir(parents=True, exist_ok=True)
     tmp = d / ".paper.html.tmp"
     shutil.copyfile(src, tmp)

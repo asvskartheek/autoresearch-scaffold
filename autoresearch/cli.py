@@ -408,7 +408,10 @@ def cmd_paper(a):
             sys.exit(f"usage: arx paper {a.verb} <name> --file paper.html")
         if a.goal and a.goal not in p.goals():
             sys.exit(f"unknown goal {a.goal}")
-        f = papers.add(p, a.name, Path(a.file), title=a.title, hill=a.hill, goal=a.goal)
+        try:
+            f = papers.add(p, a.name, Path(a.file), title=a.title, hill=a.hill, goal=a.goal)
+        except ValueError as e:
+            sys.exit(str(e))
         print(f"{f}\n{base}/papers/{a.name}")
     elif a.verb == "ls":
         for name, m in papers.papers(p).items():
@@ -428,6 +431,8 @@ def cmd_paper(a):
     elif a.verb == "new" and a.goal:  # the public paper: the worked goal example, to rewrite with this goal's result
         if a.goal not in p.goals():
             sys.exit(f"unknown goal {a.goal}")
+        if papers.owner(p, goal=a.goal):
+            sys.exit(f"goal {a.goal} already has the paper {papers.owner(p, goal=a.goal)!r}: edit that one")
         out = Path(a.file or f"paper-{a.goal}.html")
         if out.exists():
             sys.exit(f"{out} exists")
@@ -442,6 +447,8 @@ def cmd_paper(a):
     elif a.verb == "new":  # a starter page: the worked example, to rewrite with this hill's content
         if not a.name:
             sys.exit("usage: arx paper new <hill> [--file paper-<hill>.html] | arx paper new --goal <goal>")
+        if papers.owner(p, hill=a.name):
+            sys.exit(f"hill {a.name} already has the paper {papers.owner(p, hill=a.name)!r}: edit that one")
         out = Path(a.file or f"paper-{a.name}.html")
         if out.exists():
             sys.exit(f"{out} exists")
