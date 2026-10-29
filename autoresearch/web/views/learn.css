@@ -104,6 +104,9 @@
 .t-ico{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
 .lrn .t-sk{cursor:ew-resize;touch-action:none;user-select:none}
 .lrn .t-sk[data-kind=bars]{cursor:pointer}
+.lrn .t-zoom{display:flex;gap:4px;justify-content:flex-end;margin-top:-10px}
+.lrn .t-zoom .btn{min-width:32px;justify-content:center;padding:2px 8px}
+.lrn .t-sk:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
 .lrn .t-range{width:100%;margin:6px 0 2px;accent-color:var(--accent)}
 .lrn .t-need{opacity:.85;border-top:1px dashed var(--border);margin-top:6px;padding-top:6px}
 .lrn .t-code{margin:8px 0;padding:12px 14px;border-radius:10px;background:var(--subtle,var(--active));font:13px/1.9 var(--mono,ui-monospace,monospace);white-space:pre-wrap;overflow-x:auto}

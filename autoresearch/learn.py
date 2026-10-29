@@ -206,20 +206,27 @@ def _delta_card(cid, r, p: Project = None, sl: str = None, sign: int = 1, **kw) 
     +what it misses), on a continuous one ± the comparator's own value."""
     viz = _ci_viz(r, p, sl)
     d, lo, hi = viz["delta"], viz["lo"], viz["hi"]
-    base = r.get("base")
+    a, b = _room(r, viz, sign)
     if viz["unit"] != "pts":
-        span = _nice(abs(base)) if base else _nice(max(abs(lo), abs(hi)) * 4)
-        tol = max(span / 100, round((hi - lo) / 2, 3))
-        return dict(id=cid, type="number", unit=viz["unit"], min=-span, max=span, step=span / 200, start=0, tol=tol,
+        tol = max(b / 100, round((hi - lo) / 2, 3))
+        return dict(id=cid, type="number", unit=viz["unit"], min=a, max=b, step=b / 200, start=0, tol=tol,
                     truth=round(d, 3), viz=viz, **kw)
     tol = max(1.0, round((hi - lo) / 2, 2))
-    if base is None:
-        a, b = -100, 100
-    else:
-        down, up = (100 * base, 100 * (1 - base)) if sign > 0 else (100 * (1 - base), 100 * base)
-        a, b = -max(5, 5 * math.ceil(down / 5 - 1e-9)), max(5, 5 * math.ceil(up / 5 - 1e-9))
     return dict(id=cid, type="number", unit="pts", min=a, max=b, step=0.25 if b - a <= 20 else 0.5, start=0,
                 tol=tol, truth=round(d, 2), viz=viz, **kw)
+
+
+def _room(r: dict, viz: dict, sign: int = 1) -> tuple[float, float]:
+    """The axis a delta can be drawn on without knowing it: on a 0/1 slice the room the comparator leaves (from −its
+    score to +what it misses, in points), on a continuous one ± the comparator's own value."""
+    base = r.get("base")
+    if viz["unit"] != "pts":
+        span = _nice(abs(base)) if base else _nice(max(abs(viz["lo"]), abs(viz["hi"])) * 4)
+        return -span, span
+    if base is None:
+        return -100, 100
+    down, up = (100 * base, 100 * (1 - base)) if sign > 0 else (100 * (1 - base), 100 * base)
+    return -max(5, 5 * math.ceil(down / 5 - 1e-9)), max(5, 5 * math.ceil(up / 5 - 1e-9))
 
 
 # ---------------------------------------------------------------- cards
@@ -281,7 +288,7 @@ def _goal_ctx(g: dict, name: str) -> str:
 
 def _rule_text(p: Project, c: dict) -> str:
     thr = abs(c.get("threshold") or 0)
-    amt = sd(p, c.get("slice"), thr).lstrip("+")
+    amt = sd(p, c.get("slice"), thr).lstrip("+−")  # an amount: a "minus" metric must not make it read negative
     if c.get("rule") == "better":
         return "must be better" + (f" by {amt}" if thr else "")
     return f"may lose at most {amt}" if thr else "must not be worse"
@@ -305,7 +312,7 @@ def _card_gate(p: Project, model: str, sl: str) -> dict | None:
                             q=f"{_title(p, model)} on {_short(sl)}: it {_rule_text(p, c)}. Pass or fail?",
                             ctx=f"n = {c['n']:,} · against {_title(p, g.get('champion'))}", ev=c.get("cand_task") or sl,
                             why=why, w=85 if r["rung"] != (g["rungs"][0]["rung"] if g["rungs"] else "") else 80,
-                            viz=_ci_viz(c, p, sl, c.get("threshold")))
+                            viz=(vz := _ci_viz(c, p, sl, c.get("threshold"))), axis=_room(c, vz, _sign(p)))
     return None
 
 
@@ -429,7 +436,8 @@ def _card_run(p: Project, model: str, base: str, sl: str, task: dict | None = No
     return dict(id=f"run|{model}|{base}|{sl}", type="choice", opts=["Yes", "No"], truth=truth,
                 label="Landed" if r else "Stalled" if stalled else "Running", tone="acc" if r else "neg" if stalled else "warn",
                 t=(live or {}).get("created"), q=f"Will {_title(p, model)} beat {_title(p, base)} on {_short(sl)}?",
-                ctx=ctx, ev=(live or {}).get("id") or sl, why=why, w=50, viz=_ci_viz(r, p, sl) if r else None)
+                ctx=ctx, ev=(live or {}).get("id") or sl, why=why, w=50, viz=(vz := _ci_viz(r, p, sl) if r else None),
+                axis=_room(r, vz, _sign(p)) if r else None)
 
 
 def _card_question(p: Project, qid: str) -> dict | None:
@@ -452,7 +460,7 @@ def _card_question(p: Project, qid: str) -> dict | None:
                     label="Answered", tone="acc", t=q.get("answered") or q.get("updated") or q.get("created"),
                     q=f"{q.get('title') or qid}: {_title(p, ev['model'])} against {_title(p, base)} on {_short(sl)}?",
                     ctx=f"n = {r['n']:,}", ev=(p.latest_eval(ev["model"], sl) or {}).get("id", sl),
-                    why=_first(q.get("claim"), 200) or truth, w=75, viz=_ci_viz(r, p, sl))
+                    why=_first(q.get("claim"), 200) or truth, w=75, viz=(vz := _ci_viz(r, p, sl)), axis=_room(r, vz, _sign(p)))
     return None
 
 

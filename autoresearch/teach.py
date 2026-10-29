@@ -64,7 +64,7 @@ def methods_for(c: dict) -> list[str]:
             # spot and code teach delta = (fixed - broken) / n: only where that is how this card's delta was made (one
             # 0/1 run per example). Pooled or fractional scores make it the mean difference, which the counts miss.
             out += ["spot", "prototype", "code"] if counts_give_delta(v) else ["prototype"]
-    elif v.get("kind") == "bars" and any(r.get("v") is not None for r in v.get("rows") or []):
+    elif v.get("kind") == "bars" and _sketch_rows(v) and _bars_max(v):
         out.append("sketch")
     if c.get("why") or v:
         out.append("explain")
@@ -80,7 +80,14 @@ def counts_give_delta(v: dict) -> bool:
 
 # ---------------------------------------------------------------- the task each method shows (never the answer)
 def _ci_axis(c: dict) -> dict:
-    return dict(min=c.get("min", -10), max=c.get("max", 10), unit=(c.get("viz") or {}).get("unit") or c.get("unit") or "pts")
+    """The sketch's axis in the card's own unit, never from its answer: a number card's own range, else the room its
+    comparator leaves (learn._room). `view` is the half-width it opens at (± 10 pts on a 0/1 slice, the whole range on
+    a continuous one); the page zooms between the range and a twentieth of it."""
+    v = c.get("viz") or {}
+    unit = v.get("unit") or c.get("unit") or "pts"
+    a, b = (c["min"], c["max"]) if c.get("type") == "number" and c.get("min") is not None else tuple(c.get("axis") or ((-100, 100) if unit == "pts" else (-10, 10)))
+    full = max(abs(a), abs(b))
+    return dict(min=a, max=b, unit=unit, view=min(full, 10) if unit == "pts" else full)
 
 
 def _example(c: dict) -> dict:
@@ -140,10 +147,8 @@ def task(c: dict, method: str) -> dict:
     if method == "sketch":
         if v.get("kind") == "ci":
             return dict(kind="ci", **_ci_axis(c))
-        rows = [dict(label=r.get("label"), tag=r.get("tag"), n=r.get("n"), unit=r.get("unit")) for r in v.get("rows") or [] if r.get("v") is not None]
-        cont = any(r.get("unit") for r in rows)
-        top = max(abs(r["v"]) for r in v["rows"] if r.get("v") is not None) if cont else 1
-        return dict(kind="bars", rows=rows, max=_nice_up(top * 1.6) if cont else 1)
+        rows = [dict(label=r.get("label"), tag=r.get("tag"), n=r.get("n"), unit=r.get("unit")) for r in _sketch_rows(v)]
+        return dict(kind="bars", rows=rows, max=_bars_max(v))
     if method == "spot":
         return _spot_ci(c)[0]
     if method == "prototype":
@@ -154,6 +159,19 @@ def task(c: dict, method: str) -> dict:
     if method == "explain":
         return dict(ideas=[i[0] for i in _ideas(c)])
     return {}
+
+
+def _sketch_rows(v: dict) -> list[dict]:
+    """The bars a sketch asks for: every scored row but the champion's reference (it is not the question)."""
+    return [r for r in v.get("rows") or [] if r.get("v") is not None and r.get("hl") != 3]
+
+
+def _bars_max(v: dict) -> float | None:
+    """The sketch's scale without its answer: a share (0 to 1) on 0/1 slices; on a continuous slice twice the
+    champion's reference value, and no sketch at all without one."""
+    if not any(r.get("unit") for r in _sketch_rows(v)):
+        return 1
+    return _nice_up(abs(v["ref"]) * 2) if v.get("ref") else None
 
 
 def _nice_up(x: float) -> float:
@@ -206,7 +224,7 @@ def grade(c: dict, method: str, ans) -> dict:
         err = abs(d - v["delta"])
         return dict(hit=err <= max(c.get("tol") or 1, (v["hi"] - v["lo"]) / 2) and sides, err=round(err, 3), show=dict(noise_right=sides))
     if method == "sketch":
-        rows = [r for r in v.get("rows") or [] if r.get("v") is not None]
+        rows = _sketch_rows(v)
         got = ans.get("rows") if isinstance(ans, dict) else None
         if not isinstance(got, list) or len(got) != len(rows):
             return dict(hit=False, err=None, show={})

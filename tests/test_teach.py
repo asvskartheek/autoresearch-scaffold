@@ -54,6 +54,21 @@ class Teach(unittest.TestCase):
         self.assertTrue(4 <= need < float("inf"))
         self.assertTrue(teach.grade(zero, "prototype", round(need))["hit"])
 
+    def test_sketch_axis_is_the_cards_own_scale(self):
+        c = self.gate
+        ax = teach.task(c, "sketch")
+        self.assertEqual((ax["min"], ax["max"]), tuple(c["axis"]))  # from the comparator, not the answer
+        self.assertTrue(ax["min"] <= c["viz"]["delta"] <= ax["max"])
+        num = dict(id="rej|x", type="number", unit="ms", min=-5000, max=5000, truth=-104.6,
+                   viz=dict(kind="ci", unit="ms", delta=-104.6, lo=-119.7, hi=-87.1, n=12, wins=1, losses=11))
+        ax = teach.task(num, "sketch")
+        self.assertEqual((ax["unit"], ax["min"], ax["max"], ax["view"]), ("ms", -5000, 5000, 5000))
+        bars = dict(kind="bars", ref=200.0, rows=[dict(label="a", v=150.0, unit="ms"), dict(label="b", v=900.0, unit="ms"),
+                                                  dict(label="champ", v=200.0, unit="ms", hl=3)])
+        t = teach.task(dict(id="batch|x", truth="b", viz=bars), "sketch")
+        self.assertEqual((t["max"], len(t["rows"])), (500, 2))  # from the champion's value, its own row left out
+        self.assertNotIn("sketch", teach.methods_for(dict(id="batch|y", truth="b", viz=dict(bars, ref=None))))
+
     def test_goal_context_has_no_target_count(self):
         self.p.open_goal("keep", "Keep 28 correct", "full", 0.7)
         g = learn.card(self.p, "goal|keep")

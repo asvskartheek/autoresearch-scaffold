@@ -13,31 +13,42 @@ const ico=m=>`<svg viewBox="0 0 24 24" class="t-ico">${ICO[m]||''}</svg>`;
 const amt=(u,x)=>lamt(u||'pts',x);
 
 // ---------- sketch: drag the delta and the ends of its interval, or each bar (pointer or arrow keys)
-const ciWin=(t,s)=>[t.min,t.max];
+// the axis is the card's own range in its own unit; the sketch opens on ±view and zooms between the range and a
+// twentieth of it; after the reveal it widens to hold the truth, so both sit on one scale
+const niceD=x=>{const m=10**Math.floor(Math.log10(x));return [10,5,2.5,2,1].map(k=>k*m).find(v=>v<=x+1e-12)||m},niceU=x=>{const m=10**Math.floor(Math.log10(x));return [1,2,2.5,5,10].map(k=>k*m).find(v=>v>=x-1e-12)};
+const zFull=t=>Math.max(Math.abs(t.min),Math.abs(t.max));
+function ciWin(t,s){const z=s.z??t.view??zFull(t);let a=Math.max(t.min,-z),b=Math.min(t.max,z);
+ if(s.tv){const v=s.tv,k=s.sk||{},xs=[v.lo,v.hi,v.delta,k.lo,k.hi,t.bar].filter(q=>q!=null&&isFinite(q));const lo=Math.min(a,...xs),hi=Math.max(b,...xs),pad=(hi-lo)*.06;
+  if(lo<a)a=lo-pad;if(hi>b)b=hi+pad}
+ return [a,b]}
+function zoom(c,dir){const s=st(c),t=c.task||s.tk,f=zFull(t),z=s.z??t.view??f;s.z=dir>0?Math.max(f/20,niceD(z/2)):Math.min(f,niceU(z*2));render(true)}
 function sketchCI(c,s){
- const t=c.task||s.tk,W=LW(),H=92,Lx=16,R=W-16,[a,b]=ciWin(t,s),x=q=>Lx+(Math.max(a,Math.min(b,q))-a)/(b-a)*(R-Lx),span=b-a;
- if(!s.sk)s.sk={delta:0,lo:-span*.08,hi:span*.08};const k=s.sk;
+ const t=c.task||s.tk;s.tv=c.reveal?.viz||null;if(!s.sk){const [a0,b0]=ciWin(t,s);s.sk={delta:0,lo:-(b0-a0)*.08,hi:(b0-a0)*.08}}const k=s.sk;
+ const W=LW(),H=92,Lx=16,R=W-16,[a,b]=ciWin(t,s),x=q=>Lx+(Math.max(a,Math.min(b,q))-a)/(b-a)*(R-Lx),span=b-a;
  const stp=nstep(span,W<420?5:9);let g='';
  for(let q=Math.ceil(a/stp)*stp;q<=b+1e-9;q+=stp){const qq=+q.toPrecision(6);g+=`<line x1="${x(qq)}" x2="${x(qq)}" y1="30" y2="60" stroke="var(--grid)"/><text x="${x(qq)}" y="76" text-anchor="middle">${qq>0?'+':qq<0?'−':''}${grp(Math.abs(qq))}</text>`}
- const tr=c.reveal?.viz;const truth=tr?`<line x1="${x(tr.lo)}" x2="${x(tr.hi)}" y1="56" y2="56" stroke="var(--text)" stroke-width="4" stroke-linecap="round" opacity=".5"/><circle cx="${x(tr.delta)}" cy="56" r="5" fill="var(--text)"/>`:'';
+ const tr=c.reveal?.viz;const truth=tr?`<line x1="${x(tr.lo)}" x2="${x(tr.hi)}" y1="56" y2="56" stroke="var(--text)" stroke-width="4" stroke-linecap="round" opacity=".5"/><circle cx="${x(tr.delta)}" cy="56" r="5" fill="var(--text)"/><text x="${R}" y="14" text-anchor="end" class="mono strong">${amt(t.unit,tr.delta)} [${amt(t.unit,tr.lo)}, ${amt(t.unit,tr.hi)}]</text>`:'';
+ const bar=t.bar!=null&&t.bar>=a&&t.bar<=b?`<line x1="${x(t.bar)}" x2="${x(t.bar)}" y1="24" y2="64" stroke="var(--warning)" stroke-width="2" stroke-dasharray="4 3"/><text x="${x(t.bar)}" y="88" text-anchor="middle" style="fill:var(--warning)">bar ${amt(t.unit,t.bar)}</text>`:'';
  const lab=`${amt(t.unit,k.delta)} [${amt(t.unit,k.lo)}, ${amt(t.unit,k.hi)}]`;
  return `<svg class="lv t-sk" id="tsk" data-kind="ci" viewBox="0 0 ${W} ${H}" role="slider" tabindex="${c.pred?-1:0}" aria-label="your sketch: arrow keys move it, up and down widen the interval" aria-valuetext="${lab}">
   <text x="${Lx}" y="14" class="mono strong" style="fill:var(--accent)">${lab}</text>${g}
-  <line x1="${x(0)}" x2="${x(0)}" y1="24" y2="64" stroke="var(--text)" stroke-width="1.5"/>
+  <line x1="${x(0)}" x2="${x(0)}" y1="24" y2="64" stroke="var(--text)" stroke-width="1.5"/>${bar}
   <line x1="${x(k.lo)}" x2="${x(k.hi)}" y1="44" y2="44" stroke="var(--accent)" stroke-width="10" stroke-linecap="round" opacity=".3"/>
   <rect x="${x(k.lo)-4}" y="34" width="8" height="20" rx="3" fill="var(--accent)"/><rect x="${x(k.hi)-4}" y="34" width="8" height="20" rx="3" fill="var(--accent)"/>
-  <circle cx="${x(k.delta)}" cy="44" r="8" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>${truth}</svg>`;
+  <circle cx="${x(k.delta)}" cy="44" r="8" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>${truth}</svg>
+  ${c.pred?'':`<div class="t-zoom"><button class="btn" data-t="zout" aria-label="Zoom out" title="Zoom out (−)" ${b-a>=zFull(t)*1.99?'disabled':''}>−</button><button class="btn" data-t="zin" aria-label="Zoom in" title="Zoom in (+)" ${(s.z??t.view??zFull(t))<=zFull(t)/20+1e-9?'disabled':''}>+</button></div>`}`;
 }
 function sketchBars(c,s){
  const t=c.task||s.tk,W=LW(),rh=44,H=t.rows.length*rh+4,R=W-(W<420?96:120);
- if(!s.sb)s.sb=t.rows.map(()=>t.max/2);const tr=c.reveal?.viz?.rows?.filter(r=>r.v!=null),row=s.row||0;
+ if(!s.sb)s.sb=t.rows.map(()=>t.max/2);const tr=c.reveal?.viz?.rows?.filter(r=>r.v!=null&&r.hl!==3),row=s.row||0;
+ const M=tr?Math.max(t.max,...tr.map(r=>r.v*1.05)):t.max;  // the truth stays on the sketch's scale, widened only to fit
  const fmt=(r,v)=>r.unit?(grp(v)+' '+r.unit):r.n?`${Math.round(v*r.n).toLocaleString()} of ${r.n.toLocaleString()}`:pct(v);
- return `<svg class="lv t-sk" id="tsk" data-kind="bars" viewBox="0 0 ${W} ${H}" role="slider" tabindex="${c.pred?-1:0}" aria-label="drag each bar: up and down pick a bar, left and right set it" aria-valuetext="${esc(t.rows[row]?.label||'')}: ${fmt(t.rows[row]||{},s.sb[row])}">${t.rows.map((r,i)=>{const y=i*rh,v=s.sb[i],w=v/t.max*R;
-  const tv=tr&&tr[i]?tr[i].v/t.max*R:null;
+ return `<svg class="lv t-sk" id="tsk" data-kind="bars" viewBox="0 0 ${W} ${H}" role="slider" tabindex="${c.pred?-1:0}" aria-label="drag each bar: up and down pick a bar, left and right set it" aria-valuetext="${esc(t.rows[row]?.label||'')}: ${fmt(t.rows[row]||{},s.sb[row])}">${t.rows.map((r,i)=>{const y=i*rh,v=s.sb[i],w=v/M*R;
+  const tv=tr&&tr[i]?tr[i].v/M*R:null;
   return `<text x="0" y="${y+12}" ${i===row&&!c.pred?'class="strong"':''}>${esc(r.label)}${r.tag?' · '+esc(r.tag):''}</text><rect x="0" y="${y+18}" width="${R}" height="16" rx="3" fill="var(--active)" data-row="${i}"/>
    <rect x="0" y="${y+18}" width="${Math.max(2,w)}" height="16" rx="3" fill="var(--accent)" opacity=".75" data-row="${i}" pointer-events="none"/>
    ${tv!=null?`<line x1="${tv}" x2="${tv}" y1="${y+14}" y2="${y+38}" stroke="var(--text)" stroke-width="3"/>`:''}
-   <text x="${Math.min(R,w)+6}" y="${y+31}" class="mono strong">${fmt(r,v)}</text>`}).join('')}</svg>`;
+   <text x="${Math.min(R,w)+6}" y="${y+31}" class="mono" style="fill:var(--accent)">${fmt(r,v)}${tv!=null?`<tspan class="strong" style="fill:var(--text)"> · ${fmt(r,tr[i].v)}</tspan>`:''}</text>`}).join('')}</svg>`;
 }
 // redraw the sketch in place; keep keyboard focus on it
 function redrawSketch(c,s){const g=document.getElementById('tsk');if(!g)return;const f=document.activeElement===g;
@@ -140,7 +151,7 @@ function card(c){
  let reveal='';
  if(p&&rv){const verdict=p.hit==null?'<span class="vd open">Open</span>':p.hit?'<span class="vd ok">✓ Right</span>':'<span class="vd no">✗ Not quite</span>';
   const own=q!==c.q?`<p class="ctx t-own">${esc(c.q)}</p>`:'';  // the method asked about an example: the card's own question and answer follow
-  reveal=`<div class="reveal">${own}<div class="verdict">${verdict}${rv.truth!=null?`<b>${c.type==='choice'?esc(rv.truth):lfmt(c,rv.truth)}</b>`:''}</div>${viz(rv.viz)}<p class="why">${esc(rv.why||'')}</p></div>`}
+  reveal=`<div class="reveal">${own}<div class="verdict">${verdict}${rv.truth!=null?`<b>${c.type==='choice'?esc(rv.truth):lfmt(c,rv.truth)}</b>`:''}</div>${c.method==='sketch'?'':viz(rv.viz)}<p class="why">${esc(rv.why||'')}</p></div>`}
  return `<div class="kind">${pill(c.label,c.tone)}<span>${i+1} of ${n}</span>${c.t?`<span>${ago(c.t)}</span>`:''}${strip(c)}</div>
   <p class="q">${esc(q)}</p>${c.ctx&&c.method!=='spot'?`<p class="ctx">${esc(c.ctx)}</p>`:''}${body(c)}${reveal}
   <div class="actions">${p?`<button class="btn primary" data-l="next">${i===n-1?'Finish':'Next'} <kbd>space</kbd></button>`:`<button class="btn primary" data-t="go" ${ready?'':'disabled'}>Check <kbd>space</kbd></button><button class="btn" data-t="skip" title="Learn this card another way">Another way</button>`}
@@ -172,7 +183,7 @@ function profile(){
 
 document.addEventListener('click',e=>{
  if(route().r!=='learn')return;const a=e.target.closest('#main [data-t]');if(!a)return;const c=L.b?.cards[L.cur];if(!c)return;
- const k=a.dataset.t;if(k==='go')submit(c);else if(k==='skip')skip(c);else if(k==='pick'&&!c.pred){st(c).pick=a.dataset.v;render(true)}
+ const k=a.dataset.t;if(k==='zin'||k==='zout'){if(!c.pred)zoom(c,k==='zin'?1:-1)}else if(k==='go')submit(c);else if(k==='skip')skip(c);else if(k==='pick'&&!c.pred){st(c).pick=a.dataset.v;render(true)}
 });
 document.addEventListener('pointerdown',e=>{if(route().r!=='learn'||!e.target.closest)return;const c=L.b?.cards[L.cur];if(c&&c.method==='sketch')dragSketch(e,c)});
 document.addEventListener('input',e=>{
@@ -184,7 +195,8 @@ document.addEventListener('input',e=>{
 document.addEventListener('keydown',e=>{
  if(route().r!=='learn'||!L.b||e.metaKey||e.ctrlKey||e.altKey)return;const c=L.b.cards[L.cur];if(!c||c.pred)return;
  const tg=e.target;if(tg&&/^(TEXTAREA|INPUT|SELECT)$/.test(tg.tagName))return;
- if(c.method==='sketch'&&(c.task||st(c).tk)){if(/^Arrow/.test(e.key)&&keySketch(e,c))e.preventDefault();return}
+ if(c.method==='sketch'&&(c.task||st(c).tk)){if(/^Arrow/.test(e.key)&&keySketch(e,c))e.preventDefault();
+  else if((e.key==='+'||e.key==='='||e.key==='-')&&(c.task||st(c).tk).kind==='ci'){zoom(c,e.key==='-'?-1:1);e.preventDefault()}return}
  if(c.method!=='spot')return;const n=+e.key,k=(c.task||st(c).tk)?.parts;if(k&&n>=1&&n<=k.length){st(c).pick=k[n-1];render(true);e.preventDefault()}
 },true);
 return {card,submit,profile,active:c=>!!(c&&c.method&&c.method!=='predict'&&(c.task||c.pred&&c.pred.method&&c.pred.method!=='predict'))};
