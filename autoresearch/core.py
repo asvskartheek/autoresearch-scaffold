@@ -449,6 +449,16 @@ class Project:
                 for sl in self._resolve(chk["slice"], m):
                     c = dict(slice=sl, rule=chk["rule"], threshold=chk.get("margin", 0) if chk["rule"] == "better" else -chk.get("tolerance", 0))
                     ce, be = self.latest_eval(model_name, sl), self.latest_eval(champ, sl) if champ else None
+                    cand_runs = self.slice_evals(model_name, sl)
+                    base_runs = self.slice_evals(champ, sl) if champ else []
+                    contract = (ce.get("config") or {}).get("baseline_contract") if ce else None
+                    if contract is not None:
+                        # A newer run made with another harness is not a comparator. Pool repeats only
+                        # within the candidate's declared contract on both sides of the comparison.
+                        cand_runs = [t for t in cand_runs if (t.get("config") or {}).get("baseline_contract") == contract]
+                        base_runs = [t for t in base_runs if (t.get("config") or {}).get("baseline_contract") == contract]
+                        be = base_runs[-1] if base_runs else None
+                        c["baseline_contract"] = contract
                     if champ == model_name:
                         c["state"] = "champion"
                     elif not champ:
@@ -460,11 +470,12 @@ class Project:
                         c["state"] = "need_run"
                         next_runs.append((model_name, sl))
                     else:
-                        p = paired(self.pooled_scores(model_name, sl), self.pooled_scores(champ, sl), sign)
+                        p = paired(per_id([row for t in cand_runs for row in self.rows(t["id"])]),
+                                   per_id([row for t in base_runs for row in self.rows(t["id"])]), sign)
                         ok = p["delta"] is not None and (p["delta"] > c["threshold"] if chk["rule"] == "better" else p["delta"] >= c["threshold"])
                         c |= dict(state="pass" if ok else "fail", noisy=p["lo"] is not None and p["lo"] < 0 < p["hi"],
                                   cand_task=ce["id"], base_task=be["id"],
-                                  cand_runs=len(self.slice_evals(model_name, sl)), base_runs=len(self.slice_evals(champ, sl)), **p)
+                                  cand_runs=len(cand_runs), base_runs=len(base_runs), **p)
                     checks.append(c)
             states = {c["state"] for c in checks}
             if blocked:
