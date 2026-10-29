@@ -52,7 +52,7 @@ function sketchBars(c,s){
   return `<text x="0" y="${y+12}" ${i===row&&!c.pred?'class="strong"':''}>${esc(r.label)}${r.tag?' · '+esc(r.tag):''}</text><rect x="0" y="${y+18}" width="${R}" height="16" rx="3" fill="var(--active)" data-row="${i}"/>
    <rect x="0" y="${y+18}" width="${Math.max(2,w)}" height="16" rx="3" fill="var(--accent)" opacity=".75" data-row="${i}" pointer-events="none"/>
    ${tv!=null?`<line x1="${tv}" x2="${tv}" y1="${y+14}" y2="${y+38}" stroke="var(--text)" stroke-width="3"/>`:''}
-   <text x="${Math.min(R,w)+6}" y="${y+31}" class="mono" style="fill:var(--accent)">${fmt(r,v)}${tv!=null?`<tspan class="strong" style="fill:var(--text)"> · ${fmt(r,tr[i].v)}</tspan>`:''}</text>`}).join('')}</svg>`;
+   <text x="${Math.min(R,Math.max(w,tv??0))+6}" y="${y+31}" class="mono" style="fill:var(--accent)">${fmt(r,v)}${tv!=null?`<tspan class="strong" style="fill:var(--text)"> · ${fmt(r,tr[i].v)}</tspan>`:''}</text>`}).join('')}</svg>`;
 }
 // redraw the sketch in place; keep keyboard focus on it
 function redrawSketch(c,s){const g=document.getElementById('tsk');if(!g)return;const f=document.activeElement===g;
