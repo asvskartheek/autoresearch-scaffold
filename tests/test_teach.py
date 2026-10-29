@@ -31,8 +31,23 @@ class Teach(unittest.TestCase):
         self.assertIn(g["method"], g["methods"]); self.assertNotIn("reveal", g)
         self.assertIn("profile", b["teach"])
 
+    def test_no_task_depends_on_the_truth(self):
+        """Change every number the card is graded on: each method's task stays the same, so none can carry it."""
+        c = self.gate
+        other = dict(c, truth="Fail" if c["truth"] == "Pass" else "Pass",
+                     viz=dict(c["viz"], delta=-7.5, lo=-9.0, hi=-6.0, wins=1, losses=4))
+        for m in teach.methods_for(c)[1:]:
+            self.assertEqual(teach.task(c, m), teach.task(other, m), m)
+        hill = next(x for x in learn.cards(self.p) if x["id"].startswith("hill|"))
+        self.assertNotIn("spot", teach.methods_for(hill))  # a bars figure is its card's answer
+
+    def test_goal_context_has_no_target_count(self):
+        self.p.open_goal("keep", "Keep 28 correct", "full", 0.7)
+        g = learn.card(self.p, "goal|keep")
+        self.assertEqual(g["truth"], 28); self.assertNotIn("28", g["ctx"])
+
     def test_code_is_graded_safely(self):
-        v = self.gate["viz"]
+        v = teach._example(self.gate)
         self.assertTrue(teach.grade(self.gate, "code", "100 * (fixed - broken) / n")["hit"])
         self.assertFalse(teach.grade(self.gate, "code", "(fixed + broken) / n")["hit"])
         self.assertIsNone(teach.safe_eval("__import__('os').system('true')", dict(n=1)))
@@ -40,7 +55,7 @@ class Teach(unittest.TestCase):
         self.assertEqual(teach.safe_eval("(fixed-broken)/n*100", dict(fixed=v["wins"], broken=v["losses"], n=v["n"])), 100 * (v["wins"] - v["losses"]) / v["n"])
 
     def test_code_refuses_non_finite_and_bare_constants(self):
-        v = self.gate["viz"]
+        v = teach._example(self.gate)
         for bad in ("1e309", "1e308*10", "0*1e309", "fixed/0"):
             self.assertIsNone(teach.safe_eval(bad, dict(fixed=1, broken=0, n=1)))
             g = teach.grade(self.gate, "code", bad)
@@ -53,7 +68,7 @@ class Teach(unittest.TestCase):
         s, wrong = teach._spot_ci(self.gate)
         self.assertTrue(teach.grade(self.gate, "spot", wrong)["hit"])
         self.assertFalse(teach.grade(self.gate, "spot", "nope")["hit"])
-        need = teach._n_needed(self.gate["viz"])
+        need = teach._n_needed(teach._example(self.gate))
         self.assertTrue(teach.grade(self.gate, "prototype", need * 1.2)["hit"])
         self.assertFalse(teach.grade(self.gate, "prototype", need * 3)["hit"])
         self.assertTrue(teach.grade(self.gate, "explain", "It fixed 6, broke none, and the interval clears zero")["hit"])

@@ -51,18 +51,11 @@ function dragSketch(e,c){
  move(e);const up=()=>{removeEventListener('pointermove',move);removeEventListener('pointerup',up)};addEventListener('pointermove',move);addEventListener('pointerup',up);e.preventDefault();
 }
 
-// ---------- spot: the real figure with one number made inconsistent
-function spotBars(rows,wrong){
- const W=LW(),rh=42,H=rows.length*rh+4,R=W-(W<420?96:120),cont=rows.some(r=>r.unit!=null),b=cont?Math.max(...rows.map(r=>Math.max(r.v,r.shown??0)))*1.05:1,x=q=>Math.max(0,q)/b*R;
- const val=(r,v)=>r.unit!=null?(grp(v)+' '+r.unit):r.n?`${Math.round(v*r.n).toLocaleString()} of ${r.n.toLocaleString()}`:pct(v);
- return `<svg class="lv" viewBox="0 0 ${W} ${H}">${rows.map((r,i)=>{const y=i*rh,bad=wrong!=null&&+wrong===i;
-  return `<text x="0" y="${y+12}">${esc(r.label)}${r.tag?' · '+esc(r.tag):''}</text><rect x="0" y="${y+18}" width="${Math.max(1,x(r.v))}" height="14" rx="2" fill="var(--control)"/><text x="${x(r.v)+6}" y="${y+30}" class="mono strong" ${bad?'style="fill:var(--negative);text-decoration:line-through"':''}>${val(r,r.shown??r.v)}</text>`}).join('')}</svg>`;
-}
+// ---------- spot: an example at the card's n with one number made inconsistent (the card's own figure is its answer)
 function spotBody(c,s){
- const t=c.task||s.tk,v=t.viz,ans=c.reveal?.show?.wrong;
- if(v.kind==='ci'){const u=v.unit||'pts',opts=[['counts',`${v.wins.toLocaleString()} fixed · ${v.losses.toLocaleString()} broken`],['delta','Δ '+amt(u,v.delta)],['interval',`[${amt(u,v.lo)}, ${amt(u,v.hi)}]`]];
-  return vizCI(v)+`<div class="opts t-spot" style="--n:3">${opts.map(([k,l],i)=>`<button class="opt${s.pick===k?' on':''}${ans?k===ans?' truth':s.pick===k?' wrong':'':''}" data-t="pick" data-v="${k}" ${c.pred?'disabled':''}><kbd>${i+1}</kbd>${esc(l)}</button>`).join('')}</div>`}
- return spotBars(v.rows,ans)+`<div class="opts t-spot" style="--n:${Math.min(4,v.rows.length)}">${v.rows.map((r,i)=>`<button class="opt${s.pick===String(i)?' on':''}${ans!=null?String(i)===ans?' truth':s.pick===String(i)?' wrong':'':''}" data-t="pick" data-v="${i}" ${c.pred?'disabled':''}><kbd>${i+1}</kbd>${esc(r.label)}${r.tag?' · '+esc(r.tag):''}</button>`).join('')}</div>`;
+ const t=c.task||s.tk,v=t.viz,ans=c.reveal?.show?.wrong,u=v.unit||'pts';
+ const opts=[['counts',`${v.wins.toLocaleString()} fixed · ${v.losses.toLocaleString()} broken`],['delta','Δ '+amt(u,v.delta)],['interval',`[${amt(u,v.lo)}, ${amt(u,v.hi)}]`]];
+ return vizCI(v)+`<div class="opts t-spot" style="--n:3">${opts.map(([k,l],i)=>`<button class="opt${s.pick===k?' on':''}${ans?k===ans?' truth':s.pick===k?' wrong':'':''}" data-t="pick" data-v="${k}" ${c.pred?'disabled':''}><kbd>${i+1}</kbd>${esc(l)}</button>`).join('')}</div>`;
 }
 
 // ---------- prototype: drag n, the interval narrows as 1/√n
@@ -92,7 +85,8 @@ function codeBody(c,s){
  return `<pre class="t-code"><span class="k">const</span> fixed = <b>${t.vars.fixed}</b>, broken = <b>${t.vars.broken}</b>, n = <b>${t.vars.n}</b>;
 <span class="k">const</span> delta_pts = <input id="tcode" spellcheck="false" autocomplete="off" value="${esc(s.code||'')}" ${c.pred?'disabled':''} placeholder="…">;
 <span class="c">// ${v==null?'= ?':'= '+(+v.toFixed(2))+' pts'}</span>${sh?`
-<span class="c">// ${(sh.ok??(sh.got!=null&&Math.abs(sh.got-sh.value)<=Math.max(.05,Math.abs(sh.value)*.01)))?'✓':'✗'} ${esc(sh.line)} = ${sh.value} pts</span>`:''}</pre>`;
+<span class="c">// ${(sh.ok??(sh.got!=null&&Math.abs(sh.got-sh.value)<=Math.max(.05,Math.abs(sh.value)*.01)))?'✓':'✗'} ${esc(sh.line)} = ${sh.value} pts</span>${sh.card!=null&&c.reveal?.viz?`
+<span class="c">// this card: 100 * (${c.reveal.viz.wins} - ${c.reveal.viz.losses}) / ${c.reveal.viz.n} = ${amt('pts',sh.card)}</span>`:''}`:''}</pre>`;
 }
 
 // ---------- explain: one sentence; the ideas it names light up after
@@ -110,11 +104,13 @@ function strip(c){const ms=c.methods||[];return `<div class="t-strip">${ms.map(m
 
 function card(c){
  const s=st(c);const n=L.b.cards.length,i=L.cur,p=c.pred,rv=c.reveal;
- const q=c.method==='spot'?'One number is wrong.':c.method==='prototype'?'Drag n to where the interval just clears zero.':c.method==='code'?'The paired gain, in points:':c.q;
+ const t=c.task||s.tk,ex=t&&(t.example||t.viz?.example)?`Example at n = ${(t.n||t.viz?.n||t.vars?.n||0).toLocaleString()}: `:'';
+ const q=c.method==='spot'?ex+'one number is wrong.':c.method==='prototype'?ex+'drag n to where its interval just clears zero.':c.method==='code'?ex+'the paired gain, in points.':c.q;
  const ready=c.method==='spot'?s.pick!=null:c.method==='code'?codeVal(c.task||s.tk,s.code)!=null:c.method==='explain'?(s.ex||'').trim().length>8:true;
  let reveal='';
  if(p&&rv){const verdict=p.hit==null?'<span class="vd open">Open</span>':p.hit?'<span class="vd ok">✓ Right</span>':'<span class="vd no">✗ Not quite</span>';
-  reveal=`<div class="reveal"><div class="verdict">${verdict}${c.truth!=null||rv.truth!=null?`<b>${c.type==='choice'?esc(rv.truth):lfmt(c,rv.truth)}</b>`:''}</div>${viz(rv.viz)}<p class="why">${esc(rv.why||'')}</p></div>`}
+  const own=q!==c.q?`<p class="ctx t-own">${esc(c.q)}</p>`:'';  // the method asked about an example: the card's own question and answer follow
+  reveal=`<div class="reveal">${own}<div class="verdict">${verdict}${rv.truth!=null?`<b>${c.type==='choice'?esc(rv.truth):lfmt(c,rv.truth)}</b>`:''}</div>${viz(rv.viz)}<p class="why">${esc(rv.why||'')}</p></div>`}
  return `<div class="kind">${pill(c.label,c.tone)}<span>${i+1} of ${n}</span>${c.t?`<span>${ago(c.t)}</span>`:''}${strip(c)}</div>
   <p class="q">${esc(q)}</p>${c.ctx&&c.method!=='spot'?`<p class="ctx">${esc(c.ctx)}</p>`:''}${body(c)}${reveal}
   <div class="actions">${p?`<button class="btn primary" data-l="next">${i===n-1?'Finish':'Next'} <kbd>space</kbd></button>`:`<button class="btn primary" data-t="go" ${ready?'':'disabled'}>Check <kbd>space</kbd></button><button class="btn" data-t="skip" title="Learn this card another way">Another way</button>`}

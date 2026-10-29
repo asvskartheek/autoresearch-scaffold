@@ -268,8 +268,15 @@ def _card_goal(p: Project, name: str) -> dict | None:
     return dict(id=f"goal|{name}", type="number", unit="", int=True, min=lo, max=N, step=1, start=lo + (N - lo) // 2,
                 tol=max(2, round(N * 0.01)), truth=have, label="Goal", tone="acc", t=g.get("created"),
                 q=f"How many of {N:,} does the champion get right on {_short(g['slice'])}?",
-                ctx=f"{g.get('title') or name}: {need:,} needed", ev=g.get("task") or g["slice"], why=why, w=95,
+                ctx=_goal_ctx(g, name), ev=g.get("task") or g["slice"], why=why, w=95,
                 viz=dict(kind="goal", have=have, need=need, N=N, lo=lo, traj=traj))
+
+
+def _goal_ctx(g: dict, name: str) -> str:
+    """The goal by name, without numbers: a target count ("Keep 1,224 correct", "1,224 needed") can be the answer
+    itself. The target shows in the reveal."""
+    t = str(g.get("title") or "")
+    return t if t and not re.search(r"\d[\d,.]*\d|\d{2,}", t) else name
 
 
 def _rule_text(p: Project, c: dict) -> str:

@@ -50,17 +50,20 @@ def _f(x, d=None):
 
 
 # ---------------------------------------------------------------- which methods fit a card
+# No method's task may hold the truth its card is graded on. A real figure (counts, delta, interval, bars) is the
+# answer to every card it belongs to, so spot, prototype and code work on an example built at the card's own n and
+# labelled as one; the card's real result shows in the reveal. Bars cards keep only sketch (the bars are the answer).
 def methods_for(c: dict) -> list[str]:
     v = c.get("viz") or {}
     out = ["predict"]
     if c.get("truth") is None:
         return out  # a run that has not landed: only a prediction can wait for it
     if v.get("kind") == "ci":
-        out += ["sketch", "spot"]
+        out.append("sketch")
         if v.get("unit") == "pts" and v.get("n"):
-            out += ["prototype", "code"]
+            out += ["spot", "prototype", "code"]
     elif v.get("kind") == "bars" and any(r.get("v") is not None for r in v.get("rows") or []):
-        out += ["sketch", "spot"]
+        out.append("sketch")
     if c.get("why") or v:
         out.append("explain")
     return out
@@ -71,16 +74,36 @@ def _ci_axis(c: dict) -> dict:
     return dict(min=c.get("min", -10), max=c.get("max", 10), unit=(c.get("viz") or {}).get("unit") or c.get("unit") or "pts")
 
 
-def _spot_ci(c: dict) -> dict:
-    """The CI figure with one part made inconsistent: the counts swapped, the delta's sign flipped, or the interval
-    moved off the delta. Which part is the card's own (stable) choice."""
-    v = dict(c["viz"])
-    opts = ["counts", "delta", "interval"]
-    if v.get("wins") == v.get("losses"):
-        opts.remove("counts")
-    if abs(v.get("delta") or 0) < 1e-9:
-        opts.remove("delta")
-    wrong = opts[_h(c["id"], "spot") % len(opts)]
+def _example(c: dict) -> dict:
+    """A paired result on a 0/1 slice at the card's own n, independent of the card's result (stable per card): fixed
+    and broken counts, the delta they give and its 90% interval (normal approximation of the paired bootstrap). Its
+    interval clears zero at an n well away from the card's, so the prototype has something to find."""
+    n = int((c.get("viz") or {}).get("n") or 100)
+    for k in range(40):
+        h = _h(c["id"], "example", k)
+        w, l = max(1, round((0.02 + (h % 997) / 997 * 0.10) * n)), round((0.01 + (h // 997 % 991) / 991 * 0.07) * n)
+        if (h >> 20) & 1:
+            w, l = l, w
+        if w == l:
+            continue
+        d = (w - l) / n
+        half = 1.645 * math.sqrt(max((w + l) / n - d * d, 1e-9) / n) * 100
+        need = n * (half / abs(100 * d)) ** 2
+        if 4 <= need and abs(math.log(need / n)) > math.log(1.6) and need < 60 * n:
+            break
+    else:
+        w, l = max(2, round(0.09 * n)), round(0.03 * n)
+        d = (w - l) / n
+        half = 1.645 * math.sqrt(max((w + l) / n - d * d, 1e-9) / n) * 100
+    return dict(kind="ci", unit="pts", better=1, example=True, n=n, wins=w, losses=l,
+                delta=round(100 * d, 2), lo=round(100 * d - half, 2), hi=round(100 * d + half, 2))
+
+
+def _spot_ci(c: dict) -> tuple[dict, str]:
+    """The example figure with one part made inconsistent: the counts swapped, the delta's sign flipped, or the
+    interval moved off the delta. Which part is the card's own (stable) choice."""
+    v = _example(c)
+    wrong = ["counts", "delta", "interval"][_h(c["id"], "spot") % 3]
     if wrong == "counts":
         v["wins"], v["losses"] = v["losses"], v["wins"]
     elif wrong == "delta":
@@ -88,22 +111,13 @@ def _spot_ci(c: dict) -> dict:
     else:
         w = (v["hi"] - v["lo"]) or 1
         shift = (w + abs(v["delta"]) + 1) * (1 if v["delta"] <= 0 else -1)
-        v["lo"], v["hi"] = v["lo"] + shift, v["hi"] + shift
+        v["lo"], v["hi"] = round(v["lo"] + shift, 2), round(v["hi"] + shift, 2)
     return dict(viz=v, parts=["counts", "delta", "interval"]), wrong
 
 
-def _spot_bars(c: dict) -> dict:
-    v = c["viz"]
-    rows = [dict(r) for r in v["rows"] if r.get("v") is not None]
-    i = _h(c["id"], "spot") % len(rows)
-    r = rows[i]
-    r["shown"] = r["v"] * (0.6 if r["v"] > 0.5 else 1.6) if not r.get("unit") else r["v"] * 1.5  # the label lies, the bar does not
-    return dict(viz=dict(v, rows=rows), parts=[str(k) for k in range(len(rows))]), str(i)
-
-
 def _proto(c: dict) -> dict:
-    v = c["viz"]
-    return dict(delta=v["delta"], lo=v["lo"], hi=v["hi"], n=v["n"], wins=v["wins"], losses=v["losses"])
+    v = _example(c)
+    return dict(delta=v["delta"], lo=v["lo"], hi=v["hi"], n=v["n"], example=True)
 
 
 def _n_needed(v: dict) -> float:
@@ -122,11 +136,12 @@ def task(c: dict, method: str) -> dict:
         top = max(abs(r["v"]) for r in v["rows"] if r.get("v") is not None) if cont else 1
         return dict(kind="bars", rows=rows, max=_nice_up(top * 1.6) if cont else 1)
     if method == "spot":
-        return (_spot_ci(c) if v.get("kind") == "ci" else _spot_bars(c))[0]
+        return _spot_ci(c)[0]
     if method == "prototype":
         return _proto(c)
     if method == "code":
-        return dict(vars=dict(fixed=v["wins"], broken=v["losses"], n=v["n"]), target="delta_pts")
+        e = _example(c)
+        return dict(vars=dict(fixed=e["wins"], broken=e["losses"], n=e["n"]), target="delta_pts", example=True)
     if method == "explain":
         return dict(ideas=[i[0] for i in _ideas(c)])
     return {}
@@ -191,16 +206,19 @@ def grade(c: dict, method: str, ans) -> dict:
         err = sum(errs) / len(errs)
         return dict(hit=err <= 0.1, err=round(err, 3), show={})
     if method == "spot":
-        wrong = (_spot_ci(c) if v.get("kind") == "ci" else _spot_bars(c))[1]
+        wrong = _spot_ci(c)[1]
         return dict(hit=str(ans) == wrong, err=None, show=dict(wrong=wrong))
     if method == "prototype":
-        need, n = _n_needed(v), _f(ans)
+        need, n = _n_needed(_example(c)), _f(ans)
         if n is None or not math.isfinite(need):
             return dict(hit=False, err=None, show=dict(need=None))
         err = abs(math.log(max(n, 1) / max(need, 1)))
         return dict(hit=err <= math.log(1.35), err=round(err, 3), show=dict(need=round(need)))
     if method == "code":
-        return _grade_code(ans, v["wins"], v["losses"], v["n"])
+        e = _example(c)
+        g = _grade_code(ans, e["wins"], e["losses"], e["n"])
+        g["show"]["card"] = round(100 * (v["wins"] - v["losses"]) / v["n"], 2)  # the same line on the card's own counts
+        return g
     if method == "explain":
         text = str(ans or "")[:1000].lower()
         got = [name for name, rx in _ideas(c) if re.search(rx, text)]
