@@ -131,7 +131,7 @@ def _gpu(rows, t0):
 
 
 def _eta_panel(eta):
-    if not eta or not eta.get("hist"):
+    if not eta or len(eta.get("hist") or []) < 2:  # one estimate is a dot, not a chart
         return None
     h0 = eta["hist"][0][1]
     return dict(id="eta", title="Finish estimate", fmt="clock", value=eta["finish_at"], drift_s=eta["drift_s"],

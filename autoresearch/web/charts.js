@@ -122,6 +122,9 @@ class Chart{
    const clk=s.xfmt==='clock'?(x1-x0<900?1:60):1;
    const xt0=mins?linTicks(x0/60,x1/60,nx):linTicks(x0/clk,x1/clk,nx),xt={ticks:xt0.ticks.map(v=>v*(mins?60:clk)),step:xt0.step*(mins?60:clk)};
    const xl=s.xfmt==='clock'?v=>clk===1?hms(v):hm(v):mins?v=>fmt(v/60,xt0.step):v=>fmt(v,xt.step);
+   // a clock never ticks below a second, and no two ticks share a label (a 1-second domain once read 22:09:27 ×4)
+   if(s.xfmt==='clock'&&xt.step<clk)xt.ticks=xt.ticks.filter(v=>Math.abs(v/clk-Math.round(v/clk))<1e-6);
+   let prevL=null;xt.ticks=xt.ticks.filter(v=>{const l=xl(v);if(l===prevL)return false;prevL=l;return true});
    for(const v of xt.ticks)o+=`<line class="base" x1="${X(v).toFixed(1)}" x2="${X(v).toFixed(1)}" y1="${H-B}" y2="${H-B+4}"/><text x="${X(v).toFixed(1)}" y="${H-B+15}" text-anchor="middle">${xl(v)}</text>`;
    if(mode==='full'){const xlab=s.xfmt==='clock'?'time':g.x==='time'||s.xfmt==='time'?'minutes since start':s.xLabel||'step';
     o+=`<text class="axl" x="${(L+W-R)/2}" y="${H-4}" text-anchor="middle">${esc(xlab)}</text>`;

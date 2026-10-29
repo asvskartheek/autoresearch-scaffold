@@ -160,7 +160,7 @@ function curves(t,d){
 }
 // the finish estimate over the run: each point is where the rate over the last 5 minutes put the finish
 function etaCard(t){
- const e=t.eta;if(!e?.hist?.length||t.status!=='running')return '';
+ const e=t.eta;if((e?.hist?.length||0)<2||t.status!=='running')return '';
  const h0=e.hist[0][1];
  return `<div class="section">${panel('Finish estimate',XC.box(`tk-${t.id}-eta`,{group:'tk-eta-'+t.id,mode:'compact',h:120,xfmt:'clock',yfmt:'dmin',smooth:false,logOk:false,zero:true,
   series:[{name:'Moved by',pts:e.hist.map(([x,f])=>[x,(f-h0)/60])}]}),{right:`<b class="tk-lv">${wbClock(e.finish_at)}</b> <span class="sub">${e.drift_s>=0?'+':'−'}${wbSpan(Math.abs(e.drift_s))} in 5 min</span>`})}</div>`;
