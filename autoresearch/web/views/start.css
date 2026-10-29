@@ -1,14 +1,14 @@
 /* start: the landing. Goal and Now side by side, then Needs you and Since, then the map; one column on a phone */
-.sx{display:grid;gap:var(--gap);grid-template-columns:minmax(0,3fr) minmax(0,2fr);grid-template-areas:"a b" "c d" "e e";align-items:start}
-.sx-a{grid-area:a}.sx-b{grid-area:b}.sx-c{grid-area:c}.sx-d{grid-area:d}.sx-e{grid-area:e}
+.sx{display:grid;gap:var(--gap);grid-template-columns:minmax(0,3fr) minmax(0,2fr);grid-template-areas:"a b" "n c" "d d" "e e";align-items:start}
+.sx-a{grid-area:a}.sx-b{grid-area:b}.sx-n{grid-area:n}.sx-c{grid-area:c}.sx-d{grid-area:d}.sx-e{grid-area:e}
 .sx>div>.card{height:100%}
-@media (max-width:900px){.sx{grid-template-columns:minmax(0,1fr);grid-template-areas:"a" "b" "c" "d" "e"}}
+@media (max-width:900px){.sx{grid-template-columns:minmax(0,1fr);grid-template-areas:"a" "c" "n" "b" "d" "e"}}
 .sx .ph h2{display:flex;align-items:center;gap:8px}
 a.sx-go{display:inline-flex;align-items:center;gap:2px;color:var(--muted)}
 a.sx-go:hover{color:var(--accent)}
 .sx-none{display:flex;align-items:center;gap:8px;color:var(--muted);padding:6px 0}
 .sx-none.ok{color:var(--positive)}
-.sx-foot{display:flex;align-items:center;gap:12px;margin-top:16px;padding-top:12px;border-top:1px solid var(--rule)}
+.sx-foot{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:16px;padding-top:12px;border-top:1px solid var(--rule)}
 .sx-axis{display:flex;justify-content:space-between;font-size:11.5px;color:var(--faint);margin-top:4px}
 
 /* (1) goals on one figure: label | rail from baseline to target | distance. The dashed line is the target for all */
@@ -19,7 +19,10 @@ a.sx-go:hover{color:var(--accent)}
 a.sx-g{display:grid;grid-template-columns:minmax(0,1fr) var(--sx-dw);grid-template-areas:"t d" "r d";align-items:center;column-gap:14px;row-gap:6px;color:var(--text);min-width:0}
 .sx-gt{grid-area:t}.sx-rail{grid-area:r}.sx-gd{grid-area:d}
 a.sx-g:hover .sx-gt{color:var(--accent)}
-.sx-gt{font-weight:500}
+.sx-gt{display:flex;align-items:baseline;gap:10px;min-width:0;font-weight:500}
+.sx-gt{padding-right:calc(100% / 6 + 4px)}
+.sx-gt .ell{flex:1;min-width:0}
+.sx-tg{flex:none;font-size:12px;font-weight:500;color:var(--chart-3)}
 .sx-g.sub .sx-gt{font-weight:400;color:var(--muted)}
 .sx-rail{position:relative;height:10px;border-radius:5px;background:var(--rule);margin:0 0 18px}
 .sx-rail.none{background:repeating-linear-gradient(90deg,var(--rule) 0 6px,transparent 6px 10px)}
@@ -28,7 +31,7 @@ a.sx-g:hover .sx-gt{color:var(--accent)}
 .sx-rail b{position:absolute;top:-3px;width:16px;height:16px;margin-left:-8px;border-radius:50%;background:var(--surface);border:3px solid var(--accent);box-sizing:border-box}
 .sx-rail.met b{border-color:var(--positive)}
 .sx-rail b span{position:absolute;top:15px;left:50%;transform:translateX(-50%);font-size:11.5px;font-weight:500;color:var(--text);white-space:nowrap}
-.sx-tline{position:absolute;top:-4px;bottom:-4px;right:calc(var(--sx-dw) + 14px);width:0;border-left:2px dashed var(--chart-3);pointer-events:none}
+.sx-tline{position:absolute;top:-4px;bottom:-4px;left:calc((100% - var(--sx-dw) - 14px) / 1.2);width:0;border-left:2px dashed var(--chart-3);pointer-events:none}
 .sx-gd{display:flex;flex-direction:column;align-items:flex-end;line-height:1.15}
 .sx-gd b{font-size:20px;font-weight:600}
 .sx-gd span{font-size:12px;color:var(--muted)}
@@ -56,7 +59,7 @@ a.sx-need{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1
 a.sx-need:first-child{padding-top:0}a.sx-need:last-child{border-bottom:0;padding-bottom:0}
 a.sx-need>svg{flex:none;color:var(--accent)}
 a.sx-need.bad>svg{color:var(--negative)}
-a.sx-need .ell{flex:1}
+a.sx-need .ell{flex:1;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.35}
 a.sx-need:hover .ell{color:var(--accent)}
 .sx-tag{flex:none;font-size:12px;padding:1px 7px;border-radius:var(--radius-chip);background:var(--pill-accent-bg);color:var(--pill-accent-ink)}
 .sx-need.bad .sx-tag{background:var(--pill-negative-bg);color:var(--pill-negative-ink)}
@@ -91,3 +94,39 @@ a.sx-pg b{grid-area:l;font-weight:500}
 .sx-strip .tk{stroke:var(--control);stroke-width:1}
 .sx-k{font-size:12px;color:var(--muted);flex:none}
 .sx-rail b.lo span{left:-3px;transform:none}.sx-rail b.hi span{left:auto;right:-3px;transform:none}
+
+/* the rail runs to 1.2x the target: past the dashed line is met with room to spare. Baseline value at its left end */
+.sx-b0{position:absolute;left:0;top:15px;font-size:11px;font-style:normal;color:var(--faint)}
+.sx-gax{position:relative}.sx-gax .sx-at{position:absolute;left:calc((100% - 0px) / 1.2);transform:translateX(-50%)}
+
+/* (3) next: one runnable step per row, its command on the copy button */
+.sx-nxs{display:flex;flex-direction:column}
+.sx-nx{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--rule);min-width:0}
+.sx-nx:first-child{padding-top:0}.sx-nx:last-child{border-bottom:0;padding-bottom:0}
+.sx-nx>a{flex:1;min-width:0;display:flex;align-items:flex-start;gap:10px;color:var(--text);line-height:1.4}
+.sx-nx>a>svg{flex:none;margin-top:2px;color:var(--accent)}
+.sx-nx.bad>a>svg{color:var(--negative)}
+.sx-nx>a:hover>span{color:var(--accent)}
+.sx-nx b{font-weight:500}
+.sx-hot .sx-need .hot,.sx-pl .hot{color:var(--accent);font-weight:600}
+
+/* (5) what changed: day bars and counts on the left, the latest events on the right; stacked on a phone */
+.sx-chg{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:24px;align-items:start}
+@media (max-width:900px){.sx-chg{grid-template-columns:minmax(0,1fr)}}
+.sx-days{display:grid;grid-template-columns:repeat(var(--nd),minmax(0,1fr));gap:4px;height:84px;align-items:end}
+.sx-day{display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0}
+.sx-dbar{display:flex;flex-direction:column-reverse;min-height:2px;border-radius:3px 3px 0 0;overflow:hidden;background:var(--rule)}
+.sx-dbar i{display:block;min-height:2px}
+.sx-day span{font-size:11px;color:var(--faint);text-align:center;margin-top:4px;height:14px;white-space:nowrap;overflow:visible}
+.sx-evs{display:flex;flex-direction:column}
+a.sx-ev{display:grid;grid-template-columns:8px minmax(0,1fr) auto;align-items:center;column-gap:10px;padding:8px 0;border-bottom:1px solid var(--rule);color:var(--text);min-width:0}
+a.sx-ev:first-child{padding-top:0}a.sx-ev:last-child{border-bottom:0}
+a.sx-ev>i{width:8px;height:8px;border-radius:50%}
+.sx-el{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+a.sx-ev:hover .sx-el{color:var(--accent)}
+.sx-ew{font-size:12px;color:var(--muted);white-space:nowrap;display:flex;align-items:center;gap:6px}
+.sx-new{font-size:11px;font-weight:600;padding:0 6px;border-radius:var(--radius-chip);background:var(--pill-accent-bg);color:var(--pill-accent-ink)}
+a.sx-tile.rej b{color:var(--muted)}
+.sx-catch{height:32px}
+@media (max-width:600px){a.sx-tile{padding:8px 10px}}
+@media (max-width:600px){.sx-gt{flex-wrap:wrap;row-gap:2px;padding-right:0}.sx-gt .ell{flex-basis:100%}}
