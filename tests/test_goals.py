@@ -55,6 +55,25 @@ class Goals(unittest.TestCase):
         self.p.add_model("later"); run(self.p, "later", [1] * 20); self.p.promote("later", force=True)
         self.assertEqual(self.p.goal_status("ninety")["model"], "better")  # evidence is frozen at achieve
 
+    def test_achievement_is_frozen_after_same_model_repeat(self):
+        self.p.open_goal("g", "G", "full", .9)
+        self.p.add_model("winner")
+        run(self.p, "winner", [1] * 19 + [0])
+        self.p.promote("winner", force=True)
+        frozen = self.p.achieve_goal("g")
+        run(self.p, "winner", [0] * 20)
+        st = self.p.goal_status("g")
+        for key in ("value", "task", "runs", "n", "vs_baseline"):
+            self.assertEqual(st[key], frozen[key], key)
+        self.assertTrue(st["met"])
+        self.assertAlmostEqual(st["gap"], -.05)
+        self.assertFalse(st["current_observation"]["met"])
+        self.assertAlmostEqual(st["current_observation"]["value"], .475)
+
+    def test_same_model_comparison_is_starting_point(self):
+        self.p.open_goal("g", "G", "full", .9)
+        self.assertEqual(self.p.goal_status("g")["comparison_state"], "same_model")
+
     def test_hills_serve_goals_and_abandon(self):
         with self.assertRaises(SystemExit):
             self.p.open_hill("h", "H", "full", goal="nope")

@@ -94,9 +94,9 @@ const conChips=g=>(g.constraints||[]).map(c=>`<span class="gl-con">${esc(c)}</sp
 const baseVal=function(g){
  if(g.vs_baseline?.base!=null)return g.vs_baseline.base;
  if(g.baseline&&g.baseline===g.model&&g.status!=='achieved')return g.value;  // the champion is still the baseline: same pooled figure
- const r=g.baseline&&(S.state.leaderboard[g.slice]||{})[g.baseline];
- const v=r?.[kpiKey(g)];return typeof v==='number'&&isFinite(v)?v:null;
+ return null; // Historical or unmatched runs must not define current relative progress.
 }
+const comparisonNote=g=>({same_model:'starting point: same model',different_harness:'no matching comparison under the current harness',missing_measurement:'champion measurement missing',missing_baseline:'baseline has no complete run on this slice',paired:'paired on identical examples'}[g.comparison_state]||(g.baseline===g.model?'starting point: same model':'no compatible paired comparison'));
 // how far along the way from the baseline to the target the champion stands. rel: 0 at the baseline, 1 at the target.
 // abs: the baseline already met the target, or it has no run, so the track is drawn on the KPI's own scale.
 const prog=function(g){
@@ -149,7 +149,7 @@ const track=function(g,{big=false}={}){
  return `<div class="gl-trk abs ${big?'big':''}">
   <div class="gl-tgt"><span style="--m:${mp}">Target <b>${cmpSym(g)}&nbsp;${gt(g)}</b></span></div>
   <div class="gl-bar ${g.met?'met':''}"><i style="width:${pc(f)}"></i><b class="tgt" style="left:${pc(m)}"></b></div>
-  <div class="gl-ends"><span>${P.b!=null?`Baseline <b>${gu(g,P.b)}</b>${big&&g.baseline?`<span class="gl-bn"> · ${mLink(g.baseline)}</span>`:''}${sgn(g)*(P.b-P.t)>=0?', already past the target':''}`:'Baseline not run on this slice'}</span><span>${byN(g)?N(g.n):''}</span></div></div>`;
+  <div class="gl-ends"><span>${P.b!=null?`Baseline <b>${gu(g,P.b)}</b>${big&&g.baseline?`<span class="gl-bn"> · ${mLink(g.baseline)}</span>`:''}${sgn(g)*(P.b-P.t)>=0?', already past the target':''}`:esc(comparisonNote(g))}</span><span>${byN(g)?N(g.n):''}</span></div></div>`;
 }
 // "62% of the way", "met", "behind the baseline"
 const gapFig=function(g){
@@ -157,14 +157,14 @@ const gapFig=function(g){
  if(!d)return {v:DASH,s:'no run yet'};
  return d;
 }
-const gainFig=g=>gained(g)||{v:DASH,s:g.baseline?'baseline not run on this slice':'no baseline'};
+const gainFig=g=>gained(g)||{v:DASH,s:g.baseline?comparisonNote(g):'no baseline'};
 const vsFig=function(g){
  const v=g.vs_baseline,P=prog(g);
  if(v&&v.delta!=null)return {v:gchg(g,v.delta),s:`${byN(g)?`of ${N(g.n)} · `:''}${gci(g,v.lo,v.hi)}`,wl:`better on ${v.wins}, worse on ${v.losses}`};
  if(g.value==null)return {v:DASH,s:'no run yet'};
  if(g.baseline&&g.model&&g.baseline===g.model)return {v:'<span class="faint">0</span>',s:'the champion is still the baseline'};
  if(P.b!=null&&g.value!=null)return {v:gchg(g,g.value-P.b,false),s:'latest runs, unpaired'};
- return {v:DASH,s:g.baseline?'baseline not run on this slice':'no baseline'};
+ return {v:DASH,s:g.baseline?comparisonNote(g):'no baseline'};
 }
 const paperBtn=g=>(g.model?`<a class="btn" href="reference/${enc(g.model)}">Model paper</a>`:'')+(g=>{const p=goalPaper(g.name);return p?`<a class="btn" href="${paperUrl(p)}">${ICON.papers}${g.status==='open'?'Draft paper':'Paper'}${p.waiting?`<span class="gl-wait">${p.waiting}</span>`:''}</a>`:''})(g);
 
@@ -255,8 +255,13 @@ VIEWS.goal=name=>{
  if(g.slice_changed)h+=`<div class="banner">The slice ${esc(g.slice)} changed since this goal opened, so it cannot be achieved. Open a new goal on the new slice.</div>`;
  if(g.problem)h+=`<p class="gl-lede">${esc(g.problem)}</p>`;
  if(g.constraints?.length)h+=`<p class="gl-cons">${conChips(g)}</p>`;
- h+=`<div class="stack">${hero(g)}${family(g)}${chart(g)}<div class="gl-two">${hillsPanel(g)}${g.status==='open'?nextPanel(g):record(g)}</div></div>`;
+ h+=`<div class="stack">${hero(g)}${laterEvidence(g)}${family(g)}${chart(g)}<div class="gl-two">${hillsPanel(g)}${g.status==='open'?nextPanel(g):record(g)}</div></div>`;
  return h;
+};
+const laterEvidence=g=>{
+ const c=g.current_observation;
+ if(!c||(c.task===g.task&&c.runs===g.runs))return '';
+ return panel('Later observations',`<p>${mLink(c.model)} now pools ${gu(g,c.value)}${ofP(g)} across ${N(c.runs)} runs. ${c.met?'This pooled measurement meets':'This pooled measurement does not meet'} the target. The achievement above retains its recorded evidence.</p>${c.task?`<a class="ln" href="#task/${enc(c.task)}">Latest observed run</a>`:''}`);
 };
 const hero=function(g){
  const gap=gapFig(g),vs=vsFig(g),gn=gainFig(g),ev=g.evidence;
@@ -266,7 +271,7 @@ const hero=function(g){
  const strip=kpis([
   ['Since baseline',gn.v,gn.s],
   ['vs baseline',vs.v,vs.s],
-  ['Paired on',g.vs_baseline?.n?N(g.vs_baseline.n):DASH,g.vs_baseline?.n?`questions; ${vs.wl}`:'needs a baseline run'],
+  ['Paired on',g.vs_baseline?.n?N(g.vs_baseline.n):DASH,g.vs_baseline?.n?`questions; ${vs.wl}`:comparisonNote(g)],
   ['Hills',String(goalHills(g).length),goalHills(g).length?hillSum(g):'none serve it yet'],
  ]);
  return panel('Progress',head+track(g,{big:true})+`<div class="gl-strip">${strip}</div>`,{meta:`${kpiPre(g)}${cmpSym(g)} ${gt(g)}${byN(g)?` of ${N(g.n)}`:''} on ${sLink(g.slice)}`,cls:'gl-prog'});
@@ -348,18 +353,23 @@ const nextPanel=function(g){
  const L=S.state,items=[],hs=goalHills(g).map(([k])=>k),ch=L.champion;
  if(g.slice_changed)items.push([`The slice changed; open a new goal on it.`,`arx goal open <name> --title "${g.title}" --slice ${g.slice} --target ${g.target}`]);
  else if(g.met)items.push([`The champion meets the target. Record it; the paper reports the paired delta.`,`arx goal achieve ${g.name}`]);
- else if(g.value==null&&g.model)items.push([`The champion needs a run on ${esc(short(g.slice))}.`,`arx gate ${g.model}`]);
+ else if(g.value==null&&g.model)items.push([`The champion needs a run on ${esc(short(g.slice))}.`,goalMeasureCmd(g)]);
  if(!g.met&&!g.slice_changed){
   // the candidates nearest the goal first (most rungs passed), never one the champion already supersedes
   const passed=m=>(L.gates?.[m]?.rungs||[]).filter(r=>r.status==='pass').length;
   const cands=Object.entries(L.models).filter(([m,o])=>hs.includes(o.hill)&&m!==ch&&(o.status==='candidate'||o.status==='planned')&&!superseded(m))
-   .map(([m,o])=>({m,o,next:L.gates?.[m]?.next||[]})).filter(c=>c.next.length).sort((a,b)=>passed(b.m)-passed(a.m)||(b.o.created||0)-(a.o.created||0));
+   .map(([m,o])=>({m,o,next:L.gates?.[m]?.next||[]})).sort((a,b)=>passed(b.m)-passed(a.m)||(b.o.created||0)-(a.o.created||0));
   // a next run already in progress: what it covers and its live chip, in place of a command
   const ms=a=>a.map(n=>`<span class="mono">${esc(short(n.slice))}</span>`).join(', ');
   const rung=m=>(L.gates?.[m]?.rungs||[]).find(r=>r.status==='pending')?.rung;
-  for(const c of cands.slice(0,3)){const run=c.next.find(runTask),rest=c.next.filter(n=>!runTask(n));
+  for(const c of cands.slice(0,3)){
+   const gate=L.gates?.[c.m];
+   if(gate?.promotable){items.push([`${mLink(c.m)} passed every rung and is ready for promotion review.`,`arx promote ${c.m}`]);continue}
+   if(gate?.rungs?.some(r=>r.status==='fail')){items.push([`${mLink(c.m)} failed a gate check. Inspect its comparison before closing or revising it.`,`arx gate ${c.m}`]);continue}
+   if(!c.next.length){items.push([`${mLink(c.m)} is registered; inspect its gate and declared change.`,`arx gate ${c.m}`]);continue}
+   const run=c.next.find(runTask),rest=c.next.filter(n=>!runTask(n));
    // a run the gate still counts as started, whose task went silent for over a day: dead, so it is run again
-   const dead=!run&&c.next.find(n=>n.running);
+   const dead=c.next.find(n=>n.running&&byId(n.running)?.status==='stalled');
    const dt=dead&&byId(dead.running),at=rung(c.m)?` (${esc(rung(c.m))} rung)`:'';
    items.push(dead?[`${mLink(c.m)}${at}: its run on <span class="mono">${esc(short(dead.slice))}</span> went silent${dt?` ${ago(dt.heartbeat||dt.updated||dt.created)}`:''}${dt?.progress?.total?` at <a class="ln" href="#task/${enc(dt.id)}">${N(dt.progress.done||0)} of ${N(dt.progress.total)}</a>`:''}. Fail it, then run it again.`,dt?`arx task finish ${dt.id} --status failed`:`arx gate ${c.m}`]
     :run?[`${mLink(c.m)} on ${hLink(c.o.hill)} is running on <span class="mono">${esc(short(runTask(run).slice||run.slice))}</span>${rest.length?`, then needs ${rest.map(n=>(n.model!==c.m?'champion on ':'')+ms([n])).join(', ')}`:''}.`,null,runChip(run)]

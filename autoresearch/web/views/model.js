@@ -3,6 +3,7 @@
 // verdict in plain words; then the next runs as copyable commands, the gate per rung and check, and the model's tasks.
 // Everything sits in one block so no helper leaks into the global scope.
 {
+const errors=c=>(c.base_errors||0)+(c.cand_errors||0);
 const STATE={pass:['pass','Passed'],fail:['fail','Failed'],need_run:['ghost','Not run yet'],need_baseline:['warn','Champion not run'],champion:['champion','Champion'],no_champion:['ghost','No champion'],needs_review:['warn','Needs review'],rejected:['rejected','Rejected'],historical:['ghost','Historical'],planned:['ghost','Planned']};
 const statePill=s=>{const [c,l]=STATE[s]||['',String(s||'').replace(/_/g,' ')];return pill(l,c)};
 // the real CLI: rows from any harness are recorded with `arx eval record`, then `arx gate` re-reads the ladder
@@ -75,6 +76,7 @@ function verdict(name,m,g){
  if(g.promotable)return {text:`Ready to promote: it passed every rung against ${mlink(g.champion)}.${tail}`,cls:'pos',ready:true};
  const fail=g.rungs.find(r=>r.status==='fail');
  if(fail){const c=fail.checks.find(c=>c.state==='fail');
+  if(c&&isCont(c.slice)&&errors(c))return {text:`Gate failed under the configured rule. Inspect the evidence before a performance conclusion: this comparison includes ${c.base_errors||0} champion errors and ${c.cand_errors||0} candidate errors. Errors retain the existing score policy.`,cls:'warn',evidenceReview:true};
   return {text:`Cannot be promoted: it failed the ${esc(fail.rung)} rung${c?`, ${vsWords(c.slice,c.delta)} the champion on ${esc(short(c.slice))} (n ${c.n}) where the rule is “${(r=>r[0].toLowerCase()+r.slice(1))(rule(c))}”`:''}.${passed.length?` It had passed ${list(passed)}.`:''}`,cls:'neg',failed:true};}
  // in progress: the ladder itself is the verdict; one chip says who runs what next (people skip the sentence)
  // a next run already in progress shows as one live chip per task (a union pass covers several slices); the Next chip
@@ -86,7 +88,7 @@ function verdict(name,m,g){
  return {text:`<span class="md-vz">${ladder(g)}${rn}${nx}${noisy.length?pill('Noisy on '+noisy.map(x=>x).join(', '),'noisy'):''}</span>`,viz:true};
 }
 
-function gateTable(name,g,base='Champion'){
+function gateTable(name,g,base='Matched champion'){
  const L=S.state,rows=[];
  // the next run behind a check that has not run yet, when it is already in progress
  const live=c=>(g.next||[]).find(n=>n.slice===c.slice&&(c.state==='need_run'?n.model===name:n.model!==name)&&runTask(n));
@@ -95,10 +97,11 @@ function gateTable(name,g,base='Champion'){
   if(!r.checks.length){rows.push(`<tr class="md-locked">${head}<td colspan="8" class="sub">${r.status==='locked'?'Opens once the rung above passes':'No checks on this rung'}</td></tr>`);continue}
   r.checks.forEach((c,i)=>{
    const n=c.n??L.slices[c.slice]?.n,ran=c.delta!=null;
+   const errorNote=errors(c)?` · ${c.cand_errors||0} candidate / ${c.base_errors||0} champion errors (existing scoring policy)`:'';
    const pooled=c.cand_runs>1||c.base_runs>1?` · runs ${c.cand_runs??1} / ${c.base_runs??1}`:'';
-   const go=c.cand_task?`onclick="if(!event.target.closest('a,button'))location.hash='task/${enc(c.cand_task)}'"`:'';
+   const go=c.cand_task?`onclick="if(!event.target.closest('a,button,details'))location.hash='task/${enc(c.cand_task)}'"`:'';
    rows.push(`<tr class="${c.cand_task?'click':''} ${i===r.checks.length-1?'':'md-in'}" ${go}>${i?'':head}
-    <td class="${i?"md-c1":""}"><div class="two"><a class="mono md-sl ln" href="#slices/${enc(c.slice)}">${slw(c.slice)}</a><span class="sub" ${pooled?'title="Complete runs pooled per example: this model / champion"':''}>${n!=null?'n '+n.toLocaleString():'n —'}${pooled}${bin(c.slice)?'':' · mean'}</span></div></td>
+    <td class="${i?"md-c1":""}"><div class="two"><a class="mono md-sl ln" href="#slices/${enc(c.slice)}">${slw(c.slice)}</a><span class="sub" ${pooled?'title="Complete runs pooled per example: this model / champion"':''}>${n!=null?'n '+n.toLocaleString():'n —'}${pooled}${bin(c.slice)?'':' · mean'}${errorNote}</span><details class="md-mobile-evidence"><summary>Rule and compared values</summary><div>${rule(c)}</div><div>This model: ${score(c.cand,c.slice,c.n)}</div><div>Matched champion: ${score(c.base,c.slice,c.n)}</div>${c.base_task?`<a href="#task/${enc(c.base_task)}">Champion run / setup</a>`:''}</details></div></td>
     <td class="sub md-rule md-hm">${rule(c)}</td>
     <td class="num md-hs">${ran?(c.cand_task?`<a href="#task/${enc(c.cand_task)}">${score(c.cand,c.slice,c.n)}</a>`:score(c.cand,c.slice,c.n)):DASH}</td>
     <td class="num md-hs">${ran?(c.base_task?`<a href="#task/${enc(c.base_task)}">${score(c.base,c.slice,c.n)}</a>`:score(c.base,c.slice,c.n)):DASH}</td>
@@ -153,6 +156,7 @@ function nxRows(name,nx){
  const who=n=>n.model!==name?'Champion baseline on':'This model on',sl=a=>a.map(n=>esc(short(n.slice))).join(', ');
  const by=new Map();for(const n of nx){const t=runTask(n);if(t)by.set(t.id,[...(by.get(t.id)||[]),n])}
  return [...by.values()].map(a=>`<div class="md-next"><span class="md-lead">${who(a[0])} ${sl(a)}</span>${runChip(a[0])}</div>`).join('')
+  +nx.filter(n=>runTask(n)?.status==='stalled').map(n=>nextRow('Close the stalled attempt, then rerun the same measurement',`arx task finish ${runTask(n).id} --status failed`)).join('')
   +nx.filter(n=>!runTask(n)).map(n=>nextRow(`${who(n)} ${sl([n])}`,runCmd(n))).join('');
 }
 
@@ -188,9 +192,10 @@ VIEWS.model=(name)=>{
   const body=v.ready?nextRow('Every rung passed',`arx promote ${name}`)
    :nx.length?nxRows(name,nx)+nextRow('Then re-check the ladder',`arx gate ${name}`)
    :v.nochamp?nextRow('Make a baseline champion',champCmd(name))+nextRow('Then re-check the ladder',`arx gate ${name}`)
+   :v.evidenceReview?nextRow('Inspect comparison errors and rerun the affected measurement',`arx gate ${name}`)
    :v.failed?nextRow('Record the failure',`arx reject ${name} --reason "failed ${g.rungs.find(r=>r.status==='fail').rung}"`)
    :empty('Nothing to run',`<code>arx gate ${esc(name)}</code> re-reads the ladder`);
-  h.push(panel(v.ready?'Promote':v.failed?'Close it out':v.nochamp?'Next':'Next runs',body,{meta:nx.length?plural(nx.length,'run')+' before the next rung opens'+(nx.some(runTask)?` · ${nx.filter(runTask).length} running`:''):'',cls:'section md-np'}));
+  h.push(panel(v.ready?'Promote':v.failed?'Close it out':v.nochamp?'Next':'Next runs',body,{meta:nx.length?plural(nx.length,'run')+' before the next rung opens'+(nx.some(runTask)?` · ${nx.filter(runTask).length} started`:''):'',cls:'section md-np'}));
   h.push(panel(term('gate','Gate'),gateTable(name,g),{meta:g.champion?`paired against ${mlink(g.champion)} on the same examples`:'no champion to pair against yet',cls:'section flush md-gp'}));
  }else if(m.status==='champion'&&g&&!g.error){
   h.push(promotion(name,m));

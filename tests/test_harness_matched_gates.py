@@ -58,6 +58,14 @@ class HarnessMatchedGates(unittest.TestCase):
         self.assertIsNone(learn._pair(self.p, "cand", "base", "d/full", 1))
         self.assertIsNone(reference._paired(reference._Index(self.p), "cand", "base", "d/full", 1))
 
+    def test_errors_are_exposed_without_altering_gate_policy(self):
+        self.runs[0]['summary'] = {'errors': 2}
+        check = self.p.gate('cand')['rungs'][0]['checks'][0]
+        self.assertEqual(check['base_errors'], 2)
+        self.assertEqual(check['cand_errors'], 0)
+        self.assertEqual(check['delta'], .25)
+        self.assertEqual(check['state'], 'pass')
+
     def test_legacy_runs_keep_existing_latest_behavior(self):
         self.runs[-1]['config']={};g=self.p.gate('cand')
         self.assertFalse(g['promotable']);self.assertEqual(g['rungs'][0]['checks'][0]['base_task'],'new')

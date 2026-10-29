@@ -107,18 +107,18 @@ function nextSteps(){
   out.push({h:g?`#goal/${enc(g.name)}`:'#models',t:`Name a ${term('champion')}: register the model to beat${g?` and run it on <b>${esc(short(g.slice))}</b>`:''}`,c:'arx model add <name> --champion'});
  }
  for(const g of goals)if(g.value==null&&st.champion)
-  out.push({h:`#goal/${enc(g.name)}`,t:`Measure the goal: run ${mn(st.champion)} on <b>${esc(short(g.slice))}</b>`,c:`arx gate ${st.champion}`});
+  out.push({h:`#goal/${enc(g.name)}`,t:`Measure the goal: run ${mn(st.champion)} on <b>${esc(g.slice)}</b>${st.config.baseline_cmd?'':' — no harness configured; record its output rows'}`,c:goalMeasureCmd(g)});
  // candidates nearest promotion first: most rungs passed
  const cands=Object.entries(gates).filter(([m,g])=>st.models[m]?.status==='candidate'&&!g.error)
   .map(([m,g])=>[m,g,(g.rungs||[]).filter(r=>r.status==='pass').length]).sort((a,b)=>b[2]-a[2]);
  for(const [m] of cands.filter(([,g])=>g.promotable))
-  out.push({h:`#model/${enc(m)}`,t:`Promote ${mn(m)}: it cleared every ${term('rung')} of the ${term('gate')}`,c:`arx promote ${m}`});
+  out.push({h:`#model/${enc(m)}`,t:`Promote ${distinctModel(m)}: it cleared every ${term('rung')} of the ${term('gate')}`,c:`arx promote ${m}`});
  for(const [m,g] of cands){
   const nx=(g.next||[]).filter(n=>n.model===m);if(!nx.length)continue;
   const n=nx.find(n=>!n.running)||nx[0],rt=n.running&&byId(n.running),r=rungOf(g,n.slice);
   const sn=short(n.slice),where=`<b>${esc(sn)}</b>${r&&r!==sn?` (${esc(r)} ${term('rung')})`:r?' '+term('rung'):''}`;
-  if(rt&&rt.status==='stalled')out.push({h:`#task/${enc(rt.id)}`,t:`Rerun ${mn(m)} on ${where}: its run went silent ${span(quietFor(rt))} ago`,c:`arx gate ${m}`,bad:1});
-  else if(!n.running)out.push({h:`#model/${enc(m)}`,t:`Run ${term('candidate')} ${mn(m)} on ${where}`,c:`arx gate ${m}`});
+  if(rt&&rt.status==='stalled')out.push({h:`#task/${enc(rt.id)}`,t:`Rerun ${distinctModel(m)} on ${where}: its run went silent ${span(quietFor(rt))} ago`,c:`arx gate ${m}`,bad:1});
+  else if(!n.running)out.push({h:`#model/${enc(m)}`,t:`Run ${term('candidate')} ${distinctModel(m)} on ${where}`,c:`arx gate ${m}`});
  }
  return out;
 }
@@ -157,7 +157,7 @@ function needsBlock(){
   group(failed,t=>t.status==='budget'?'out of time':'failed',n=>`${n} jobs failed since ${since&&since<=t0+1?'you looked':stamp(t0).split(',')[0]}`,'failed','#archive');
  }
  for(const g of Object.values(st.goals||{}))if(g.status==='open'&&g.value==null)
-  items.push(['bad',`#goal/${enc(g.name)}`,ICON.goals,`${esc(g.title||g.name)}: never measured`,'not run']);
+  items.push(['bad',`#goal/${enc(g.name)}`,ICON.goals,`${esc(g.title||g.name)}: ${mn(g.model||st.champion)} has no complete measurement`,'champion unmeasured']);
  const body=items.length?`<div class="sx-needs">${items.map(([k,h,ic,txt,tag])=>`<a class="sx-need ${k}" href="${h}" data-item>${ic}<span class="ell">${txt}</span><span class="sx-tag">${tag}</span></a>`).join('')}</div>`
   :loading?`<div class="sx-none">Checking…</div>`:`<div class="sx-none ok">${OKI}Nothing waits on you</div>`;
  return panel('Needs you',body,{meta:loading?'…':items.length?String(items.length):'',cls:items.length?'sx-hot':''});

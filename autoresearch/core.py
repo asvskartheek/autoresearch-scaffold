@@ -287,13 +287,34 @@ class Project:
         if kpi == "score" and model and g.get("baseline") and g["baseline"] != model and self.latest_eval(g["baseline"], sl):
             vs = paired(self.pooled_scores(model, sl), self.pooled_scores(g["baseline"], sl, reference_model=model), sign)
         hills = {k: h.get("status") for k, h in self.hills().items() if h.get("goal") == name}
-        return dict(g, name=name, model=model, value=value, task=ev["id"] if ev else None,
+        status = dict(g, name=name, model=model, value=value, task=ev["id"] if ev else None,
                     runs=len(self.score_runs(model, sl)) if model else 0,
                     met=value is not None and sign * (value - g["target"]) >= 0,
                     gap=None if value is None else sign * (g["target"] - value), vs_baseline=vs, hills=hills,
                     slice_changed=bool(cur and g.get("slice_hash") and cur != g["slice_hash"]),
                     # how the slice's score reads: 0/1 per example (counts of n) or a continuous amount in `unit`
                     scale=slr.get("scale") or "binary", unit=slr.get("unit"), metric=slr.get("metric"))
+
+        if g.get("status") == "achieved" and g.get("evidence"):
+            frozen = g["evidence"]
+            status["current_observation"] = {key: status[key] for key in
+                                             ("model", "value", "task", "runs", "met", "gap", "vs_baseline")}
+            for key in ("model", "value", "task", "runs", "n", "vs_baseline"):
+                status[key] = frozen.get(key)
+            value = frozen.get("value")
+            status["met"] = value is not None and sign * (value - g["target"]) >= 0
+            status["gap"] = None if value is None else sign * (g["target"] - value)
+        if status.get("model") == g.get("baseline"):
+            status["comparison_state"] = "same_model"
+        elif status.get("vs_baseline", None) and status["vs_baseline"].get("n"):
+            status["comparison_state"] = "paired"
+        elif not self.latest_eval(g.get("baseline"), sl):
+            status["comparison_state"] = "missing_baseline"
+        elif value is None:
+            status["comparison_state"] = "missing_measurement"
+        else:
+            status["comparison_state"] = "different_harness"
+        return status
 
     def achieve_goal(self, name, force=False, note=None) -> dict:
         st = self.goal_status(name)
@@ -484,7 +505,9 @@ class Project:
                         ok = p["delta"] is not None and (p["delta"] > c["threshold"] if chk["rule"] == "better" else p["delta"] >= c["threshold"])
                         c |= dict(state="pass" if ok else "fail", noisy=p["lo"] is not None and p["lo"] < 0 < p["hi"],
                                   cand_task=ce["id"], base_task=be["id"],
-                                  cand_runs=len(cand_runs), base_runs=len(base_runs), **p)
+                                  cand_runs=len(cand_runs), base_runs=len(base_runs),
+                                  cand_errors=sum(t.get("summary", {}).get("errors", 0) for t in cand_runs),
+                                  base_errors=sum(t.get("summary", {}).get("errors", 0) for t in base_runs), **p)
                     checks.append(c)
             states = {c["state"] for c in checks}
             if blocked:

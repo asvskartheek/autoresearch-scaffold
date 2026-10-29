@@ -62,9 +62,9 @@ function hPair(x,runs){
  return {sub:bestAttempt(x,runs),ref:now,refFound:false};
 }
 // signed count / value change vs a reference, coloured good or bad; time reads as seconds faster (−) or slower (+)
-function hDelta(r,base,U,sl){
+function hDelta(r,base,U,sl,model){
  if(!r||!base)return DASH;
- if(boardHarnessMismatch(r,base))return '<span class="faint">Different harness</span>';
+ if(boardHarnessMismatch(r,base))return `<span class="faint">Different harness</span>${model?` · <a class="ln" href="#model/${enc(model)}">Inspect matched gate</a>`:''}`;
  if(isRate(r,sl)&&isRate(base,sl)){const k=solved(r)-solved(base);return k===0?'<span class="faint">0</span>':`<span class="${better(k,0)?'pos':'neg'}">${k>0?'+':'−'}${Math.abs(k)}</span>`}
  const d=r.score-base.score;if(Math.abs(d)<1e-9)return '<span class="faint">0</span>';
  return `<span class="${better(d,0)?'pos':'neg'}">${cDelta(d,sl,U)}</span>`;
@@ -255,9 +255,9 @@ function hAttempts(x,runs,U){
   return `<tr class="click${mod.status==='rejected'?' rej':''}" onclick="location.hash='#model/${enc(o.m)}'"><td class="hm"><div class="two"><a href="#model/${enc(o.m)}" title="${esc(o.m)}"><b>${mn(o.m)}</b></a>${mod.change?`<span class="sub ell" title="${esc(mod.change)}">${esc(mod.change)}</span>`:''}${mod.status==='rejected'&&mod.reason?`<span class="sub ell hrej" title="${esc(mod.reason)}">${esc(firstLine(mod.reason))}</span>`:''}</div></td>
    <td class="htg">${tag}</td>
    <td class="num fig">${run(o.r,pFig(o.r,U,sl,T,o.m))}</td><td class="hbar">${isRate(o.r,sl)?meter(o.r.score,{mark:!me&&now&&!boardHarnessMismatch(o.r,now.r)&&isRate(now.r,sl)?now.r.score:null,cls:me?'muted':''}):''}</td>
-   ${now?`<td class="num fig hdl">${me?DASH:(p=>p?pairCell(p,x.target):hDelta(o.r,now.r,U,sl))(hPaired(o.m,x.target,T?.runs?.[o.m],cr))}</td>`:''}
+   ${now?`<td class="num fig hdl">${me?DASH:(p=>p?pairCell(p,x.target):hDelta(o.r,now.r,U,sl,o.m))(hPaired(o.m,x.target,T?.runs?.[o.m],cr))}</td>`:''}
    ${cr?`<td class="num fig hfl">${fl?`<span class="${fl.f?'pos':'faint'}">+${fl.f}</span><span class="faint"> / </span><span class="${fl.k?'neg':'faint'}">−${fl.k}</span>`:DASH}</td>`:''}
-   ${ctl?`<td class="num fig">${o.c?run(o.c,pFig(o.c,false,ctl,D?.control,o.m)):'<span class="faint">not run</span>'}</td>${now?`<td class="num fig hdc">${me||!o.c?DASH:(p=>p?pairCell(p,x.control):hDelta(o.c,now.c,false,ctl))(hPaired(o.m,x.control,D?.control?.runs?.[o.m],D?.control?.runs?.[ch]))}</td>`:''}`:''}</tr>`});
+   ${ctl?`<td class="num fig">${o.c?run(o.c,pFig(o.c,false,ctl,D?.control,o.m)):'<span class="faint">not run</span>'}</td>${now?`<td class="num fig hdc">${me||!o.c?DASH:(p=>p?pairCell(p,x.control):hDelta(o.c,now.c,false,ctl,o.m))(hPaired(o.m,x.control,D?.control?.runs?.[o.m],D?.control?.runs?.[ch]))}</td>`:''}`:''}</tr>`});
  const head=[['Model'],[''],[isRate(runs[0].r,sl)?'Solved':isTime(sl,U)?'Mean time':'Mean','num'],['']];
  if(now)head.push([`${term('paired-delta','Δ')} vs ${term('champion')}`,'num hdl']);
  if(cr)head.push(bin?['<span title="Examples the champion got wrong and this got right / right and this got wrong">Fixed / broke</span>','num hfl']

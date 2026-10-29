@@ -1,3 +1,11 @@
+// A concrete measurement command names the requested slice, even outside the gate ladder.
+const goalMeasureCmd=g=>{
+ const quote=x=>"'"+String(x).replaceAll("'", "'\"'\"'")+"'";
+ const template=S.state.config.baseline_cmd;
+ return template?template.replaceAll('{model}',quote(g.model||S.state.champion)).replaceAll('{slice}',quote(g.slice)):
+ `arx eval record --model ${quote(g.model||S.state.champion)} --slice ${quote(g.slice)} --rows <rows.jsonl>`;
+};
+const distinctModel=k=>{const title=S.state.models[k]?.title;return mn(k)+(title&&Object.values(S.state.models).filter(m=>m.title===title).length>1?` <span class="sub">(${esc(k)})</span>`:'')};
 'use strict';
 /* overview: where the research stands, at a glance: the goals as distance to target, the ladder, what runs, the board */
 const boardHarnessMismatch=(a,b)=>a?.baseline_contract!=null&&b?.baseline_contract!=null&&JSON.stringify(a.baseline_contract)!==JSON.stringify(b.baseline_contract);
@@ -14,8 +22,8 @@ const ovDelta=(d,sl)=>d==null?'—':ovBin(sl)?pts(d):(d>0?'+':d<0?'−':'')+esc(
 const ovRunning=(m,s)=>active().some(t=>t.kind==='eval'&&t.model===m&&t.slice===s);
 // a gate's next run that is already running (the server sets n.running to its task): the live task, and a chip with
 // its progress that links to it. Shared by the model, hill and goal views, which load after this file.
-// A task silent for over a day is dead, so it does not count as running.
-const runTask=n=>{if(!n?.running)return null;const t=S.state.tasks.find(t=>t.id===n.running)||{id:n.running};return t.status==='stalled'&&now()-(t.heartbeat||t.updated||t.created)>86400?null:t};
+// Keep stalled attempts visible; their unfinished scope requires recovery.
+const runTask=n=>{if(!n?.running)return null;const t=S.state.tasks.find(t=>t.id===n.running)||{id:n.running};return t};
 const runChip=n=>{const t=runTask(n);if(!t)return '';const pr=t.progress||{},sl=t.status==='stalled';
  return `<a class="runchip" href="#task/${enc(t.id)}" onclick="event.stopPropagation()" title="${esc(t.title||'Open the running task')}"><span class="st ${sl?'stalled':'running'}">${sl?'silent '+span(now()-(t.heartbeat||t.updated||t.created)):'running'}</span>${pr.total?`<span class="num">${ovN(pr.done)}<span class="faint"> / ${ovN(pr.total)}</span></span>`:''}</a>`};
 // a candidate the champion was built on (in its lineage), or whose every +-part the champion already carries
