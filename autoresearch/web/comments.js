@@ -304,7 +304,7 @@ function thread(id){const c=all.find(t=>t.id===id);if(!c)return;
  const seenBy=P?P.seenFaces(Object.fromEntries(Object.entries(c.seen||{}).filter(([k,t])=>t>=c.last_t)),myId()):'';
  const ag=stranded(c)?`<div class="cm-m"><div class="cm-who">Agent</div><div class="cm-msg cm-idle">No agent running · <code>arx answer</code></div></div>`:working(c)?`<div class="cm-m"><div class="cm-who">Agent</div><div class="cm-msg agent cm-busy"><span class="cm-dot"></span>${h(c.agent.note||(c.agent.status==='queued'?'Queued':'Working'))}${c.agent.task?` <a href="#task/${encodeURIComponent(c.agent.task)}">task</a>`:''}</div></div>`:'';
  p.innerHTML=`<div class="cm-anchor">${mine().indexOf(c)+1} · ${h(anchorText(c.anchor||{}))}</div><div class="cm-msgs">${c.messages.map(msg).join('')}${ag}</div>${seenBy?`<div class="cm-seen" title="Read the latest message">Seen ${seenBy}</div>`:''}
- <textarea placeholder="Reply"></textarea><div class="cm-row">${nameField()}<button class="cm-sm rs">${c.resolved?'Reopen':'Resolve'}</button><button class="cm-sm pri go">Reply</button></div>`;
+ <textarea placeholder="Reply"></textarea><div class="cm-row">${nameField()}<button class="cm-sm ln" title="Copy a link to this thread">Link</button><button class="cm-sm rs">${c.resolved?'Reopen':'Resolve'}</button><button class="cm-sm pri go">Reply</button></div>`;
  if(p.querySelector('.cm-fig'))p.classList.add('wide');pops.append(p);fitFigs(p);const [x,y]=pos(c)||[innerWidth-360,innerHeight-120];place(p,x,y);const ta=p.querySelector('textarea');ta.value=draft;
  const ms=p.querySelector('.cm-msgs');ms.scrollTop=ms.scrollHeight;P&&P.complete(ta);
  if(myId()&&unread(c)){c.seen={...(c.seen||{}),[myId()]:c.last_t};post({kind:'seen',parent:id})}  // you read it as it stands
@@ -312,6 +312,10 @@ function thread(id){const c=all.find(t=>t.id===id);if(!c)return;
   const ev=await post({kind:'reply',parent:id,body,author:takeName(p)});if(!ev)return p.isConnected&&failed(p);
   if(p.isConnected&&open===id){ta.value='';thread(id)}};
  p.querySelector('.go').onclick=send;
+ p.querySelector('.ln').onclick=async e=>{const b=e.currentTarget;let base=location.origin+location.pathname;
+  try{const d=await (await fetch('api/share',{cache:'no-store'})).json();if(d.link)base=d.link}catch(_){}
+  const url=base+(base.includes('?')?'&':'?')+'c='+encodeURIComponent(id)+'#'+c.route;
+  try{await navigator.clipboard.writeText(url);b.textContent='Copied'}catch(_){prompt('Link',url)}setTimeout(()=>{b.textContent='Link'},1500)};
  p.querySelector('.rs').onclick=async()=>{if(p.dataset.busy)return;busy(p,true,'Reply');const ev=await post({kind:c.resolved?'reopen':'resolve',parent:id,author:me()||'you'});
   if(!ev)return p.isConnected&&failed(p);if(p.isConnected&&open===id)closePop()};
  p.querySelectorAll('textarea,input').forEach(f=>f.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))send();if(e.key==='Escape')closePop()})}
@@ -330,5 +334,8 @@ document.body.append(host);
 addEventListener('scroll',drawPins,{passive:true,capture:true});addEventListener('resize',drawPins);
 addEventListener('hashchange',()=>{closePop();setMode(false);chip.style.display='none';setTimeout(()=>{drawPins();drawList()},0)});
 (S.afterRender=S.afterRender||[]).push(drawPins);
-setInterval(()=>{if(!draw&&mine().length)drawPins()},1000);setInterval(()=>{if(!document.hidden)load()},4000);load();
+setInterval(()=>{if(!draw&&mine().length)drawPins()},1000);setInterval(()=>{if(!document.hidden)load()},4000);
+// a shared thread link (?c=<id>): open that thread once the comments are in, then drop it from the address
+const c0=new URLSearchParams(location.search).get('c');
+load().then(()=>{if(c0&&all.some(t=>t.id===c0)){history.replaceState(null,'',location.pathname+location.hash);setTimeout(()=>thread(c0),600)}});
 })();
