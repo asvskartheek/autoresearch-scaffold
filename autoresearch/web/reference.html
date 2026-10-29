@@ -344,7 +344,7 @@ const champGoal = gPick.map(f => D.goals.find(g => g.model === CH && f(g))).find
 $("#app").innerHTML = `
 <div class="bar"><div class="in">
   <div class="crumb">${esc(D.project.name || "project")} · paper · <b>${mn(CH)}</b></div>
-  <button class="tb" id="bLink" title="Copy a link to the section in view">${ICON.link}<span>Copy link</span></button>
+  <button class="tb" id="bLink" title="Copy a link to the section in view" ${window.parent!==window&&window.parent.ARX_SNAP||window.ARX_SNAP?'hidden':''}>${ICON.link}<span>Copy link</span></button>
   <button class="tb pri" id="bDown" title="Download one self-contained HTML file">${ICON.down}<span>Download</span></button>
   <button class="tb" id="bPrint" title="Print or save as PDF">${ICON.print}<span>PDF</span></button>
   <button class="tb" id="bTheme" title="Theme" aria-label="Theme">${ICON.theme}</button>
