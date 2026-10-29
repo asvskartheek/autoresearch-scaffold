@@ -1,0 +1,69 @@
+"""Server review fixes: the state's task window, the full task list, cheap project rows and readable reject reasons."""
+import json, os, tempfile, time, unittest
+from pathlib import Path
+
+os.environ["ARX_HOME"] = tempfile.mkdtemp()  # never touch the real ~/.arx
+from autoresearch import projects, server
+from autoresearch.core import Project, Task
+
+
+def ledger(name="demo"):
+    d = Path(tempfile.mkdtemp()) / name
+    d.mkdir()
+    (d / "research.json").write_text(json.dumps(dict(name=name, higher_is_better=True, ladder=[])))
+    p = Project(d)
+    p.add_dataset("ds", list(range(4)))
+    return p
+
+
+class Window(unittest.TestCase):
+    def test_live_newest_kept_and_parents(self):
+        ts = [dict(id=f"d{i}", status="done", ended=i, updated=i) for i in range(200)]
+        ts += [dict(id="old-parent", status="done", ended=-5, updated=-5),
+               dict(id="live", status="running", parent="old-parent", updated=300),
+               dict(id="kid", status="done", parent="live", ended=-9, updated=-9),
+               dict(id="goal-ev", status="done", ended=-3, updated=-3)]
+        ids = {t["id"] for t in server.window(ts, {"goal-ev"})}
+        self.assertTrue({"live", "kid", "old-parent", "goal-ev", "d199", f"d{200 - server.WINDOW}"} <= ids)
+        self.assertNotIn("d0", ids)
+        self.assertEqual(len(ids), server.WINDOW + 4)
+
+    def test_running_jobs_counts_atomic_only(self):
+        t = time.time()
+        ts = [dict(id="parent", status="running", heartbeat=t), dict(id="child", status="running", parent="parent", heartbeat=t),
+              dict(id="ans", status="running", kind="answer", heartbeat=t),
+              dict(id="stale", status="running", heartbeat=t - 1200), dict(id="dead", status="stalled", heartbeat=t - 3 * 86400)]
+        self.assertEqual(server.running_jobs(ts, 600, t), (1, 1))  # child runs; stale is stalled; dead counts as neither
+
+
+class State(unittest.TestCase):
+    def test_state_window_and_all_tasks(self):
+        p = ledger()
+        p.add_model("base", status="champion")
+        for i in range(server.WINDOW + 5):
+            Task(p, "experiment", f"job {i}").finish()
+        st = server.state(p)
+        self.assertEqual(st["tasks_total"], server.WINDOW + 5)
+        self.assertEqual(len(st["tasks"]), server.WINDOW)
+        full = server.all_tasks(p)
+        self.assertEqual(len(full["tasks"]), server.WINDOW + 5)
+        self.assertEqual(full["rev"], st["tasks_rev"])
+
+    def test_project_rows_are_cheap_and_count_waiting_questions(self):
+        p = ledger("alpha")
+        projects.register(p.root)
+        (p.dir / "questions.json").write_text(json.dumps({"q1": dict(title="Ship?", status="open", needs_human=True),
+                                                          "q2": dict(title="Done", status="answered", needs_human=True)}))
+        Task(p, "experiment", "runs")  # left running
+        row = next(r for r in server.project_list(p) if r["name"] == "alpha")
+        self.assertEqual((row["running"], row["stalled"], row["asks"], row["waiting"]), (1, 0, 1, 0))
+
+
+class Reasons(unittest.TestCase):
+    def test_paths_and_dicts(self):
+        r = server._clean_reason("No climb {'n': 185, 'delta': 0.010811, 'lo': -0.011} see /Users/me/work/run/out.json.")
+        self.assertEqual(r, "No climb (n 185, delta 0.0108, lo -0.011) see out.json.")
+
+
+if __name__ == "__main__":
+    unittest.main()
