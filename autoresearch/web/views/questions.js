@@ -214,7 +214,12 @@ function qDocLoad(id){
 const qThemed=(html,t)=>/<html\b/i.test(html)?html.replace(/<html\b/i,`<html data-theme="${t}"`):`<html data-theme="${t}">${html}</html>`;
 // the question or comment thread a document answers: its crumbs lead back there, and a thread's answer opens the thread
 const qThreadHref=n=>n?.thread?`?c=${enc(n.thread)}#${String(n.route||'overview').replace(/^#/,'')}`:'';
-function qFit(){const f=document.querySelector('.q-reader');if(f)f.style.height=Math.max(420,innerHeight-f.getBoundingClientRect().top-scrollY-12)+'px'}
+// the frame fills the window below the crumbs, so the document scrolls inside it and the page never does
+function qFit(){
+ const f=document.querySelector('.q-reader');if(!f)return;
+ let h=innerHeight-f.getBoundingClientRect().top-scrollY-12;f.style.height=Math.max(420,h)+'px';
+ const extra=document.scrollingElement.scrollHeight-innerHeight;if(extra>0)f.style.height=Math.max(420,h-extra)+'px';
+}
 addEventListener('resize',()=>{if(route().r==='answer')qFit()});
 VIEWS.answer=arg=>{
  qLoad();

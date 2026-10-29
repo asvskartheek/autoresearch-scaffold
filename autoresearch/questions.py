@@ -384,7 +384,7 @@ def _comment_nodes(p, out) -> None:
             par = group
         last = said[-1]["body"] if said else ""
         doc = re.search(r"#answer/([a-z0-9][a-z0-9-]{1,47})", last)
-        title = _short(_plain(ms[0]["body"]), 10) or "A comment"
+        title = _short(_plain(ms[0]["body"]), 16) or "A comment"
         out[f"c:{th['id']}"] = dict(
             title=title if len(title) <= 120 else title[:119] + "…", parent=par,
             status="agent" if th["waiting"] else "answered", claim=_line(_plain(last), 200) if said else None,
