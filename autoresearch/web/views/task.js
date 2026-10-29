@@ -20,6 +20,8 @@ const cDelta=(d,sl)=>timedSl(sl)?`${cNum(Math.abs(d))}&nbsp;s ${d>0?'faster':'sl
 // a score, and a change in score against the champion, in the slice's own terms
 const scoreOf=(v,sl)=>v==null?DASH:isCont(sl)?cVal(v,sl):pct(v);
 const deltaOf=(d,sl)=>isCont(sl)?cDelta(d,sl):pts(d)+' pts';
+// seconds with a space, as every other unit: "5.61 s"
+const secs=x=>x==null?'—':(x<10?x.toFixed(2):x.toFixed(1))+'&nbsp;s';
 const mval=(k,v)=>v==null?DASH:isScoreKey(k)?scoreOf(v,CUR):/_runtime$/.test(k)?wbSpan(v):/_per_second$/.test(k)?XC.fmt(v)+' a second':/_s$/.test(k)?secs(v):fmtv(v);
 // a task's last logged numbers, the headline ones first (reward, score, loss…), bookkeeping (train_runtime…) last
 // (t.last is the last metrics row; a trainer's closing row holds only its summary, so merge every row when we have them)
@@ -70,7 +72,7 @@ function kpiStrip(t,d){
   const sc=sm.score??t.last?.running_score,n=sm.n??pr.done,sl=slOf(t),c=isCont(sl);
   const mt=c&&timedSl(sl);
   items.push([live?(mt?'Mean time so far':c?'Mean so far':'Score so far'):(mt?'Mean time':c?'Mean score':'Score'),scoreOf(sc,sl),sc!=null?(c?`over ${n.toLocaleString()}`:`${Math.round(sc*n).toLocaleString()} of ${n.toLocaleString()}`):'']);
-  if(vc&&vc.delta!=null)items.push(['Against the champion',c?`<span class="${tone(vc)}">${cDelta(vc.delta,sl)}</span>`:`<span class="${tone(vc)}">${pts(vc.delta)}</span><small>pts</small>`,c?`90% interval ${cNum(vc.lo)} to ${cNum(vc.hi)}`:`90% interval ${pts(vc.lo)} to ${pts(vc.hi)}`]);
+  if(vc&&vc.delta!=null)items.push(['Against the champion',c?`<span class="${tone(vc)}">${cDelta(vc.delta,sl)}</span>`:`<span class="${tone(vc)}">${pts(vc.delta)}</span><small>pts</small>`,c?`${cNum(vc.lo)} to ${cNum(vc.hi)}, 90% CI`:`${pts(vc.lo)} to ${pts(vc.hi)}, 90% CI`]);
   if(live)items.push(['Progress',pr.total?`${pr.done.toLocaleString()}<small>of ${pr.total.toLocaleString()}</small>`:DASH,pr.total?(100*pr.done/pr.total).toFixed(0)+'%':'']);
   if(sm.cost!=null)items.push(['Cost per example',money(sm.cost),sm.cost_total!=null?money(sm.cost_total)+' in all':'']);
   const lat=sm.latency_p50??t.last?.latency_s;
@@ -82,7 +84,7 @@ function kpiStrip(t,d){
   for(const [k,v] of last)items.push([wbMetric(k),mval(k,v),live?'latest':'final']);
   if(!items.length)return '';
  }
- if(t.status==='running')items.push(['Finishes',t.eta?`<span class="${t.health?.state==='over'?'warn':''}">in ${wbSpan(t.eta.eta_s)}</span>`:DASH,t.eta?`at ${wbClock(t.eta.finish_at)}, ${t.eta.per_min<10?t.eta.per_min.toFixed(1):Math.round(t.eta.per_min)} a minute`:'no rate yet']);
+ if(t.status==='running')items.push(['Finishes',t.eta?`<span class="${t.health?.state==='over'?'warn':''}">in ${wbSpan(t.eta.eta_s)}</span>`:DASH,t.eta?`at ${wbClock(t.eta.finish_at)}`:'no rate yet']);
  const B=wbBudget(t);items.push([live?'Elapsed':'Took',`<span class="${bc}">${(B?wbSpanB:wbSpan)((t.ended||now())-t.created)}</span>`,B?`of a ${wbSpanB(B)} budget`:'']);
  return `<div class="section">${kpis(items.slice(0,6))}</div>`;
 }
@@ -143,7 +145,7 @@ function curves(t,d){
  const base=d.vs_champion?.base??null;
  const spec=(k,mode,h)=>({group:grp,mode,h,xLabel:ev?'examples':'step',yLabel:mode==='full'?nm(k):null,yfmt:flip(k)?'s':yfOf(k),t0:t.created,domain:dom,series:ser(k),
   ref:k==='running_score'&&base!=null?{y:flip(k)?-base:base,label:'champion'}:null});
- const nm=k=>flip(k)?(k==='running_score'?'Mean time so far':'Mean time'):wbMetric(k);
+ const nm=k=>flip(k)?(k==='running_score'&&isLive(t)?'Mean time so far':'Mean time'):k==='running_score'&&!isLive(t)?'Score':wbMetric(k);
  const lastOf=k=>{const y=rows.map(m=>m[k]).filter(v=>typeof v==='number');return y.length?mval(k,flip(k)?-y.at(-1):y.at(-1)):DASH};
  const sm=k=>`<div class="tk-sm"><div class="tk-smh"><button type="button" class="tk-pick" data-k="${esc(k)}" onclick="S.tkMetric[${esc(JSON.stringify(t.id))}]=this.dataset.k;render();scrollTo({top:document.querySelector('.tk-curves')?.offsetTop-60||0,behavior:'smooth'})" title="Make this the main chart">${esc(nm(k))}</button><b>${lastOf(k)}</b></div>${XC.box(`tk-${t.id}-${k}`,spec(k,'compact',120))}</div>`;
  const legend=ps.length?XC.legend(grp,runs.map((r,i)=>{const y=r.rows.map(m=>m[cur]).filter(v=>typeof v==='number');
