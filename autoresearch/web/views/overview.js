@@ -30,9 +30,14 @@ function ovSortBy(k){const s=S.ovSort||{k:'score',d:-1};S.ovSort={k,d:s.k===k?-s
 function ovPickSlice(name){S.lbSlice=name;S.ovLbAll=false;render()}
 
 VIEWS.overview=()=>{
- const st=S.state,champ=st.champion,ds=Object.keys(st.datasets),hib=st.config.higher_is_better!==false;
- const prim=st.config.primary_dataset||ds[0],fullKey=prim+'/full';
- const cf=champ&&fullScore(champ),fsl=st.slices[fullKey];
+ const st=S.state,champ=st.champion,hib=st.config.higher_is_better!==false;
+ // datasets: registered ones, plus any a frozen slice names without one (synthetic benches)
+ const ds=[...new Set(Object.keys(st.datasets).concat(Object.values(st.slices).map(s=>s.dataset).filter(Boolean)))];
+ // the headline slice: the primary full set; a project without one (synthetic benches) leads with its first open goal
+ const og=Object.values(st.goals||{}).filter(g=>g.status==='open').sort((a,b)=>(a.created||0)-(b.created||0))[0];
+ const prim=st.config.primary_dataset||ds[0],fullKey=st.slices[prim+'/full']||!og?prim+'/full':og.slice;
+ const cf=champ&&st.leaderboard[fullKey]?.[champ],fsl=st.slices[fullKey];
+ const hg=og&&og.slice===fullKey?og:null;
  const cands=Object.entries(st.models).filter(([,m])=>m.status==='candidate')
   .map(([k,m])=>[k,m,st.gates[k]||{}])
   .sort((a,b)=>(b[2].promotable-a[2].promotable)||(!!ovFailedAt(a[2])-!!ovFailedAt(b[2]))||(ovPassed(b[2])-ovPassed(a[2]))||((b[1].created||0)-(a[1].created||0)));
@@ -45,7 +50,8 @@ VIEWS.overview=()=>{
  let finding,nextCmd='';
  if(!champ)finding='There is no champion yet. Register a baseline with <code>arx model add &lt;name&gt; --champion</code>; every candidate is gated against it.';
  else{
-  const p=[`<b>${mn(champ)}</b> is champion${cf?` at ${ovScore(cf.score,fsl)} on ${esc(short(fullKey))} (${ovBin(fsl)?`${ovN(solved(cf))} of ${ovN(cf.n)}`:`mean of ${ovN(cf.n)}`})`:`, with no run on ${esc(short(fullKey))} yet`}.`];
+  const p=[`<b>${mn(champ)}</b> is champion${cf?` at ${ovScore(cf.score,fsl)} on ${esc(hg?fullKey:short(fullKey))} (${ovBin(fsl)?`${ovN(solved(cf))} of ${ovN(cf.n)}`:`mean of ${ovN(cf.n)}`})`:`, with no run on ${esc(hg?fullKey:short(fullKey))} yet`}.`];
+  if(hg&&hg.value!=null)p.push(hg.met?`That meets the goal <b>${esc(hg.title)}</b>.`:`Goal <b>${esc(hg.title)}</b> is ${ovG(hg,hg.gap)} away (target ${ovG(hg,hg.target)}).`);
   if(promotable.length)p.push(`<b>${mn(promotable[0][0])}</b> passed every rung and is ready to promote.`);
   else if(lead){
    const g=lead[2],done=(g.rungs||[]).filter(r=>r.status==='pass').map(r=>esc(r.rung)),nx=g.next?.[0];
@@ -64,7 +70,7 @@ VIEWS.overview=()=>{
  // KPIs: the champion's score leads; the rest are counts of what is in motion
  const goal=st.config.goal;
  h+=`<div class="ov-kpis">${kpis([
-  ['Champion',cf?ovScore(cf.score,fsl):DASH,champ?`<a href="#model/${enc(champ)}" class="ov-cn" title="${esc(champ)}">${mn(champ)}</a>${cf?` · ${esc(short(fullKey))}, n ${ovN(cf.n)}`:''}${goal?.target!=null?` · target ${pct(goal.target)}`:''}`:'No champion yet'],
+  ['Champion',cf?ovScore(cf.score,fsl):DASH,champ?`<a href="#model/${enc(champ)}" class="ov-cn" title="${esc(champ)}">${mn(champ)}</a>${cf?` · ${esc(hg?fullKey:short(fullKey))}, n ${ovN(cf.n)}`:''}${hg?` · target ${ovG(hg,hg.target)}`:goal?.target!=null?` · target ${pct(goal.target)}`:''}`:'No champion yet'],
   ['Candidates',String(cands.length),promotable.length?`<span class="pos">${promotable.length} ready to promote</span>`:cands.length?`${onWay.length} passed a rung · ${failed.length} failed one`:'None registered','#models'],
   ['Running',String(live.length),stalled.length?`<span class="neg">${stalled.length} not reporting</span>`:live.length?'All reporting':'Nothing running','#workbench'],
   ['Open hills',String(open),`${climbed} climbed · ${hills.length} in all`,'#hills'],
@@ -77,7 +83,7 @@ VIEWS.overview=()=>{
   const grows=gs.map(g=>{
    const v=g.vs_baseline,p=goalPaper(g.name),sc=(g.kpi||'score')==='score'&&ovBin(g);
    const vs=v&&v.delta!=null?`<span title="vs ${esc(g.baseline||'')}, 90% CI" class="${v.lo>0?'pos':v.hi<0?'neg':'sub'}">${ovDelta(v.delta,g)}</span><span class="sub ov-hide-s"> · ${ovDelta(v.lo,g)} to ${ovDelta(v.hi,g)}</span>`:DASH;
-   return `<tr class="click" onclick="if(!event.target.closest('a,button'))location.hash='goal/${enc(g.name)}'"><td class="ov-id"><div class="two"><a class="ell ov-nm" href="#goal/${enc(g.name)}" title="${esc(g.problem||g.title)}">${esc(g.title||g.name)}</a><span class="sub ell">${esc(short(g.slice))} · n ${ovN(g.n)}${g.model?` · <span title="${esc(g.model)}">${mn(g.model)}</span>`:''}</span></div></td>
+   return `<tr class="click" onclick="if(!event.target.closest('a,button'))location.hash='goal/${enc(g.name)}'"><td class="ov-id"><div class="two"><a class="ell ov-nm" href="#goal/${enc(g.name)}" title="${esc(g.problem||g.title)}">${esc(g.title||g.name)}</a><span class="sub ell">${esc(g.slice)} · n ${ovN(g.n)}${g.model?` · <span title="${esc(g.model)}">${mn(g.model)}</span>`:''}</span></div></td>
     <td class="ov-gst ov-hide-s">${gst(g)}</td>
     <td class="ov-gv"><div class="ov-gvw"><span class="ov-gn"><b>${ovG(g,g.value)}</b><span class="faint"> of ${ovG(g,g.target)}</span></span>${sc&&g.value!=null?meter(Math.min(g.value,1),{mark:g.target,cls:g.met?'pos':''}):''}</div></td>
     <td class="num ov-gd ov-hide-m">${vs}</td>
@@ -128,7 +134,7 @@ VIEWS.overview=()=>{
  }
 
  // leaderboard: dataset tabs, slice control, paired deltas vs the champion on the same slice
- if(!S.lbDataset||!st.datasets[S.lbDataset])S.lbDataset=prim;
+ if(!S.lbDataset||!ds.includes(S.lbDataset))S.lbDataset=st.slices[fullKey]?.dataset||prim;
  const sl=Object.values(st.slices).filter(s=>s.dataset===S.lbDataset);
  const order={full:0,random:1,control:2,dev:3,synthetic:4};
  sl.sort((a,b)=>((order[a.kind]??9)-(order[b.kind]??9))||(b.n-a.n)||a.name.localeCompare(b.name));
@@ -142,7 +148,7 @@ VIEWS.overview=()=>{
  const has=f=>entries.some(([,r])=>r[f]!=null);
  const hasCost=has('cost'),hasLat=has('latency_p50'),hasP95=has('latency_p95');
  const LB=10,shown=S.ovLbAll?board:board.slice(0,LB);
- const tabs=`<div class="tabs ov-tabs" role="tablist">${ds.map(d=>`<button role="tab" aria-selected="${d===S.lbDataset}" class="${d===S.lbDataset?'on':''}" onclick="S.lbDataset=${esc(JSON.stringify(d))};S.lbSlice=null;S.ovLbAll=false;render()">${esc(d)}<small>${ovN(st.datasets[d].size)}</small></button>`).join('')}</div>`;
+ const tabs=`<div class="tabs ov-tabs" role="tablist">${ds.map(d=>`<button role="tab" aria-selected="${d===S.lbDataset}" class="${d===S.lbDataset?'on':''}" onclick="S.lbDataset=${esc(JSON.stringify(d))};S.lbSlice=null;S.ovLbAll=false;render()">${esc(d)}<small>${ovN(st.datasets[d]?.size??Math.max(...Object.values(st.slices).filter(s=>s.dataset===d).map(s=>s.n)))}</small></button>`).join('')}</div>`;
  const opt=s=>`<option value="${esc(s.name)}" ${s.name===S.lbSlice?'selected':''}>${esc(short(s.name))} · n ${ovN(s.n)}${st.leaderboard[s.name]?` · ${plural(Object.keys(st.leaderboard[s.name]).length,'model')}`:' · no runs'}</option>`;
  const kinds=[...new Set(sl.map(s=>s.kind))];
  const sel=`<label class="ov-pickl"><span>Slice</span><select class="ov-sel" onchange="ovPickSlice(this.value)">${kinds.map(k=>`<optgroup label="${esc(ovKind[k]||k)}">${sl.filter(s=>s.kind===k).map(opt).join('')}</optgroup>`).join('')}</select></label><span class="faint ov-pickn">${plural(sl.length,'slice')}</span>`;
