@@ -1,13 +1,13 @@
 """Loopback-only dashboard server. Serves web/ and aggregate JSON computed from `.research/`."""
 from __future__ import annotations
 
-import gzip, json, mimetypes, time
+import copy, gzip, hashlib, json, mimetypes, os, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlsplit
 
 from . import features, papers, projects
-from .core import Project, paired, per_id
+from .core import Project, _read, paired, per_id
 from .readable import readable
 
 WEB = Path(__file__).with_name("web")
@@ -91,6 +91,84 @@ def _slim(t: dict) -> dict:
     return t
 
 
+WINDOW = 80  # finished tasks /api/state sends; the archive and history views load the rest from /api/tasks
+_MEMO: dict = {}  # (kind, root) -> (fingerprint, value): gates, goals and hill strips only change with the ledger
+
+
+def _fp(p: Project) -> tuple:
+    """Changes whenever anything a gate, goal or hill strip reads changes: research.json, the ledger's json files
+    and the set of finished evals (ids, end times, supersessions)."""
+    fs = []
+    for f in (p.root / "research.json", *sorted(p.dir.glob("*.json"))):
+        try:
+            fs.append((f.name, f.stat().st_mtime_ns))
+        except OSError:
+            pass
+    return tuple(fs), tuple(sorted((t["id"], t.get("ended"), t.get("superseded_by")) for t in p.evals()))
+
+
+def _memo(kind: str, p: Project, fp, fn):
+    k = (kind, str(p.root))
+    hit = _MEMO.get(k)
+    if not hit or hit[0] != fp:
+        hit = _MEMO[k] = (fp, fn())
+    return copy.deepcopy(hit[1])
+
+
+def _gates(p: Project, models: dict) -> dict:
+    gates = {}
+    for name, m in models.items():
+        if m.get("status") in ("candidate", "champion"):
+            try:
+                gates[name] = p.gate(name)
+            except SystemExit as e:
+                gates[name] = dict(error=str(e))
+    return gates
+
+
+def _enrich(p: Project, t: dict) -> dict:
+    """A list row: its latest note, a readable description, an ETA and a sparkline of its first metric."""
+    ev = p.events(t["id"])
+    t["note"] = ev[-1] | {"text": readable(ev[-1].get("msg"))} if ev else None
+    if t.get("description"):
+        t["description"] = readable(t["description"])
+    series = p.metrics(t["id"])[-40:]
+    keys = [k for k in (t.get("last") or {}) if isinstance(t["last"][k], (int, float))]
+    t["eta"] = eta(p, t)
+    t["spark"] = {"key": keys[0], "y": [s.get(keys[0]) for s in series if isinstance(s.get(keys[0]), (int, float))]} if keys else None
+    return _slim(t)
+
+
+def _rev(tasks: list[dict]) -> str:
+    """Changes when a task starts, ends or is superseded: the client then refetches the full list."""
+    sig = sorted((t["id"], t.get("status"), t.get("ended"), t.get("superseded_by")) for t in tasks
+                 if t.get("status") not in ("running", "stalled"))
+    return hashlib.md5(repr((len(tasks), sig)).encode()).hexdigest()[:12]
+
+
+def window(tasks: list[dict], keep=()) -> list[dict]:
+    """What the 4 s poll needs: live tasks and their children, the newest finished ones, every task in `keep`
+    (goal evidence) and the parents of all of those. Views only link leaderboard runs by id."""
+    live = {t["id"] for t in tasks if t.get("status") in ("running", "stalled")}
+    done = sorted((t for t in tasks if t["id"] not in live), key=lambda t: t.get("ended") or t.get("updated") or 0, reverse=True)
+    ids = live | {t["id"] for t in done[:WINDOW]} | set(keep) | {t["id"] for t in tasks if t.get("parent") in live}
+    by = {t["id"]: t for t in tasks}
+    for i in list(ids):
+        x, hops = by.get(i), 0
+        while x and x.get("parent") and x["parent"] not in ids and hops < 50:
+            ids.add(x["parent"])
+            x, hops = by.get(x["parent"]), hops + 1
+    return [t for t in tasks if t["id"] in ids]
+
+
+def all_tasks(p: Project) -> dict:
+    """Every task as a list row, for the archive and the history views."""
+    with p.snapshot():
+        tasks = p.tasks()
+        infer_parents(tasks)
+        return dict(rev=_rev(tasks), tasks=[_enrich(p, t) for t in tasks])
+
+
 def _state(p: Project) -> dict:
     slices = {k: {kk: vv for kk, vv in v.items() if kk != "ids"} | {"name": k} for k, v in p.slices().items()}
     models, tasks = p.models(), p.tasks()
@@ -106,26 +184,15 @@ def _state(p: Project) -> dict:
         if not sl.get("scale") and name in newest:
             vals = {r.get("score") for r in p.rows(newest[name][1]) if not r.get("error")}
             sl["scale"] = "binary" if vals <= {0, 1} else "continuous"
-    gates = {}
-    for name, m in models.items():
-        if m.get("status") in ("candidate", "champion"):
-            try:
-                gates[name] = p.gate(name)
-            except SystemExit as e:
-                gates[name] = dict(error=str(e))
+    fp = _fp(p)
+    gates = _memo("gates", p, fp, lambda: _gates(p, models))
+    gl = _memo("goals", p, fp, lambda: goals(p))
     infer_parents(tasks)
-    for t in tasks:
-        ev = p.events(t["id"])
-        t["note"] = ev[-1] | {"text": readable(ev[-1].get("msg"))} if ev else None
-        if t.get("description"):
-            t["description"] = readable(t["description"])
-        series = p.metrics(t["id"])[-40:]
-        keys = [k for k in (t.get("last") or {}) if isinstance(t["last"][k], (int, float))]
-        t["eta"] = eta(p, t)
-        t["spark"] = {"key": keys[0], "y": [s.get(keys[0]) for s in series if isinstance(s.get(keys[0]), (int, float))]} if keys else None
+    win = window(tasks, {g["task"] for g in gl.values() if g.get("task")})
     return dict(config=p.config, now=time.time(), champion=champ, datasets=p.datasets(), slices=slices,
-                hills=p.hills(), models={k: m | {f: readable(m[f]) for f in ("change", "reason") if isinstance(m.get(f), str)} for k, m in models.items()}, papers=papers.papers(p), gates=gates, tasks=[_slim(t) for t in tasks], leaderboard=board,
-                goals=goals(p),
+                hills=p.hills(), models={k: m | {f: readable(m[f]) for f in ("change", "reason") if isinstance(m.get(f), str)} for k, m in models.items()}, papers=papers.papers(p), gates=gates,
+                tasks=[_enrich(p, t) for t in win], tasks_total=len(tasks), tasks_rev=_rev(tasks), leaderboard=board,
+                goals=gl,
                 baseline=p.baseline_plan(champ) if champ else None,
                 decisions=_tail(p.dir / "decisions.jsonl", 50))
 
@@ -140,8 +207,58 @@ def goals(p: Project) -> dict:
     return out
 
 
+DEAD_S = 86400  # stalled longer than a day: dead, not running
+
+
+def _light_tasks(q: Project) -> list[dict]:
+    """status, heartbeat, parent and kind of every task, read straight from task.json (parse-cached by mtime)."""
+    out = []
+    try:
+        dirs = list(os.scandir(q.dir / "tasks"))
+    except OSError:
+        return out
+    for d in dirs:
+        t = _read(Path(d.path) / "task.json") if d.is_dir() else None
+        if t:
+            out.append({k: t.get(k) for k in ("id", "status", "heartbeat", "updated", "parent", "kind")})
+    return out
+
+
+def running_jobs(tasks: list[dict], stall_s: float, t_now: float = None) -> tuple[int, int]:
+    """(running, stalled) atomic jobs: no live child, never an answer agent; a task silent for more than a day is
+    dead and counts as neither."""
+    t_now = t_now or time.time()
+    live = [t for t in tasks if t.get("status") in ("running", "stalled")]
+    for t in live:
+        if t.get("status") == "running" and t_now - (t.get("heartbeat") or t.get("updated") or 0) > stall_s:
+            t["status"] = "stalled"
+    parents = {t.get("parent") for t in live if t.get("parent")}
+    jobs = [t for t in live if t["id"] not in parents and t.get("kind") != "answer"]
+    run = sum(1 for t in jobs if t["status"] == "running")
+    stalled = sum(1 for t in jobs if t["status"] == "stalled" and t_now - (t.get("heartbeat") or t.get("updated") or 0) <= DEAD_S)
+    return run, stalled
+
+
+_PAPERS: dict = {}  # root -> (thread mtimes, waiting count)
+
+
+def _waiting(q: Project) -> int:
+    fp = tuple((f.parent.name, f.stat().st_mtime_ns) for f in sorted((q.dir / "papers").glob("*/thread.jsonl")))
+    hit = _PAPERS.get(str(q.root))
+    if not hit or hit[0] != fp:
+        hit = _PAPERS[str(q.root)] = (fp, sum(m["waiting"] for m in papers.papers(q).values()))
+    return hit[1]
+
+
+def _asks(q: Project) -> int:
+    """Questions that wait on a person (needs_human, still open)."""
+    qs = _read(q.dir / "questions.json", {}) or {}
+    return sum(1 for n in qs.values() if isinstance(n, dict) and n.get("needs_human") and n.get("status") in ("open", "agent"))
+
+
 def project_list(default: Project) -> list[dict]:
-    """Every registered project with its goals, for the sidebar and the projects view. The served one comes first."""
+    """Every registered project for the sidebar: name, running and stalled jobs, comments and questions waiting, and
+    each goal's status as recorded. Cheap on purpose (no gates or goal scoring): it is fetched on every page load. The served one comes first."""
     reg = projects.registry()
     dk = projects.key_for(default.root)
     keys = ([dk] if dk in reg else []) + [k for k in reg if k != dk]
@@ -149,13 +266,10 @@ def project_list(default: Project) -> list[dict]:
     for k in keys:
         try:
             q = Project(reg[k]["root"])
-            ps = papers.papers(q)
-            with q.snapshot():
-                out.append(dict(key=k, name=q.config.get("name") or k, root=str(q.root), default=k == dk,
-                                champion=q.champion(), goals=goals(q), hills=len(q.hills()),
-                                open_hills=sum(1 for h in q.hills().values() if h.get("status") == "open"),
-                                waiting=sum(m["waiting"] for m in ps.values()),
-                                running=sum(1 for t in q.tasks() if t.get("status") in ("running", "stalled"))))
+            run, stalled = running_jobs(_light_tasks(q), q._stall())
+            out.append(dict(key=k, name=q.config.get("name") or k, root=str(q.root), default=k == dk,
+                            running=run, stalled=stalled, waiting=_waiting(q), asks=_asks(q),
+                            goals={g: dict(status=v.get("status"), title=v.get("title")) for g, v in q.goals().items()}))
         except Exception as e:  # a broken project never takes the list down
             out.append(dict(key=k, name=k, root=reg[k]["root"], error=f"{type(e).__name__}: {e}"))
     return out
@@ -176,7 +290,13 @@ def _tail(path: Path, n: int) -> list:
 
 
 def hill_detail(p: Project, name: str) -> dict:
-    """Per-example scores on the hill's target and control slices: the slice's ids, and id -> score per model."""
+    """Per-example scores on the hill's target and control slices: the slice's ids, and id -> score per model.
+    Memoised on the ledger: the first open reads every run's rows, later ones reuse them until an eval lands."""
+    with p.snapshot():
+        return _memo("hill:" + name, p, _fp(p), lambda: _hill_detail(p, name))
+
+
+def _hill_detail(p: Project, name: str) -> dict:
     h, slices = p.hills()[name], p.slices()
     out = {}
     for role in ("target", "control"):
@@ -309,6 +429,8 @@ def serve(port: int = 8890, root=None):
                         return self._send(200, f.read_bytes(), TYPES[f.suffix])
                 if path == "/api/state":
                     return self._send(200, json.dumps(state(p), default=str).encode(), "application/json")
+                if path == "/api/tasks":
+                    return self._send(200, json.dumps(all_tasks(p), default=str).encode(), "application/json")
                 if path.startswith("/api/task/"):
                     return self._send(200, json.dumps(task_detail(p, path.rsplit("/", 1)[1]), default=str).encode(), "application/json")
                 if path.startswith("/api/hill/"):
