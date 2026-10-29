@@ -41,7 +41,7 @@ class EvidenceFlows(unittest.TestCase):
   self.page.wait_for_function('S.state.goals.g.current_observation?.runs === 2',timeout=15000)
   self.assertEqual(self.page.evaluate('S.state.goals.g.value'),.9)
   self.assertEqual(self.page.evaluate('S.state.goals.g.task'),ev['task'])
-  text=self.page.locator('#main').inner_text();self.assertIn('+5 against',text);self.assertIn('Later observations',text)
+  text=self.page.locator('#main').inner_text();self.assertIn('+5 against',text);self.assertIn('Later observations',text);self.assertIn('5.5 of 10',text)
   self.assertNotIn('+2 against',text)
   self.assertEqual(self.page.locator('.gl-prog .gl-bar i').get_attribute('style'),'width:100.0%')
  def test_ready_candidate_and_mobile_gate_rules(self):
