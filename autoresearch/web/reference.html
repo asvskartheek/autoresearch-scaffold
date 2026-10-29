@@ -209,7 +209,7 @@ table{overflow-wrap:normal}
 .ladder{grid-template-columns:repeat(var(--cols,4),minmax(0,1fr))}
 @media (max-width:760px){.ladder{grid-template-columns:minmax(0,1fr)}}
 .stg .k,.stg .v,.spine .nd b,.lrow .nm,.goal .gt,h1,.crumb b{overflow-wrap:anywhere;word-break:break-word}
-.stg .k{word-break:break-all}
+.stg .k{word-break:normal}
 .tb select{border:0;background:none;font:inherit;color:inherit;max-width:220px;padding:0;outline:0;cursor:pointer}
 .pickers{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 0}
 .pickers label{display:inline-flex;align-items:center;gap:6px;font:500 12px var(--mono);color:var(--faint)}
@@ -270,7 +270,7 @@ const pct = (x, d = 1) => x == null ? "—" : (x * 100).toFixed(d) + "%";
 const pts = (x, d = 1) => x == null ? "—" : (x >= 0 ? "+" : "−") + Math.abs(x * 100).toFixed(d);
 const sgn = (x, d = 1) => x == null ? "—" : (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(d);
 const num = (x, p = 4) => x == null ? "—" : Math.abs(x) >= 1000 ? N0(x) : (+x.toPrecision(p)).toString();
-const dt = t => { if (!t) return "—"; const d = new Date(t * 1000); return d.toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) + " UTC"; };
+const dt = t => { if (!t) return "—"; const d = new Date(t * 1000); return d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }); };  // local time, as on the dashboard
 const secs = x => x == null ? "—" : x < 10 ? x.toFixed(2) + " s" : x.toFixed(1) + " s";
 const enc = encodeURIComponent;
 
@@ -339,7 +339,9 @@ const ICON = {
 };
 const sec = (i, id, title) => `<section class="s" id="${id}"><div class="hd"><b>${String(i + 1).padStart(2, "0")}</b><h2>${title}</h2><button class="anc" data-anchor="${id}" title="Copy link to this section">#</button></div><div data-body="${id}"></div></section>`;
 const order = { champion: 0, candidate: 1, retired: 2, historical: 3, rejected: 4, planned: 5 };
-const opts = (list, sel) => list.map(m => `<option value="${esc(m.name)}"${m.name === sel ? " selected" : ""}>${esc(mnt(m.name))} · ${esc(m.status)}</option>`).join("");
+// two models can share a title: the option then also names the id, so no two entries read the same
+const dupT = (c => (D.models.forEach(m => c[mnt(m.name)] = (c[mnt(m.name)] || 0) + 1), c))({});
+const opts = (list, sel) => list.map(m => `<option value="${esc(m.name)}"${m.name === sel ? " selected" : ""}>${esc(mnt(m.name))}${dupT[mnt(m.name)] > 1 && mnt(m.name) !== m.name ? " (" + esc(m.name) + ")" : ""} · ${esc(m.status)}</option>`).join("");
 const byStatus = [...D.models].sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || a.name.localeCompare(b.name));
 const gPick = [g => g.status === "open" && g.kpi === "score" && !g.met && g.slice === D.main, g => g.status === "open" && g.kpi === "score" && !g.met, g => g.status === "open", () => true];
 const champGoal = gPick.map(f => D.goals.find(g => g.model === CH && f(g))).find(Boolean) || null;
@@ -467,7 +469,7 @@ section("data", () => {
     runs: x.ran ? runIds(x) : [], src: ".research/slices.json › " + x.slice,
     extra: [["kind", x.kind], ["roles", (x.roles || []).join(", ")], ["metric", x.metric], ["measures", x.description], ["this model", x.ran ? `${x.runs} run${x.runs === 1 ? "" : "s"}` : "no run"]] });
   const seg = (x, full) => evb(`<span class="sn">${esc(full ? short(x.slice) || x.slice : String(x.slice).split("/").slice(1).join("/") || x.slice)}</span><span class="sv">${N0(x.n)}</span>${glyph(x)}`, pop(x),
-    `cseg ${kc(x.kind)} ${x.ran ? "run" : "norun"}`, full ? "" : `flex:${Math.max(1, x.n || 1)} 1 0`);
+    `cseg ${kc(x.kind)} ${x.ran ? "run" : "norun"}`, full ? "" : `flex:${Math.max(1, x.n || 1)} 1 auto`);  // never narrower than its label
   const idle = names.filter(k => !ranIn(k));
   const idleRow = idle.length ? `<div class="dsr"><div class="dsh"><b>${idle.length} more dataset${idle.length === 1 ? "" : "s"}</b> <span class="faint">· none run by ${mn(CH)}</span></div><div class="lane">${idle.map(k => {
     const d = D.datasets[k] || {}, mine = all.filter(x => ds(x.slice) === k);
@@ -485,7 +487,7 @@ section("data", () => {
       ${shown.length || offSeg ? `<div class="lane">${shown.map(x => seg(x)).join("")}${offSeg}</div>` : fulls.length ? "" : '<div class="faint" style="font-size:12.5px">no slices</div>'}</div>`;
   }).join("");
   const kinds = KINDS.filter(k => all.some(x => x.kind === k));
-  return `<div class="cov">${rows}${idleRow}</div><div class="leg">${kinds.map(k => `<span><i class="${kc(k)}" style="background:var(--c)"></i>${k}</span>`).join("")}<span><i style="background:var(--muted)"></i>ran</span><span><i class="hatch"></i>not run</span><span>◎ hill target · ◇ hill control</span><span>click a segment for its hash, metric and runs</span></div>`;
+  return `<div class="cov">${rows}${idleRow}</div><div class="leg">${kinds.map(k => `<span><i class="${kc(k)}" style="background:var(--c)"></i>${k}</span>`).join("")}<span><i style="background:var(--muted)"></i>ran</span><span><i class="hatch"></i>not run</span><span>◎ hill target · ◇ hill control</span></div>`;
 });
 
 /* ================= 04 results ================= */
