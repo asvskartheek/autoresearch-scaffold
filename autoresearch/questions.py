@@ -484,6 +484,8 @@ def _tree(p, full: bool) -> dict:
                     except KeyError:
                         pass
                 n["live"] = live
+            elif it and it.get("task"):
+                n["answer_task"] = it["task"]  # the agent task that answered it: its notes are the working
         return dict(nodes=sorted(nodes.values(), key=lambda n: (n.get("seed") == "group", n.get("created") or 0)), goals=_trajectories(p, ctx),
                     champion=ctx["champion"], needs_human=sum(1 for n in nodes.values() if _waiting(n)), now=time.time())
 
@@ -594,6 +596,10 @@ def _decisions(p):
     return out
 
 
+# the answer daemon's own notes on every agent task (answer.py): they say nothing about the question
+_LIFECYCLE = re.compile(r"^(Reading the question and the ledger\.|Answered in \d+ s\.)$")
+
+
 def notes(p, qid: str, cap: int = 60) -> list[dict]:
     """The reading pane: the notes behind this question and the questions under it, newest first. Each decision
     reason and task note is placed on the node it is about: a question's own answering agent and evidence tasks, else
@@ -652,7 +658,8 @@ def notes(p, qid: str, cap: int = 60) -> list[dict]:
         head = f"{task.get('title') or ''} {task.get('description') or ''}"
         for e in p.events(task["id"])[-(6 if at else 2):]:
             msg = e.get("msg")
-            if isinstance(msg, str) and len(msg) > (12 if at else 40) and not msg.lstrip().startswith(("{", "[")):
+            if isinstance(msg, str) and len(msg) > (12 if at else 40) and not msg.lstrip().startswith(("{", "[")) \
+                    and not _LIFECYCLE.match(msg):
                 out.append(dict(t=e.get("t"), node=at or place(task.get("model"), head + " " + msg), src=task["id"],
                                 text=readable(msg)))
     for k in sub:

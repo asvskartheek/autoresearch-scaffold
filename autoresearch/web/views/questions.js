@@ -3,12 +3,13 @@
 // Left: the outline, claims on hover. Right: the focused question, its claim and its evidence as paired-delta dots
 // with CI and fixed/broke squares. "Ask" under any node, or window.qAsk(text) from selected text on any view (the
 // comments chip's Ask button), sends a question to an agent (status agent, inbox kind=question).
-const QS={data:null,at:0,busy:false,closed:null,read:false,notes:{},fresh:new Set(),err:null};
+const QS={data:null,at:0,busy:false,closed:null,notes:{},fresh:new Set(),err:null};
 const qName=()=>{try{return localStorage.getItem('arx-name')||'you'}catch(e){return 'you'}};
 
 function qLoad(force){
  if(QS.busy&&!force)return QS.busy;
  if(!force&&QS.data&&Date.now()-QS.at<5000)return Promise.resolve();
+ if(force)QS.notes={};  // an answer or a new note may have landed
  const p=fetch('api/questions',{cache:'no-store'}).then(r=>r.json()).then(d=>{QS.data=d;QS.at=Date.now();QS.err=null})
   .catch(e=>{QS.err=String(e)}).finally(()=>{if(QS.busy===p)QS.busy=false;if(route().r==='questions')render()});
  return QS.busy=p;
@@ -138,22 +139,32 @@ function qPanel(id,ix){
  h+=qEvidence(n);
  const live=n.status==='open'||n.status==='agent';
  if(w&&n.choices?.length)h+=`<div class="q-acts">${n.choices.map((c,i)=>`<button class="btn ${i?'':'q-warn'}" data-qpick="${esc(c)}">${esc(c)}</button>`).join('')}</div>`;
- if(live)h+=`<div class="q-form ${w?'on':''}" id="q-af"><input class="q-in" id="q-ans" aria-label="Your answer" placeholder="Your answer"><button class="btn primary" data-qact="answer">Answer</button><button class="btn" data-qact="dead">Dead end</button></div>`;
+ if(live)h+=`<div class="q-form ${w?'on':''}" id="q-af"><input class="q-in" id="q-ans" aria-label="Your answer" placeholder="Your answer"><button class="btn primary" data-qact="answer">Answer</button><button class="btn" data-qact="dead">Close as dead end</button></div>`;
+ h+=qNotesInline(id,ix);
  const ks=ix.kids[id]||[];
  if(ks.length)h+=`<div class="q-kids">${ks.map(k=>{const c=ix.by[k];return `<button class="q-kid" data-qgo="${esc(k)}" data-qnode="${esc(k)}"${c.claim?` data-qtip="${esc(c.claim)}"`:''}><span class="q-sh">${qShape(c)}</span><span>${esc(c.title)}</span></button>`}).join('')}</div>`;
- h+=`<div class="q-acts"><button class="btn primary" data-qact="branch">Ask</button>`+
-  (live&&!w?`<button class="btn" data-qact="settle">Answer</button>`:'')+(live?`<button class="btn ${n.needs_human?'on':''}" data-qact="flag" aria-pressed="${!!n.needs_human}">Needs you</button>`:`<button class="btn" data-qact="reopen">Reopen</button>`)+
-  `<button class="btn ${QS.read?'on':''}" data-qact="read" aria-expanded="${QS.read}">Read</button>`+
-  `${n.model?`<a class="btn" href="#model/${enc(n.model)}">Model</a>`:n.hill?`<a class="btn" href="#hill/${enc(n.hill)}">Hill</a>`:n.goal?`<a class="btn" href="#goal/${enc(n.goal)}">Goal</a>`:''}</div>`+
-  `<div class="q-form" id="q-bf"><input class="q-in" id="q-bin" aria-label="Question" maxlength="120"><button class="btn primary" data-qact="ask">Ask</button></div>`;
- if(QS.read)h+=qRead(id,ix);
+ const open=n.model?['model','#model/'+enc(n.model)]:n.hill?['hill','#hill/'+enc(n.hill)]:n.goal?['goal','#goal/'+enc(n.goal)]:null;
+ h+=`<div class="q-acts"><button class="btn primary" data-qact="branch">Ask a follow-up</button>`+
+  (live&&!w?`<button class="btn" data-qact="settle">Answer</button>`:'')+(live?`<button class="btn ${n.needs_human?'on':''}" data-qact="flag" aria-pressed="${!!n.needs_human}">${n.needs_human?'Waiting on a person':'Needs a person'}</button>`:`<button class="btn" data-qact="reopen">Reopen</button>`)+
+  `${open?`<a class="btn" href="${open[1]}">Open ${open[0]}</a>`:''}</div>`+
+  `<div class="q-form" id="q-bf"><input class="q-in" id="q-bin" aria-label="Follow-up question" placeholder="Your question for an agent" maxlength="120"><button class="btn primary" data-qact="ask">Ask</button></div>`;
  return h;
 }
-function qRead(id,ix){
+// what the ledger says about this question, shown under it: the newest notes on this node (decisions, the answering
+// agent's and the evidence tasks' notes), each with its source; notes on the questions under it fold behind a count
+function qNotesInline(id,ix){
  const r=QS.notes[id];
- if(!r){qNotes(id);return `<div class="q-read"><div class="body"><div class="q-note faint">Reading the ledger…</div></div></div>`}
- if(!r.length)return `<div class="q-read"><div class="body"><div class="q-note faint">No notes</div></div></div>`;
- return `<div class="q-read"><div class="body">${r.map(x=>`<div class="q-note" data-qnode="${esc(x.node)}"><div class="meta"><a data-qgo="${esc(x.node)}">${esc(ix.by[x.node]?.title||x.node)}</a><span class="faint">${x.t?ago(x.t):''}</span></div><p>${esc(x.text)}</p></div>`).join('')}</div></div>`;
+ if(r===undefined)qNotes(id);
+ const at=ix.by[id]?.answer_task,tl=at?`<a class="q-at" href="#task/${enc(at)}">The agent's task${byId(at)?.updated?' · '+ago(byId(at).updated):''}</a>`:'';
+ if(!r?.length)return tl?`<div class="q-notes">${tl}</div>`:'';
+ const own=r.filter(x=>x.node===id),sub=r.filter(x=>x.node!==id);
+ const one=x=>{
+  const src=/^\d{4}-\d{6}-/.test(x.src||'')?`<a href="#task/${enc(x.src)}">${esc(byId(x.src)?.title||x.src)}</a>`:x.src==='quote'?'quote':esc(String(x.src||'').replace(/^decision /,''));
+  const at=x.node!==id?`<a data-qgo="${esc(x.node)}">${esc(ix.by[x.node]?.title||x.node)}</a>`:'';
+  return `<li class="q-note" data-qnode="${esc(x.node)}"><p tabindex="0" data-qclamp>${esc(x.text)}</p><div class="meta">${at}<span>${src}</span><span>${x.t?ago(x.t):''}</span></div></li>`};
+ const head=own.slice(0,3),rest=own.slice(3).concat(sub);
+ return `<div class="q-notes">${tl}${head.length?`<ul>${head.map(one).join('')}</ul>`:''}`+
+  (rest.length?`<details class="q-more"><summary>${rest.length} more note${rest.length>1?'s':''}${sub.length?' here and below':''}</summary><ul>${rest.map(one).join('')}</ul></details>`:'')+`</div>`;
 }
 function qNotes(id){
  if(QS.notes[id]!==undefined)return;QS.notes[id]=null;
@@ -205,7 +216,9 @@ document.addEventListener('click',async e=>{
  const car=e.target.closest('[data-qcar]');
  if(car){e.stopPropagation();const id=car.dataset.qcar;QS.closed.has(id)?QS.closed.delete(id):QS.closed.add(id);render(true);return}
  const g=e.target.closest('[data-qgo]');
- if(g){e.preventDefault();g.closest('details')?.removeAttribute('open');qGo(g.dataset.qgo);return}
+ if(g){e.preventDefault();g.closest('details.q-need')?.removeAttribute('open');qGo(g.dataset.qgo);return}
+ const cl=e.target.closest('[data-qclamp]');
+ if(cl&&!e.target.closest('a')){cl.classList.toggle('full');return}
  const a=e.target.closest('[data-qact]');
  const pick=e.target.closest('[data-qpick]');
  const act=a?.dataset.qact,id=()=>qFocus(qIndex(),route().arg);
@@ -222,7 +235,6 @@ document.addEventListener('click',async e=>{
   try{await qPost(act,{id:id(),on:act==='flag'?!n?.needs_human:undefined});await qLoad(true)}catch(err){alert(err.message)}
   return}
  if(a.dataset.qact==='branch'){$('#q-bf').classList.add('on');$('#q-bin').focus();return}
- if(a.dataset.qact==='read'){QS.read=!QS.read;render(true);return}
  if(a.dataset.qact==='ask'){
   const v=$('#q-bin').value.trim();if(!v)return;a.disabled=true;
   try{const q=await qAskPost(v,qFocus(qIndex(),route().arg));qGo(q.id)}catch(err){a.disabled=false;alert(err.message)}
@@ -231,6 +243,7 @@ document.addEventListener('click',async e=>{
 document.addEventListener('keydown',e=>{
  if(e.key==='Enter'&&e.target.id==='q-bin')document.querySelector('[data-qact="ask"]')?.click();
  if(e.key==='Enter'&&e.target.id==='q-ans')document.querySelector('[data-qact="answer"]')?.click();
+ if(e.key==='Enter'&&e.target.dataset?.qclamp!==undefined)e.target.classList.toggle('full');
  if((e.key==='Enter'||e.key===' ')&&e.target.classList?.contains('q-row')){e.preventDefault();qGo(e.target.dataset.qgo)}
 });
 
