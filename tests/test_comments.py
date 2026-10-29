@@ -108,6 +108,30 @@ class Daemon(unittest.TestCase):
         rec = questions.stored(p)[q["id"]]
         self.assertEqual(rec["status"], "open"); self.assertIn("without replying", rec["error"])
 
+    def test_followup_alone_does_not_acknowledge_parent(self):
+        from autoresearch import questions
+        p = project()
+        q = questions.ask(p, "Why did the run fail?")
+        self.run_daemon(p, fake_agent(p.root, f'arx q add "Rerun it?" --parent {q["id"]} --needs-human --choice Yes --choice No --why "A new run is needed."'))
+        self.assertEqual(features.inbox(p)[0]["status"], "failed")
+        rec = questions.stored(p)[q["id"]]
+        self.assertEqual(rec["status"], "open")
+        self.assertIn("without replying", rec["error"])
+
+    def test_question_ack_requires_current_visible_result(self):
+        from autoresearch import questions
+        p = project()
+        q = questions.ask(p, "Why did the run fail?")
+        item = features.inbox(p)[0]
+        start = time.time()
+        questions.settle(p, q["id"], "answered", "The log shows a timeout.")
+        self.assertTrue(answer._answered(p, item, start))
+        questions.reopen(p, q["id"])
+        self.assertFalse(answer._answered(p, item, start))
+        questions.flag(p, q["id"])
+        self.assertTrue(answer._answered(p, item, start))
+        self.assertFalse(answer._answered(p, item, time.time() + 1))
+
     def test_timeout(self):
         p = project()
         a = comments._post(p, "/api/comments", dict(kind="comment", body="slow", anchor=ANCHOR))[1]

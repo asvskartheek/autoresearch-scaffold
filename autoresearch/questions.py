@@ -150,7 +150,9 @@ def reopen(p, qid, by="agent") -> dict:
 
 def flag(p, qid, on=True, by="agent") -> dict:
     """Mark a question as waiting on a person (or not)."""
-    rec = _base(p, qid) | dict(needs_human=bool(on), flagged_by=by)
+    rec = _base(p, qid) | dict(needs_human=bool(on), flagged_by=by, flagged_at=time.time())
+    if on and rec.get("status") == "agent":
+        rec["status"] = "open"  # the person, not an agent, now owns the next step
     _save(p, qid, rec)
     return rec | {"id": qid}
 

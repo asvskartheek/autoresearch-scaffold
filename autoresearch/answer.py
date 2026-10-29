@@ -147,12 +147,15 @@ def _answered(p: Project, item: dict, since: float) -> bool:
     if k == "paper":
         th = next((t for t in papers.threads(papers.thread(p, pl["paper"])) if t["id"] == pl["thread"]), None)
         return th is None or not th["waiting"]
-    if k == "question":  # settled, handed to a person, or split into follow-ups since the agent started
+    if k == "question":
         from . import questions
-        qs, qid = questions.stored(p), item.get("ref")
-        rec = qs.get(qid) or {}
-        return ((rec.get("settled") or 0) >= since - 1 or bool(rec.get("needs_human")) and (rec.get("updated") or rec.get("settled") or since) >= since - 1
-                or any(v.get("parent") == qid and (v.get("created") or 0) >= since - 1 for v in qs.values() if isinstance(v, dict)))
+        rec = questions.stored(p).get(item.get("ref")) or {}
+        # A follow-up is not an answer to its parent. Require a visible result or a fresh, explicit hand-off;
+        # otherwise a successful process can leave the original question spinning forever.
+        settled = rec.get("status") in ("answered", "dead") and (rec.get("settled") or 0) >= since
+        handed_off = (rec.get("status") == "open" and bool(rec.get("needs_human"))
+                      and (rec.get("flagged_at") or 0) >= since)
+        return bool(settled or handed_off)
     if k == "goal":  # the intake agent leaves a proposal on its item
         cur = next((i for i in features.inbox(p) if i["id"] == item["id"]), {})
         return bool(cur.get("proposal"))
