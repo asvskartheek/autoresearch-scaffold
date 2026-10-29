@@ -143,13 +143,15 @@ def threads(log: list[dict]) -> list[dict]:
         e.setdefault("t", "")
         k = e["kind"]
         if k == "comment":
-            m = dict(id=e["id"], t=e["t"], author=e.get("author") or "you", body=e.get("body", ""), agent=False)
+            m = dict(id=e["id"], t=e["t"], author=e.get("author") or "you", body=e.get("body", ""), agent=False,
+                     by=e.get("by"), mentions=e.get("mentions") or [])
             out[e["id"]] = dict(id=e["id"], t=e["t"], anchor=e.get("anchor"), resolved=False, resolved_by=None,
-                                messages=[m], seen=set())
+                                messages=[m], seen=set(), seen_by={})
             msgs[e["id"]] = m; owner[e["id"]] = e["id"]
         elif k == "reply" and e.get("parent") in out:
             m = dict(id=e["id"], t=e["t"], author=e.get("author") or ("agent" if e.get("agent") else "you"),
-                     body=e.get("body") or "", agent=bool(e.get("agent")), link=e.get("link"))
+                     body=e.get("body") or "", agent=bool(e.get("agent")), link=e.get("link"), by=e.get("by"),
+                     mentions=e.get("mentions") or [])
             out[e["parent"]]["messages"].append(m)
             msgs[e["id"]] = m; owner[e["id"]] = e["parent"]
         elif k in ("resolve", "reopen") and e.get("parent") in out:
@@ -163,7 +165,9 @@ def threads(log: list[dict]) -> list[dict]:
             msgs[e["target"]].update(body=e.get("body") or "", edited=e["t"])
         elif k == "delete" and e.get("target") in msgs:
             msgs[e["target"]]["deleted"] = True
-        elif k == "seen" and e.get("parent") in owner:
+        elif k == "seen" and e.get("by") and e.get("parent") in out:  # a person read the thread (people.py)
+            out[e["parent"]]["seen_by"][e["by"]] = e["t"]
+        elif k == "seen" and e.get("parent") in owner:  # the agent picked up that message
             out[owner[e["parent"]]]["seen"].add(e["parent"])
     res = []
     for th in out.values():
@@ -176,7 +180,10 @@ def threads(log: list[dict]) -> list[dict]:
         last = th["messages"][-1] if th["messages"] else None
         # "@agent" in a person's message summons the agent with the whole thread, even on a resolved thread
         th["mention"] = bool(last and not last["agent"] and MENTION.search(last["body"]))
-        th["waiting"] = bool(last and not last["agent"] and (not th["resolved"] or th["mention"]))
+        to_people = bool(last and last.get("mentions") and not th["mention"])  # people talking to people
+        th["waiting"] = bool(last and not last["agent"] and not to_people and (not th["resolved"] or th["mention"]))
+        th["people"] = sorted({m["by"] for m in th["messages"] if m.get("by")})
+        th["mentions"] = sorted({x for m in th["messages"] for x in m.get("mentions") or []})
         th["thinking"] = bool(th["waiting"] and last["id"] in th["seen"])
         th["last"] = last["id"] if last else None
         th.pop("seen")

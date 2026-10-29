@@ -6,7 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlsplit
 
-from . import features, papers, projects
+from . import features, papers, people, projects
 from .core import Project, _read, paired, per_id
 from .readable import readable
 
@@ -378,7 +378,7 @@ def task_detail(p: Project, tid: str) -> dict:
 
 
 LOCAL = ("127.0.0.1", "localhost", "::1")
-HUMAN_KINDS = ("comment", "reply", "resolve", "reopen", "edit", "delete")
+HUMAN_KINDS = ("comment", "reply", "resolve", "reopen", "edit", "delete", "seen")
 
 
 def human_event(p: Project, name: str, kind: str, d: dict) -> dict | None:
@@ -387,23 +387,44 @@ def human_event(p: Project, name: str, kind: str, d: dict) -> dict | None:
     if author.lower() in ("agent", "claude", "arx"):  # names the agent signs with; a person never posts as it
         return None
     body = str(d.get("body") or "").strip()[:4000]
+    by = str(d.get("by") or "") if people.ID.match(str(d.get("by") or "")) else None
+    who = dict(author=author, by=by)
     log = {e["id"]: e for e in papers.thread(p, name)}
     ids = set(log)
     if kind == "comment":
         a = d.get("anchor") if isinstance(d.get("anchor"), dict) else None
         anchor = {k: str(a[k])[:600] for k in ("block", "quote", "prefix", "suffix") if a and a.get(k)} or None
-        return papers.post(p, name, "comment", body=body, anchor=anchor, author=author) if body and anchor else None
-    ref = str(d.get("parent" if kind in ("reply", "resolve", "reopen") else "target") or "")
+        if anchor and isinstance(a.get("shape"), dict):  # a drawn comment: the shape, relative to its block (paper.html)
+            anchor["shape"] = clean_shape(a["shape"])
+        return papers.post(p, name, "comment", body=body, anchor=anchor, mentions=people.mentioned(body) or None, **who) if body and anchor else None
+    ref = str(d.get("parent" if kind in ("reply", "resolve", "reopen", "seen") else "target") or "")
     if ref not in ids or (kind in ("reply", "edit") and not body):
         return None
+    if kind == "seen":  # a person read the thread; the agent's own "seen" carries no `by`
+        return papers.post(p, name, "seen", parent=ref, by=by) if by and log[ref]["kind"] == "comment" else None
     if kind == "reply":
-        return papers.post(p, name, "reply", parent=ref, body=body, author=author)
+        return papers.post(p, name, "reply", parent=ref, body=body, mentions=people.mentioned(body) or None, **who)
     if kind in ("resolve", "reopen"):
-        return papers.post(p, name, kind, parent=ref, author=author)
+        return papers.post(p, name, kind, parent=ref, **who)
     t = log[ref]  # edit / delete: only your own message, never the agent's
     if t["kind"] not in ("comment", "reply") or t.get("agent") or (t.get("author") or "") != author:
         return None
-    return papers.post(p, name, kind, target=ref, body=body or None, author=author)
+    return papers.post(p, name, kind, target=ref, body=body or None, **who)
+
+
+def clean_shape(s: dict) -> dict:
+    """A drawn mark from the paper reader: tool, an SVG path in px from its block's top-left, and the block's size then."""
+    out = {k: s[k] for k in ("tool",) if s.get(k) in ("box", "arrow", "pen", "highlight")}
+    if "tool" not in out:
+        return {}
+    d = str(s.get("d") or "")[:4000]
+    out["d"] = d if re.fullmatch(r"[MLQCZmlqcz0-9.,\s-]*", d) else ""
+    for k in ("bw", "bh", "x", "y", "w", "h"):
+        try:
+            out[k] = round(float(s[k]), 1)
+        except (KeyError, TypeError, ValueError):
+            pass
+    return out
 
 
 def serve(port: int = 8890, root=None):
