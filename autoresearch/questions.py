@@ -416,6 +416,20 @@ def resolve(p, e: dict, node: dict, ctx: dict) -> dict | None:
     return _pd(_PAIRED[key], model, base, sl, role, runs=len(mine), base_runs=len(theirs))
 
 
+def _dedupe(ev, p) -> list[dict]:
+    """One row per run: a task cited next to its model:slice (the pooled row already holds it) is dropped, and so is
+    a repeated model:slice."""
+    pooled = {(r.get("model"), r.get("slice")) for r in ev if not r.get("task") and r.get("model")}
+    out, seen = [], set()
+    for r in ev:
+        key = (r.get("task"),) if r.get("task") else (r.get("kind"), r.get("model"), r.get("slice"), r.get("role"))
+        if key in seen or r.get("task") and (r.get("model"), r.get("slice")) in pooled:
+            continue
+        seen.add(key)
+        out.append(r)
+    return out
+
+
 def _pd(r, model, base, sl, role, **kw):
     n = r.get("n") or 0
     out = dict(kind="paired", role=role, model=model, base=base, slice=sl, n=n, delta=r.get("delta"), lo=r.get("lo"),
@@ -569,7 +583,7 @@ def _tree(p, full: bool) -> dict:
         for n in nodes.values():
             if n.get("goal") and not n.get("claim"):
                 n["claim"] = _goal_claim(p, ctx["goal_status"].get(n["goal"]) or {})
-            n["ev"] = [r for r in (resolve(p, e, n, ctx) for e in n.get("evidence") or []) if r]
+            n["ev"] = _dedupe([r for r in (resolve(p, e, n, ctx) for e in n.get("evidence") or []) if r], p)
             it = items.get(n["id"])
             if it and n.get("status") == "agent":
                 live = dict(item=it["id"], status=it.get("status"), task=it.get("task"), error=it.get("error"))

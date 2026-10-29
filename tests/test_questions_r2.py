@@ -60,6 +60,13 @@ class R2(unittest.TestCase):
         self.assertEqual((n["why"], n["choices"]), ("Two runs stopped at 4 of 10.", ["Rerun", "Drop"]))
         self.assertEqual(n["ev"][0]["kind"], "paired")
 
+    def test_a_run_cited_twice_draws_once(self):
+        tid = next(t["id"] for t in self.p.evals() if t.get("model") == "base+hint")
+        a = q.add(self.p, "Does the hint hold?", parent="h:hard",
+                  evidence=q.parse_evidence(self.p, ["base+hint:hard", f"task:{tid}", "base+hint:hard"]))
+        n = {x["id"]: x for x in q.tree(self.p)["nodes"]}[a["id"]]
+        self.assertEqual([e["kind"] for e in n["ev"]], ["paired"])
+
     def test_notes_leave_out_tooling_dicts_and_other_questions_evidence(self):
         p = self.p
         t = Task(p, "paper", "Port the goal paper", model="base")

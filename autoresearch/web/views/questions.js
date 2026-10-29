@@ -90,7 +90,7 @@ function qTipOf(e){
 function qSquares(e){
  if(e.kind!=='paired'||(!e.wins&&!e.losses))return '';
  const u=Math.max(1,Math.ceil((e.wins+e.losses)/28));
- return `<span class="sqs" title="${e.wins} fixed · ${e.losses} broke">`+'<i class="f"></i>'.repeat(Math.ceil(e.wins/u))+'<i class="b"></i>'.repeat(Math.ceil(e.losses/u))+'</span>';
+ return `<span class="sqs" title="${e.wins} fixed · ${e.losses} broke">`+'<i class="f"></i>'.repeat(Math.ceil(e.wins/u))+'<i class="b"></i>'.repeat(Math.ceil(e.losses/u))+`<span class="sqn"><b class="f">${e.wins} fixed</b> · <b class="b">${e.losses} broke</b></span></span>`;
 }
 function qEvidence(n){
  // one lane per run: role, the delta (or count) as a dot with its CI, the value in the slice's units, and under it
@@ -99,6 +99,8 @@ function qEvidence(n){
  const isPts=e=>e.kind==='paired'&&e.delta!=null&&!isCont(e.slice);
  const span=e=>Math.max(...[e.delta,e.lo,e.hi].filter(v=>v!=null).map(Math.abs),0);
  const R=Math.max(3,Math.ceil(Math.max(0,...ev.filter(isPts).map(e=>100*span(e)))*1.1));
+ // name the model on each row unless every row is this question's own model
+ const who=e=>e.model&&(e.model!==n.model||new Set(ev.map(x=>x.model)).size>1)?qM(e.model):'';
  const rows=ev.map(e=>{
   let lane='';
   if(e.kind==='raw')lane=`<div class="trk"></div><div class="fill" style="width:${e.n&&e.c!=null&&!(e.slice&&isCont(e.slice))?Math.max(0,Math.min(100,100*e.c/e.n)).toFixed(1):0}%"></div>`;
@@ -106,7 +108,7 @@ function qEvidence(n){
    const col=qCol(e),k=isPts(e)?100:1,r=isPts(e)?R:(span(e)*1.15||1),x=v=>50+Math.max(-r,Math.min(r,k*v))/r*48;
    lane=`<div class="z"></div>`+(e.lo!=null?`<div class="ci" style="left:${x(e.lo)}%;width:${Math.max(.5,x(e.hi)-x(e.lo))}%;background:${col}"></div>`:'')+`<div class="d" style="left:${x(e.delta)}%;background:${col}"></div>`}
   const href=e.task?`#task/${enc(e.task)}`:e.model?`#model/${enc(e.model)}`:'';
-  const cap=[e.kind==='raw'&&e.role==='errors'?(e.what||e.label):e.slice,e.n?'n '+qFmt(e.n):'',e.kind==='paired'&&e.base?'vs '+qM(e.base):'',qCI(e)].filter(Boolean).map(esc).join(' · ');
+  const cap=[who(e),e.kind==='raw'&&e.role==='errors'?(e.what||e.label):e.slice,e.n?'n '+qFmt(e.n):'',e.kind==='paired'&&e.base?'vs '+qM(e.base):'',qCI(e)].filter(Boolean).map(esc).join(' · ');
   const tag=e.role==='errors'?'errors':qTag(e);
   return `<${href?'a':'div'} class="q-lr ${e.kind}"${href?` href="${href}"`:''} data-qtip="${esc(qTipOf(e))}"><span class="tag">${esc(tag)}</span><div class="lane">${lane}</div><b class="val">${esc(qVal(e))}</b><span class="cap">${cap}${qSquares(e)}</span></${href?'a':'div'}>`;
  }).join('');
