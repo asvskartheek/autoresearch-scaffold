@@ -363,7 +363,7 @@ function rangeAt(nodes, s, e) {
 }
 function resolve(a) {
   const d = paperDoc(); if (!d || !a) return null;
-  if (a.shape) { const b = [...d.querySelectorAll("[data-block]")].find(x => x.dataset.block === a.block) || (a.block ? null : d.body); return { range: null, block: b, exact: !!b, shape: true }; }
+  if (a.shape) { const b = [...d.querySelectorAll("[data-block]")].find(x => x.dataset.block === a.block) || (a.block ? null : d.body); return { range: null, block: b, exact: !!b, shape: true, word: b && refWord(b, a) }; }
   if (!a.quote) return null;
   const b = a.block ? [...d.querySelectorAll("[data-block]")].find(x => x.dataset.block === a.block) : null;
   for (const el of b ? [b, d.body] : [d.body]) {
@@ -498,9 +498,9 @@ function updateCount() {
 function topOf(t) {
   const r = ranges.get(t.id), fr = frame;
   if (!fr) return 0;
+  if (r && r.shape && r.block) { const x = shapeXf(t.anchor, r); return page.offsetTop + x.ty + (t.anchor.shape.y || 0) * x.k; }
   const rect = r && r.range ? r.range.getClientRects()[0] || r.range.getBoundingClientRect() : r && r.block ? r.block.getBoundingClientRect() : null;
-  const sh = r && r.shape && t.anchor.shape, dy = sh && rect ? (sh.y || 0) * rect.width / Math.max(1, sh.bw || rect.width) : 0;
-  return rect ? fr.offsetTop + page.offsetTop + rect.top + dy : 0;
+  return rect ? fr.offsetTop + page.offsetTop + rect.top : 0;
 }
 const ordered = () => visible().map(t => ({ t, y: topOf(t) })).sort((a, b) => a.y - b.y || a.t.t - b.t.t).map(x => x.t);
 let lay = 0;
@@ -575,7 +575,12 @@ function startDraft(given) {
 function cancelDraft() { if (draft) { draft.el.remove(); draft = null; drawInk(); if (mobile() && !active) col.classList.remove("open"); renderAll(); } }
 
 // ---------- drawing on the paper: Box, Arrow, Pen, Highlight. A mark is stored on the block under it (anchor.block),
-// as an SVG path in px from that block's top-left at the block's width then (bw), so it scales with the column.
+// as an SVG path in px from that block's top-left at the block's width then (bw). Text reflows (tiles stack, lines
+// wrap), so a mark also holds on to a word under it: the path opens with two bare moves "M x0 y0M x1 y1" (they draw
+// nothing) giving that word's top-left and bottom-left then, and the word (anchor.suffix) is found again after its
+// 40-character prefix. The mark
+// then follows the word and scales with its height (words in a figure scale with it, words in text do not). Marks
+// without the reference, or whose word is gone, fall back to the block, scaled by its width.
 const TOOLN = { box: "Box", arrow: "Arrow", pen: "Drawing", highlight: "Highlight" };
 const ink = h("div", "ink", '<svg class="ink-svg" xmlns="http://www.w3.org/2000/svg"></svg>'), inkSvg = ink.firstChild;
 page.appendChild(ink);
@@ -594,7 +599,27 @@ function shapeD(tool, pts) {
     return `M${r1(a.x)} ${r1(a.y)}L${r1(b.x)} ${r1(b.y)}M${r1(b.x - L * Math.cos(ang - s))} ${r1(b.y - L * Math.sin(ang - s))}L${r1(b.x)} ${r1(b.y)}L${r1(b.x - L * Math.cos(ang + s))} ${r1(b.y - L * Math.sin(ang + s))}`; }
   return "M" + pts.filter((p, i) => i === 0 || i === pts.length - 1 || i % 2 === 0).map(p => `${r1(p.x)} ${r1(p.y)}`).join("L");
 }
-const local = e => { const r = page.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+const local = e => { const r = ink.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+// the frame's top-left in the ink layer's px (the ink layer covers the page, the frame sits at its top)
+const fOff = () => { const i = ink.getBoundingClientRect(), f = frame.getBoundingClientRect(); return { x: f.left - i.left, y: f.top - i.top }; };
+const REF = /^M(-?[\d.]+) (-?[\d.]+)M(-?[\d.]+) (-?[\d.]+)(?=M)/;
+// the reference word of a mark (anchor.suffix: the word alone), found again in its block: after its prefix, else
+// alone; null when the mark has none or the word is gone
+function refWord(b, a) {
+  const m = REF.exec(a.shape.d || ""), word = a.suffix; if (!m || !word) return null;
+  const nodes = texts(b); if (!nodes.length) return null;
+  const full = nodes.map(([n]) => n.data).join(""), pre = a.prefix || "";
+  let i = pre ? full.indexOf(pre + word) : -1;
+  if (i >= 0) i += pre.length; else i = full.indexOf(word);
+  return i < 0 ? null : rangeAt(nodes, i, i + word.length);
+}
+// where a mark's path (block px then) goes now, in the ink layer's px: x' = tx + x·k, y' = ty + y·k
+function shapeXf(a, r) {
+  const fo = fOff(), m = REF.exec(a.shape.d || ""), wr = m && r.word && r.word.getClientRects()[0];
+  if (wr && wr.height) { const k = wr.height / Math.max(1, m[4] - m[2]); return { tx: fo.x + wr.left - m[1] * k, ty: fo.y + wr.top - m[2] * k, k }; }
+  const br = r.block.getBoundingClientRect(), k = br.width / Math.max(1, a.shape.bw || br.width);
+  return { tx: fo.x + br.left, ty: fo.y + br.top, k };
+}
 ink.addEventListener("pointerdown", e => {
   if (!pen || e.button) return; e.preventDefault(); ink.setPointerCapture(e.pointerId);
   stroke = { id: e.pointerId, tool: pen, pts: [local(e)] };
@@ -604,22 +629,44 @@ ink.addEventListener("pointerup", e => {
   if (!stroke || e.pointerId !== stroke.id) return; const s = stroke; stroke = null; ink.releasePointerCapture(e.pointerId);
   const xs = s.pts.map(p => p.x), ys = s.pts.map(p => p.y), w = Math.max(...xs) - Math.min(...xs), ht = Math.max(...ys) - Math.min(...ys);
   if (w < 6 && ht < 6) return drawInk();
-  const d = paperDoc(), fy = frame.offsetTop, cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+  const d = paperDoc(), fo = fOff(), cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2;
   // what the mark is about: an arrow points with its tip, anything else covers its middle
-  const tip = s.tool === "arrow" ? s.pts.at(-1) : { x: cx, y: cy };
-  const under = d.elementFromPoint(tip.x, tip.y - fy) || d.body, b = blockOf(under) || d.body, br = b.getBoundingClientRect();
-  const ox = br.left, oy = br.top + fy, rel = s.pts.map(p => ({ x: p.x - ox, y: p.y - oy }));
+  const tip = s.tool === "arrow" ? s.pts.at(-1) : { x: cx, y: cy }, tx = tip.x - fo.x, ty = tip.y - fo.y;
+  const cr = caretAt(d, tx, ty), under = d.elementFromPoint(tx, ty) || d.body;
+  // the block under the point; in the margin, the block of the nearest text
+  const b = blockOf(under) || (cr && blockOf(cr[0])) || d.body, br = b.getBoundingClientRect();
+  const ox = fo.x + br.left, oy = fo.y + br.top, rel = s.pts.map(p => ({ x: p.x - ox, y: p.y - oy }));
   let q = under; while (q && q !== b && !(q.textContent || "").trim()) q = q.parentElement;  // a bar or a tick: its figure's words
   const quote = texts(q || b).map(([n]) => n.data.trim()).filter(Boolean).join(" ").replace(/\s+/g, " ").slice(0, 120);
-  const shape = { tool: s.tool, d: shapeD(s.tool, rel), bw: r1(br.width), bh: r1(br.height), x: r1(Math.min(...rel.map(p => p.x))), y: r1(Math.min(...rel.map(p => p.y))), w: r1(w), h: r1(ht) };
+  const ref = cr && wordAt(b, cr[0], cr[1]);
+  const shape = { tool: s.tool, d: refD(ref, br) + shapeD(s.tool, rel), bw: r1(br.width), bh: r1(br.height), x: r1(Math.min(...rel.map(p => p.x))), y: r1(Math.min(...rel.map(p => p.y))), w: r1(w), h: r1(ht) };
   const anchor = { block: b === d.body ? "" : b.dataset.block, quote: quote || "", shape };
+  if (ref) Object.assign(anchor, { prefix: ref.full.slice(Math.max(0, ref.s - 40), ref.s), suffix: ref.full.slice(ref.s, ref.e) });
   if (!anchor.block && !anchor.quote) anchor.quote = TOOLN[s.tool];  // the server keeps an anchor only with a block or words
   setPen(null); startDraft({ anchor, y: page.offsetTop + oy + shape.y }); drawInk();
 });
+function caretAt(d, x, y) {
+  if (d.caretPositionFromPoint) { const p = d.caretPositionFromPoint(x, y); return p && [p.offsetNode, p.offset]; }
+  if (d.caretRangeFromPoint) { const r = d.caretRangeFromPoint(x, y); return r && [r.startContainer, r.startOffset]; }
+  return null;
+}
+// the word at (or else right after, or before) a caret inside block b: its offsets in b's text and its first box
+function wordAt(b, node, off) {
+  if (!node || node.nodeType !== 3 || !b.contains(node)) return null;
+  const nodes = texts(b), hit = nodes.find(([n]) => n === node); if (!hit) return null;
+  const t = node.data; let s = off, e = off;
+  while (s > 0 && /\S/.test(t[s - 1])) s--; while (e < t.length && /\S/.test(t[e])) e++;
+  if (s === e) { const nx = /\S+/.exec(t.slice(off)); if (nx) { s = off + nx.index; e = s + nx[0].length; }
+    else { const pv = /\S+(?=\s*$)/.exec(t.slice(0, off)); if (!pv) return null; s = pv.index; e = s + pv[0].length; } }
+  const full = nodes.map(([n]) => n.data).join(""), r = rangeAt(nodes, hit[1] + s, hit[1] + e), rect = r.getClientRects()[0];
+  return rect && rect.height ? { s: hit[1] + s, e: hit[1] + e, full, rect } : null;
+}
+// the two bare moves that carry the reference word's first box, in block px (see the note above)
+const refD = (ref, br) => ref ? `M${r1(ref.rect.left - br.left)} ${r1(ref.rect.top - br.top)}M${r1(ref.rect.left - br.left)} ${r1(ref.rect.bottom - br.top)}` : "";
 function inkG(a, cls, id) {
   const r = id === "_draft" ? resolve(a) : ranges.get(id); if (!r || !r.block || !a.shape) return "";
-  const br = r.block.getBoundingClientRect(), k = br.width / Math.max(1, a.shape.bw || br.width);
-  return `<g class="${cls}" data-id="${esc(id)}" transform="translate(${r1(br.left)} ${r1(br.top + frame.offsetTop)}) scale(${r1(k * 1000) / 1000})"><path class="hit" d="${esc(a.shape.d)}"/><path class="v ${esc(a.shape.tool)}" d="${esc(a.shape.d)}"/></g>`;
+  const x = shapeXf(a, r);
+  return `<g class="${cls}" data-id="${esc(id)}" transform="translate(${r1(x.tx)} ${r1(x.ty)}) scale(${r1(x.k * 1000) / 1000})"><path class="hit" d="${esc(a.shape.d)}"/><path class="v ${esc(a.shape.tool)}" d="${esc(a.shape.d)}"/></g>`;
 }
 function drawInk() {
   if (!frame) return;
