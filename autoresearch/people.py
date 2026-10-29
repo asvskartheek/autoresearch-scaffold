@@ -75,6 +75,19 @@ def members(p) -> dict:
     return {k: v for k, v in roster().items() if key in (v.get("projects") or [key])}
 
 
+def who(d: dict) -> tuple[str | None, str | None]:
+    """The person behind a write: (id, name) with the name taken from the roster, never from the request. Someone on a
+    share link (d["_remote"]) may only act as a person made on a share link; claiming a person of this machine gives
+    (None, None) and the write is refused."""
+    pid = str(d.get("by") or "")
+    if not ID.match(pid):
+        return (None, None) if d.get("_remote") else (None, clean_name(d.get("author")) or "you")
+    cur = roster().get(pid)
+    if d.get("_remote") and cur and not cur.get("remote"):
+        return None, None
+    return pid, (cur or {}).get("name") or clean_name(d.get("author")) or ("guest" if d.get("_remote") else "you")
+
+
 def here(p) -> list[dict]:
     t = time.time()
     with _lock:
