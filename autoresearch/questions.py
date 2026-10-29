@@ -421,8 +421,8 @@ def _evals(p):
 _PAIRED: dict = {}  # (model, base, slice, run ids) -> paired(); bootstraps are the slow part
 
 
-def _runs(p, model, sl):
-    return tuple(t["id"] for t in _evals(p) if t.get("model") == model and t.get("slice") == sl)
+def _runs(p, model, sl, reference_model=None):
+    return tuple(t["id"] for t in p.score_runs(model, sl, reference_model))
 
 
 def _role(p, sl, node, hills, goals):
@@ -471,15 +471,15 @@ def resolve(p, e: dict, node: dict, ctx: dict) -> dict | None:
         return dict(kind="missing", model=model, slice=sl, role=role)
     m = models.get(model) or {}
     cands = [e.get("base"), m.get("parent"), (hills.get(m.get("hill") or "") or {}).get("found_in"), champ]
-    base = next((b for b in cands if b and b != model and _runs(p, b, sl)), None)
+    base = next((b for b in cands if b and b != model and _runs(p, b, sl, model)), None)
     if not base:
         sc = p.pooled_scores(model, sl)
         return dict(kind="raw", role=role, model=model, slice=sl, n=len(sc), c=_evidence_sum(sum(sc.values()), p, sl), runs=len(mine))
-    theirs = _runs(p, base, sl)
+    theirs = _runs(p, base, sl, model)
     key = (model, base, sl, mine, theirs)
     if key not in _PAIRED:
         sign = 1 if p.config.get("higher_is_better", True) else -1
-        _PAIRED[key] = paired(p.pooled_scores(model, sl), p.pooled_scores(base, sl), sign)
+        _PAIRED[key] = paired(p.pooled_scores(model, sl), p.pooled_scores(base, sl, reference_model=model), sign)
     return _pd(_PAIRED[key], model, base, sl, role, continuous=p.slices().get(sl, {}).get("scale") == "continuous", runs=len(mine), base_runs=len(theirs))
 
 
@@ -523,7 +523,7 @@ def _pts(x) -> str:
 
 def number_lines(p, models=None, slices=None) -> list[str]:
     """Each model's score on each slice it has runs on, as the gates and the Questions evidence compute it: every
-    complete run at the slice's current hash pooled per example, paired against the model's parent (else the hill's
+    compatible complete run at the slice's current hash pooled per example, paired against the model's parent (else the hill's
     baseline, else the champion) with the 90% CI. `arx q numbers` prints these; answer agents quote them as written."""
     with p.snapshot():
         p._q_evals = None
@@ -572,9 +572,10 @@ def number_lines(p, models=None, slices=None) -> list[str]:
 
 NUMBERS_RULE = """\
 - Numbers come from `arx q numbers [model ...] [--slice s]` and are quoted exactly as it prints them. They are what the
-  dashboard and the gates show: every complete run of a model on a slice pooled per example, and the paired delta vs
+  dashboard and the gates show: compatible complete runs of a model on a slice pooled per example, and the paired delta vs
   the model's parent (else the champion) with its 90% CI. Never take a score from one run's summary or a task note,
-  and never average runs yourself.
+  and never average runs yourself. A declared baseline_contract selects matching runs on both sides; the champion's
+  own latest-contract headline can differ from the matched comparator printed in a candidate's evidence.
 - Counts with thousands separators and their n ("1,224 of 1,319 on gsm8k-test/full"), never a bare percentage. A gap
   to a goal is the goal line's own text below; do not subtract it again.
 - Say what a comparison is on: "leads" or "best" names the slice and the n."""

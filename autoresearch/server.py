@@ -201,14 +201,15 @@ def _state(p: Project) -> dict:
     champ = p.champion()
     board, newest = {}, {}
     for sl, model in {(t["slice"], t["model"]) for t in p.evals()}:
-        runs = p.slice_evals(model, sl)
+        runs = p.score_runs(model, sl)
         if not runs:
             continue
         latest = runs[-1]
         scores = p.pooled_scores(model, sl)
         summary = summarize([r for t in runs for r in p.rows(t["id"])])
         summary.update(n=len(scores), score=sum(scores.values()) / len(scores) if scores else None)
-        board.setdefault(sl, {})[model] = dict(task=latest["id"], ended=latest["ended"], runs=len(runs), **summary)
+        board.setdefault(sl, {})[model] = dict(task=latest["id"], ended=latest["ended"], runs=len(runs),
+                                              baseline_contract=(latest.get("config") or {}).get("baseline_contract"), **summary)
         if latest["ended"] > newest.get(sl, (0, 0))[0]:
             newest[sl] = (latest["ended"], latest["id"])
     for name, sl in slices.items():  # slices frozen before `scale` existed: read it off the scores
@@ -355,7 +356,7 @@ def project_list(default: Project) -> list[dict]:
 
 
 _CHECK = ("slice", "rule", "state", "threshold", "noisy", "n", "delta", "lo", "hi", "wins", "losses", "cand", "base",
-          "cand_runs", "base_runs", "cand_task", "base_task")
+          "cand_runs", "base_runs", "cand_task", "base_task", "baseline_contract")
 
 
 def _slim_gate(g) -> dict | None:
@@ -425,10 +426,14 @@ def task_detail(p: Project, tid: str) -> dict:
         rows = p.rows(tid)
         out["rows"] = [dict(id=r["id"], score=r.get("score"), error=bool(r.get("error")), latency_s=r.get("latency_s"), cost=r.get("cost")) for r in rows]
         champ = p.champion()
-        base = p.latest_eval(champ, t["slice"]) if champ and champ != t.get("model") else None
-        if base:
-            out["vs_champion"] = dict(model=champ, task=base["id"], runs=len(p.slice_evals(champ, t["slice"])),
-                                      **paired(per_id(rows), p.pooled_scores(champ, t["slice"]), 1 if p.config.get("higher_is_better", True) else -1))
+        bases = p.slice_evals(champ, t["slice"]) if champ and champ != t.get("model") else []
+        contract = (t.get("config") or {}).get("baseline_contract")
+        if contract is not None:
+            bases = [b for b in bases if (b.get("config") or {}).get("baseline_contract") == contract]
+        if bases:
+            out["vs_champion"] = dict(model=champ, task=bases[-1]["id"], runs=len(bases), baseline_contract=contract,
+                                      **paired(per_id(rows), per_id([r for b in bases for r in p.rows(b["id"])]),
+                                               1 if p.config.get("higher_is_better", True) else -1))
     return out
 
 

@@ -1,5 +1,5 @@
 """Questions, round 2: pooled numbers for answers, prompts, hand-offs, notes, comment threads and readable titles."""
-import os, tempfile, unittest
+import json, os, tempfile, unittest
 
 os.environ["ARX_HOME"] = tempfile.mkdtemp()  # never touch the real ~/.arx
 from autoresearch import comments, features, questions as q
@@ -39,6 +39,33 @@ class R2(unittest.TestCase):
         p.supersede("base", "ds/hard", latest.id)
         row = server.state(p)["leaderboard"]["ds/hard"]["base"]
         self.assertEqual((row["score"], row["runs"]), (0.6, 1))
+
+    def test_contract_scoped_evidence_agrees_with_gate_and_leaderboard(self):
+        from autoresearch import server
+        p = self.p
+        p.add_slice("ds/contract", list(range(4)))
+        cfg = p.config | dict(ladder=[dict(rung="full", checks=[dict(slice="ds/contract", rule="better")])])
+        (p.root / "research.json").write_text(json.dumps(cfg))
+        for model, contract, scores in (("base", "A", [1, 1, 0, 0]),
+                                         ("base", "B", [1, 1, 1, 1]),
+                                         ("base+hint", "B", [0, 0, 0, 0]),
+                                         ("base+hint", "A", [1, 1, 1, 0])):
+            task = Task(p, "eval", model, model=model, slice="ds/contract", config=dict(baseline_contract=contract))
+            for i, score in enumerate(scores):
+                task.add_row(dict(id=str(i), score=score))
+            task.finish()
+        gate = p.gate("base+hint")["rungs"][0]["checks"][0]
+        node = q.add(p, "Does it improve?", evidence=[dict(model="base+hint", slice="ds/contract")])
+        ev = next(n for n in q.tree(p)["nodes"] if n["id"] == node["id"])["ev"][0]
+        self.assertEqual((ev["delta"], ev["runs"], ev["base_runs"]), (gate["delta"], 1, 1))
+        self.assertEqual((ev["c"], ev["bc"]), (3, 2))
+        board = server.state(p)["leaderboard"]["ds/contract"]
+        self.assertEqual((board["base+hint"]["score"], board["base+hint"]["runs"]), (gate["cand"], 1))
+        self.assertEqual(board["base+hint"]["baseline_contract"], "A")
+        self.assertEqual(board["base"]["baseline_contract"], "B")
+        self.assertEqual(server.task_detail(p, task.id)["vs_champion"]["delta"], gate["delta"])
+        text = "\n".join(q.number_lines(p, ["base+hint"], ["ds/contract"]))
+        self.assertIn("ds/contract: 3 of 4 (1 run); vs Plain base [base] 2 of 4: +25.0 pts", text)
 
     def test_half_counts_match_browser_rounding(self):
         p = self.p
