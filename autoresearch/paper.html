@@ -474,7 +474,7 @@ function cardFor(t) {
       (hidden > 0 ? `<div class="collapsed">${hidden} more ${hidden === 1 ? "reply" : "replies"}</div>` : "") +
       (t.thinking ? `<div class="think"><span class="av agent">${I.spark}</span>Agent is thinking<span class="dots"><i></i><i></i><i></i></span></div>` :
         t.waiting ? `<div class="think"><span class="av agent">${I.spark}</span>Sent to the agent</div>` :
-        `<div class="think"><button class="btn sm outline" data-act="ask"><span class="av agent">${I.spark}</span>Send to agent</button></div>`) +
+        t.resolved ? "" : `<div class="think"><button class="btn sm outline" data-act="ask"><span class="av agent">${I.spark}</span>Send to agent</button></div>`) +
       (PX && Object.keys(readers(t)).some(k => k !== myId()) ? `<div class="seen">Seen ${PX.seenFaces(readers(t), myId())}</div>` : "") +
       (t.resolved ? `<div class="res">${I.check}Resolved${t.resolved_by ? " by " + esc(t.resolved_by) : ""}<button class="btn sm outline" data-act="reopen">${I.reopen}Re-open</button></div>` : "");
   }
