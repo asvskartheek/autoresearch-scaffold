@@ -5,7 +5,7 @@ truth. Gate results are never stored; they are derived from finished eval tasks 
 """
 from __future__ import annotations
 
-import contextlib, fcntl, hashlib, json, math, os, random, shlex, signal, statistics, subprocess, sys, threading, time, uuid
+import contextlib, fcntl, hashlib, itertools, json, math, os, random, shlex, signal, statistics, subprocess, sys, threading, time, uuid
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 
@@ -119,16 +119,33 @@ def per_id(rows: list[dict]) -> dict[str, float]:
     return {k: statistics.mean(v) for k, v in acc.items()}
 
 
+_BOOT: dict = {}  # (deltas, iters) -> (lo, hi): a bootstrap is a pure function of its deltas
+
+
 def paired(cand: dict[str, float], base: dict[str, float], sign: int = 1, iters: int = 2000) -> dict:
+    """Paired delta of cand over base on their shared ids, with a 90% bootstrap CI (seed 0, `iters` resamples).
+
+    The resamples draw exactly what `random.Random(0).choices(d, k=n)` draws, one draw `floor(random() * n)` per
+    pick, but run the whole draw-index-sum chain in C (islice/map/fsum) instead of a Python loop and
+    statistics.mean (about 3x faster), and remember each CI by its deltas, so the dashboard's next poll of the same
+    pair costs nothing."""
     ids = sorted(set(cand) & set(base))
     if not ids:
         return dict(n=0, delta=None, lo=None, hi=None, wins=0, losses=0)
     d = [sign * (cand[i] - base[i]) for i in ids]
-    rng = random.Random(0)
-    boots = sorted(statistics.mean(rng.choices(d, k=len(d))) for _ in range(iters))
-    return dict(n=len(ids), delta=statistics.mean(d), lo=boots[int(0.05 * iters)], hi=boots[int(0.95 * iters) - 1],
+    n, key = len(d), (tuple(d), iters)
+    ci = _BOOT.get(key)
+    if ci is None:
+        draws = iter(random.Random(0).random, None)  # an endless stream of the same floats choices() would use
+        pick, scale = d.__getitem__, float(n).__mul__
+        boots = sorted(math.fsum(map(pick, map(int, map(scale, itertools.islice(draws, n))))) / n for _ in range(iters))
+        ci = _BOOT[key] = (boots[int(0.05 * iters)], boots[int(0.95 * iters) - 1])
+        with contextlib.suppress(RuntimeError, StopIteration, KeyError):  # another thread may be trimming too
+            while len(_BOOT) > 512:  # the dashboard re-asks the same pairs every poll; keep the recent ones
+                _BOOT.pop(next(iter(_BOOT)))
+    return dict(n=n, delta=math.fsum(d) / n, lo=ci[0], hi=ci[1],
                 wins=sum(x > 0 for x in d), losses=sum(x < 0 for x in d),
-                cand=statistics.mean(cand[i] for i in ids), base=statistics.mean(base[i] for i in ids))
+                cand=math.fsum(cand[i] for i in ids) / n, base=math.fsum(base[i] for i in ids) / n)
 
 
 # ---------------------------------------------------------------- the project
