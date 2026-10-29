@@ -1,9 +1,8 @@
 'use strict';
-/* overview: where does the research stand — who is champion, what is climbing, what is running, what to run next */
+/* overview: where the research stands, at a glance: the goals as distance to target, the ladder, what runs, the board */
 const ovPassed=g=>(g?.rungs||[]).filter(r=>r.status==='pass').length;
 const ovFailedAt=g=>(g?.rungs||[]).find(r=>r.status==='fail')?.rung;
 const ovN=n=>n==null?'—':Number(n).toLocaleString();
-const ovList=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a.at(-1);
 // the line under a model's name (the name is its title): its id when the title differs, else its change
 const ovAbout=(k,m)=>m?.title&&m.title!==k?k:firstLine(m?.change||'');
 // a slice scores 0/1 per example unless it says otherwise (scale: continuous, optional unit): then no %, no solved / n
@@ -12,11 +11,38 @@ const ovVal=(v,sl)=>v==null?'—':(Math.abs(v)>=10?v.toFixed(1):num(v,3))+(sl?.u
 const ovScore=(v,sl)=>ovBin(sl)?pct(v):esc(ovVal(v,sl));
 const ovDelta=(d,sl)=>d==null?'—':ovBin(sl)?pts(d):(d>0?'+':d<0?'−':'')+esc(ovVal(Math.abs(d),sl));
 const ovRunning=(m,s)=>active().some(t=>t.kind==='eval'&&t.model===m&&t.slice===s);
-// goals: score KPIs read as %, latency in seconds, anything else as a plain number
-const ovG=(g,v)=>v==null?'—':(g.kpi||'score')==='score'?pct(v):/^latency/.test(g.kpi)?secs(v):num(v);
-// a baseline role: "hill <key> target|control" names the hill; a dataset slice says which kind it is
-const ovRole=r=>{const m=/^hill (\S+) (target|control)$/.exec(r);if(m){const h=S.state.hills[m[1]];return `<a class="ov-ln" href="#hill/${enc(m[1])}" onclick="event.stopPropagation()">${esc(h?.title||m[1])}</a> <span class="faint">${m[2]}</span>`}return esc(({full:'Full set',random:'Random sample'})[r]||r)};
 const ovRungs=()=>{const st=S.state;return (st.config.ladder||[]).map(r=>r.rung).filter(Boolean).length?st.config.ladder.map(r=>r.rung):(Object.values(st.gates).find(g=>g.rungs?.length)?.rungs||[]).map(r=>r.rung)};
+// a task silent for more than a day is dead: not running, not a live card, one line
+const ovDead=t=>t.status==='stalled'&&now()-(t.heartbeat||t.updated||t.created)>86400;
+const ovTask=t=>{
+ const pr=t.progress||{},f=pr.total?pr.done/pr.total:null,sl=t.status==='stalled';
+ const nm=t.kind==='eval'&&t.model?`${mn(t.model)}${t.slice?`<span class="faint"> · ${esc(short(t.slice))}</span>`:''}`:esc(t.title);
+ const v=sl?`<span class="neg">silent ${span(now()-(t.heartbeat||t.updated||t.created))}</span>`:pr.total?`${ovN(pr.done)}<span class="faint"> / ${ovN(pr.total)}</span>`:dur(t.created);
+ return `<a class="ov-task ${sl?'stalled':''}" href="#task/${enc(t.id)}" title="${esc(t.title)}"><span class="ov-tl"><span class="ell">${nm}</span><span class="ov-tv">${v}</span></span>${f!=null?meter(f,{cls:sl?'muted':''}):''}</a>`;
+};
+// one open goal: where the champion stands on the way from the baseline to the target, in the goal's units
+const ovGoal=g=>{
+ const U=window.GoalUnits,P=U.prog(g),d=U.dist(g),met=g.met;
+ const f=met?1:P.mode==='rel'?Math.max(0,Math.min(1,P.p)):P.mode==='abs'?(x=>isFinite(x)?Math.max(0,Math.min(1,x)):0)(U.cmpSym(g)==='≥'?U.disp(g,g.value)/U.disp(g,g.target):U.disp(g,g.target)/U.disp(g,g.value)):0;
+ const fig=d?(d.short?`<b class="neg">${d.v}</b> <span class="faint">${d.s}</span>`:`<b class="pos">Met</b> <span class="faint">${d.s}</span>`):'<span class="faint">not run yet</span>';
+ const now=g.value==null?DASH:`${U.gu(g,g.value)}${U.ofP(g)}`;
+ const base=P.b!=null&&P.mode==='rel'?`<span>Baseline ${U.gu(g,P.b)}</span>`:'<span></span>';
+ return `<a class="ov-goal ${U.isMain(g)?'':'ov-sub'}" href="#goal/${enc(g.name)}">
+  <span class="ov-gh"><span class="ell ov-gt">${esc(g.title||g.name)}</span><span class="ov-gd num">${fig}</span></span>
+  <span class="ov-gb"><span class="ov-trk ${met?'met':''}"><i style="width:${(100*f).toFixed(1)}%"></i></span>${ovSpark(g)}</span>
+  <span class="ov-ge num">${base}<span>Now <b>${now}</b></span><span>Target ${U.cmpSym(g)}&nbsp;${U.gt(g)}</span></span></a>`;
+};
+// the best run on the goal slice over time, as a step, with the target dashed
+const ovSpark=g=>{
+ const U=window.GoalUnits,k=U.kpiKey(g),s=U.sgn(g),runs=U.slRuns(g);
+ if(runs.length<2)return '';
+ const D=v=>U.disp(g,v),W=160,H=32,ys=runs.map(r=>D(r.summary[k])).concat([D(g.target)]);
+ if(!ys.every(isFinite))return '';
+ const lo=Math.min(...ys),hi=Math.max(...ys),sp=(hi-lo)||1,x0=runs[0].ended,xs=(runs.at(-1).ended-x0)||1;
+ const X=t=>2+(t-x0)/xs*(W-4),Y=v=>H-3-(D(v)-lo)/sp*(H-6);
+ let best=null,p='';runs.forEach(r=>{const v=r.summary[k];if(best==null||s*(v-best)>0){p+=p?`H${X(r.ended).toFixed(1)}V${Y(v).toFixed(1)}`:`M${X(r.ended).toFixed(1)} ${Y(v).toFixed(1)}`;best=v}});p+=`H${W-2}`;
+ return `<svg class="ov-spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="best run on ${esc(g.slice)} over time"><line x1="0" x2="${W}" y1="${Y(g.target).toFixed(1)}" y2="${Y(g.target).toFixed(1)}" stroke="var(--chart-3)" stroke-dasharray="3 3"/><path d="${p}" fill="none" stroke="var(--chart-1)" stroke-width="1.6"/></svg>`;
+};
 const ovKind={full:'Full set',random:'Random sample',control:'Control',dev:'Development',synthetic:'Synthetic'};
 // what a candidate needs next, as [label html, command to copy, cls]
 function ovNextOf(k,g){
@@ -32,99 +58,59 @@ function ovPickSlice(name){S.lbSlice=name;S.ovLbAll=false;render()}
 VIEWS.overview=()=>{
  const st=S.state,champ=st.champion,ds=Object.keys(st.datasets),hib=st.config.higher_is_better!==false;
  const prim=st.config.primary_dataset||ds[0],fullKey=prim+'/full';
- const cf=champ&&fullScore(champ),fsl=st.slices[fullKey];
+ const cf=champ&&fullScore(champ);
  const cands=Object.entries(st.models).filter(([,m])=>m.status==='candidate')
   .map(([k,m])=>[k,m,st.gates[k]||{}])
   .sort((a,b)=>(b[2].promotable-a[2].promotable)||(!!ovFailedAt(a[2])-!!ovFailedAt(b[2]))||(ovPassed(b[2])-ovPassed(a[2]))||((b[1].created||0)-(a[1].created||0)));
- const live=active(),stalled=live.filter(t=>t.status==='stalled'),running=live.filter(t=>t.status!=='stalled');
+ // research work only: answer agents are not research, and a task silent for over a day is dead, not running
+ const work=active().filter(t=>t.kind!=='answer');
+ const dead=work.filter(ovDead),stalled=work.filter(t=>t.status==='stalled'&&!ovDead(t)),running=work.filter(t=>t.status!=='stalled');
  const hills=Object.values(st.hills),open=hills.filter(h=>h.status==='open').length,climbed=hills.filter(h=>h.status==='climbed').length;
  const promotable=cands.filter(c=>c[2].promotable),failed=cands.filter(c=>ovFailedAt(c[2])),onWay=cands.filter(c=>ovPassed(c[2])&&!ovFailedAt(c[2]));
- const lead=promotable[0]||cands.find(c=>!ovFailedAt(c[2])),bl=st.baseline;
+ const bl=st.baseline;
+ let h=page({title:'Overview',crumbs:[['Overview','#overview']],finding:champ?'':'No champion yet.',
+  acts:champ?`<a class="btn" href="#model/${enc(champ)}">Open champion</a>`:''});
 
- // the finding: said the way a lead would say it in stand-up
- let finding,nextCmd='';
- if(!champ)finding='There is no champion yet. Register a baseline with <code>arx model add &lt;name&gt; --champion</code>; every candidate is gated against it.';
- else{
-  const p=[`<b>${mn(champ)}</b> is champion${cf?` at ${ovScore(cf.score,fsl)} on ${esc(short(fullKey))} (${ovBin(fsl)?`${ovN(solved(cf))} of ${ovN(cf.n)}`:`mean of ${ovN(cf.n)}`})`:`, with no run on ${esc(short(fullKey))} yet`}.`];
-  if(promotable.length)p.push(`<b>${mn(promotable[0][0])}</b> passed every rung and is ready to promote.`);
-  else if(lead){
-   const g=lead[2],done=(g.rungs||[]).filter(r=>r.status==='pass').map(r=>esc(r.rung)),nx=g.next?.[0];
-   if(done.length)p.push(`<b>${mn(lead[0])}</b> is closest: it passed ${ovList(done)}${nx?` and needs a run on ${esc(short(nx.slice))}`:''}.`);
-   else p.push(`No candidate has passed a rung yet${failed.length?`; ${failed.length} failed one`:''}. Next up is <b>${mn(lead[0])}</b>${nx?` on ${esc(short(nx.slice))}`:''}.`);
-  }else if(cands.length)p.push(`All ${plural(cands.length,'candidate')} failed a rung; reject them or register a new one.`);
-  else p.push('No candidate is climbing.');
-  if(bl?.need?.length)p.push(`The champion has no run on ${bl.need.length} of ${plural(Object.keys(bl.roles).length,'baseline slice')}.`);
-  if(stalled.length)p.push(`<span class="neg">${stalled.length===1?'1 task has':stalled.length+' tasks have'} stopped reporting.</span>`);
-  finding=p.join(' ');
-  nextCmd=lead?ovNextOf(lead[0],lead[2])[1]:bl?.need?.length?'arx baseline':'';
- }
- let h=page({title:'Overview',crumbs:[['Overview','#overview']],finding,
-  acts:`${nextCmd?`<span class="ov-next-cmd" title="Run this next">${cmd(nextCmd)}</span>`:''}${champ?`<a class="btn" href="#model/${enc(champ)}">Open champion</a>`:''}`});
-
- // KPIs: the champion's score leads; the rest are counts of what is in motion
- const goal=st.config.goal;
+ // with no run on the full slice, the champion reads by the first main goal it has a value on
+ const GU=window.GoalUnits,gs=GU?Object.values(st.goals||{}).filter(g=>g.status==='open').sort((a,b)=>GU.isMain(b)-GU.isMain(a)||(a.created||0)-(b.created||0)):[];
+ const cg=!cf&&champ&&gs.find(g=>GU.isMain(g)&&g.model===champ&&g.value!=null);
  h+=`<div class="ov-kpis">${kpis([
-  ['Champion',cf?ovScore(cf.score,fsl):DASH,champ?`<a href="#model/${enc(champ)}" class="ov-cn" title="${esc(champ)}">${mn(champ)}</a>${cf?` · ${esc(short(fullKey))}, n ${ovN(cf.n)}`:''}${goal?.target!=null?` · target ${pct(goal.target)}`:''}`:'No champion yet'],
-  ['Candidates',String(cands.length),promotable.length?`<span class="pos">${promotable.length} ready to promote</span>`:cands.length?`${onWay.length} passed a rung · ${failed.length} failed one`:'None registered','#models'],
-  ['Running',String(live.length),stalled.length?`<span class="neg">${stalled.length} not reporting</span>`:live.length?'All reporting':'Nothing running','#workbench'],
-  ['Open hills',String(open),`${climbed} climbed · ${hills.length} in all`,'#hills'],
+  ['Champion',cf?sv(fullKey,cf.score,cf.n):cg?`${GU.gu(cg,cg.value)}${GU.ofP(cg)}`:DASH,champ?`<a href="#model/${enc(champ)}" class="ov-cn" title="${mnt(champ)}">${mn(champ)}</a>${cf?` · ${esc(short(fullKey))}`:cg?` · ${esc(short(cg.slice))}`:''}`:'No champion yet'],
+  ['Candidates',String(cands.length),promotable.length?`<span class="pos">${promotable.length} ready to promote</span>`:cands.length?`${onWay.length} passed a rung · ${failed.length} failed`:'None','#models'],
+  ['Running',String(running.length),stalled.length?`<span class="neg">${stalled.length} stalled</span>`:running.length?'All reporting':'Nothing running','#workbench'],
+  ['Open hills',String(open),`${climbed} climbed`,'#hills'],
  ])}</div>`;
 
- // goals: the outward-facing targets the hills serve, each with its paper
- const gs=Object.values(st.goals||{}).sort((a,b)=>(a.status==='open'?0:1)-(b.status==='open'?0:1)||(a.created||0)-(b.created||0));
- if(gs.length){
-  const gst=g=>g.error?pill('Error','neg'):g.status==='open'?(g.met?pill('Target met','pass'):pill('Open','ghost')):pill(g.status[0].toUpperCase()+g.status.slice(1),g.status==='achieved'?'pass':'ghost');
-  const grows=gs.map(g=>{
-   const v=g.vs_baseline,p=goalPaper(g.name),sc=(g.kpi||'score')==='score';
-   const vs=v&&v.delta!=null?`<span title="vs ${esc(g.baseline||'')}, 90% CI" class="${v.lo>0?'pos':v.hi<0?'neg':'sub'}">${pts(v.delta)}</span><span class="sub ov-hide-s"> · ${pts(v.lo)} to ${pts(v.hi)}</span>`:DASH;
-   return `<tr class="click" onclick="if(!event.target.closest('a,button'))location.hash='goal/${enc(g.name)}'"><td class="ov-id"><div class="two"><a class="ell ov-nm" href="#goal/${enc(g.name)}" title="${esc(g.problem||g.title)}">${esc(g.title||g.name)}</a><span class="sub ell">${esc(short(g.slice))} · n ${ovN(g.n)}${g.model?` · <span title="${esc(g.model)}">${mn(g.model)}</span>`:''}</span></div></td>
-    <td class="ov-gst ov-hide-s">${gst(g)}</td>
-    <td class="ov-gv"><div class="ov-gvw"><span class="ov-gn"><b>${ovG(g,g.value)}</b><span class="faint"> of ${ovG(g,g.target)}</span></span>${sc&&g.value!=null?meter(Math.min(g.value,1),{mark:g.target,cls:g.met?'pos':''}):''}</div></td>
-    <td class="num ov-gd ov-hide-m">${vs}</td>
-    <td class="num ov-gp">${p?`<a class="ov-ln" href="${paperUrl(p)}">${g.status==='open'?'<span class="ov-hide-s">Draft p</span><span class="ov-show-s">P</span>aper':'Paper'}</a>${p.waiting?` ${pill(p.waiting,'warn')}`:''}`:DASH}</td></tr>`});
-  h+=panel('Goals',table(['Goal',['Status','ov-gst ov-hide-s'],['Champion vs target','ov-gv'],['vs start, pts','num ov-gd ov-hide-m'],['Paper','num ov-gp']],grows),
-   {meta:plural(gs.length,'goal'),cls:'section ov-goals',right:'<a class="more" href="#goals">View goals</a>'});
- }
+ // goals first: each open goal as its distance to target, in units, with the best run on its slice over time
+ if(gs.length)h+=panel('Goals',`<div class="ov-gl">${gs.map(ovGoal).join('')}</div>`,{cls:'section ov-goals',right:'<a class="more" href="#goals">View goals</a>'});
 
  // the ladder: one column per rung, so each name is said once in the header and the track reads across
  const RUNGS=ovRungs(),CAP=6;
  const ladderRows=cands.slice(0,CAP).map(([k,m,g])=>{
   const by=Object.fromEntries((g.rungs||[]).map(r=>[r.rung,r.status]));
-  const [lbl,c,cls]=ovNextOf(k,g),about=ovAbout(k,m);
+  const [lbl,,cls]=ovNextOf(k,g);
   const word={pass:'passed',fail:'failed',pending:'next',locked:'locked',champion:'champion'};
   const cells=RUNGS.map((r,i)=>{const s=by[r]||'locked';return `<td class="ov-rg ${esc(s)} ${i&&by[RUNGS[i-1]]==='pass'?'in':''} ${i<RUNGS.length-1&&s==='pass'?'out':''} ${i?'':'first'} ${i===RUNGS.length-1?'last':''}"><i title="${esc(r)}: ${word[s]||esc(s)}"></i></td>`}).join('');
-  return `<tr class="click" onclick="location.hash='model/${enc(k)}'"><td class="ov-id"><div class="two"><a class="ell ov-nm" href="#model/${enc(k)}" title="${esc(m.change||k)}">${mn(k)}</a>${about?`<span class="sub ell ${about===k?'mono':''}" title="${esc(m.change||about)}">${esc(about)}</span>`:''}</div></td>
-   ${cells}<td class="ov-nx"><span class="ov-nxw"><span class="ell ${cls}">${lbl||DASH}</span>${copyBtn(c)}</span></td></tr>`;
+  return `<tr class="click" onclick="location.hash='model/${enc(k)}'"><td class="ov-id"><a class="ell ov-nm" href="#model/${enc(k)}" title="${esc(m.change||k)}">${mn(k)}</a></td>
+   ${cells}<td class="ov-nx"><span class="ell ${cls}">${lbl||DASH}</span></td></tr>`;
  });
- const ladderCard=panel('Ladder',cands.length?`<div class="ov-ladtbl">${table(['Candidate',...RUNGS.map(r=>[`<span class="ov-rgh">${esc(r)}</span>`,'ov-rg']),['<span class="ov-nxh">Next run</span>','ov-nx']],ladderRows)}</div>`:
-  empty('No candidates climbing',`<p>Register one, then ask the gate for its first run.</p>${cmd('arx model add <name> --hill <hill> --change "…"')}`),
-  {meta:champ?`against ${mn(champ)}`:'',right:cands.length>CAP?`<a class="more" href="#models">View all ${cands.length}</a>`:''});
+ const ladderCard=panel('Ladder',cands.length?`<div class="ov-ladtbl">${table(['Candidate',...RUNGS.map(r=>[`<span class="ov-rgh">${esc(r)}</span>`,'ov-rg']),['<span class="ov-nxh">Next</span>','ov-nx']],ladderRows)}</div>`:
+  empty('No candidates climbing',''),
+  {meta:champ?`against ${mn(champ)}`:'',right:cands.length>CAP?`<a class="more" href="#models">All ${cands.length}</a>`:''});
 
- // running now: stalled work grouped under one mark, so the warning is said once
- const RC=6;
- const trow=t=>{
-  const pr=t.progress||{},f=pr.total?pr.done/pr.total:null,sl=t.stalled||t.status==='stalled';
-  const nm=t.kind==='eval'&&t.model?mn(t.model):esc(t.title);
-  const what=t.kind==='eval'&&t.slice?esc(short(t.slice)):esc(t.kind||'task');
-  const meta=sl?`${what} · silent ${dur(t.heartbeat||t.updated||t.created)}`:t.note?esc(t.note.text??t.note.msg??''):`${what} · started ${ago(t.created)}${t.eta?` · ${left(t.eta.eta_s)} left`:''}`;
-  return `<div class="ov-task"><a class="ov-tl" href="#task/${enc(t.id)}" title="${esc(t.title)}"><span class="ell">${nm}</span><span class="ov-tv">${pr.total?`${ovN(pr.done)}<span class="faint"> / ${ovN(pr.total)}</span>`:dur(t.created)}</span></a>
-   ${f!=null?meter(f,{cls:sl?'muted':''}):''}<div class="ov-tm"><span class="ell">${meta}</span>${sl?copyBtn(`arx task finish ${t.id} --status failed`):''}</div></div>`;
- };
- const grp=(label,list,cls,n)=>list.length?`<div class="ov-grp ${cls}"><span>${label}</span><span class="faint">${list.length}</span></div>${list.slice(0,n).map(trow).join('')}`:'';
- const byNew=(a,b)=>b.created-a.created;
- const showRun=Math.min(running.length,RC),showSt=Math.max(0,RC-showRun);
- const runCard=panel('Running',live.length?`<div class="ov-run">${grp('Running',running.sort(byNew),'',showRun)}${grp('Not reporting for 10+ minutes',stalled.sort(byNew),'neg',showSt)}</div>`:
-  empty('Nothing running',`<p>Start work as a task so it shows here.</p>${cmd('arx task start --title "…"')}`),
-  {meta:live.length?plural(live.length,'task'):'',right:live.length>RC?`<a class="more" href="#workbench">View all ${live.length}</a>`:''});
+ // running now: one compact row each; stalled rows marked; work dead for over a day is one line, not a card
+ const RC=6,byNew=(a,b)=>b.created-a.created;
+ const trows=[...running.sort(byNew),...stalled.sort(byNew)].slice(0,RC).map(ovTask).join('');
+ const deadLine=dead.length?`<a class="ov-dead" href="#workbench">${plural(dead.length,'task')} silent for over a day</a>`:'';
+ const runCard=panel('Running',running.length||stalled.length?`<div class="ov-run">${trows}</div>${deadLine}`:empty('Nothing running','')+deadLine,
+  {meta:running.length+stalled.length>RC?`${RC} of ${running.length+stalled.length}`:'',right:'<a class="more" href="#workbench">Workbench</a>'});
  h+=`<div class="grid ov-row">${ladderCard}${runCard}</div>`;
 
- // the champion's baseline: every slice a candidate is compared on, and the ones it has no run on yet
+ // the champion's baseline: the slices it has no run on yet, as chips
  if(champ&&bl?.need?.length){
-  const nr=Object.keys(bl.roles).length,BC=5,showB=S.ovBlAll?bl.need:bl.need.slice(0,BC);
-  const brows=showB.map(s=>`<tr><td class="ov-bs"><a class="mono ov-ln ell" href="#slices/${enc(s)}" title="${esc(s)}">${esc(short(s))}</a></td><td class="ov-br ov-hide-s"><span class="ell">${(bl.roles[s]||[]).map(ovRole).join(', ')}</span></td><td class="num">${ovN(st.slices[s]?.n)}</td><td class="num ov-bst">${ovRunning(champ,s)?pill('Running','running'):pill('Not run','warn')}</td></tr>`);
-  h+=panel('Champion baseline',table([['Slice','ov-bs'],['Measures','ov-br ov-hide-s'],['n','num'],['<span class="sr">State</span>','num ov-bst']],brows)+
-   `<div class="ov-bfoot">${bl.need.length>BC?`<button class="btn ov-ball" onclick="S.ovBlAll=!S.ovBlAll;render()">${S.ovBlAll?'Show fewer':'Show all '+bl.need.length}</button>`:''}<span class="ov-bcmd">${cmd('arx baseline')}</span></div>`,
-   {meta:`${Object.keys(bl.have).length} of ${plural(nr,'slice')} run by ${mn(champ)}`,cls:'section ov-base'});
+  const nr=Object.keys(bl.roles).length;
+  h+=panel('Champion baseline',`<div class="ov-bchips">${bl.need.map(s=>`<a class="ov-bchip ${ovRunning(champ,s)?'run':''}" href="#slices/${enc(s)}" title="${esc(s)}">${esc(short(s))}<span class="faint"> ${ovN(st.slices[s]?.n)}</span></a>`).join('')}</div>`,
+   {meta:`${bl.need.length} of ${plural(nr,'slice')} not run`,cls:'section ov-base'});
  }
 
  // leaderboard: dataset tabs, slice control, paired deltas vs the champion on the same slice
@@ -155,19 +141,19 @@ VIEWS.overview=()=>{
   return `<tr class="click" onclick="location.hash='task/${enc(r.task)}'"><td class="num faint ov-rank">${rank.get(m)}</td>
    <td class="ov-id"><div class="two"><span class="row"><a class="ell ov-nm" href="#model/${enc(m)}" onclick="event.stopPropagation()" title="${esc(m)}">${mn(m)}</a>${m===champ?`<span class="ov-hide-s">${pill('champion','champion')}</span>`:''}</span><span class="sub ell ov-show-s">${m===champ?'Champion · ':''}n ${ovN(r.n)}${r.errors?' · '+plural(r.errors,'error'):''}</span></div></td>
    ${bin?`<td class="ov-bar ov-hide-s">${meter(r.score,{cls:m===champ?'':'muted'})}</td>`:''}
-   <td class="num"><b class="ov-sc">${ovScore(r.score,cur)}</b></td>
+   <td class="num"><b class="ov-sc">${cur?sv(cur.name,r.score,r.n):ovScore(r.score,cur)}</b></td>
    <td class="num ov-hide-s">${ovN(r.n)}</td>
-   <td class="num ${good} ${d===0||d==null?'faint':''}">${d==null?DASH:d===0?(bin?'0.0':'0'):ovDelta(d,cur)}</td>
+   <td class="num ${good} ${d===0||d==null?'faint':''}">${d==null?DASH:d===0?'0':cur?sd(cur.name,d):ovDelta(d,cur)}</td>
    <td class="num ov-hide-s ${r.errors?'':'faint'}">${ovN(r.errors??0)}</td>
    ${hasCost?`<td class="num ov-hide-m">${r.cost==null?DASH:money(r.cost)}</td>`:''}
    ${hasLat?`<td class="num ov-hide-m">${r.latency_p50==null?DASH:secs(r.latency_p50)}</td>`:''}${hasP95?`<td class="num ov-hide-m">${r.latency_p95==null?DASH:secs(r.latency_p95)}</td>`:''}
    <td class="num ov-hide-m faint">${ago(r.ended)}</td></tr>`});
- const head=[['<span class="sr">Rank</span>','num'],'Model',...(bin?[['<span class="sr">Score bar</span>','ov-bar ov-hide-s']]:[]),sh(bin?'Score':'Mean score','score','num'),sh('n','n','num ov-hide-s'),sh(bin?`<span class="ov-hide-s">vs champion, pts</span><span class="ov-show-s">Δ pts</span>`:`<span class="ov-hide-s">vs champion</span><span class="ov-show-s">Δ</span>`,'delta','num'),sh('Errors','errors','num ov-hide-s'),
+ const head=[['<span class="sr">Rank</span>','num'],'Model',...(bin?[['<span class="sr">Score bar</span>','ov-bar ov-hide-s']]:[]),sh(bin?'Correct':'Mean','score','num'),sh('n','n','num ov-hide-s'),sh(`<span class="ov-hide-s">vs champion</span><span class="ov-show-s">Δ</span>`,'delta','num'),sh('Errors','errors','num ov-hide-s'),
   ...(hasCost?[sh('Cost / example','cost','num ov-hide-m')]:[]),...(hasLat?[sh('p50','p50','num ov-hide-m')]:[]),...(hasP95?[sh('p95','p95','num ov-hide-m')]:[]),sh('Ran','ended','num ov-hide-m')];
  const meta=cur?`${esc(ovKind[cur.kind]||cur.kind)} · ${ovN(cur.n)} examples${cs==null&&champ&&board.length?' · no champion run here':''}`:'';
  h+=`<section class="card section ov-lb" id="ov-lb"><div class="ph"><h2>Leaderboard</h2><span class="meta">${meta}</span>${cur?`<span class="r"><a class="more" href="#slices/${enc(cur.name)}">View slice</a></span>`:''}</div>${tabs}<div class="ov-pick">${sl.length?pick:''}</div>
   ${board.length?table(head,rows)+(board.length>LB?`<button class="btn ov-all" onclick="S.ovLbAll=!S.ovLbAll;render()">${S.ovLbAll?'Show top '+LB:'Show all '+board.length+' models'}</button>`:'')
-  :empty(sl.length?'No complete runs on this slice':'No slices in this dataset',sl.length?`<p>Ask the gate which model runs next.</p>${cmd('arx gate <model>')}`:`<p>Freeze one for this dataset.</p>${cmd(`arx slice add ${S.lbDataset}/<name> --ids-file ids.txt`)}`)}</section>`;
+  :empty(sl.length?'No complete runs on this slice':'No slices in this dataset','')}</section>`;
  if(S.ovJump){S.ovJump=false;setTimeout(()=>document.getElementById('ov-lb')?.scrollIntoView({block:'start'}),0)}
  return h;
 };
