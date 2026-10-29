@@ -81,7 +81,7 @@ function pn(t,p,lead){
  if(p.id==='eta'){big=t.status==='stalled'?`<span class="neg">none</span><small>last said ${wbClock(p.value)}</small>`:`${wbClock(p.value)}<small>${p.drift_s>=0?'+':'−'}${span(Math.abs(p.drift_s))} in 5 min</small>`;sub=plural(p.n,'re-estimate')}
  else if(p.id==='gpu'){big=`${Math.round(p.value)}%${p.mem?.[0]!=null?`<small>${p.mem[0].toFixed(1)} of ${p.mem[1]?.toFixed(0)} GB</small>`:''}`;sub=p.gpus>1?`${p.gpus} GPUs`:'';
   if(p.mem?.[1])extra=`<div class="wb-mem">${meter(p.mem[0]/p.mem[1],{cls:'mem'})}</div>`}
- else if(p.id==='pair'){big=`<span class="${p.value>0?'pos':p.value<0?'neg':''}">${sgn(p.value)}</span><small>90% CI ${sgn(Math.floor(p.ci[0]))} to ${sgn(Math.ceil(p.ci[1]))}</small>`;sub=`${p.won} won · ${p.lost} lost`}
+ else if(p.id==='pair'){const dl=p.delta??p.value/(p.n||1);big=`<span class="${dl>0?'pos':dl<0?'neg':''}">${sd(t.slice,dl)}</span><small>90% CI ${pts(p.ci[0])} to ${pts(p.ci[1])}</small>`;sub=`${p.won} won · ${p.lost} lost`}
  else if(p.id==='lat'){big=`${p.value.toFixed(1)} s<small>95th ${p.p95.toFixed(1)} s</small>`;sub='median'}
  else if((p.id==='tps'||p.id==='rate')&&quiet>=60){big=`<span class="neg">none</span><small>no progress for ${span(quiet)}</small>`}
  else if(p.id==='tps'){big=`${n0(p.value)}${p.step_time?`<small>${p.step_time.toFixed(1)} s a step</small>`:''}`}

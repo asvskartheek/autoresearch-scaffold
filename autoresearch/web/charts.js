@@ -3,7 +3,7 @@
 // A view returns HTML strings, so a chart is a placeholder: XC.box(id, spec) registers the spec and returns
 // <div data-xc=id>; after each render XC.mount() draws into it, keeping the chart (zoom, hover) across the 4 s poll.
 //   spec: {group, series:[{id,name,color,pts:[[x,y,t?]],faint,smooth}], h, mode:'full'|'compact'|'mini', xLabel, yLabel,
-//          domain:[x0,x1], ymin, ymax, ref:{y,label}, band:[[x,lo,hi]], zero, yfmt:'num'|'pct'|'pct100'|'s'|'signed'|'int'|'dmin',
+//          domain:[x0,x1], ymin, ymax, ref:{y,label}, band:[[x,lo,hi]], zero, yfmt:'num'|'pct'|'pct100'|'s'|'signed'|'pts'|'int'|'dmin',
 //          xfmt:'num'|'time'|'clock', t0, logOk}
 //   Group state (shared by every chart with the same group: synced crosshair, zoom, smoothing, log-y, hidden series):
 //   XC.g(name, defaults) -> {w, log, x:'step'|'time', zoom, pin, hidden:Set, hl}
@@ -33,7 +33,8 @@ const hms=t=>new Date(t*1000).toLocaleTimeString('en-GB',{hour:'2-digit',minute:
 // a value in a spec's own terms; `step` is the tick step (null for a read-out)
 function yv(f,v,step){if(v==null||!isFinite(v))return '–';
  switch(f){case 'pct':return step!=null?fmt(100*v,step*100)+'%':(100*v).toFixed(1)+'%';case 'pct100':return Math.round(v)+'%';
-  case 's':return fmt(v,step)+' s';case 'signed':return sgn(v);case 'int':return Math.round(v).toLocaleString();
+  case 's':return fmt(v,step)+' s';case 'signed':return sgn(v);
+  case 'pts':{const x=100*v,a=Math.abs(x),sg=x>1e-9?'+':x<-1e-9?'−':'';return sg+(step!=null?fmt(a,step*100):a.toFixed(1))+(step!=null?'':' pts')}case 'int':return Math.round(v).toLocaleString();
   case 'dmin':{const a=Math.abs(v),sg=v>1e-9?'+':v<-1e-9?'−':'±';return a<2?sg+Math.round(a*60)+' s':sg+(a<10?a.toFixed(1):Math.round(a))+' min'}default:return fmt(v,step)}}
 // x read-outs: steps, minutes since start, or a clock time
 const xv=(spec,g,x,step)=>spec.xfmt==='clock'?hms(x):g.x==='time'||spec.xfmt==='time'?(x<120?Math.round(x)+' s':fmt(x/60,step!=null?step/60:null)+' min'):step==null&&Math.abs(x-Math.round(x))<1e-9?Math.round(x).toLocaleString():fmt(x,step);

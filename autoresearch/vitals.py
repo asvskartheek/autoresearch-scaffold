@@ -227,12 +227,13 @@ def _eval_panels(p, t, st, ml, total):
                 lost += c < base[i]
                 d = won - lost
                 se = math.sqrt(max(0.0, won + lost - d * d / n))
-                line.append([n, d])
-                band.append([n, d - Z * se, d + Z * se])
+                line.append([n, d / n])
+                band.append([n, (d - Z * se) / n, (d + Z * se) / n])
             if line:
-                pair = dict(id="pair", title="Against the champion", fmt="signed", value=line[-1][1], won=won, lost=lost,
-                            zero=True, smooth=False, ci=band[-1][1:],
-                            series=[dict(name="Won minus lost", pts=thin(line, 240))], band=thin(band, 240))
+                # the paired change in score, as the task page shows it: (won - lost) / n, read in points
+                pair = dict(id="pair", title="Against the champion", fmt="pts", value=won - lost, delta=line[-1][1],
+                            n=n, won=won, lost=lost, zero=True, smooth=False, ci=band[-1][1:],
+                            series=[dict(name="Change in score", pts=thin(line, 240))], band=thin(band, 240))
     lat = [float(r["latency_s"]) for r in rows if _num(r.get("latency_s"))]
     latp = None
     if len(lat) >= 8:
