@@ -18,5 +18,15 @@ class Budget(unittest.TestCase):
         self.assertEqual(vitals.health(t | dict(budget_s=600), eta, n)["state"], "ok")
 
 
-if __name__ == "__main__":
-    unittest.main()
+
+class Silence(unittest.TestCase):
+    def test_eta_slips_while_silent(self):
+        b = [(float(i), i) for i in range(31)]          # 1 step a second for 30 s, then nothing
+        live = vitals.eta_track(b, 1000, now=30.5)
+        self.assertAlmostEqual(live["finish_at"], 30 + 970, delta=1)
+        quiet = vitals.eta_track(b, 1000, now=150)
+        self.assertGreater(quiet["finish_at"], 150 + 970)     # never sooner than now + what is left at the old rate
+        self.assertLess(quiet["per_min"], live["per_min"])     # the rate decays with the silence
+        later = vitals.eta_track(b, 1000, now=270)
+        self.assertGreater(later["finish_at"], quiet["finish_at"])
+        self.assertAlmostEqual(later["silent_s"], 240)

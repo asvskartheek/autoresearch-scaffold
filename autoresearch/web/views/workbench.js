@@ -63,7 +63,8 @@ function rowValue(t){
  const l=t.last||{},bits=[];
  if(typeof l.running_score==='number')bits.push(pct(l.running_score));
  else{const k=Object.keys(l).find(k=>typeof l[k]==='number'&&!/^(t|step|epoch)$/.test(k));if(k)bits.push(`${esc(wbMetric(k).toLowerCase())} ${fmtv(l[k])}`)}
- if(t.eta)bits.push(`${t.eta.per_min>=60?n0(t.eta.per_min/60)+' a second':t.eta.per_min>=10?n0(t.eta.per_min)+' a minute':t.eta.per_min.toFixed(1)+' a minute'}`);
+ if((t.health?.silent_s||0)>=60)bits.push(`no progress for ${span(t.health.silent_s)}`);
+ else if(t.eta)bits.push(`${t.eta.per_min>=60?n0(t.eta.per_min/60)+' a second':t.eta.per_min>=10?n0(t.eta.per_min)+' a minute':t.eta.per_min.toFixed(1)+' a minute'}`);
  return bits.join(' · ');
 }
 const smoothLast=(pts,w)=>{const s=XC.ema(pts,w);return s.length?s[s.length-1][1]:null};
@@ -72,12 +73,13 @@ function pn(t,p,lead){
  const grp=`wb-${t.id}`+(p.x?'-'+p.x:''),pts=p.series?.[0]?.pts||[];
  const sm=p.smooth===true,w=XC.g(grp,{w:.6}).w;
  let big='',sub='',lb=p.title,extra='';
- const f=p.fmt;
+ const f=p.fmt,quiet=t.health?.silent_s??(t.status==='stalled'?now()-t.heartbeat:0);
  if(p.id==='eta'){big=t.status==='stalled'?`<span class="neg">none</span><small>last said ${wbClock(p.value)}</small>`:`${wbClock(p.value)}<small>${p.drift_s>=0?'+':'−'}${span(Math.abs(p.drift_s))} in 5 min</small>`;sub=plural(p.n,'re-estimate')}
  else if(p.id==='gpu'){big=`${Math.round(p.value)}%${p.mem?.[0]!=null?`<small>${p.mem[0].toFixed(1)} of ${p.mem[1]?.toFixed(0)} GB</small>`:''}`;sub=p.gpus>1?`${p.gpus} GPUs`:'';
   if(p.mem?.[1])extra=`<div class="wb-mem">${meter(p.mem[0]/p.mem[1],{cls:'mem'})}</div>`}
  else if(p.id==='pair'){big=`<span class="${p.value>0?'pos':p.value<0?'neg':''}">${sgn(p.value)}</span><small>90% CI ${sgn(Math.floor(p.ci[0]))} to ${sgn(Math.ceil(p.ci[1]))}</small>`;sub=`${p.won} won · ${p.lost} lost`}
  else if(p.id==='lat'){big=`${p.value.toFixed(1)} s<small>95th ${p.p95.toFixed(1)} s</small>`;sub='median'}
+ else if((p.id==='tps'||p.id==='rate')&&quiet>=60){big=`<span class="neg">none</span><small>no progress for ${span(quiet)}</small>`}
  else if(p.id==='tps'){big=`${n0(p.value)}${p.step_time?`<small>${p.step_time.toFixed(1)} s a step</small>`:''}`}
  else if(p.id==='rate'){big=`${p.value<10?p.value.toFixed(1):n0(p.value)}<small>a minute</small>`}
  else if(t.kind==='eval'&&p.id==='main'){const b=p.band?.at(-1),n=p.n;

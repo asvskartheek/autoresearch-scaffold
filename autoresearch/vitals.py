@@ -48,10 +48,12 @@ def beats(t: dict, metrics: list[dict]) -> list[tuple[float, float]]:
 
 def eta_track(b: list[tuple[float, float]], total: float, now: float, win: float = WIN_S) -> dict | None:
     """At each beat, the finish time the rate over the last `win` seconds predicts. The latest is the ETA; the list is
-    how the estimate moved (`hist`: [time, predicted finish]); `drift_s` is how far it moved in the last window."""
+    how the estimate moved (`hist`: [time, predicted finish]); `drift_s` is how far it moved in the last window.
+    A job silent for longer than its usual beat gap slips: its rate is spread over the window up to `now`, so the
+    finish moves out with every silent second (`silent_s` says for how long)."""
     if not total or len(b) < 2:
         return None
-    hist, k0, rate = [], 0, None
+    hist, k0, rate, x0 = [], 0, None, None
     for i, (x, d) in enumerate(b):
         while k0 < i and b[k0][0] < x - win:
             k0 += 1
@@ -60,15 +62,21 @@ def eta_track(b: list[tuple[float, float]], total: float, now: float, win: float
         if i and dx > 2 and dd > 0 and d < total:
             r = dd / dx
             hist.append([x, x + (total - d) / r])
-            rate = r
+            rate, x0 = r, b[j][0]
     if rate is None:
         return None
     x, d = b[-1]
     finish = x + (total - d) / rate
+    gaps = sorted(b[i][0] - b[i - 1][0] for i in range(max(1, len(b) - 20), len(b)))
+    silent = now - x
+    if silent > max(10.0, 3 * gaps[len(gaps) // 2]) and d < total:
+        rate = rate * (x - x0) / (now - x0)
+        finish = now + (total - d) / rate
+        hist.append([now, finish])
     old = [h for h in hist if h[0] <= x - win]
     drift = finish - old[-1][1] if old else (finish - hist[0][1] if len(hist) > 1 else 0.0)
     return dict(per_min=rate * 60, eta_s=max(0.0, finish - now), finish_at=finish, window_s=win, drift_s=drift,
-                hist=thin(hist, 80))
+                silent_s=max(0.0, silent), hist=thin(hist, 80))
 
 
 def health(t: dict, eta: dict | None, now: float) -> dict:
