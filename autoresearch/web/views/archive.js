@@ -26,6 +26,82 @@ const isTop=t=>!t.parent||!byId(t.parent);
 const resOf=t=>wbState(t)[0];
 const desc=t=>tree(t.id).map(([k])=>k).filter(k=>!isLive(k));
 
+// ---------- the session story: what was tried, what each change predicted, and what was found, on one time axis.
+// A session is a run of activity (tasks, new models, decisions) with no gap over two hours; the newest comes first.
+const GAP=2*3600;
+const top=t=>!(t.parent&&byId(t.parent))&&!/^historical/.test(t.kind||'');
+function sessions(){
+ const st=S.state,ev=[];
+ // research work defines a session (a model's runs, evals, trains); answers and chores only fill in around it
+ const work=t=>t.model||/^(eval|train|experiment|data)$/.test(t.kind||'');
+ for(const t of st.tasks)if(top(t)&&work(t))ev.push([t.created,isLive(t)?now():(t.ended||t.updated||t.created)]);
+ for(const m of Object.values(st.models))if(m.created&&m.status!=='historical')ev.push([+m.created,+m.created]);
+ for(const d of st.decisions||[])if(d.t&&d.model)ev.push([d.t,d.t]);
+ ev.sort((a,b)=>a[0]-b[0]);
+ const out=[];for(const [a,b] of ev){const x=out.at(-1);if(x&&a<=x[1]+GAP)x[1]=Math.max(x[1],b);else out.push([a,b])}
+ return out.reverse();
+}
+function sessionOf([a,b]){
+ const st=S.state,inS=x=>x>=a-1&&x<=b+1;
+ const tasks=st.tasks.filter(t=>top(t)&&inS(t.created)).sort((x,y)=>x.created-y.created);
+ const decs=(st.decisions||[]).filter(d=>d.model&&inS(d.t));
+ const first=[...tasks.filter(t=>t.model).map(t=>[t.created,t.model]),
+  ...Object.entries(st.models).filter(([,m])=>m.created&&m.status!=='historical'&&inS(+m.created)).map(([k,m])=>[+m.created,k]),
+  ...decs.map(d=>[d.t,d.model])].sort((x,y)=>x[0]-y[0]);
+ const ms=[];for(const [,m] of first)if(st.models[m]&&!ms.includes(m))ms.push(m);
+ return {a,b,tasks,decs,ms};
+}
+// "… Pre-declared: X" → [what changed, what it should move]
+const split=c=>{const s=String(c||''),i=s.search(/pre-?declared\s*:?/i);return i<0?[s,'']:[s.slice(0,i).trim().replace(/[.;,]$/,''),s.slice(i).replace(/^pre-?declared\s*:?\s*/i,'')]};
+const evScore=t=>{const sm=t.summary||{};if(emptyEval(t))return 'no results';if(sm.score==null)return '';
+ return S.state.slices[t.slice]?.scale==='continuous'?sv(t.slice,sm.score,sm.n):sm.n?`${Math.round(sm.score*sm.n).toLocaleString()}/${sm.n.toLocaleString()}`:pct(sm.score)};
+const verdict=(m,ds)=>{const d=ds.filter(x=>x.model===m&&/^(rejected|promote|champion)$/.test(x.kind)).at(-1),M=S.state.models[m]||{};
+ if(d)return [d.kind==='rejected'?'Rejected':'Promoted',d.kind==='rejected'?'neg':'pos',d.reason||M.reason||''];
+ return [M.status==='champion'?'Champion':M.status?wbKind(M.status):'Model',M.status==='champion'?'champion':M.status==='rejected'?'neg':'ghost',''];
+};
+function story(){
+ const ss=sessions();if(!ss.length)return '';
+ const i=Math.min(S.arcSess||0,ss.length-1),X=sessionOf(ss[i]),{a,b}=X,w=Math.max(60,b-a);
+ const at=x=>Math.max(0,Math.min(100,100*(x-a)/w));
+ const st=S.state;
+ // one lane per model in play; each eval a bar from start to end, packed into rows so labels never overlap
+ // the track's width in px, to size each label in % of it
+ const W=innerWidth,trackPx=Math.max(160,W-(W>1100?260:0)-(W>640?236:0)-(W>640?120:96)-64);
+ const lane=(ts,lab,top0=0)=>{const rows=[];let h='';
+  for(const t of ts){const x0=at(t.created),x1=Math.max(x0+.5,at(isLive(t)?now():t.ended||t.updated||t.created)),sc=t.kind==='eval'?evScore(t):'';
+   const lw=lab&&t.kind==='eval'?100*((short(t.slice||'').length+sc.length+1)*7.2+10)/trackPx:0;
+   let r=rows.findIndex(e=>e<=x0);if(r<0){r=rows.length;rows.push(0)}rows[r]=x1+lw+.5;
+   const [sl,sc_]=wbState(t);
+   h+=`<a class="arc-bar ${esc(sc_)}${isLive(t)?' live':''}" href="#task/${enc(t.id)}" style="left:${x0.toFixed(2)}%;width:${(x1-x0).toFixed(2)}%;top:${top0+r*22}px" title="${esc(t.title)} · ${esc(sl)}${sc?' · '+esc(sc):''}"></a>`
+    +(lw?`<span class="arc-bl" style="left:calc(${x1.toFixed(2)}% + 4px);top:${top0+r*22}px">${esc(short(t.slice||''))} <b>${esc(sc)}</b></span>`:'');}
+  return [h,Math.max(1,rows.length)]};
+ const seen=new Set(),ticks=[0,.25,.5,.75,1].map(f=>{const c=wbClock(a+f*w);if(seen.has(c))return '';seen.add(c);return `<span style="left:${100*f}%">${c}</span>`}).join('');
+ const lanes=X.ms.map(m=>{
+  const M=st.models[m]||{},ts=X.tasks.filter(t=>t.model===m),[vl,vc]=verdict(m,X.decs);
+  // created and decided marks sit on their own strip above the bars, so they never cover a label
+  const marks=[...(M.created&&+M.created>=a-1?[`<i class="arc-mk new" style="left:${at(+M.created)}%" title="Created${M.change?': '+esc(split(M.change)[0]):''}"></i>`]:[]),
+   ...X.decs.filter(d=>d.model===m&&/^(rejected|promote|champion)$/.test(d.kind)).map(d=>`<i class="arc-mk ${d.kind==='rejected'?'neg':'pos'}" style="left:${at(d.t)}%" title="${d.kind==='rejected'?'Rejected':'Promoted'} ${wbClock(d.t)}${d.reason?': '+esc(d.reason):''}"></i>`)].join(''),mt=marks?16:0,[h,n]=lane(ts,true,mt);
+  return `<div class="arc-ln"><div class="arc-lh"><a class="ell" href="#model/${enc(m)}" title="${esc(m)}">${mn(m)}</a>${pill(vl,vc)}</div><div class="arc-tr" style="height:${mt+n*22}px">${h}${marks}</div></div>`}).join('');
+ const other=X.tasks.filter(t=>!t.model||!st.models[t.model]);
+ const kinds={};for(const t of other)kinds[t.kind||'other']=(kinds[t.kind||'other']||0)+1;
+ const oLane=other.length?(()=>{const [h]=lane(other,false);return `<div class="arc-ln other"><div class="arc-lh"><span title="${esc(Object.entries(kinds).map(([k,n])=>n+' '+wbKind(k).toLowerCase()).join(', '))}">${plural(other.length,'other job')}</span></div><div class="arc-tr" style="height:22px">${h.replace(/top:\d+px/g,'top:0px')}</div></div>`})():'';
+ // tried → predicted → found, one row per model that changed something or was decided on
+ const tpf=X.ms.map(m=>{const M=st.models[m]||{},[tried,pred]=split(M.change),[vl,vc,why]=verdict(m,X.decs);
+  if(!M.change&&!why)return '';
+  const ev={};for(const t of X.tasks)if(t.model===m&&t.kind==='eval'&&t.slice&&evScore(t))ev[t.slice]=t;
+  const g=st.gates?.[m],nx=M.status==='candidate'&&g?.next?.[0];
+  const chips=Object.values(ev).slice(-6).map(t=>`<a class="arc-sc ${emptyEval(t)?'neg':''}" href="#task/${enc(t.id)}">${esc(short(t.slice))} <b>${esc(evScore(t))}</b></a>`).join('');
+  return `<div class="arc-r"><div class="arc-t"><a href="#model/${enc(m)}" title="${esc(m)}"><b>${mn(m)}</b></a>${tried?`<p class="arc-cl" onclick="this.classList.toggle('open')">${esc(tried)}</p>`:''}</div>
+   <div class="arc-p">${pred?`<p class="arc-cl" onclick="this.classList.toggle('open')">${esc(pred)}</p>`:'<span class="faint">—</span>'}</div>
+   <div class="arc-f"><div class="arc-fv">${pill(vl,vc)}${chips}${nx?`<span class="arc-nx">next ${esc(short(nx.slice||nx.rung||''))}</span>`:''}</div>${why?`<p class="arc-cl" onclick="this.classList.toggle('open')">${esc(why)}</p>`:''}</div></div>`}).filter(Boolean).join('');
+ const nEv=X.tasks.filter(t=>t.kind==='eval').length,nRej=X.decs.filter(d=>d.kind==='rejected').length,nPro=X.decs.filter(d=>d.kind==='promote'||d.kind==='champion').length;
+ const meta=[plural(X.ms.length,'model'),plural(nEv,'eval'),nPro&&`${nPro} promoted`,nRej&&`${nRej} rejected`].filter(Boolean).join(' · ');
+ const nav=`<span class="arc-sn"><button class="btn" ${i+1>=ss.length?'disabled':''} onclick="S.arcSess=${i+1};render()" aria-label="Older session">‹</button><span>${wbDay(a)}, ${wbClock(a)}–${wbClock(b)} <span class="faint">${span(b-a)}</span></span><button class="btn" ${i?'':'disabled'} onclick="S.arcSess=${i-1};render()" aria-label="Newer session">›</button></span>`;
+ return panel(i?'Session':'Latest session',`<div class="arc-story">
+  ${lanes||oLane?`<div class="arc-tl"><div class="arc-ln arc-ax"><div class="arc-lh"></div><div class="arc-tk">${ticks}</div></div>${lanes}${oLane}</div>`:''}
+  ${tpf?`<div class="arc-tpf"><div class="arc-r arc-hd"><div>Tried</div><div>Predicted</div><div>Found</div></div>${tpf}</div>`:''}</div>`,{cls:'section arc-st',meta,right:nav});
+}
+
 VIEWS.archive=()=>{
  const every=archived(),all=every.filter(isTop);
  const loading=(S.state.tasks_total||0)>S.state.tasks.length;
@@ -58,7 +134,7 @@ VIEWS.archive=()=>{
  const sortSel=`<label class="arc-sel arc-sortsel"><span class="sr">Sort</span><select onchange="const [k,d]=this.value.split(':');ARC.sort=k;ARC.dir=+d;render()">${SORTS.map(([k,d,l])=>`<option value="${k}:${d}" ${ARC.sort===k&&ARC.dir===d?'selected':''}>${l}</option>`).join('')}</select></label>`;
  const RES=Object.keys(rcount).sort((a,b)=>rcount[b]-rcount[a]);
  const resSel=`<label class="arc-sel"><span class="sr">Result</span><select onchange="archiveRes(this.value)"><option value="all">All results (${all.length.toLocaleString()})</option>${RES.map(r=>`<option value="${esc(r)}" ${r===ARC.res?'selected':''}>${esc(r)} (${rcount[r].toLocaleString()})</option>`).join('')}</select></label>`;
- const bar=`<div class="arc-bar">${search}${kindCtl}${resSel}${sortSel}</div>`;
+ const bar=`<div class="arc-tools">${search}${kindCtl}${resSel}${sortSel}</div>`;
  const vis=rows.slice(0,archiveShown);
  const row=(t,depth=0,open=false)=>{
   const [sl,sc]=wbState(t),ks=depth?[]:desc(t),nk=ks.length,tk=took(t),n=t.summary?.n,s=score(t),c=cont(t);
@@ -79,7 +155,7 @@ VIEWS.archive=()=>{
   return `<th class="${cls}" ${on?`aria-sort="${dir}"`:''}><button class="arc-sort ${on?'on':''}" onclick="archiveSort('${k}')">${label}<i aria-hidden="true">${on?(ARC.dir>0?'↑':'↓'):''}</i></button></th>`};
  const more=`<div class="arc-more"><span class="sub">${rows.length>vis.length?`1–${vis.length.toLocaleString()} of ${rows.length.toLocaleString()}`:plural(rows.length,'job')}</span>${rows.length>vis.length?`<button class="btn" onclick="archiveMore()">Show ${Math.min(100,rows.length-vis.length)} more</button>`:''}</div>`;
  const none=empty(q?`No tasks match “${esc(ARC.q.trim())}”`:`No ${ARC.res==='all'?'':esc(ARC.res.toLowerCase())+' '}${S.archiveKind==='all'?'':esc(wbKind(S.archiveKind).toLowerCase())+' '}jobs`,q?`<button class="btn arc-clear" onclick="archiveQ('')">Clear search</button>`:ARC.res!=='all'?`<button class="btn arc-clear" onclick="archiveRes('all')">All results</button>`:'');
- return h+bar+`<section class="card flush arc">
+ return h+story()+bar+`<section class="card flush arc">
  ${rows.length?`<table><thead><tr>${th('title','Task')}${th('model','Model and slice','arc-mod')}${th('state','Result')}${th('score','Score','num')}${th('took','Took','num')}${th('ended','Ended','num')}<th class="arc-m">Task</th></tr></thead><tbody>${body}</tbody></table>${more}`:none}</section>`;
 };
 }
