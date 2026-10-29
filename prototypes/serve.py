@@ -22,6 +22,21 @@ class H(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        # every prototype page gets the comment overlay
+        f = ROOT / self.path.split("?")[0].split("#")[0].lstrip("/")
+        if f.is_dir() and self.path.split("?")[0].endswith("/"):  # without the slash, the base class redirects
+            f = f / "index.html"
+        if f.suffix == ".html" and f.is_file():
+            html = f.read_text()
+            tag = '<script src="/comment.js"></script>'
+            html = html.replace("</body>", tag + "</body>") if "</body>" in html else html + tag
+            body = html.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         super().do_GET()
 
     def do_POST(self):
