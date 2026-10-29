@@ -62,17 +62,23 @@ const PAIR={};
 function hPaired(m,slice,a,b){
  const g=S.state.gates?.[m],c=g&&!g.error&&g.champion===S.state.champion?g.rungs.flatMap(r=>r.checks).find(c=>c.slice===slice&&c.delta!=null):null;
  if(c)return {delta:c.delta,lo:c.lo,hi:c.hi,n:c.n};
+ return pairedRows(m+'\u0000'+slice,a,b);
+}
+// the gate's paired statistic on per-example rows (core.paired): mean difference and a seeded 90% bootstrap interval.
+// Global, so the model page can show a champion's promotion evidence from the same rows
+window.pairedRows=(tag,a,b)=>{
  if(!a||!b)return null;
  const ids=Object.keys(a).filter(id=>a[id]!=null&&b[id]!=null);if(!ids.length)return null;
- const sign=S.state.config.higher_is_better===false?-1:1,key=m+'\u0000'+slice+'\u0000'+ids.length+'\u0000'+ids.reduce((t,id)=>t+a[id]-b[id],0);
+ const sign=S.state.config.higher_is_better===false?-1:1,key=tag+'\u0000'+ids.length+'\u0000'+ids.reduce((t,id)=>t+a[id]-b[id],0);
  if(PAIR[key])return PAIR[key];
  const d=ids.map(id=>sign*(a[id]-b[id])),n=d.length,mean=d.reduce((x,y)=>x+y,0)/n;
  let z=0x9e3779b9;const rnd=()=>{z|=0;z=z+0x6D2B79F5|0;let t=Math.imul(z^z>>>15,1|z);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296};
  const it=2000,bs=new Float64Array(it);
  for(let i=0;i<it;i++){let t=0;for(let j=0;j<n;j++)t+=d[(rnd()*n)|0];bs[i]=t/n}
  bs.sort();
- return PAIR[key]={delta:mean,lo:bs[Math.floor(.05*it)],hi:bs[Math.floor(.95*it)-1],n};
-}
+ return PAIR[key]={delta:mean,lo:bs[Math.floor(.05*it)],hi:bs[Math.floor(.95*it)-1],n,wins:d.filter(x=>x>0).length,losses:d.filter(x=>x<0).length,
+  cand:ids.reduce((t,id)=>t+a[id],0)/n,base:ids.reduce((t,id)=>t+b[id],0)/n};
+};
 // the Δ cell: the paired change in the slice's units, its 90% interval under it, "Noisy" when the interval crosses zero
 function pairCell(p,slice){
  if(!p)return DASH;

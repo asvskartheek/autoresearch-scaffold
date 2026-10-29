@@ -40,7 +40,7 @@ function verdict(name,m,g){
  return {text:t+tail};
 }
 
-function gateTable(name,g){
+function gateTable(name,g,base='Champion'){
  const L=S.state,rows=[];
  for(const r of g.rungs){
   const head=`<td class="md-rung" rowspan="${Math.max(1,r.checks.length)}"><span class="ladder"><span class="rg ${esc(r.status)}"><i></i><span>${esc(r.rung)}</span></span></span></td>`;
@@ -60,7 +60,39 @@ function gateTable(name,g){
     <td><span class="row">${statePill(c.state)}${c.noisy?pill('Noisy','noisy'):''}</span></td></tr>`);
   });
  }
- return `<div class="tbl md-gate"><table><thead><tr><th>Rung</th><th>Slice</th><th>Rule</th><th class="num">This model</th><th class="num">Champion</th><th class="num">Δ</th><th>90% CI</th><th class="num">Wins / losses</th><th>Result</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+ return `<div class="tbl md-gate"><table><thead><tr><th>Rung</th><th>Slice</th><th>Rule</th><th class="num">This model</th><th class="num">${base}</th><th class="num">Δ</th><th>90% CI</th><th class="num">Wins / losses</th><th>Result</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+}
+
+// a champion's promotion evidence: the gate it passed, stored on the promote decision; for older promotions, the
+// same paired statistic recomputed on its hill's target and control rows against the champion it replaced
+function hillRows(hill){
+ if(S.hill?.key===hill)return S.hill.data;
+ if(S.mdHill?.key===hill)return S.mdHill.data;
+ if(S.mdHill?.key!==hill+'\u0000loading'){S.mdHill={key:hill+'\u0000loading'};
+  fetch('api/hill/'+enc(hill),{cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{S.mdHill={key:hill,data:d};render()}).catch(()=>{S.mdHill={key:hill,data:null}})}
+ return undefined;
+}
+function promotion(name,m){
+ const L=S.state,pd=(L.decisions||[]).filter(d=>d.kind==='promote'&&d.model===name).at(-1);
+ if(!pd)return m.promoted?panel('Promotion evidence',empty('Promotion record not in view','The dashboard reads the last 50 decisions; the paper keeps the evidence.'),{cls:'section'}):'';
+ const was=pd.replaced,meta=`paired against ${was?mlink(was):'the previous champion'} on the same examples · promoted ${stamp(pd.t)}`;
+ if(pd.gate?.rungs)return panel('Promotion evidence',gateTable(name,pd.gate,'Was champion'),{meta,cls:'section flush md-gp'});
+ const hill=m.hill&&L.hills[m.hill];
+ if(!was||!hill)return panel('Promotion evidence',empty('No paired record','This promotion predates stored gates and has no hill to recompute it from.'),{meta,cls:'section'});
+ const D=hillRows(m.hill);
+ if(D===undefined)return panel('Promotion evidence',`<div class="sub">Reading per-example rows…</div>`,{meta,cls:'section'});
+ const rows=['target','control'].map(role=>{const R=D?.[role];if(!R)return '';
+  const p=pairedRows?.(name+'\u0000'+was+'\u0000'+R.slice,R.runs[name],R.runs[was]);
+  const k=R.slice,noisy=p&&p.lo<0&&0<p.hi;
+  return `<tr><td><div class="two"><a class="mono md-sl ln" href="#slices/${enc(k)}">${esc(short(k))}</a><span class="sub">${role==='target'?'hill target':'control'}${p?' · n '+p.n.toLocaleString():''}</span></div></td>
+   <td class="num">${p?score(p.cand,k,p.n):DASH}</td><td class="num">${p?score(p.base,k,p.n):DASH}</td>
+   <td class="num"><span class="${!p||noisy?'sub':p.delta>0?'pos':p.delta<0?'neg':'sub'}">${p?diff(p.delta,k):DASH}</span></td>
+   <td class="md-ci">${p?(bin(k)?ciBar(p):'')+`<div class="sub md-cil">${ciText(p,k)}</div>`:'<span class="sub">no paired rows</span>'}</td>
+   <td class="num">${p?`<span class="pos">${p.wins}</span> / <span class="${p.losses?'neg':''}">${p.losses}</span>`:DASH}</td>
+   <td>${noisy?pill('Noisy','noisy'):''}</td></tr>`}).join('');
+ if(!rows)return '';
+ return panel('Promotion evidence',`<div class="tbl md-gate"><table><thead><tr><th>Slice</th><th class="num">This model</th><th class="num">Was champion</th><th class="num">Δ</th><th>90% CI</th><th class="num">Wins / losses</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`,
+  {meta:meta+' · recomputed from the hill’s rows',cls:'section flush md-gp'});
 }
 
 const nextRow=(lead,c)=>`<div class="md-next"><span class="md-lead">${lead}</span>${cmd(c)}</div>`;
@@ -100,6 +132,7 @@ VIEWS.model=(name)=>{
   h.push(panel(v.ready?'Promote':v.failed?'Close it out':'Next runs',body,{meta:nx.length?plural(nx.length,'run')+' before the next rung opens':'',cls:'section md-np'}));
   h.push(panel('Gate',gateTable(name,g),{meta:`paired against ${mlink(g.champion||'')} on the same examples`,cls:'section flush md-gp'}));
  }else if(m.status==='champion'&&g&&!g.error){
+  h.push(promotion(name,m));
   h.push(panel('Ladder slices',table(['Rung','Slice',['n','num'],['Score','num']],g.rungs.flatMap(r=>r.checks.map((c,i)=>{const s=L.leaderboard[c.slice]?.[name],n=s?.n??L.slices[c.slice]?.n;
    return `<tr><td>${i?'':esc(r.rung)}</td><td><a class="mono md-sl ln" href="#slices/${enc(c.slice)}">${esc(short(c.slice))}</a></td><td class="num">${n!=null?n.toLocaleString():DASH}</td><td class="num">${s?(s.task?`<a href="#task/${enc(s.task)}">${score(s.score,c.slice,s.n)}</a>`:score(s.score,c.slice,s.n)):DASH}</td></tr>`}))),{meta:'the scores candidates are paired against',cls:'section'}));
  }
