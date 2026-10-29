@@ -207,3 +207,7 @@ select.gi-in{border-color:var(--control);margin:0;max-width:100%}
 .gi-dot.off{background:var(--warning)}
 .gi-st .cmd{min-width:0}
 .gi-note{margin:6px 0 0;font-size:13px;color:var(--muted);line-height:1.45}
+/* a hill's share on the goal page: the count, and under it what the count is of */
+.gl-sh .two{align-items:flex-end}
+.gl-sh .sub{max-width:240px;text-align:right}
+@media (max-width:600px){.gl-sh .sub{max-width:130px}}

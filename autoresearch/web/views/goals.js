@@ -327,8 +327,9 @@ const hillsPanel=function(g){
  if(!hs.length)return panel('Hills',empty('No hill serves this goal',`Open one from error analysis on the champion’s failures.`)+`<div class="gl-cmd">${cmd(`arx hill open <name> --goal ${g.name} --title "…" --target <dev slice>`)}</div>`,{cls:'gl-hills'});
  const cap=Math.max(5,hs.filter(([,s])=>s!=='closed').length),more=hs.slice(cap);
  const rows=hs.slice(0,cap).map(([k,s])=>{const x=L.hills[k]||{},sh=x.share&&x.share.of?x.share.count/x.share.of:null,p=paperOf(k);
-  return `<tr class="click" onclick="if(!event.target.closest('a,button'))location.hash='hill/${enc(k)}'"><td><div class="two">${hLink(k)}<span class="sub">${x.target?`<span class="mono">${esc(short(x.target))}</span>`:'no dev set'}${p&&p.hill===k?` · <a class="ln" href="${paperUrl(p)}">notes</a>`:''}</span></div></td><td>${st(s)}</td><td class="num">${sh!=null?`${N(x.share.count)} <span class="faint">of ${N(x.share.of)}</span>`:DASH}</td></tr>`});
- return panel('Hills',table([['Hill'],['Status'],['<span title="Share of the failures the hill was counted against">Share</span>','num']],rows)+(more.length?`<p class="gl-note">${plural(more.length,'more hill')}: ${more.map(([k])=>hLink(k)).join(', ')}.</p>`:''),{meta:hillSum(g),cls:'gl-hills'});
+  const ow=sh!=null?String(x.share.of_what||'').replace(new RegExp('^of\\s+('+x.share.of+'\\s+)?','i'),'').trim():'';
+  return `<tr class="click" onclick="if(!event.target.closest('a,button'))location.hash='hill/${enc(k)}'"><td><div class="two">${hLink(k)}<span class="sub">${x.target?`<span class="mono">${esc(short(x.target))}</span>`:'no dev set'}${p&&p.hill===k?` · <a class="ln" href="${paperUrl(p)}">notes</a>`:''}</span></div></td><td>${st(s)}</td><td class="num gl-sh">${sh!=null?`<div class="two"><span>${N(x.share.count)} <span class="faint">of ${N(x.share.of)}</span></span>${ow?`<span class="sub ell" title="${esc(ow)}">${esc(ow)}</span>`:''}</div>`:DASH}</td></tr>`});
+ return panel('Hills',table([['Hill'],['Status'],['Share','num']],rows)+(more.length?`<p class="gl-note">${plural(more.length,'more hill')}: ${more.map(([k])=>hLink(k)).join(', ')}.</p>`:''),{meta:hillSum(g),cls:'gl-hills'});
 }
 // ---------- what to run next on an open goal
 const nextPanel=function(g){
