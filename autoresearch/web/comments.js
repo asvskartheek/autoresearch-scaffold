@@ -269,7 +269,16 @@ function cssPath(el){const parts=[];while(el&&el.nodeType===1&&el!==document.bod
 const textOf=ARXPICK.textOf;
 const label=el=>{const t=textOf(el)||(el.getAttribute?.('aria-label')||el.getAttribute?.('title')||'').trim();
  return (t||el.tagName.toLowerCase()).slice(0,90)};
+// the card an element sits in, named by its heading (the Brief's question): one id such as the Brief's #lnl is reused
+// by every card, so an id key also carries its card (key.within) and resolves only on that card. Digits are left out
+// of the match: a heading's count may change, its words do not
+// (and its subject line, .ctx: two Brief cards ask the same question of different goals)
+const scopeOf=el=>{const c=el.closest('section,article,.card,dialog');if(!c)return '';const fx=x=>!x.contains(el)&&textOf(x,80);
+ const hd=[...c.querySelectorAll('h1,h2,h3,h4,.q,header')].find(fx),cx=[...c.querySelectorAll('.ctx')].find(fx);
+ return [hd,cx].filter(Boolean).map(x=>textOf(x,80)).join(' · ')};
+const words=t=>squash(t).replace(/[\d.,%+\u2212-]/g,'');
 function anchorFor(el){const [key,node]=keyOf(el);const rel=node?relPath(node,el):null;
+ if(key&&key.sel&&node){const w=scopeOf(node);if(w)key.within=w}
  return key&&rel!=null?{key,rel,sel:cssPath(el),text:label(el)}:{sel:cssPath(el),text:label(el)}}
 function keyNode(k){
  if(k.sel){try{return document.querySelector(k.sel)}catch(e){return null}}
@@ -278,7 +287,8 @@ function keyNode(k){
  for(const l of ls){const c=l.closest(k.card);if(c)return c}
  return null}
 function resolve(a){
- if(a.key){const n=keyNode(a.key);if(n){if(!a.rel)return n;try{return n.querySelector(':scope>'+a.rel)||n}catch(e){return n}}}
+ if(a.key){const n=keyNode(a.key);if(n&&a.key.within&&words(scopeOf(n))!==words(a.key.within))return false;  // another card: no pin here
+  if(n){if(!a.rel)return n;try{return n.querySelector(':scope>'+a.rel)||n}catch(e){return n}}}
  let el=null;try{el=a.sel&&document.querySelector(a.sel)}catch(e){}
  if(a.text&&(!el||squash(el.textContent)!==squash(a.text))){  // the element moved or the anchor came from the CLI: find it by its text
   const same=[...(document.querySelector('#main')?.querySelectorAll(el?el.tagName.toLowerCase():'h1,h2,h3,a,b,th,td,span,p')||[])].find(x=>squash(x.textContent)===squash(a.text));if(same)return same}
@@ -301,8 +311,9 @@ tools.querySelectorAll('button').forEach(b=>b.onclick=()=>setTool(b.dataset.tool
 setTool('pick');
 // a picked element: its stable key (anchorFor), what it is, its own words and the card around it
 function pickEl(el){const r=el.getBoundingClientRect(),k=ARXPICK.kind(el),t=ARXPICK.text(el);
- const card=el.parentElement?.closest('section,article,.card'),head=card&&card!==el&&[...card.querySelectorAll('h1,h2,h3,h4,.hd,header')].find(x=>!x.contains(el));
- const a={...anchorFor(el),what:k,text:t||k,ctx:(!t||ARXPICK.MARK.test(k)?ARXPICK.around(el,80):'')||(head&&textOf(head,80))||ctxOf(el,t),rx:0,ry:0,px:r1(r.left+scrollX),py:r1(r.top+scrollY)};
+ const card=el.parentElement?.closest('section,article,.card'),head=card&&card!==el&&[...card.querySelectorAll('h1,h2,h3,h4,.q,.hd,header')].find(x=>!x.contains(el));
+ const near=!t||ARXPICK.MARK.test(k)?ARXPICK.around(el,80):'',hd=head?textOf(head,80):'';  // a mark: its row or series and its card
+ const a={...anchorFor(el),what:k,text:t||k,ctx:(near&&hd&&!near.includes(hd)?near+' · '+hd:near||hd)||ctxOf(el,t),rx:0,ry:0,px:r1(r.left+scrollX),py:r1(r.top+scrollY)};
  setMode(false);compose(a,Math.min(r.right,innerWidth-20),Math.max(r.top,8))}
 $c('.cm-lst').onclick=()=>{list.classList.toggle('on');drawList()};
 const KEYS={p:'pick',b:'box',a:'arrow',d:'pen',h:'highlight'};
@@ -516,7 +527,7 @@ function boxRect(s,r){const [l,t,rr,b]=s.ins;let q=[r.left+l,r.top+t,r.right+rr,
  q[0]=Math.max(q[0],Math.min(4,r.left));q[2]=Math.min(q[2],Math.max(innerWidth-4,r.right));return q}
 // a pin sits with its point on the corner of what it marks (a quote's first line, a shape's top-left, an arrow's tail)
 // and its body up and to the left of that point, so it never covers the text itself (to the right only at the screen edge)
-function pos(c){const a=c.anchor||{},g=where(a),s=a.shape;
+function pos(c){const a=c.anchor||{},g=where(a),s=a.shape;if(g.el===false)return null;
  if(g.rg){const q=g.rg.getClientRects()[0];return [q.left,q.top]}
  if(s&&s.mode==='tip')return [g.tx+(s.ax||0)*g.sx,g.ty+(s.ay||0)*g.sy];
  if(g.box)return [g.box[0],g.box[1]];
