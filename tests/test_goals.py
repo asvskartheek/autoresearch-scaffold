@@ -96,7 +96,8 @@ class GoalPaper(unittest.TestCase):
         self.assertIn("ledger value", " ".join(self.errs(html, value=0.95)))
         self.assertIn("negative result", " ".join(self.errs(html, status="abandoned")))
         self.assertIn("no system section", " ".join(self.errs(html.replace('data-block="system"', 'data-block="sys"'))))
-        self.assertIn("system section does not name qwen3-other-v1", " ".join(self.errs(html, baseline="qwen3-other-v1")))
+        self.assertTrue(any("system section does not name" in error and "qwen3-other-v1" in error
+                            for error in self.errs(html, baseline="qwen3-other-v1")))
         self.assertIn("no final-result", " ".join(self.errs("<section data-block=\"x\"></section>")))
         self.assertEqual(self.errs(html, hills={"time-rate": "open"}), [])  # a hill without a paper needs no link
 
