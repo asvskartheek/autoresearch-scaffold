@@ -67,7 +67,7 @@ function vizCI(v){
  const sq=(n,c,y)=>Array.from({length:Math.min(n,cap)},(_,i)=>`<rect x="${Lx+i*7}" y="${y}" width="5" height="9" rx="1" fill="${c}"/>`).join('');
  const row=(n,c,y,w)=>`${sq(n,c,y)}<text x="${Lx+Math.min(n,cap)*7+(n?6:0)}" y="${y+9}">${n.toLocaleString()} ${w}</text>`;
  return `<svg class="lv" viewBox="0 0 ${W} ${H}" role="img" aria-label="paired delta ${lamt(u,d)}, 90% interval ${lamt(u,lo)} to ${lamt(u,hi)}">
- <text x="${Lx}" y="12" class="mono strong">${lamt(u,d)} [${lamt(u,lo)}, ${lamt(u,hi)}]</text><text x="${R}" y="12" text-anchor="end">${v.example?'example · ':''}n = ${v.n.toLocaleString()}</text>${t}
+ <text x="${Lx}" y="12" class="mono strong">${lamt(u,d)} [${lamt(u,lo)}, ${lamt(u,hi)}]</text><text x="${R}" y="${W<420&&!bar?92:12}" text-anchor="end">${v.example?'example · ':''}n = ${v.n.toLocaleString()}</text>${t}
  <line x1="${x(0)}" x2="${x(0)}" y1="22" y2="66" stroke="var(--text)" stroke-width="1.5"/>
  ${bar?`<line x1="${x(bar)}" x2="${x(bar)}" y1="22" y2="66" stroke="var(--warning)" stroke-width="2" stroke-dasharray="4 3"/><text x="${x(bar)}" y="92" text-anchor="middle" style="fill:var(--warning)">bar ${lamt(u,bar)}</text>`:''}
  <line x1="${x(lo)}" x2="${x(hi)}" y1="44" y2="44" stroke="${col}" stroke-width="8" stroke-linecap="round" opacity=".35"/>
