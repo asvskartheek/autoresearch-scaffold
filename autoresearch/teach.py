@@ -2,13 +2,15 @@
 work for them. The cards and their truth come from learn.py; this module adds a method per card, grades answers on the
 server (the truth never reaches the page before an answer) and keeps every attempt.
 
-Methods (which apply depends on the card's figure):
+Methods (which apply depends on the card; no task ever holds the truth its card is graded on):
   predict    the original: pick or slide a guess, say how sure (learn.py /api/predictions)
-  sketch     draw the result: drag the paired delta and its interval, or each bar's height
-  spot       spot the error: the real figure with one number made inconsistent; tap the wrong one
-  prototype  a live model of the measurement: drag n and watch the interval narrow; set the n where it clears zero
-  code       write the one line: the paired delta from fixed, broken and n
-  explain    explain it back in a sentence; the ideas it names are checked off
+  sketch     draw the result on the card's own axis (the delta and its interval, against the bar on a gate; or each
+             bar's height), graded on the card's own question
+  spot       spot the error: an example at the card's n with one number made inconsistent; tap the wrong one
+  prototype  a live model of the measurement: drag n and watch an example interval narrow; set the n where it clears 0
+  code       write the one line: the paired delta from fixed, broken and n (an example's counts; the reveal runs it on
+             the card's own). Spot and code only where the card's delta really is (fixed - broken) / n
+  explain    one sentence, right when it says which way it went and whether it could be noise, and both are true
 
 Attempts go to .research/teach.jsonl: {t, viewer, card, method, hit, err, ms, skip}. A person's profile per method
 (tries, hits, skips) picks the next card's method: methods they finish and get right more often, a new method now and
