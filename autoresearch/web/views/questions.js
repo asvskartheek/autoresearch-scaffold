@@ -133,7 +133,7 @@ function qPanel(id,ix){
   const L=n.live||{},pr=L.progress,f=pr&&pr.total?Math.min(1,(pr.done||0)/pr.total):null;
   const line=L.status==='failed'?('Agent failed'+(L.error?': '+L.error:'')):L.note||(L.status==='running'?'Agent working':'Queued for an agent');
   h+=`<div class="q-claim agent">${esc(line)}${L.task?` <a class="q-tl" href="#task/${enc(L.task)}">${esc(L.task)}</a>`:''}${f!=null?`<div class="pb"><i style="width:${(100*f).toFixed(1)}%"></i></div>`:''}</div>`;
- }else if(n.claim)h+=`<div class="q-claim ${cls}">${esc(n.claim)}${n.settled_by&&n.settled_by!=='agent'?`<span class="q-by">${esc(n.settled_by)}</span>`:''}</div>`;
+ }else if(n.claim)h+=`<div class="q-claim ${cls}">${esc(n.claim)}${n.settled_by&&!['agent','you'].includes(n.settled_by)?`<span class="q-by">${esc(n.settled_by)}</span>`:''}</div>`;
  if(n.quote)h+=`<div class="q-quote"><mark>${esc(n.quote)}</mark></div>`;
  h+=qEvidence(n);
  const live=n.status==='open'||n.status==='agent';
