@@ -29,6 +29,11 @@ class Review(unittest.TestCase):
         _age(t, 3 * 86400)
         self.assertNotIn(cid, {c["id"] for c in learn.cards(self.p)})
 
+    def test_open_goal_is_not_news_once_seen(self):
+        self.p.open_goal("g", "Goal", "full", 0.9)
+        self.assertIn("goal|g", {c["id"] for c in learn.cards(self.p, 0)})
+        self.assertNotIn("goal|g", {c["id"] for c in learn.cards(self.p, time.time() + 1)})
+
 
 if __name__ == "__main__":
     unittest.main()

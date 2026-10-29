@@ -365,8 +365,9 @@ def cards(p: Project, since: float = 0) -> list[dict]:
     for d in decs:
         if d.get("kind") == "promote":
             add(_card_promote(p, d["model"]))
-    for name, g in p.goals().items():
-        if g.get("status") == "open" or _f(g.get("created")) > since:
+    for name, g in p.goals().items():  # an open goal is news when it opened or the champion's score on it moved
+        moved = g.get("status") == "open" and champ and _f((p.latest_eval(champ, g.get("slice")) or {}).get("ended")) > since
+        if moved or _f(g.get("created")) > since or any(d.get("kind") == "promote" for d in decs):
             add(_card_goal(p, name))
     rejected = list(dict.fromkeys(d["model"] for d in decs if d.get("kind") == "rejected" and d.get("model") in models
                                   and models[d["model"]].get("status") == "rejected"))
