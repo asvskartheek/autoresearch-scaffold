@@ -147,10 +147,10 @@ tr.me td{background:color-mix(in srgb,var(--accent) 6%,transparent)}
 .lrow{display:grid;grid-template-columns:minmax(0,210px) 86px minmax(0,1fr);gap:10px;align-items:center;padding:3px 0;cursor:pointer;border-radius:4px}
 .lrow:hover{background:var(--raised)}
 .lrow .nm{font:12.5px var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lrow svg{height:18px;width:100%}
+.lrow .ends{display:flex;justify-content:space-between;font:11px var(--mono);color:var(--faint)}
 .ldet{display:none;grid-column:1/-1;font-size:13px;padding:6px 10px 10px;border-left:2px solid var(--border);margin:2px 0 6px 4px}
 .lrow.open+.ldet{display:block}
-@media (max-width:560px){.lrow{grid-template-columns:minmax(0,1fr) 78px}.lrow svg{grid-column:1/-1}}
+@media (max-width:560px){.lrow{grid-template-columns:minmax(0,1fr) 78px}.lrow .trk,.lrow .ends{grid-column:1/-1}}
 .st{font-size:11.5px;padding:1px 7px;border-radius:999px;text-align:center;white-space:nowrap}
 .st.champion{background:var(--pill-positive-bg);color:var(--positive)}.st.rejected{background:var(--pill-negative-bg);color:var(--negative)}
 .st.candidate{background:var(--pill-warning-bg);color:var(--warning)}.st.retired,.st.historical,.st.planned{background:var(--pill-neutral-bg);color:var(--muted)}
@@ -583,27 +583,35 @@ section("failures", () => {
 /* ================= 08 lineage ================= */
 section("lineage", () => {
   const chain = D.lineage;
-  const ref = RS[M.hill && D.gallery.find(h => h.name === M.hill)?.target] || MAIN;
+  // the strip's slice: the one most of this family ran (ties: the main slice, then a full one), not a sparse hill target
+  const fam = new Set([...chain.map(s => s.name), ...chain.flatMap(s => s.siblings.map(v => v.name)), ...D.children.map(v => v.name)]);
+  const cover = r => (r.field || []).filter(f => f[1] != null && fam.has(f[0])).length;
+  const rank = r => r.slice === D.main ? 0 : r.kind === "full" ? 1 : 2;
+  const ref = [...R].sort((a, b) => cover(b) - cover(a) || rank(a) - rank(b) || (b.n || 0) - (a.n || 0))[0] || null;
+  const F = Object.fromEntries((ref?.field || []).map(f => [f[0], f]));
   const field = Object.fromEntries((ref?.field || []).map(f => [f[0], f[1]]));
-  const spine = chain.map((s, i) => `${i ? '<span class="ar">→</span>' : ""}<div class="nd${s.name === CH ? " me" : ""}"><b title="${esc(s.name)}">${esc(mnt(s.name))}</b>${field[s.name] != null ? ev(sc(field[s.name], ref), { label: mnt(s.name) + " on " + ref.slice, slice: ref.slice, n: ref.n, src: "pooled over complete runs" }) + " · " : ""}${stPill(s.status)}</div>`).join("");
-  const vals = Object.values(field).filter(v => v != null), lo = vals.length ? Math.min(...vals) : 0, hi = vals.length ? Math.max(...vals) : 1;
-  const X = v => 4 + (hi > lo ? (v - lo) / (hi - lo) : .5) * 292;
-  const refs = [[field[PV], "s-mut"], [field[CH], "s-pos"]].filter(x => x[0] != null);
+  const evM = k => ({ label: mnt(k) + " on " + ref.slice, slice: ref.slice, hash: ref.hash, n: ref.n, runs: F[k]?.[3] || [], src: `mean per id over ${(F[k]?.[3] || []).length} complete run${(F[k]?.[3] || []).length === 1 ? "" : "s"}` });
+  const spine = chain.map((s, i) => `${i ? '<span class="ar">→</span>' : ""}<div class="nd${s.name === CH ? " me" : ""}"><b title="${esc(s.name)}">${esc(mnt(s.name))}</b>${field[s.name] != null ? ev(sc(field[s.name], ref), evM(s.name)) + " · " : ""}${stPill(s.status)}</div>`).join("");
+  const vals = Object.entries(field).filter(([k, v]) => v != null && fam.has(k)).map(e => e[1]), lo = vals.length ? Math.min(...vals) : 0, hi = vals.length ? Math.max(...vals) : 1;
+  const X = v => .02 + (hi > lo ? (v - lo) / (hi - lo) : .5) * .96;
+  const refs = [[field[PV], "c-mut"], [field[CH], "c-pos"]].filter(x => x[0] != null);
+  const dotC = st => st === "champion" ? "c-pos" : st === "rejected" ? "c-neg" : st === "candidate" ? "c-warn" : "c-mut";
   const row = v => { const s = field[v.name]; return `<div class="lrow" data-k="${esc(v.name)}"><div class="nm" title="${esc(v.name)}">${esc(mnt(v.name))}</div>${stPill(v.status)}
-    <svg viewBox="0 0 300 18" preserveAspectRatio="none"><line class="grid" x1="4" x2="296" y1="9" y2="9"/>${refs.map(([r, c]) => `<line class="${c}" x1="${X(r)}" x2="${X(r)}" y1="1" y2="17" stroke-dasharray="2 2"/>`).join("")}${s != null ? `<circle cx="${X(s)}" cy="9" r="5" class="${v.status === "champion" ? "f-pos" : v.status === "rejected" ? "f-neg" : v.status === "candidate" ? "f-warn" : "f-mut"}"/>` : `<text x="8" y="13" class="t-f">no run on ${esc(short(ref?.slice || ""))}</text>`}</svg></div>
-    <div class="ldet"><dl class="f" style="font-size:12.5px">${v.title ? `<dt>title</dt><dd>${esc(v.title)}</dd>` : ""}${s != null ? `<dt>${esc(short(ref.slice))}</dt><dd>${sc(s, ref)}</dd>` : ""}${v.hill ? `<dt>hill</dt><dd>${esc(v.hill)}</dd>` : ""}<dt>change</dt><dd>${esc(v.change || "—")}</dd>${v.reason ? `<dt>${v.status === "rejected" ? "rejected" : "reason"}</dt><dd class="${v.status === "rejected" ? "neg" : ""}">${esc(v.reason)}</dd>` : ""}</dl></div>`; };
+    ${trk([tLine(), ...refs.map(([r, c]) => tMark(X(r), c)), s != null ? tDot(X(s), dotC(v.status), 5, mnt(v.name) + " · " + sc(s, ref)) : `<span class="ttxt">no run</span>`])}</div>
+    <div class="ldet"><dl class="f" style="font-size:12.5px">${v.title ? `<dt>title</dt><dd>${esc(v.title)}</dd>` : ""}<dt>id</dt><dd class="mono">${esc(v.name)}</dd>${s != null ? `<dt>${esc(short(ref.slice))}</dt><dd>${ev(sc(s, ref), evM(v.name))}</dd>` : ""}${v.hill ? `<dt>hill</dt><dd>${esc(v.hill)}</dd>` : ""}<dt>change</dt><dd>${esc(v.change || "—")}</dd>${v.reason ? `<dt>${v.status === "rejected" ? "rejected" : "reason"}</dt><dd class="${v.status === "rejected" ? "neg" : ""}">${esc(v.reason)}</dd>` : ""}</dl></div>`; };
+  const ranFirst = list => [...list].sort((a, b) => (field[a.name] == null) - (field[b.name] == null));
   const groups = chain.filter(s => s.parent).map(s => ({ parent: s.parent, kept: s, sib: s.siblings }));
   if (D.children.length) groups.push({ parent: CH, kept: null, sib: D.children });
   const counts = {}; groups.forEach(g => g.sib.forEach(v => counts[v.status] = (counts[v.status] || 0) + 1));
-  const axis = vals.length ? `<div class="lrow" style="cursor:default"><div class="nm faint">${esc(short(ref.slice))}</div><div></div><svg viewBox="0 0 300 18" preserveAspectRatio="none"><text x="6" y="12" class="t-f">${sc(lo, ref)}</text><text x="294" y="12" text-anchor="end" class="t-f">${sc(hi, ref)}</text></svg></div>` : "";
+  const axis = vals.length ? `<div class="lrow" style="cursor:default"><div class="nm faint">${esc(short(ref.slice))} · n ${N0(ref.n)}</div><div></div><div class="ends"><span>${sc(lo, ref)}</span><span>${sc(hi, ref)}</span></div></div>` : "";
   const tl = D.decisions.slice().reverse(), TLN = 12, kinds = {};
   tl.forEach(d => kinds[d.kind] = (kinds[d.kind] || 0) + 1);
   const tlRow = d => `<div><span class="k">${dt(d.t)}</span><span>${stPill(d.kind)}</span><span>${d.model ? mn(d.model) : esc(d.goal || "")}${d.reason || d.note ? ` <span class="muted">· ${esc(d.reason || d.note)}</span>` : ""}</span></div>`;
   setTimeout(() => { const l = $(".lin"); if (l) l.onclick = e => { if (e.target.closest(".ev")) return; const r = e.target.closest(".lrow[data-k]"); if (r) r.classList.toggle("open"); }; });
-  return `<div class="spine">${spine}</div>
+  return `${ref ? `<div class="cap" style="margin:0 0 8px">scores on <code>${esc(short(ref.slice))}</code>, n ${N0(ref.n)} · ${cover(ref)} of ${fam.size} models in this family ran it</div>` : ""}<div class="spine">${spine}</div>
   ${Object.keys(counts).length ? `<div class="facts" style="margin-bottom:10px">${Object.entries(counts).map(([k, n]) => `<span class="st ${esc(k)}">${n} ${esc(k)}</span>`).join("")}</div>` : ""}
   <div class="lin">${axis}
-  ${groups.map(g => `<div class="grp">tried after ${mn(g.parent)}${g.kept ? ` · kept ${mn(g.kept.name)}` : " · this model"}</div>${g.kept ? row(g.kept) : ""}${g.sib.map(row).join("") || '<div class="empty">no other tries</div>'}`).join("")}
+  ${groups.map(g => `<div class="grp">tried after ${mn(g.parent)}${g.kept ? ` · kept ${mn(g.kept.name)}` : " · this model"}</div>${g.kept ? row(g.kept) : ""}${ranFirst(g.sib).map(row).join("") || '<div class="empty">no other tries</div>'}`).join("")}
   </div><div class="leg"><span><i style="background:var(--control)"></i>dashed: before</span><span><i style="background:var(--positive)"></i>dashed: this</span></div>
   ${tl.length ? `<h3>decisions · ${N0(tl.length)}</h3><div class="facts" style="margin-bottom:8px">${Object.entries(kinds).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<span class="st ${esc(k)}">${n} ${esc(k)}</span>`).join("")}</div>
   <div class="tl">${tl.slice(0, TLN).map(tlRow).join("")}</div>${tl.length > TLN ? `<details class="noprint"><summary class="more-btn" style="display:inline-block;cursor:pointer">${tl.length - TLN} earlier</summary><div class="tl">${tl.slice(TLN).map(tlRow).join("")}</div></details>` : ""}` : ""}`;
