@@ -17,7 +17,7 @@ host.innerHTML=`<svg class="cm-shapes" xmlns="http://www.w3.org/2000/svg"></svg>
 <div class="cm-fab"><div class="cm-tools">${TOOLS.map(([k,n,key])=>`<button data-tool="${k}" title="${n} (${key})">${n}<b>${key}</b></button>`).join('')}</div><button class="cm-btn cm-lst" title="Comments">0</button><button class="cm-btn cm-mode">Comment<b>C</b></button></div>`;
 const $c=s=>host.querySelector(s),hl=$c('.cm-hl'),pinsEl=$c('.cm-pins'),pops=$c('.cm-pops'),list=$c('.cm-list'),chip=$c('.cm-chip'),layer=$c('.cm-layer'),shapesEl=$c('.cm-shapes'),tools=$c('.cm-tools');
 const h=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let mode=false,tool='pin',all=[],open=null,hot=null,draw=null,pending=null;
+let mode=false,tool='pin',all=[],open=null,hot=null,draw=null,pending=null,agentOn=true;
 const here=()=>location.hash.slice(1)||'overview';
 const me=()=>{try{return localStorage.getItem('arx-name')||''}catch(e){return ''}};
 const setMe=n=>{try{localStorage.setItem('arx-name',n)}catch(e){}};
@@ -260,7 +260,9 @@ function shapeSvg(a,cl,id){const s=a.shape,g=where(a),cls=`${cl}${id&&id===hot?'
  if(s.ins&&g.r){const [l,t2,rr,b]=s.ins,q=g.r,bd=`M${r1(q.left+l)} ${r1(q.top+t2)}H${r1(q.right+rr)}V${r1(q.bottom+b)}H${r1(q.left+l)}Z`;
   return `<g class="${cls}" data-id="${h(id||'')}"><path class="hit box" d="${bd}"/><path class="v box" d="${bd}"/></g>`}
  return `<g class="${cls}" data-id="${h(id||'')}" transform="translate(${r1(g.tx)} ${r1(g.ty)}) scale(${r1(g.sx*1000)/1000} ${r1(g.sy*1000)/1000})"><path class="hit ${t}" d="${d}"/><path class="v ${t}" d="${d}"/></g>`}
-const working=c=>c.agent&&(c.agent.status==='queued'||c.agent.status==='running');
+// answer_agent comes with /api/comments: a queued item with no `arx answer` running waits for a person, not the agent
+const working=c=>c.agent&&(c.agent.status==='running'||c.agent.status==='queued'&&agentOn);
+const stranded=c=>c.agent&&c.agent.status==='queued'&&!agentOn;
 const klass=c=>c.resolved?'res':working(c)?'wait':c.messages.some(m=>m.agent)&&!c.waiting?'rep':'';
 function drawPins(){if(draw)return;const ts=mine(),openN=ts.filter(t=>!t.resolved).length;
  $c('.cm-lst').textContent=openN?openN+' open':ts.length?String(ts.length):'All';$c('.cm-lst').classList.toggle('none',!ts.length&&!all.length);
@@ -281,7 +283,7 @@ function thread(id){const c=all.find(t=>t.id===id);if(!c)return;
  const ta0=pops.querySelector('textarea'),draft=open===id&&ta0?ta0.value:'';
  closePop();open=id;const p=document.createElement('div');p.className='cm-pop';
  const msg=m=>`<div class="cm-m"><div class="cm-who">${h(m.agent?'Agent':m.author)} · ${when(m.t)}</div><div class="cm-msg ${m.agent?'agent':''}${m.error?' err':''}">${m.agent?rich(m.body):linky(m.body)}</div></div>`;
- const ag=working(c)?`<div class="cm-m"><div class="cm-who">Agent</div><div class="cm-msg agent cm-busy"><span class="cm-dot"></span>${h(c.agent.note||(c.agent.status==='queued'?'Queued':'Working'))}${c.agent.task?` <a href="#task/${encodeURIComponent(c.agent.task)}">task</a>`:''}</div></div>`:'';
+ const ag=stranded(c)?`<div class="cm-m"><div class="cm-who">Agent</div><div class="cm-msg cm-idle">No agent running · <code>arx answer</code></div></div>`:working(c)?`<div class="cm-m"><div class="cm-who">Agent</div><div class="cm-msg agent cm-busy"><span class="cm-dot"></span>${h(c.agent.note||(c.agent.status==='queued'?'Queued':'Working'))}${c.agent.task?` <a href="#task/${encodeURIComponent(c.agent.task)}">task</a>`:''}</div></div>`:'';
  p.innerHTML=`<div class="cm-anchor">${mine().indexOf(c)+1} · ${h(anchorText(c.anchor||{}))}</div><div class="cm-msgs">${c.messages.map(msg).join('')}${ag}</div>
  <textarea placeholder="Reply"></textarea><div class="cm-row">${nameField()}<button class="cm-sm rs">${c.resolved?'Reopen':'Resolve'}</button><button class="cm-sm pri go">Reply</button></div>`;
  pops.append(p);const [x,y]=pos(c)||[innerWidth-360,innerHeight-120];place(p,x,y);const ta=p.querySelector('textarea');ta.value=draft;
@@ -294,14 +296,14 @@ function thread(id){const c=all.find(t=>t.id===id);if(!c)return;
   if(!ev)return p.isConnected&&failed(p);if(p.isConnected&&open===id)closePop()};
  p.querySelectorAll('textarea,input').forEach(f=>f.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))send();if(e.key==='Escape')closePop()})}
 function drawList(){if(!list.classList.contains('on'))return;const ts=[...mine(),...all.filter(t=>t.route!==here())];
- const item=c=>{const i=mine().indexOf(c);return `<div class="cm-it ${klass(c)}" data-id="${c.id}"><span class="cm-n">${i>=0?i+1:'#'+h(c.route)}</span>${h(c.messages[0].body.slice(0,140))}<div class="cm-who">${h(anchorText(c.anchor||{}))} · ${c.messages.length-1} ${c.messages.length===2?'reply':'replies'}${c.resolved?' · resolved':working(c)?' · agent working':''}</div></div>`};
+ const item=c=>{const i=mine().indexOf(c);return `<div class="cm-it ${klass(c)}" data-id="${c.id}"><span class="cm-n">${i>=0?i+1:'#'+h(c.route)}</span>${h(c.messages[0].body.slice(0,140))}<div class="cm-who">${h(anchorText(c.anchor||{}))} · ${c.messages.length-1} ${c.messages.length===2?'reply':'replies'}${c.resolved?' · resolved':stranded(c)?' · no agent running':!working(c)?'':c.agent.status==='running'?' · agent working':' · queued'}</div></div>`};
  list.innerHTML=`<div class="cm-me"><input class="cm-name" placeholder="Your name" maxlength="60" value="${h(me())}"></div>`+(ts.length?ts.map(item).join(''):'<div class="cm-it">Press C</div>');
  const nf=list.querySelector('.cm-name');nf.onchange=()=>setMe(nf.value.trim());nf.onkeydown=e=>e.stopPropagation();
  list.querySelectorAll('.cm-it[data-id]').forEach(el=>el.onclick=()=>{const c=all.find(t=>t.id===el.dataset.id);
   if(c.route!==here())return thread(c.id);const n=anchorEl(c);if(n)n.scrollIntoView({block:'center'});setTimeout(()=>thread(c.id),300)})}
 
 async function post(row){let ev=null;try{const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(row)});if(r.ok)ev=await r.json()}catch(e){}await load();return ev}
-async function load(){try{const r=await fetch(API,{cache:'no-store'});if(!r.ok)return;all=(await r.json()).threads||[];
+async function load(){try{const r=await fetch(API,{cache:'no-store'});if(!r.ok)return;const d=await r.json();all=d.threads||[];agentOn=!d.answer_agent||!!d.answer_agent.running;
  const p=pops.firstChild,reopen=open&&p&&!p.dataset.busy&&!p.contains(document.activeElement);drawPins();drawList();if(reopen)thread(open)}catch(e){}}
 document.body.append(host);
 addEventListener('scroll',drawPins,{passive:true,capture:true});addEventListener('resize',drawPins);
