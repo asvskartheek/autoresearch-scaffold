@@ -32,6 +32,16 @@ class ReferenceReview(unittest.TestCase):
                 else:
                     self.assertEqual(a[k], b[k], k)
 
+    def test_achieved_reference_remains_frozen_after_repeat(self):
+        p = self.p
+        p.achieve_goal('g', force=True)
+        frozen = p.goal_status('g')
+        evaluate(p, 'v1', 'qa/full', lambda i: {'score': 0})
+        got = reference._goal_status(p, reference._Index(p), 'g', p.goals()['g'], p.champion())
+        for key in ('value', 'task', 'runs', 'vs_baseline', 'met', 'gap'):
+            self.assertEqual(got[key], frozen[key], key)
+        self.assertNotEqual(got['current_observation']['value'], got['value'])
+
     def test_build_is_cached_until_the_ledger_changes(self):
         d1 = reference.build(self.p, "a+b+c+d+e")
         self.assertIs(reference.build(self.p, "a+b+c+d+e"), d1)
