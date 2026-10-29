@@ -129,6 +129,9 @@ function doneHTML(){
  const st=S.state,live=(st.tasks||[]).filter(t=>isLive(t)&&t.kind==='eval'&&t.progress?.total);
  const open=L.b.open||[];
  const jobs=live.slice(0,6).map(t=>{const pr=t.progress,eta=t.eta?.eta_s;return `<a class="job" href="#task/${enc(t.id)}"><div class="l"><b>${esc(t.title)}</b><span class="m">${pr.done.toLocaleString()}/${pr.total.toLocaleString()}${eta!=null?' · '+left(eta)+' left':''}${t.status==='stalled'?' · stalled':''}</span></div>${meter(pr.done/pr.total,{cls:t.status==='stalled'?'bad':''})}</a>`}).join('');
+ const skip=L.b.cards.map((c,k)=>c.pred?-1:k).filter(k=>k>=0);
+ if(skip.length)return `<div class="done-h"><h2>${plural(skip.length,'card')} skipped</h2></div>
+  <div class="actions"><button class="btn primary" data-l="go" data-i="${skip[0]}">Card ${skip[0]+1} <kbd>space</kbd></button></div>`;
  return `<div class="done-h"><h2>You're caught up</h2><span class="muted">${L.b.calibration.n} scored · ${open.length} open</span></div>
   ${jobs?`<div class="jobs">${jobs}</div>`:''}
   ${open.length?`<div class="pend">${open.map(r=>`<div>${pill('Open','warn')}<span class="pq">${esc(r.q||r.card)}</span><span class="mono">${esc(typeof r.guess==='number'?(+r.guess).toFixed(1):r.guess)} · ${Math.round(r.conf*100)}%</span></div>`).join('')}</div>`:''}
@@ -182,7 +185,7 @@ VIEWS.learn=()=>{
  const b=L.b,i=L.cur,c=b.cards[i];
  if(c&&L.timer.id!==c.id){leaveCard();tStart(c.id);L.visits[c.id]=(L.visits[c.id]||0)+1}
  if(!c&&L.timer.id){leaveCard();L.timer.id=null}
- if(!c&&b.cards.length&&i>=b.cards.length)lset(LK(),String(b.now));  // finished the deck: next visit starts here
+ if(!c&&b.cards.length&&i>=b.cards.length&&b.cards.every(x=>x.pred))lset(LK(),String(b.now));  // every card answered: next visit starts here
  const pips=b.cards.map((x,k)=>{const p=x.pred;const cl=k===i?'cur':!p?'':p.hit==null?'pend':p.hit?'hit':'miss';return `<button class="pip ${cl}" data-l="go" data-i="${k}" aria-label="card ${k+1}"></button>`}).join('');
  const since=b.since?`since ${stamp(b.since)}`:'all of it';
  const stage=!b.cards.length?`<div class="done-h"><h2>Nothing new ${esc(since)}</h2></div>`:c?cardHTML(c):doneHTML();
@@ -257,7 +260,9 @@ document.addEventListener('keydown',e=>{
  const tg=e.target;if(tg&&(tg.isContentEditable||/^(TEXTAREA|SELECT)$/.test(tg.tagName)||(tg.tagName==='INPUT'&&tg.type!=='range')))return;
  if(e.key==='['){go(L.cur-1);e.preventDefault();return}
  if(e.key===']'){go(L.cur+1);e.preventDefault();return}
- const c=L.b.cards[L.cur];if(!c)return;const u=uiOf(c);
+ const c=L.b.cards[L.cur];
+ if(!c){const k=L.b.cards.findIndex(x=>!x.pred);if(k>=0&&(e.key===' '||e.key==='Enter')){go(k);e.preventDefault()}return}
+ const u=uiOf(c);
  if(e.key===' '||e.key==='Enter'){if(tg&&tg.tagName==='BUTTON'&&e.key==='Enter')return;e.preventDefault();c.pred?go(L.cur+1):commitCard();return}
  if(c.pred)return;
  const n=+e.key;
