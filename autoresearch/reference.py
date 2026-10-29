@@ -472,6 +472,7 @@ def _build(p, model, vs):
         base_spec=_flat({k: v for k, v in models[base].items() if k not in CORE_FIELDS}) if base in models else [],
         baseline=dict(have=list(plan["have"]), need=plan["need"]),
         models=[dict(name=k, status=m.get("status"), title=_txt(m.get("title"))) for k, m in models.items()],
+        labels={k: features.model_label(p, k) for k in models},
         datasets={k: dict(title=v.get("title"), size=v.get("size"), url=v.get("url"), description=_txt(v.get("description")))
                   for k, v in p.datasets().items()})
 

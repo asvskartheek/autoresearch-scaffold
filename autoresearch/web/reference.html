@@ -267,6 +267,9 @@ try {
 const M = D.model, CH = M.name, PV = D.base, R = D.results, RS = Object.fromEntries(R.map(r => [r.slice, r]));
 const MAIN = RS[D.main] || R[0] || null;
 const STATUS = Object.fromEntries(D.models.map(m => [m.name, m.status]));
+const LB = D.labels || {};
+const mnt = k => k == null || k === "" ? "—" : LB[k] || (String(k).split("+").length > 3 ? "…+" + String(k).split("+").slice(-2).join("+") : String(k));
+const mn = k => { const t = mnt(k); return t === String(k ?? "—") ? esc(t) : `<span title="${esc(k)}">${esc(t)}</span>`; };
 const isBin = r => (r?.scale || "binary") === "binary";
 const unit = r => r?.unit ? " " + r.unit : "";
 const sc = (v, r) => v == null ? "—" : isBin(r) ? pct(v) : num(v) + unit(r);
@@ -280,8 +283,8 @@ const stPill = s => `<span class="st ${esc(s || "")}">${esc(s || "—")}</span>`
 /* ---------------- evidence registry ---------------- */
 const EV = {}; let evN = 0;
 function ev(v, o) { const k = "e" + (++evN); EV[k] = { v, ...o }; return `<button class="ev" data-ev="${k}">${esc(v)}</button>`; }
-const evRes = (r, label, note) => ({ label: label || `${CH} on ${r.slice}`, slice: r.slice, hash: r.hash, n: r.n, runs: [r.task, r.base?.task], src: `${r.runs} complete run${r.runs === 1 ? "" : "s"} pooled per id` + (r.base ? `, ${PV}: ${r.base.runs}` : ""), note });
-const evPair = (r, p) => evRes(r, `Paired delta vs ${PV} on ${r.slice}`, p ? `delta ${dl(p.delta, r)}, 90% CI ${ciTxt(p, r)}, n ${N0(p.n)} shared ids, ${p.wins} better, ${p.losses} worse` : null);
+const evRes = (r, label, note) => ({ label: label || `${mnt(CH)} on ${r.slice}`, slice: r.slice, hash: r.hash, n: r.n, runs: [r.task, r.base?.task], src: `${r.runs} complete run${r.runs === 1 ? "" : "s"} pooled per id` + (r.base ? `, ${mnt(PV)}: ${r.base.runs}` : ""), note });
+const evPair = (r, p) => evRes(r, `Paired delta vs ${mnt(PV)} on ${r.slice}`, p ? `delta ${dl(p.delta, r)}, 90% CI ${ciTxt(p, r)}, n ${N0(p.n)} shared ids, ${p.wins} better, ${p.losses} worse` : null);
 
 /* ---------------- shell ---------------- */
 const SECS = [["claim", "Claim"], ["system", "System"], ["data", "Data and slices"], ["results", "Results"], ["gates", "Gate ladder"], ["flips", "Fixed and broken"], ["failures", "Failures"], ["lineage", "Lineage"], ["cost", "Cost and latency"], ["unknown", "Not known"], ["reproduce", "Reproduce"]];
@@ -293,14 +296,14 @@ const ICON = {
 };
 const sec = (i, id, title) => `<section class="s" id="${id}"><div class="hd"><b>${String(i + 1).padStart(2, "0")}</b><h2>${title}</h2><button class="anc" data-anchor="${id}" title="Copy link to this section">#</button></div><div data-body="${id}"></div></section>`;
 const order = { champion: 0, candidate: 1, retired: 2, historical: 3, rejected: 4, planned: 5 };
-const opts = (list, sel) => list.map(m => `<option value="${esc(m.name)}"${m.name === sel ? " selected" : ""}>${esc(m.name)} · ${esc(m.status)}</option>`).join("");
+const opts = (list, sel) => list.map(m => `<option value="${esc(m.name)}"${m.name === sel ? " selected" : ""}>${esc(mnt(m.name))} · ${esc(m.status)}</option>`).join("");
 const byStatus = [...D.models].sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || a.name.localeCompare(b.name));
 const gPick = [g => g.status === "open" && g.kpi === "score" && !g.met && g.slice === D.main, g => g.status === "open" && g.kpi === "score" && !g.met, g => g.status === "open", () => true];
 const champGoal = gPick.map(f => D.goals.find(g => g.model === CH && f(g))).find(Boolean) || null;
 
 $("#app").innerHTML = `
 <div class="bar"><div class="in">
-  <div class="crumb">${esc(D.project.name || "project")} · paper · <b>${esc(CH)}</b></div>
+  <div class="crumb">${esc(D.project.name || "project")} · paper · <b>${mn(CH)}</b></div>
   <button class="tb" id="bLink" title="Copy a link to the section in view">${ICON.link}<span>Copy link</span></button>
   <button class="tb pri" id="bDown" title="Download one self-contained HTML file">${ICON.down}<span>Download</span></button>
   <button class="tb" id="bPrint" title="Print or save as PDF">${ICON.print}<span>PDF</span></button>
@@ -311,12 +314,12 @@ $("#app").innerHTML = `
 <main>
 <header class="head">
   <div class="kick">${esc(M.status)} · ${esc(D.project.name || "")}${champGoal ? " · goal " + esc(champGoal.name) : ""}</div>
-  <h1>${esc(CH)}</h1>
+  <h1>${mn(CH)}</h1>${mnt(CH) !== CH ? `<div class="kick" style="margin:-4px 0 10px">${esc(CH)}</div>` : ""}
   <div class="facts">
     ${stPill(M.status)}
     ${M.title ? `<span class="pill">${esc(M.title)}</span>` : ""}
     ${M.promoted ? `<span class="pill pos">champion since ${dt(M.promoted)}</span>` : ""}
-    ${PV ? `<span class="pill">vs ${esc(PV)}</span>` : ""}
+    ${PV ? `<span class="pill">vs ${mn(PV)}</span>` : ""}
     ${champGoal && champGoal.need != null && champGoal.have != null && !champGoal.met ? `<span class="pill warn">${N0(champGoal.need - champGoal.have)} more of ${N0(champGoal.n)} to goal</span>` : ""}
     ${champGoal?.met ? `<span class="pill pos">goal met</span>` : ""}
     <span class="pill">ledger ${dt(D.generated)}</span>
@@ -331,10 +334,10 @@ function section(id, fn) { try { const h = fn(); if (typeof h === "string") body
 
 /* ================= 01 claim ================= */
 section("claim", () => {
-  if (!MAIN) return `<div class="empty">${esc(CH)} has no complete eval run yet.</div>`;
+  if (!MAIN) return `<div class="empty">${mn(CH)} has no complete eval run yet.</div>`;
   const r = MAIN, p = r.vs, bin = isBin(r), g = champGoal && champGoal.slice === r.slice && champGoal.kpi === "score" ? champGoal : D.goals.find(x => x.slice === r.slice && x.kpi === "score" && x.status === "open");
   const val = v => bin ? v * r.n : v;
-  const bars = [[PV ? "before · " + PV : null, p ? p.base : null, "f-mut"], ["this · " + CH, r.score, "f-pos"]].filter(b => b[0] && b[1] != null);
+  const bars = [[PV ? "before · " + mnt(PV) : null, p ? p.base : null, "f-mut"], ["this · " + mnt(CH), r.score, "f-pos"]].filter(b => b[0] && b[1] != null);
   const tgt = g ? (g.need ?? g.target * r.n) : null;
   const vals = [...bars.map(b => val(b[1])), ...(tgt != null && bin ? [tgt] : [])];
   const top = bin ? r.n : Math.max(...vals) * 1.05, span = Math.max(...vals) - Math.min(...vals);
@@ -361,7 +364,7 @@ section("claim", () => {
   <dl class="f">
     <dt>result</dt><dd>${bin ? ev(N0(r.right) + " / " + N0(r.n), evRes(r)) + ` right (${pct(r.score)})` : ev(sc(r.score, r), evRes(r))} on ${esc(r.slice)} · ${runsTxt(r)}</dd>
     ${p ? `<dt>vs before</dt><dd>${ev(dl(p.delta, r), evPair(r, p))} paired, 90% CI ${ev(ciTxt(p, r), evPair(r, p))}${p.noisy ? ' <span class="warn">noisy</span>' : ""}, same ${N0(p.n)} ids</dd>
-    <dt>churn</dt><dd><span class="pos">${ev(p.wins + " fixed", evPair(r, p))}</span> · <span class="neg">${ev(p.losses + " broken", evPair(r, p))}</span> · net ${sgn(p.wins - p.losses, 0)}</dd>` : `<dt>vs before</dt><dd class="warn">${PV ? esc(PV) + " has no run on this slice" : "no comparator in the ledger"}</dd>`}
+    <dt>churn</dt><dd><span class="pos">${ev(p.wins + " fixed", evPair(r, p))}</span> · <span class="neg">${ev(p.losses + " broken", evPair(r, p))}</span> · net ${sgn(p.wins - p.losses, 0)}</dd>` : `<dt>vs before</dt><dd class="warn">${PV ? mn(PV) + " has no run on this slice" : "no comparator in the ledger"}</dd>`}
     ${g ? `<dt>goal</dt><dd>${esc(g.title || g.name)}: ${g.met ? '<span class="pos">met</span>' : g.need != null && g.have != null ? ev(N0(g.need - g.have) + " more", { label: "Distance to goal " + g.name, slice: g.slice, n: g.n, runs: [g.task], src: ".research/goals.json › " + g.name, note: `target ${g.target} → ${N0(g.need)} of ${N0(g.n)}; now ${N0(g.have)}` }) + ` of ${N0(g.n)} to reach ${N0(g.need)}` : "target " + g.target}</dd>` : ""}
     ${M.title ? `<dt>change</dt><dd>${esc(M.title)}</dd>` : ""}
     ${lat || cost ? `<dt>cost of it</dt><dd>${[lat, cost].filter(Boolean).join(" · ")}</dd>` : ""}
@@ -376,7 +379,7 @@ function goalStrips() {
     const fmtv = x => x == null ? "—" : isS ? pct(x) : g.kpi.startsWith("latency") ? secs(x) : num(x);
     const top = Math.max(v ?? 0, t ?? 0) * (isS ? 1 : 1.15) || 1, hi = isS ? 1 : top, X = x => 2 + Math.max(0, Math.min(1, x / hi)) * 296;
     const dist = g.met ? '<span class="pos">met</span>' : g.need != null && g.have != null ? `${N0(g.need - g.have)} more of ${N0(g.n)}` : v != null ? `${fmtv(Math.abs(t - v))} to go` : "no run";
-    return `<div class="goal"><div class="gt">${esc(g.title || g.name)} <span class="faint mono" style="font-size:11.5px">${esc(g.status)} · ${esc(short(g.slice))}${g.model && g.model !== CH ? " · " + esc(g.model) : ""}</span></div><div class="gv">${fmtv(v)} <span class="faint">${hib ? "≥" : "≤"} ${fmtv(t)}</span> · ${dist}</div>
+    return `<div class="goal"><div class="gt">${esc(g.title || g.name)} <span class="faint mono" style="font-size:11.5px">${esc(g.status)} · ${esc(short(g.slice))}${g.model && g.model !== CH ? " · " + mn(g.model) : ""}</span></div><div class="gv">${fmtv(v)} <span class="faint">${hib ? "≥" : "≤"} ${fmtv(t)}</span> · ${dist}</div>
     <svg viewBox="0 0 300 14" preserveAspectRatio="none"><rect class="f-track" x="2" y="3" width="296" height="8" rx="3"/>${v != null ? `<rect class="${g.met ? "f-pos" : "f-acc"}" x="2" y="3" width="${X(v) - 2}" height="8" rx="3"/>` : ""}<line class="s-text" x1="${X(t)}" x2="${X(t)}" y1="0" y2="14" stroke-width="1.5"/></svg></div>`;
   }).join("")}</div>`;
 }
@@ -384,9 +387,9 @@ function goalStrips() {
 /* ================= 02 system ================= */
 section("system", () => {
   const chain = D.lineage;
-  const spine = chain.map((s, i) => `${i ? '<div class="arr"><span>→</span></div>' : ""}<div class="stg${s.name === CH ? " chg" : ""}"><div class="k">${esc(s.name)}</div><div class="v">${esc(s.title || (s.change || "").split(/(?<=\.)\s/)[0] || "—")}</div>${s.delta && s.delta.delta != null ? `<div class="${s.delta.delta > 0 ? "pos" : s.delta.delta < 0 ? "neg" : "faint"}" style="font:600 12px var(--mono);margin-top:4px">${ev(dl(s.delta.delta, RS[s.delta.slice] || { scale: "binary" }), { label: `${s.name} vs ${s.parent} on ${s.delta.slice}`, slice: s.delta.slice, n: s.delta.n, src: "paired over shared ids", note: `CI ${ciTxt(s.delta, RS[s.delta.slice] || { scale: "binary" })}, ${s.delta.wins} better, ${s.delta.losses} worse` })} <span class="faint" style="font-weight:400">${esc(short(s.delta.slice))}</span></div>` : ""}</div>`).join("");
+  const spine = chain.map((s, i) => `${i ? '<div class="arr"><span>→</span></div>' : ""}<div class="stg${s.name === CH ? " chg" : ""}"><div class="k" title="${esc(s.name)}">${esc(mnt(s.name))}</div><div class="v">${esc(s.title || (s.change || "").split(/(?<=\.)\s/)[0] || "—")}</div>${s.delta && s.delta.delta != null ? `<div class="${s.delta.delta > 0 ? "pos" : s.delta.delta < 0 ? "neg" : "faint"}" style="font:600 12px var(--mono);margin-top:4px">${ev(dl(s.delta.delta, RS[s.delta.slice] || { scale: "binary" }), { label: `${mnt(s.name)} vs ${mnt(s.parent)} on ${s.delta.slice}`, slice: s.delta.slice, n: s.delta.n, src: "paired over shared ids", note: `CI ${ciTxt(s.delta, RS[s.delta.slice] || { scale: "binary" })}, ${s.delta.wins} better, ${s.delta.losses} worse` })} <span class="faint" style="font-weight:400">${esc(short(s.delta.slice))}</span></div>` : ""}</div>`).join("");
   const a = Object.fromEntries(D.base_spec), b = Object.fromEntries(D.spec), keys = [...new Set([...D.base_spec.map(x => x[0]), ...D.spec.map(x => x[0])])];
-  const tbl = keys.length ? `<h3>specification</h3><div class="tw"><table><thead><tr><th>field</th>${PV ? `<th>${esc(PV)}</th>` : ""}<th>${esc(CH)}</th></tr></thead><tbody>
+  const tbl = keys.length ? `<h3>specification</h3><div class="tw"><table><thead><tr><th>field</th>${PV ? `<th>${mn(PV)}</th>` : ""}<th>${mn(CH)}</th></tr></thead><tbody>
     ${keys.map(k => { const chg = PV && String(a[k] ?? "") !== String(b[k] ?? ""); return `<tr${chg ? ' class="me"' : ""}><td class="id">${esc(k)}</td>${PV ? `<td class="mono" style="word-break:break-all">${esc(a[k] ?? "—")}</td>` : ""}<td class="mono" style="word-break:break-all">${chg ? "<b>" + esc(b[k] ?? "—") + "</b>" : esc(b[k] ?? "—")}</td></tr>`; }).join("")}</tbody></table></div>` : "";
   return `<div class="pipe">${spine}</div>
   <h3>change, as registered</h3><dl class="f"><dt>change</dt><dd>${esc(M.change || "—")}</dd>${M.hill ? `<dt>hill</dt><dd>${esc(M.hill)}</dd>` : ""}<dt>registered</dt><dd>${dt(M.created)}</dd>${M.promoted ? `<dt>promoted</dt><dd>${dt(M.promoted)}</dd>` : ""}${M.reason ? `<dt>reason</dt><dd>${esc(M.reason)}</dd>` : ""}
@@ -402,7 +405,7 @@ section("data", () => {
   const dsl = Object.entries(D.datasets);
   return `${dsl.length ? `<dl class="f" style="margin-bottom:14px">${dsl.map(([k, d]) => `<dt>${esc(k)}</dt><dd>${esc(d.title || k)} · ${N0(d.size)} examples${d.description ? ` <span class="muted">· ${esc(d.description)}</span>` : ""}${d.url ? ` · <a href="${esc(d.url)}" target="_blank" rel="noopener">source</a>` : ""}</dd>`).join("")}</dl>` : ""}
   <div class="tw"><table><thead><tr><th>slice</th><th>kind</th><th class="n">n</th><th>size</th><th>hash</th><th>role</th><th>what it measures</th></tr></thead><tbody>
-  ${rows.map(r => r.missing ? `<tr class="na"><td class="id">${esc(r.slice)}</td><td colspan="5">not run by ${esc(CH)}</td><td>${esc((D.unknown.find(u => u.kind === "not_run" && u.slice === r.slice)?.roles || []).join(", "))}</td></tr>` :
+  ${rows.map(r => r.missing ? `<tr class="na"><td class="id">${esc(r.slice)}</td><td colspan="5">not run by ${mn(CH)}</td><td>${esc((D.unknown.find(u => u.kind === "not_run" && u.slice === r.slice)?.roles || []).join(", "))}</td></tr>` :
     `<tr id="slice-${esc(r.slice.replace(/[^\w-]/g, "_"))}"><td class="id">${esc(r.slice)}</td><td>${esc(r.kind || "—")}</td><td class="n">${ev(N0(r.n), { label: r.slice, slice: r.slice, hash: r.hash, n: r.n, src: ".research/slices.json › " + r.slice, note: r.scale + (r.unit ? " · " + r.unit : "") })}</td>
     <td><div class="szw"><div class="sz" style="width:${Math.min(100, r.n / full(r.slice.split("/")[0]) * 100)}%"></div></div></td><td class="id">${esc(r.hash || "—")}</td><td>${esc((r.roles || []).join(", ") || "—")}</td><td>${esc(r.description || "")}${r.metric ? `<div class="faint" style="font-size:12px">${esc(r.metric)}</div>` : ""}</td></tr>`).join("")}
   </tbody></table></div>`;
@@ -419,7 +422,7 @@ section("results", () => {
     const W = 800, L = 230, Rr = 70, X = v => L + (v - lo) / (hi - lo) * (W - L - Rr), rh = 28, H = bins.length * rh;
     let s = `<svg viewBox="0 0 ${W} ${H + 40}" role="img" aria-label="Paired delta per slice with 90% CI">`;
     for (let v = lo; v <= hi + 1e-9; v += st) s += `<line class="${Math.abs(v) < 1e-9 ? "s-text" : "grid"}" x1="${X(v)}" x2="${X(v)}" y1="4" y2="${H + 6}"/><text class="t-f" x="${X(v)}" y="${H + 22}" text-anchor="middle">${v > 0 ? "+" : ""}${+v.toFixed(2)}</text>`;
-    s += `<text class="t-f" x="${X(hi)}" y="${H + 36}" text-anchor="end">pts, ${esc(CH.length > 30 ? "this" : CH)} − ${esc(PV && PV.length < 30 ? PV : "before")}</text>`;
+    s += `<text class="t-f" x="${X(hi)}" y="${H + 36}" text-anchor="end">pts, ${esc(mnt(CH).length > 30 ? "this" : mnt(CH))} − ${esc(PV && mnt(PV).length < 30 ? mnt(PV) : "before")}</text>`;
     bins.forEach((r, i) => {
       const y = 16 + i * rh, p = r.vs, c = p.lo > 0 ? "pos" : p.hi < 0 ? "neg" : "mut";
       s += `<text x="${L - 10}" y="${y + 4}" text-anchor="end">${esc(short(r.slice).slice(0, 30))} <tspan class="t-f">n ${N0(r.n)}</tspan></text>`;
@@ -432,7 +435,7 @@ section("results", () => {
     const f = r.field.filter(x => x[1] != null); if (f.length < 2) return "";
     const vs = f.map(x => x[1]), a = Math.min(...vs), b = Math.max(...vs), X = v => 6 + (b > a ? (v - a) / (b - a) : .5) * 148;
     const rank = 1 + f.filter(x => (D.project.higher_is_better ? x[1] > r.score : x[1] < r.score) && x[0] !== CH).length;
-    return `<svg class="strip" viewBox="0 0 160 18" preserveAspectRatio="none"><line class="grid" x1="6" x2="154" y1="9" y2="9"/>${f.map(x => `<circle cx="${X(x[1])}" cy="9" r="${x[0] === CH ? 5 : 3}" class="${x[0] === CH ? "f-pos" : x[0] === PV ? "f-acc" : "f-mut"}"><title>${esc(x[0])} · ${sc(x[1], r)}</title></circle>`).join("")}</svg><span class="faint" style="font:11px var(--mono)">rank ${rank} of ${f.length}</span>`;
+    return `<svg class="strip" viewBox="0 0 160 18" preserveAspectRatio="none"><line class="grid" x1="6" x2="154" y1="9" y2="9"/>${f.map(x => `<circle cx="${X(x[1])}" cy="9" r="${x[0] === CH ? 5 : 3}" class="${x[0] === CH ? "f-pos" : x[0] === PV ? "f-acc" : "f-mut"}"><title>${esc(mnt(x[0]))} · ${sc(x[1], r)}</title></circle>`).join("")}</svg><span class="faint" style="font:11px var(--mono)">rank ${rank} of ${f.length}</span>`;
   };
   return `${fig}<div class="tw"><table><thead><tr><th>slice</th><th class="n">n</th><th class="n">this</th><th class="n">before</th><th class="n">Δ</th><th class="n">90% CI</th><th class="n">fixed / broken</th><th class="n">runs</th><th>every try</th></tr></thead><tbody>
   ${R.map(r => { const p = r.vs; return `<tr${r.slice === D.main ? ' class="me"' : ""}><td class="id">${esc(short(r.slice))}</td><td class="n">${N0(r.n)}</td>
@@ -441,7 +444,7 @@ section("results", () => {
     <td class="n ${p ? (p.lo > 0 ? "pos" : p.hi < 0 ? "neg" : "") : ""}">${p ? ev(dl(p.delta, r), evPair(r, p)) : "—"}</td><td class="n">${p ? ev(ciTxt(p, r), evPair(r, p)) : "—"}</td>
     <td class="n">${p ? `<span class="pos">${p.wins}</span> / <span class="neg">${p.losses}</span>` : "—"}</td><td class="n">${r.runs}${r.base ? " · " + r.base.runs : ""}</td><td>${strip(r)}</td></tr>`; }).join("")}
   </tbody></table></div>
-  <dl class="f" style="margin-top:12px"><dt>this</dt><dd>${esc(CH)}: mean per id over every complete run</dd><dt>before</dt><dd>${PV ? esc(PV) : "no comparator"}</dd><dt>CI</dt><dd>paired bootstrap over shared ids, 2,000 resamples, seed 0</dd><dt>errors</dt><dd>count as 0</dd></dl>`;
+  <dl class="f" style="margin-top:12px"><dt>this</dt><dd>${mn(CH)}: mean per id over every complete run</dd><dt>before</dt><dd>${PV ? mn(PV) : "no comparator"}</dd><dt>CI</dt><dd>paired bootstrap over shared ids, 2,000 resamples, seed 0</dd><dt>errors</dt><dd>count as 0</dd></dl>`;
 });
 
 /* ================= 05 gates ================= */
@@ -455,7 +458,7 @@ section("gates", () => {
     const ok = c.state === "pass";
     return `<svg viewBox="0 0 200 30" preserveAspectRatio="none"><line class="grid" x1="6" x2="194" y1="15" y2="15"/><line class="s-mut" x1="${X(0)}" x2="${X(0)}" y1="6" y2="24"/><rect x="${X(lo)}" y="9" width="${Math.max(0, X(thr) - X(lo))}" height="12" style="fill:var(--negative);opacity:.12"/><line class="s-neg" x1="${X(thr)}" x2="${X(thr)}" y1="5" y2="25" stroke-dasharray="2 2"/>${c.lo != null ? `<line class="${ok ? "s-pos" : "s-neg"}" stroke-width="3" stroke-linecap="round" x1="${X(c.lo * 100)}" x2="${X(c.hi * 100)}" y1="15" y2="15"/>` : ""}<circle class="${ok ? "f-pos" : "f-neg"}" cx="${X(c.delta * 100)}" cy="15" r="4.5"/></svg>`;
   };
-  const stateTxt = { need_run: `${CH} not run`, need_baseline: `${PV || "comparator"} not run`, no_comparator: "no comparator", needs_review: "needs a person" };
+  const stateTxt = { need_run: `${mnt(CH)} not run`, need_baseline: `${PV ? mnt(PV) : "comparator"} not run`, no_comparator: "no comparator", needs_review: "needs a person" };
   const rungs = L.map((rg, i) => {
     const checks = rg.checks.map(c => {
       const r = RS[c.slice] || { slice: c.slice, scale: "binary", n: c.n };
@@ -467,14 +470,14 @@ section("gates", () => {
     return `<div class="rung"><div class="rh"><b>${i + 1} · ${esc(rg.rung)}</b><span class="st ${cls}">${esc(rg.status)}</span></div>${checks}</div>`;
   }).join("");
   return `<div class="ladder" style="--cols:${Math.min(4, L.length)}">${rungs}</div>
-  <div class="leg"><span><i style="background:var(--positive)"></i>observed Δ and 90% CI</span><span><i style="background:var(--negative);opacity:.35"></i>fails below the dashed threshold</span><span>vs ${esc(PV || "—")}</span></div>
-  ${D.baseline.need.length ? `<div class="after"><div class="stp"><div class="k">baseline</div>${D.baseline.have.length} slices have runs of ${esc(CH)} · missing ${D.baseline.need.map(x => `<code>${esc(short(x))}</code>`).join(", ")}</div></div>` : ""}`;
+  <div class="leg"><span><i style="background:var(--positive)"></i>observed Δ and 90% CI</span><span><i style="background:var(--negative);opacity:.35"></i>fails below the dashed threshold</span><span>vs ${(PV ? mn(PV) : "—")}</span></div>
+  ${D.baseline.need.length ? `<div class="after"><div class="stp"><div class="k">baseline</div>${D.baseline.have.length} slices have runs of ${mn(CH)} · missing ${D.baseline.need.map(x => `<code>${esc(short(x))}</code>`).join(", ")}</div></div>` : ""}`;
 });
 
 /* ================= 06 flips ================= */
 section("flips", () => {
   const can = R.filter(r => r.cells && r.cells.b);
-  if (!can.length) return `<div class="empty">No slice has per-id runs of both ${esc(CH)} and ${esc(PV || "a comparator")}.</div>`;
+  if (!can.length) return `<div class="empty">No slice has per-id runs of both ${mn(CH)} and ${(PV ? mn(PV) : "a comparator")}.</div>`;
   let cur = can[0].slice, hide = new Set();
   const LAB = { fix: "fixed", brk: "broken", ww: "both wrong", rr: "both right", na: "not in both" }, COL = { fix: "f-pos", brk: "f-neg", ww: "f-ww", rr: "f-rr", na: "f-track" };
   const ORD = { fix: 0, brk: 1, ww: 2, rr: 3, na: 4 };
@@ -494,7 +497,7 @@ section("flips", () => {
     $("#grid").innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="max-width:${W}px" role="img" aria-label="Every id on ${esc(cur)}: fixed, broken, both right, both wrong">${out}</svg>`;
     const tot = {}; all.forEach(c => tot[c.o] = (tot[c.o] || 0) + 1); const L2 = labs(r);
     $("#fleg").innerHTML = Object.keys(ORD).filter(o => tot[o]).map(o => `<button data-o="${o}" class="${hide.has(o) ? "dim" : ""}"><i style="background:${{ fix: "var(--positive)", brk: "var(--negative)", ww: "var(--cell-ww)", rr: "var(--cell-rr)", na: "var(--pill-neutral-bg)" }[o]}"></i>${L2[o]} · <b>${N0(tot[o])}</b></button>`).join("") + (isBin(r) && r.runs > 1 ? `<span><i style="background:var(--surface);border:1px solid var(--control);border-radius:50%"></i>differs across runs</span>` : "");
-    $("#fsum").innerHTML = `<dt>net</dt><dd>${ev((tot.fix || 0) + " − " + (tot.brk || 0) + " = " + sgn((tot.fix || 0) - (tot.brk || 0), 0), evPair(r, r.vs))} ids on ${esc(r.slice)}</dd><dt>flaky</dt><dd>${all.filter(c => c.c > 0 && c.c < 1).length} ids where ${esc(CH)} differs across its ${r.runs} runs</dd>`;
+    $("#fsum").innerHTML = `<dt>net</dt><dd>${ev((tot.fix || 0) + " − " + (tot.brk || 0) + " = " + sgn((tot.fix || 0) - (tot.brk || 0), 0), evPair(r, r.vs))} ids on ${esc(r.slice)}</dd><dt>flaky</dt><dd>${all.filter(c => c.c > 0 && c.c < 1).length} ids where ${mn(CH)} differs across its ${r.runs} runs</dd>`;
   };
   setTimeout(() => {
     draw();
@@ -549,11 +552,11 @@ section("lineage", () => {
   const chain = D.lineage;
   const ref = RS[M.hill && D.gallery.find(h => h.name === M.hill)?.target] || MAIN;
   const field = Object.fromEntries((ref?.field || []).map(f => [f[0], f[1]]));
-  const spine = chain.map((s, i) => `${i ? '<span class="ar">→</span>' : ""}<div class="nd${s.name === CH ? " me" : ""}"><b>${esc(s.name)}</b>${field[s.name] != null ? ev(sc(field[s.name], ref), { label: s.name + " on " + ref.slice, slice: ref.slice, n: ref.n, src: "pooled over complete runs" }) + " · " : ""}${stPill(s.status)}</div>`).join("");
+  const spine = chain.map((s, i) => `${i ? '<span class="ar">→</span>' : ""}<div class="nd${s.name === CH ? " me" : ""}"><b title="${esc(s.name)}">${esc(mnt(s.name))}</b>${field[s.name] != null ? ev(sc(field[s.name], ref), { label: mnt(s.name) + " on " + ref.slice, slice: ref.slice, n: ref.n, src: "pooled over complete runs" }) + " · " : ""}${stPill(s.status)}</div>`).join("");
   const vals = Object.values(field).filter(v => v != null), lo = vals.length ? Math.min(...vals) : 0, hi = vals.length ? Math.max(...vals) : 1;
   const X = v => 4 + (hi > lo ? (v - lo) / (hi - lo) : .5) * 292;
   const refs = [[field[PV], "s-mut"], [field[CH], "s-pos"]].filter(x => x[0] != null);
-  const row = v => { const s = field[v.name]; return `<div class="lrow" data-k="${esc(v.name)}"><div class="nm" title="${esc(v.name)}">${esc(v.name)}</div>${stPill(v.status)}
+  const row = v => { const s = field[v.name]; return `<div class="lrow" data-k="${esc(v.name)}"><div class="nm" title="${esc(v.name)}">${esc(mnt(v.name))}</div>${stPill(v.status)}
     <svg viewBox="0 0 300 18" preserveAspectRatio="none"><line class="grid" x1="4" x2="296" y1="9" y2="9"/>${refs.map(([r, c]) => `<line class="${c}" x1="${X(r)}" x2="${X(r)}" y1="1" y2="17" stroke-dasharray="2 2"/>`).join("")}${s != null ? `<circle cx="${X(s)}" cy="9" r="5" class="${v.status === "champion" ? "f-pos" : v.status === "rejected" ? "f-neg" : v.status === "candidate" ? "f-warn" : "f-mut"}"/>` : `<text x="8" y="13" class="t-f">no run on ${esc(short(ref?.slice || ""))}</text>`}</svg></div>
     <div class="ldet"><dl class="f" style="font-size:12.5px">${v.title ? `<dt>title</dt><dd>${esc(v.title)}</dd>` : ""}${s != null ? `<dt>${esc(short(ref.slice))}</dt><dd>${sc(s, ref)}</dd>` : ""}${v.hill ? `<dt>hill</dt><dd>${esc(v.hill)}</dd>` : ""}<dt>change</dt><dd>${esc(v.change || "—")}</dd>${v.reason ? `<dt>${v.status === "rejected" ? "rejected" : "reason"}</dt><dd class="${v.status === "rejected" ? "neg" : ""}">${esc(v.reason)}</dd>` : ""}</dl></div>`; };
   const groups = chain.filter(s => s.parent).map(s => ({ parent: s.parent, kept: s, sib: s.siblings }));
@@ -565,7 +568,7 @@ section("lineage", () => {
   return `<div class="spine">${spine}</div>
   ${Object.keys(counts).length ? `<div class="facts" style="margin-bottom:10px">${Object.entries(counts).map(([k, n]) => `<span class="st ${esc(k)}">${n} ${esc(k)}</span>`).join("")}</div>` : ""}
   <div class="lin">${axis}
-  ${groups.map(g => `<div class="grp">tried after ${esc(g.parent)}${g.kept ? ` · kept ${esc(g.kept.name)}` : " · this model"}</div>${g.kept ? row(g.kept) : ""}${g.sib.map(row).join("") || '<div class="empty">no other tries</div>'}`).join("")}
+  ${groups.map(g => `<div class="grp">tried after ${mn(g.parent)}${g.kept ? ` · kept ${mn(g.kept.name)}` : " · this model"}</div>${g.kept ? row(g.kept) : ""}${g.sib.map(row).join("") || '<div class="empty">no other tries</div>'}`).join("")}
   </div><div class="leg"><span><i style="background:var(--control)"></i>dashed: before</span><span><i style="background:var(--positive)"></i>dashed: this</span></div>
   ${tl.length ? `<h3>decisions</h3><div class="tl">${tl.map(d => `<div><span class="k">${dt(d.t)}</span><span>${stPill(d.kind)}</span><span>${esc(d.model || d.goal || "")}${d.reason || d.note ? ` <span class="muted">· ${esc(d.reason || d.note)}</span>` : ""}</span></div>`).join("")}</div>` : ""}`;
 });
@@ -574,7 +577,7 @@ section("lineage", () => {
 section("cost", () => {
   const ls = R.filter(r => r.latency_p50 != null);
   const cs = R.filter(r => r.cost != null);
-  if (!ls.length && !cs.length) return `<div class="empty">No run of ${esc(CH)} logged latency or cost.</div>`;
+  if (!ls.length && !cs.length) return `<div class="empty">No run of ${mn(CH)} logged latency or cost.</div>`;
   let s = "";
   if (ls.length) {
     const hi = Math.max(...ls.flatMap(r => [r.latency_p95 ?? r.latency_p50, r.base?.latency_p95 ?? r.base?.latency_p50 ?? 0])) * 1.1;
@@ -589,7 +592,7 @@ section("cost", () => {
     });
     s += `</svg>`;
   }
-  return `${s ? `<div class="fig">${s}<div class="leg"><span><i style="background:var(--control)"></i>${esc(PV || "before")}</span><span><i style="background:var(--accent)"></i>${esc(CH)}</span></div></div>` : ""}
+  return `${s ? `<div class="fig">${s}<div class="leg"><span><i style="background:var(--control)"></i>${(PV ? mn(PV) : "before")}</span><span><i style="background:var(--accent)"></i>${mn(CH)}</span></div></div>` : ""}
   <div class="tw"><table><thead><tr><th>slice</th><th class="n">p50</th><th class="n">p95</th><th class="n">before p50</th><th class="n">$ / example</th><th class="n">before $</th><th class="n">$ total</th></tr></thead><tbody>
   ${R.map(r => `<tr><td class="id">${esc(short(r.slice))}</td><td class="n">${secs(r.latency_p50)}</td><td class="n">${secs(r.latency_p95)}</td><td class="n">${secs(r.base?.latency_p50)}</td><td class="n">${r.cost == null ? "—" : "$" + num(r.cost, 3)}</td><td class="n">${r.base?.cost == null ? "—" : "$" + num(r.base.cost, 3)}</td><td class="n">${r.cost_total == null ? "—" : "$" + num(r.cost_total, 4)}</td></tr>`).join("")}
   </tbody></table></div>`;
@@ -602,13 +605,13 @@ section("unknown", () => {
     not_run: [`not run`, "", `<code>${esc(u.slice)}</code>${u.roles?.length ? " · " + esc(u.roles.join(", ")) : ""}`],
     noisy: [`noisy`, "", `<code>${esc(short(u.slice))}</code>: 90% CI ${pts(u.lo)} to ${pts(u.hi)} pts spans 0, n ${N0(u.n)}`],
     errors: [`errors`, "neg", `<code>${esc(short(u.slice))}</code>: ${N0(u.errors)} of ${N0(u.n)} errored, scored 0`],
-    no_pair: [`no pair`, "mut", `<code>${esc(short(u.slice))}</code>: ${esc(u.base)} has no run here`],
-    need_run: [`gate`, "", `rung ${esc(u.rung)} needs a run of ${esc(CH)} on <code>${esc(short(u.slice))}</code>`],
-    need_baseline: [`gate`, "", `rung ${esc(u.rung)} needs a run of ${esc(PV || "the comparator")} on <code>${esc(short(u.slice))}</code>`],
+    no_pair: [`no pair`, "mut", `<code>${esc(short(u.slice))}</code>: ${mn(u.base)} has no run here`],
+    need_run: [`gate`, "", `rung ${esc(u.rung)} needs a run of ${mn(CH)} on <code>${esc(short(u.slice))}</code>`],
+    need_baseline: [`gate`, "", `rung ${esc(u.rung)} needs a run of ${(PV ? mn(PV) : "the comparator")} on <code>${esc(short(u.slice))}</code>`],
     no_cost: [`cost`, "mut", "no run logged cost"],
     no_latency: [`latency`, "mut", "no run logged latency"],
     goal_open: [`goal`, "", `${esc(u.title || u.goal)} not met`],
-    pending_child: [`waiting`, "mut", `${esc(u.model)} is ${esc(u.status)}`]
+    pending_child: [`waiting`, "mut", `${mn(u.model)} is ${esc(u.status)}`]
   }[u.kind] || [u.kind, "mut", esc(JSON.stringify(u))]);
   const sl = [...R.map(r => r.slice), ...D.baseline.need];
   const mk = v => v === 2 ? '<span class="ok">✓</span>' : v === 1 ? '<span class="part">~</span>' : '<span class="no">✗</span>';
@@ -621,7 +624,7 @@ section("unknown", () => {
 /* ================= 11 reproduce ================= */
 section("reproduce", () => {
   const g = D.goals.filter(x => x.model === CH);
-  const cmd = `<span class="cmt"># where ${esc(CH)} stands, and the next run</span>
+  const cmd = `<span class="cmt"># where ${esc(mnt(CH))} stands, and the next run</span>
 arx gate ${esc(CH)}${g.map(x => `\narx goal status ${esc(x.name)}`).join("")}
 <span class="cmt"># run it on every slice it lacks${D.baseline.need.length ? " (" + D.baseline.need.length + ")" : ""}</span>
 arx baseline ${esc(CH)} --dry-run`;
@@ -694,7 +697,7 @@ if (!SNAP) {
 /* ---------------- scroll spy ---------------- */
 const spy = new IntersectionObserver(es => { es.forEach(e => { if (e.isIntersecting) { cur = e.target.id; $$("#toc a, #chips a").forEach(a => a.classList.toggle("on", a.dataset.s === cur)); const c = $(`#chips a[data-s="${cur}"]`); const ch = $("#chips"); if (c && ch.offsetParent) ch.scrollTo({ left: c.offsetLeft - ch.clientWidth / 2 + c.offsetWidth / 2, behavior: "smooth" }); } }); }, { rootMargin: "-80px 0px -65% 0px" });
 $$("section.s").forEach(s => spy.observe(s));
-document.title = `${CH} · paper`;
+document.title = `${mnt(CH)} · paper`;
 if (location.hash && location.hash.length > 1) { const t = document.getElementById(decodeURIComponent(location.hash.slice(1))); if (t) requestAnimationFrame(() => t.scrollIntoView()); }
 if (SNAP) $(".crumb").insertAdjacentHTML("beforeend", ` · <span class="warn">snapshot ${dt(D.generated)}</span>`);
 })();
