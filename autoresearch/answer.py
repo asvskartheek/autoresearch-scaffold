@@ -45,18 +45,33 @@ the current directory.
 Thread {tid} (oldest first; answer the newest message):
 {convo}
 
-Where: block {a.get('block')!r}, quoted text: "{a.get('quote') or ''}"
+Where: {_paper_where(a)}
 
 How to answer
 - Post your answer with: arx paper reply {name} {tid} "<answer>"   (exactly once, at the end). If the paper itself
   should change, say what and why in the reply; do not edit it.
 - While you work: arx task note $ARX_TASK "<what you are checking>".
 - Read-only: read the paper, research.json, PROTOCOL.md and the ledger in .research/; read-only arx commands only.
-- Be short: at most two short plain sentences. Name models by their titles (models.json), never raw ids.
+- Visual first. When the answer has two or more numbers, or explains how something works, lead with one figure: an
+  inline <svg viewBox="0 0 400 H" width="400"> (H at most 240) built only from svg, g, path, rect, circle, line,
+  polyline and text. Text at font-size 12 or more; text and axes in currentColor; one accent colour (#3b82f6, or
+  #22c55e / #ef4444 for better / worse). No scripts, styles or links inside it. The reader shows the figure first.
+- Then at most two short plain sentences. Name models by their titles (models.json), never raw ids.
 
 Reporting rules (PROTOCOL.md):
 {comments._rules(p)}
 """
+
+
+def _paper_where(a: dict) -> str:
+    """The anchor in words: the block, and for a drawn mark what it covers (a box or pen around, an arrow pointing at)."""
+    sh = a.get("shape") if isinstance(a.get("shape"), dict) else None
+    q = a.get("quote") or ""
+    if sh:
+        verb = {"arrow": "an arrow pointing at", "box": "a box around", "pen": "a pen mark on", "highlight": "a highlight over"}.get(sh.get("tool"), "a mark on")
+        return (f"{verb} part of block {a.get('block')!r} ({sh.get('w', '?')} x {sh.get('h', '?')} px, "
+                f"{sh.get('x', '?')} px from its left, {sh.get('y', '?')} px from its top); the words there: \"{q}\"")
+    return f"block {a.get('block')!r}, quoted text: \"{q}\""
 
 
 features.PROMPTS.setdefault("paper", paper_prompt)
