@@ -12,9 +12,9 @@
 (()=>{
 if(window.ARXPICK)return;
 // the element's text as it reads on screen: text nodes in different elements that sit apart get a space between them
-// ("+1" and "90% CI" are two spans with a margin, never "+190% CI"); hidden text is skipped
+// ("+1" and "90% CI" are two spans with a margin, never "+190% CI"); hidden text and key hints (kbd, the sidebar's "g o") are skipped
 function textOf(el,max=90){const d=el.ownerDocument;let out='',pr=null,pe=null,n=0;const w=d.createTreeWalker(el,NodeFilter.SHOW_TEXT);let t;
- while((t=w.nextNode())&&n++<400&&out.length<max+40){const s=t.nodeValue;if(t.parentElement?.closest('script,style,noscript'))continue;
+ while((t=w.nextNode())&&n++<400&&out.length<max+40){const s=t.nodeValue;if(t.parentElement?.closest('script,style,noscript,kbd,.kn'))continue;
   if(!s.trim()){if(out&&!/\s$/.test(out))out+=' ';continue}
   const rg=d.createRange();rg.selectNodeContents(t);const rs=rg.getClientRects();if(!rs.length&&el.getClientRects().length)continue;
   const r0=rs[0],rl=rs[rs.length-1];
@@ -24,7 +24,7 @@ function textOf(el,max=90){const d=el.ownerDocument;let out='',pr=null,pe=null,n
 const SVGK=/^(rect|circle|ellipse|line|polyline|polygon|path|text|image|use)$/;
 const INLINE=/^(span|b|i|em|strong|small|sub|sup|u|s|abbr|time|kbd|var|q|cite|tspan|br|wbr|font)$/;
 const SEM=/^(tr|td|th|li|p|h[1-6]|a|button|img|canvas|svg|table|figure|figcaption|input|select|textarea|summary|blockquote|pre|dt|dd|caption|video|iframe|label|code|mark)$/;
-const NAMED=/(^|[\s_-])(tick|bar|tile|chip|pill|badge|tag|card|row|cell|dot|seg|stat|kpi|node|step|rung|track|lane)s?($|[\s_-])/;
+const NAMED=/(^|[\s_-])(tick|bar|tile|chip|pill|badge|tag|card|row|cell|dot|seg|stat|kpi|node|step|rung|track|lane|count|legend)s?($|[\s_-])/;
 const isSvg=el=>el.namespaceURI==='http://www.w3.org/2000/svg';
 const cls=el=>(el.getAttribute('class')||'').toLowerCase();
 const ownText=el=>[...el.childNodes].some(n=>n.nodeType===3&&n.nodeValue.trim());
@@ -56,17 +56,34 @@ function meaningful(el){
   return true}
  return false}
 // what it is, in one word a person would use
+const ROLE={tablist:'tabs',tab:'tab',switch:'switch',slider:'slider',progressbar:'bar',meter:'bar',radiogroup:'choice',radio:'option',option:'option',
+ listbox:'list',list:'list',listitem:'item',row:'row',cell:'cell',gridcell:'cell',columnheader:'cell',rowheader:'cell',button:'button',link:'link',
+ checkbox:'checkbox',textbox:'field',searchbox:'field',heading:'heading',dialog:'dialog',navigation:'menu',menu:'menu',menuitem:'item',tooltip:'tip'};
+const barry=q=>q.height<=18&&q.width>=3*q.height||q.width<=18&&q.height>=3*q.width;
+// one of many alike: six or more siblings with its tag and first class and no children (a heatmap's cells)
+const alike=el=>{const p=el.parentElement;if(!p||p.childElementCount<6||el.childElementCount)return false;const c=el.classList[0]||'';let n=0;
+ for(const x of p.children)if(x.localName===el.localName&&(x.classList[0]||'')===c&&++n>=6)return true;return false};
+// a box with no words by its shape: a cell among many, a tick, a track (a bar holding a shorter bar) and its fill, a bar,
+// a point, a tile or a card; a box of two or more buttons is a switch or tabs
+function shapeKind(el,r){
+ if(alike(el))return 'cell';
+ const ks=[...el.children];if(ks.length>=2&&ks.every(c=>c.localName==='button'||c.getAttribute('role')==='tab'))return ks.length===2?'switch':'tabs';
+ if(Math.min(r.width,r.height)<=3)return 'tick';
+ if(barry(r)){const p=el.parentElement,pr=p&&p.getBoundingClientRect();
+  if(pr&&barry(pr)&&Math.abs(pr.height-r.height)<2&&pr.width>r.width+2)return 'fill';
+  if(ks.some(c=>{const q=c.getBoundingClientRect();return barry(q)&&q.width<r.width-2}))return 'track';return 'bar'}
+ if(Math.max(r.width,r.height)<=18)return 'point';return area(r)<=90000?'tile':'card'}
 function kind(el){const t=el.localName,c=cls(el),r=el.getBoundingClientRect();
  if(isSvg(el)){if(t==='svg')return 'chart';if(t==='rect')return /tick/.test(c)||Math.min(r.width,r.height)<=3?'tick':'bar';
   if(t==='circle'||t==='ellipse')return 'point';if(t==='line')return Math.max(r.width,r.height)<=14||/tick/.test(c)?'tick':'line';
   if(t==='text')return 'label';if(t==='path'||t==='polyline')return /area|band/.test(c)?'band':'line';return t==='g'?'group':'mark'}
- const m=NAMED.exec(c);if(m){const k=m[2];return {pill:'chip',badge:'chip',tag:'chip',dot:'point',seg:'bar',kpi:'tile',stat:'tile',rung:'step',lane:'track'}[k]||k}
+ const m=NAMED.exec(c);if(m){const k=m[2];return {pill:'chip',badge:'count',tag:'chip',dot:'point',seg:'bar',kpi:'tile',stat:'tile',rung:'step',lane:'track',count:'count',legend:'legend'}[k]||k}
  const T={tr:'row',td:'cell',th:'cell',li:'item',p:'paragraph',a:'link',button:'button',img:'image',canvas:'chart',table:'table',figure:'figure',
   figcaption:'caption',pre:'code',code:'code',blockquote:'quote',input:'field',select:'field',textarea:'field',summary:'heading',label:'label',dt:'term',dd:'value',caption:'caption',video:'video',iframe:'frame',mark:'mark'};
  if((t==='a'||t==='button')&&r.height>40)return r.width>=5*r.height?'row':area(r)<=90000?'tile':'card';  // a link that is a whole card
- if(T[t])return T[t];if(/^h[1-6]$/.test(t))return 'heading';if(el.getAttribute('role'))return el.getAttribute('role');
- if(boxed(el)||!ownText(el)&&!el.children.length){if(Math.min(r.width,r.height)<=3)return 'tick';if(r.height<=18&&r.width>=3*r.height||r.width<=18&&r.height>=3*r.width)return 'bar';
-  if(Math.max(r.width,r.height)<=18)return 'point';return area(r)<=90000?'tile':'card'}
+ if(T[t])return T[t];if(/^h[1-6]$/.test(t))return 'heading';
+ const ro=el.getAttribute('role');if(ro&&ROLE[ro])return ROLE[ro];
+ if(ro==='img'||boxed(el)||!ownText(el)&&!el.children.length)return shapeKind(el,r);
  return ownText(el)?'text':'box'}
 // the words around an element with none of its own (a bar: its row's), for the tag
 function around(el,max=60){for(let a=el.parentElement,i=0;a&&i<6&&a.localName!=='body';a=a.parentElement,i++){const t=a.getAttribute('title')||a.getAttribute('aria-label')||textOf(a,max);if(t)return t.replace(/\s+/g,' ').trim().slice(0,max)}return ''}
