@@ -170,7 +170,7 @@ function ARXPICK(o){
   if(t){const i=top.createElement('i');i.textContent=' · ';tag.append(i,t)}
   if(c&&c!==t){const i=top.createElement('i');i.textContent=' · in ';tag.append(i,c)}
   tag.style.display='block';const tw=tag.offsetWidth,th=tag.offsetHeight;
-  tag.style.left=Math.max(8,Math.min(innerWidth-tw-8,L-2))+'px';tag.style.top=(T-th-6>4?T-th-6:Math.min(innerHeight-th-4,T+r.height+6))+'px'}
+  tag.style.left=Math.max(8,Math.min(innerWidth-tw-8,L-2))+'px';tag.style.top=(T+r.height+th+10<innerHeight?T+r.height+6:T-th-6>4?T-th-6:Math.min(innerHeight-th-4,T+4))+'px'}  // under it: the title above stays readable
  const loop=()=>{if(!on)return;draw();raf=requestAnimationFrame(loop)};
  function grow(){if(!cur)return;const p=up(cur);if(p){trail.push(cur);set(p,via)}}
  function shrink(){if(!cur)return;let c=trail.pop();if(!c||!cur.contains(c)){const ks=kids(cur);c=last&&ks.find(k=>{const r=k.getBoundingClientRect(),f=O();return last.x-f.x>=r.left&&last.x-f.x<=r.right&&last.y-f.y>=r.top&&last.y-f.y<=r.bottom})||ks[0]}if(c)set(c,via)}
