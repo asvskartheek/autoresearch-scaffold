@@ -265,7 +265,7 @@ const working=c=>c.agent&&(c.agent.status==='running'||c.agent.status==='queued'
 const stranded=c=>c.agent&&c.agent.status==='queued'&&!agentOn;
 const klass=c=>c.resolved?'res':working(c)?'wait':c.messages.some(m=>m.agent)&&!c.waiting?'rep':'';
 function drawPins(){if(draw)return;const ts=mine(),openN=ts.filter(t=>!t.resolved).length;
- $c('.cm-lst').textContent=openN?openN+' open':ts.length?String(ts.length):'All';$c('.cm-lst').classList.toggle('none',!ts.length&&!all.length);
+ $c('.cm-lst').textContent=openN?openN+' open':ts.length?ts.length+' resolved':all.length+' elsewhere';$c('.cm-lst').classList.toggle('none',!ts.length&&!all.length);
  pinsEl.innerHTML=ts.map((c,i)=>{const xy=pos(c);if(!xy)return '';const [x,y]=xy;
   return `<div class="cm-pin ${klass(c)}${c.id===hot?' hot':''}" data-id="${c.id}" style="left:${x}px;top:${y}px" title="${h(c.messages[0].body.slice(0,200))}">${i+1}</div>`}).join('');
  const live=shapesEl.querySelector('.live');
