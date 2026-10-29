@@ -43,8 +43,8 @@ function meaningful(el){
  const s=el.ownerDocument.defaultView.getComputedStyle(el);if(s.display==='contents'||s.visibility==='hidden')return false;
  if(SEM.test(t))return true;
  if(NAMED.test(cls(el))||el.getAttribute('role')||el.getAttribute('aria-label'))return true;
- if(INLINE.test(t))return boxed(el);  // a pill is a span with a background
- if(boxed(el))return true;
+ if(INLINE.test(t)){if(boxed(el))return true;if(!ownText(el))return false}  // a pill is a span with a background; a span
+ else if(boxed(el))return true;                                               // with words ("43 more", "Now 1,224") is text
  if(ownText(el)){  // a line of text: itself, unless it is a number or a label inside a small boxed thing (a tile)
   for(let a=el.parentElement,i=0;a&&i<3;a=a.parentElement,i++){if(boxed(a)||NAMED.test(cls(a)))return area(a.getBoundingClientRect())>90000}
   return true}
@@ -125,7 +125,7 @@ function ARXPICK(o){
    if(el){let a=el;while(a&&!ok(a))a=a.parentElement;if(a)set(a,'key')}loop()},
   off(){on=false;cancelAnimationFrame(raf);cur=null;trail=[];box.remove();tag.remove()},
   active:()=>on,cur:()=>cur&&cur.isConnected?cur:null,
-  point(x,y){if(!on)return;last={x,y};const el=leaf(x,y);if(!el){if(via==='pointer')set(null,'pointer');return}
+  point(x,y){if(!on)return;last={x,y};const el=leaf(x,y);if(!el){trail=[];set(null,'pointer');return}
    if(trail.length&&cur&&cur.isConnected&&(cur===el||cur.contains(el)))return;  // still inside a pick grown with ] or Alt+wheel: keep it
    trail=[];set(el,'pointer')},
   hide(){set(null,'pointer')},
