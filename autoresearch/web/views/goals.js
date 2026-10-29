@@ -380,7 +380,8 @@ const edOf=function(i){
 // a proposed goal read like a ledger goal, so dist() and the units helpers apply; `now` from the champion's latest run
 const asGoal=function(pg){
  const L=S.state,sl=L.slices?.[pg.slice],n=sl?.n||pg.n||0,kpi=pg.kpi||'score';
- const g={kpi,n,slice:pg.slice,higher_is_better:!LOWER.includes(kpi),target:kpi==='score'?(pg.count!=null&&n?pg.count/n:pg.target):Number(pg.target)};
+ const g={kpi,n,slice:pg.slice,scale:sl?.scale,unit:sl?.unit,metric:sl?.metric,higher_is_better:!LOWER.includes(kpi)};
+ g.target=kpi==='score'&&!cont(g)?(pg.count!=null&&n?pg.count/n:pg.target):Number(pg.target);
  const r=L.champion&&(L.leaderboard?.[pg.slice]||{})[L.champion],v=r?.[kpi==='score'?'score':kpi];
  g.value=typeof v==='number'&&isFinite(v)?v:null;g.model=L.champion;g.task=r?.task;
  return g;
@@ -406,8 +407,8 @@ const nowCell=function(pg){
  return `<span class="gi-big num">${gu(g,g.value)}</span>${byN(g)?`<span class="num faint">of ${N(g.n)}</span>`:''}<span class="num">${distLine(g)}</span>${ispark(pg)}`;
 }
 const tgtCell=function(i,pg){
- const g=asGoal(pg),id=esc(i.id),val=g.kpi==='score'?(pg.count??''):(pg.target??'');
- const unit=g.kpi==='score'?`of ${N(g.n)} correct`:/^latency/.test(g.kpi)?'s':'$ per answer';
+ const g=asGoal(pg),id=esc(i.id),val=byN(g)?(pg.count!=null?N(pg.count):''):pg.target!=null&&isFinite(pg.target)?String(dsg(g)*pg.target):'';
+ const unit=byN(g)?`of ${N(g.n)} correct`:cont(g)?unitG(g):/^latency/.test(g.kpi)?'s':'$ per answer';
  return `<span class="gi-big num">${cmpSym(g)} <input id="gi-${id}-target" class="gi-in gi-num" inputmode="decimal" value="${esc(val)}" onchange="Intake.target('${id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></span><span class="num faint">${unit}</span>`;
 }
 const card1=function(i){
@@ -433,11 +434,16 @@ const relCard=function(i,r,k){
  const can=main&&!r.missing_slice&&!added&&!IN.busy[i.id];
  const fig=r.missing_slice?pill('slice not in the ledger','warn'):g.value==null?'<span class="faint">not measured</span>':distLine(g);
  return `<div class="gi-sug ${added?'added':''}"><div class="t"><span>${esc(r.title)}</span>${pill(ROLE[r.role]||r.role,r.role==='guard'?'ghost':'acc')}${why(r.why?.target||Object.values(r.why||{})[0])}</div>
-  <div class="d mono">${esc(kpiName(g))} ${cmpSym(g)} ${g.kpi==='score'?N(r.count??tcnt(g)):gv(g,g.target)}${byN(g)?` of ${N(g.n)}`:''} · ${esc(r.slice)}</div>
+  <div class="d mono">${kpiPre(g)}${cmpSym(g)} ${byN(g)?N(r.count??tcnt(g)):gv(g,g.target)}${byN(g)?` of ${N(g.n)}`:''} · ${esc(r.slice)}</div>
   <div class="row"><span class="d num">${fig}</span><button class="btn" type="button" ${can?'':'disabled'} onclick="Intake.add('${esc(i.id)}',${k})">${added?'✓ Added':'Add'}</button></div></div>`;
 }
+// no `arx answer` worker for this project: a queued ask waits for one, so say so instead of "Queued" forever.
+// A missing answer_agent (an older server) is unknown, not "not running".
+const noAgent=()=>S.state.answer_agent?.running===false;
+const isWorking=i=>i.status==='running'||(i.status==='queued'&&!noAgent());
 const statusLine=function(i,P){
  const t=i.task&&byId(i.task),round=i.round||0;
+ if(i.status==='queued'&&noAgent())return `<div class="gi-st warn"><span class="gi-dot off"></span>No agent running · ${cmd('arx answer')}</div>`;
  if(i.status==='queued')return `<div class="gi-st"><span class="gi-dot"></span>Queued</div>`;
  if(i.status==='running')return `<div class="gi-st"><span class="gi-dot live"></span>${t?`<a class="ln" href="#task/${enc(t.id)}">Agent working</a>${t.note?`<span class="faint"> · ${esc(t.note.text??t.note.msg)}</span>`:''}`:'Agent working'}</div>`;
  if(i.status==='failed')return `<div class="gi-st neg">${esc(i.error||'The agent failed')}<button class="btn" type="button" onclick="Intake.retry('${esc(i.id)}')">Retry</button></div>`;
@@ -445,12 +451,14 @@ const statusLine=function(i,P){
  return '';
 }
 const itemCard=function(i){
- const P=i.proposal,id=esc(i.id),working=i.status==='queued'||i.status==='running',cur=P&&P.round===(i.round||0)&&!working;
+ // with no agent, the last proposal stays editable (and keeps its local edits) while the answers wait in the queue
+ const P=i.proposal,id=esc(i.id),working=isWorking(i),cur=P&&!working&&(P.round===(i.round||0)||(i.status==='queued'&&noAgent()));
  const ans={...(i.answers||{}),...(IN.ans[i.id]||{})},main=i.opened?.[0],mg=main&&S.state.goals?.[main];
  let h=`<div class="gi-said"><span>${esc(i.ask)}</span></div>`;
  const asked=new Set((P?.questions||[]).map(q=>q.id)),said=(i.answered||[]).filter(a=>!asked.has(a.id));
  if(said.length)h+=`<div class="gi-said-a">${said.map(a=>`<span><span class="faint">${esc(a.text)}</span> ${esc(a.label)}</span>`).join('')}</div>`;
  h+=statusLine(i,P);
+ if(P?.note&&(cur||working))h+=`<p class="gi-note">${esc(P.note)}</p>`;
  if(P?.questions?.length&&!main)h+=`<div class="gi-qs">${P.questions.map((q,k)=>`<div class="gi-q"><div class="gi-qt"><span class="faint">${k+1} of ${P.questions.length}</span> ${esc(q.text)}</div><div class="gi-opts">${q.options.map((o,j)=>`<button type="button" class="gi-opt ${ans[q.id]===o.value?'on':''}" ${working?'disabled':''} onclick="Intake.pick('${id}',${k},${j})">${esc(o.label)}${o.sub?`<small>${esc(o.sub)}</small>`:''}</button>`).join('')}</div></div>`).join('')}</div>`;
  if(cur&&!main)h+=card1(i);
  if(main)h+=`<div class="gi-done">${pill('opened','pos')}<a class="ln" href="#goal/${enc(main)}"><b>${esc(mg?.title||main)}</b></a>${mg?`<span class="num">${distLine(mg)}</span>`:''}</div>`;
@@ -478,11 +486,17 @@ window.Intake={
   if(v!=='score'&&old.kpi==='score'||g.target==null)g.target=now.value!=null?+(now.value*.9).toFixed(v==='cost'?4:1):null
   render(true)},
  slice:(id,v)=>{const i=itemOf(id),g=edOf(i),a=asGoal(g),n=S.state.slices?.[v]?.n;
-  if(g.kpi==='score'&&g.count!=null&&a.n&&n)g.count=Math.min(n,Math.ceil(g.count/a.n*n-1e-9));
-  g.slice=v;delete g.missing_slice;g.n=n;render(true)},
+  g.slice=v;delete g.missing_slice;g.n=n;
+  const b=asGoal(g);
+  // the same share of the new slice, rounded once ("1,280 of 1,319" -> "97 of 100"); the title follows the count
+  if(byN(a)&&byN(b)&&g.count!=null){const old=g.count;g.count=Math.max(1,Math.min(n,Math.round(old/a.n*n)));
+   if(g.title&&old!==g.count)g.title=String(g.title).replace(N(old),N(g.count)).replace(new RegExp('\\b'+old+'\\b'),N(g.count))}
+  else if(!byN(b))delete g.count;
+  render(true)},
  target:(id,v)=>{const i=itemOf(id),g=edOf(i),x=parseFloat(String(v).replace(/[, ]/g,''));
-  if(isFinite(x)){if(g.kpi==='score'){const n=asGoal(g).n;g.count=Math.max(1,Math.min(n||x,Math.round(x)))}else g.target=x;
-   if(g.why)g.why.target=g.kpi==='score'?`Set by hand: ${N(g.count)} of ${N(asGoal(g).n)}.`:`Set by hand: ${x}.`}
+  const a=asGoal(g);
+  if(isFinite(x)){if(byN(a)){g.count=Math.max(1,Math.min(a.n||x,Math.round(x)))}else g.target=dsg(a)*x;
+   if(g.why)g.why.target=byN(a)?`Set by hand: ${N(g.count)} of ${N(a.n)}.`:`Set by hand: ${x}${unitG(a)?' '+unitG(a):''}.`}
   render(true)},
  con:(e,id,el)=>{if(e.key!=='Enter')return;e.preventDefault();const v=el.value.trim();if(!v)return;const g=edOf(itemOf(id));(g.constraints=g.constraints||[]).push(v);el.value='';render(true);setTimeout(()=>document.getElementById(`gi-${id}-con`)?.focus())},
  uncon:(id,k)=>{const g=edOf(itemOf(id));g.constraints.splice(k,1);render(true)},
@@ -495,8 +509,8 @@ window.Intake={
  retry:id=>act(id,()=>ipost('retry',{id})),
  dismiss:id=>act(id,()=>ipost('dismiss',{id})),
 };
+// the Overview draws each open goal with these, so a goal reads the same on both pages
+window.GoalUnits={gu,gt,gv,ofP,dist,prog,cmpSym,kpiPre,byN,isMain,slRuns,kpiKey,sgn,disp:(g,v)=>byN(g)?v*g.n:dsg(g)*v};
 // the chart is sized to the sheet in pixels so its labels stay legible; redraw once a resize settles
 let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(route().r==='goal'&&S.state)render(true)},150)});
 }
-// the Overview draws each open goal with these, so a goal reads the same on both pages
-window.GoalUnits={gu,gt,gv,ofP,dist,prog,cmpSym,kpiPre,byN,isMain,slRuns,kpiKey,sgn,disp:(g,v)=>byN(g)?v*g.n:dsg(g)*v};

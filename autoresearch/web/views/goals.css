@@ -203,3 +203,6 @@ select.gi-in{border-color:var(--control);margin:0;max-width:100%}
 }
 .gi-said-a{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;padding-right:28px;font-size:13px}
 .gi-said-a>span{border:1px solid var(--border);border-radius:var(--radius-chip);padding:2px 8px}
+.gi-dot.off{background:var(--warning)}
+.gi-st .cmd{min-width:0}
+.gi-note{margin:6px 0 0;font-size:13px;color:var(--muted);line-height:1.45}
