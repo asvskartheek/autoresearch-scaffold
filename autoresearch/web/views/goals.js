@@ -41,6 +41,36 @@ const mLink=k=>k?(S.state.models[k]?`<a class="ln" href="#model/${enc(k)}">${mn(
 const sLink=s=>`<a class="ln mono" href="#slices/${enc(s)}">${esc(s)}</a>`;
 const hLink=k=>{const x=S.state.hills[k];return `<a class="ln" href="#hill/${enc(k)}">${esc(x?.title||k)}</a>`};
 const kpiKey=g=>isScore(g)?'score':kpiOf(g);
+// ---------- units: a score goal reads as answers of N ("1,224 of 1,319", "43 more"), never a bare percentage
+const N=v=>Number(v).toLocaleString('en-US');
+const byN=g=>isScore(g)&&g.n>0;
+const cnt=(g,v)=>Math.round(v*g.n);
+const tcnt=g=>Math.ceil(g.target*g.n-1e-9);  // rounded up, so rounding can't meet it
+const gu=(g,v)=>v==null||!isFinite(v)?'—':byN(g)?N(cnt(g,v)):gv(g,v);
+const gt=g=>byN(g)?N(tcnt(g)):gv(g,g.target);
+const ofN=g=>byN(g)?`<span class="gl-of"> of ${N(g.n)}</span>`:'';
+const ofP=g=>byN(g)?` of ${N(g.n)}`:'';
+// how far is left, in the KPI's units: {v:'43 more', s:'of 1,319'} or {v:'Met', s:'12 spare'}
+const dist=function(g){
+ if(g.value==null)return null;
+ if(byN(g)){const d=tcnt(g)-cnt(g,g.value);return d>0?{v:`${N(d)} more`,s:`of ${N(g.n)}`,short:true}:{v:'Met',s:d?`${N(-d)} spare`:'at the line'}}
+ const d=sgn(g)*(g.target-g.value);
+ return d>1e-12?{v:gamt(g,d),s:sgn(g)<0?'to cut':'to go',short:true}:{v:'Met',s:`${gamt(g,-d)} headroom`};
+}
+const distLine=g=>{const d=dist(g);return d?(d.short?`<span class="neg">${d.v}</span> ${d.s}`:`<span class="pos">${d.v}</span>, ${d.s}`):'<span class="faint">not measured</span>'};
+// what the champion gained since the baseline, in units
+const gained=function(g){
+ const P=prog(g);if(P.b==null||g.value==null)return null;
+ if(byN(g)){const d=cnt(g,g.value)-cnt(g,P.b);return {v:d?`<span class="${d>0?'pos':'neg'}">${d>0?'+':'−'}${N(Math.abs(d))}</span>`:'<span class="faint">0</span>',s:`from ${N(cnt(g,P.b))}`}}
+ const good=sgn(g)*(g.value-P.b);
+ if(Math.abs(good)<1e-12)return {v:'<span class="faint">0</span>',s:`from ${gv(g,P.b)}`};
+ const w=isTime(g)?(good>0?'faster':'slower'):kpiOf(g)==='cost'?(good>0?'cheaper':'dearer'):(good>0?'better':'worse');
+ return {v:`<span class="${good>0?'pos':'neg'}">${gamt(g,good)} ${w}</span>`,s:`from ${gv(g,P.b)}`};
+}
+const ROLE={guard:'guard',sub:'sub-goal'};
+const kidsOf=(name,gs)=>gs.filter(x=>x.parent===name);
+const famLine=g=>{const L=S.state.goals||{},par=g.parent&&L[g.parent];return par?`<span>${esc(ROLE[g.role]||'part')} of <a class="ln" href="#goal/${enc(g.parent)}">${esc(par.title)}</a></span>`:''};
+const conChips=g=>(g.constraints||[]).map(c=>`<span class="gl-con">${esc(c)}</span>`).join('');
 
 // the baseline's value on the goal slice: the paired mean when the server paired it, else its latest run
 const baseVal=function(g){
@@ -68,7 +98,6 @@ const HORD={open:0,climbed:1,closed:2};
 const goalHills=g=>Object.entries(g.hills||{}).sort((a,b)=>(HORD[a[1]]??3)-(HORD[b[1]]??3));
 const hillCounts=g=>{const c={};for(const [,s] of goalHills(g))c[s]=(c[s]||0)+1;return c};
 const hillSum=g=>{const c=hillCounts(g),n=goalHills(g).length;if(!n)return 'no hills';return ['open','climbed','closed'].filter(s=>c[s]).map(s=>`${c[s]} ${s}`).concat(Object.keys(c).filter(s=>!['open','climbed','closed'].includes(s)).map(s=>`${c[s]} ${s}`)).join(' · ')};
-const answers=g=>isScore(g)&&g.gap>0&&g.n?Math.ceil(g.gap*g.n-1e-9):null;
 const ST_LABEL={open:'Open',achieved:'Achieved',abandoned:'Abandoned'};
 const gst=g=>st(g.status,ST_LABEL[g.status]||g.status);
 const ORDER={open:0,achieved:1,abandoned:2};
@@ -78,37 +107,28 @@ const rank=g=>g.status!=='open'?0:g.met?2:((p=>p.mode==='rel'?Math.max(-1,Math.m
 // ---------- the track: baseline on the left, target on the right, filled to the champion now
 const track=function(g,{big=false}={}){
  const P=prog(g),pc=f=>(100*Math.max(0,Math.min(1,f))).toFixed(1)+'%';
- if(P.mode==='none')return `<div class="gl-trk"><div class="gl-bar"></div><div class="gl-ends"><span>${g.model?`${mLink(g.model)} has no complete run on this slice`:'No champion yet'}</span><span>Target <b>${cmpSym(g)}&nbsp;${gv(g,g.target)}</b></span></div></div>`;
+ if(P.mode==='none')return `<div class="gl-trk"><div class="gl-bar"></div><div class="gl-ends"><span>${g.model?`${mLink(g.model)} has no complete run on this slice`:'No champion yet'}</span><span>Target <b>${cmpSym(g)}&nbsp;${gt(g)}</b></span></div></div>`;
  if(P.mode==='rel'){
   const met=g.met,p=P.p,cls=met?'met':p<0?'back':'';
   return `<div class="gl-trk ${big?'big':''}" role="img" aria-label="${esc(`${Math.round(100*p)}% of the way from the baseline to the target`)}">
    <div class="gl-bar ${cls}"><i style="width:${pc(p)}"></i>${p>0&&p<1?`<b style="left:${pc(p)}"></b>`:''}</div>
-   <div class="gl-ends"><span>Baseline <b>${gv(g,P.b)}</b>${big?`<span class="gl-bn"> · ${mLink(g.baseline)}</span>`:''}</span><span>Target <b>${cmpSym(g)}&nbsp;${gv(g,P.t)}</b></span></div></div>`;
+   <div class="gl-ends"><span>Baseline <b>${gu(g,P.b)}</b>${big?`<span class="gl-bn"> · ${mLink(g.baseline)}</span>`:''}</span><span>Target <b>${cmpSym(g)}&nbsp;${gt(g)}</b>${ofP(g)}</span></div></div>`;
  }
  // abs: the KPI's own scale from 0, the target as a tick; lower-is-better fills to the value and passes left of the tick
  const top=isScore(g)?1:Math.max(P.v,P.t,P.b??0)*1.15||1,f=P.v/top,m=P.t/top;
  const mp=(100*Math.max(0,Math.min(1,m))).toFixed(1);
  return `<div class="gl-trk abs ${big?'big':''}">
-  <div class="gl-tgt"><span style="--m:${mp}">Target <b>${cmpSym(g)}&nbsp;${gv(g,P.t)}</b></span></div>
+  <div class="gl-tgt"><span style="--m:${mp}">Target <b>${cmpSym(g)}&nbsp;${gt(g)}</b></span></div>
   <div class="gl-bar ${g.met?'met':''}"><i style="width:${pc(f)}"></i><b class="tgt" style="left:${pc(m)}"></b></div>
-  <div class="gl-ends"><span>${P.b!=null?`Baseline <b>${gv(g,P.b)}</b>${big&&g.baseline?`<span class="gl-bn"> · ${mLink(g.baseline)}</span>`:''}${sgn(g)*(P.b-P.t)>=0?', already past the target':''}`:'Baseline not run on this slice'}</span><span>${isScore(g)?'100%':''}</span></div></div>`;
+  <div class="gl-ends"><span>${P.b!=null?`Baseline <b>${gu(g,P.b)}</b>${big&&g.baseline?`<span class="gl-bn"> · ${mLink(g.baseline)}</span>`:''}${sgn(g)*(P.b-P.t)>=0?', already past the target':''}`:'Baseline not run on this slice'}</span><span>${byN(g)?N(g.n):''}</span></div></div>`;
 }
 // "62% of the way", "met", "behind the baseline"
-const wayText=function(g){
- const P=prog(g);
- if(g.status==='achieved')return 'Achieved';
- if(P.mode==='none')return '—';
- if(P.mode!=='rel')return '—';
- if(g.met)return '100%';
- if(P.p<0)return 'Behind baseline';
- return Math.round(100*P.p)+'%';
-}
 const gapFig=function(g){
- if(g.value==null)return {v:DASH,s:'no run yet'};
- if(g.met)return {v:'Met',s:`${gamt(g,g.gap)} past the target`};
- const a=answers(g);
- return {v:gamt(g,g.gap),s:a!=null?`${plural(a,'more answer')} of ${g.n.toLocaleString()}`:`to ${cmpSym(g)} ${gv(g,g.target)}`};
+ const d=dist(g);
+ if(!d)return {v:DASH,s:'no run yet'};
+ return d;
 }
+const gainFig=g=>gained(g)||{v:DASH,s:g.baseline?'baseline not run on this slice':'no baseline'};
 const vsFig=function(g){
  const v=g.vs_baseline,P=prog(g);
  if(v&&v.delta!=null)return {v:gchg(g,v.delta),s:`90% CI ${pts(v.lo)} to ${pts(v.hi)}`,wl:`better on ${v.wins}, worse on ${v.losses}`};
@@ -116,7 +136,7 @@ const vsFig=function(g){
  if(P.b!=null&&g.value!=null)return {v:gchg(g,g.value-P.b,false),s:'latest runs, unpaired'};
  return {v:DASH,s:g.baseline?'baseline not run on this slice':'no baseline'};
 }
-const paperBtn=g=>{const p=goalPaper(g.name);return p?`<a class="btn" href="${paperUrl(p)}">${ICON.papers}${g.status==='open'?'Draft paper':'Paper'}${p.waiting?`<span class="gl-wait">${p.waiting}</span>`:''}</a>`:''};
+const paperBtn=g=>(g.model?`<a class="btn" href="reference/${enc(g.model)}">Model paper</a>`:'')+(g=>{const p=goalPaper(g.name);return p?`<a class="btn" href="${paperUrl(p)}">${ICON.papers}${g.status==='open'?'Draft paper':'Paper'}${p.waiting?`<span class="gl-wait">${p.waiting}</span>`:''}</a>`:''})(g);
 
 // ---------- list
 VIEWS.goals=()=>{
@@ -131,33 +151,32 @@ VIEWS.goals=()=>{
   else{
    finding=`<b>${plural(open.length,'open goal')}</b>. `;
    if(met.length)finding+=`${gl(met[0])} meets its target and waits to be recorded.`;
-   else if(lead)finding+=`${open.length>1?'Furthest along: ':''}${gl(lead)}, ${Math.round(100*Math.max(0,prog(lead).p))}% of the way from its baseline, ${gamt(lead,lead.gap)} to go${answers(lead)!=null?` (${plural(answers(lead),'answer')})`:''}.`;
+   else if(lead){const d=dist(lead);finding+=`${open.length>1?'Furthest along: ':''}${gl(lead)}, ${d?`${d.v} ${d.s}`:''} to go.`}
    else finding+=open.some(g=>g.value==null)?'The champion has no complete run on a goal slice yet.':'No goal has a baseline to measure progress from.';
   }
  }
  const acts=met.length?cmd('arx goal achieve '+met[0].name):'';
- let h=page({title:'Goals',crumbs:[['Goals','#goals']],finding,acts});
- if(!gs.length){
-  const sl=L.config?.primary_dataset?L.config.primary_dataset+'/full':'<dataset>/full';
-  return h+panel('',empty('No goals yet','A goal is one KPI target on one frozen slice; hills serve it and it gets the public paper.')+`<div class="gl-cmd">${cmd(`arx goal open <name> --title "…" --slice ${sl} --target 0.9`)}</div>`);
- }
+ let h=page({title:'Goals',crumbs:[['Goals','#goals']],finding,acts})+intake();
+ if(!gs.length)return h;
+ const linked=gs.some(g=>g.parent&&L.goals[g.parent]);
+ if(linked||open.length>1)h+=goalMap(gs.filter(g=>g.status==='open'||kidsOf(g.name,gs).some(k=>k.status==='open')));
  if(open.length)h+=`<section class="gl-grp"><div class="gl-gh"><h2>Open</h2><span class="meta">${open.length}</span></div><div class="gl-cards">${open.map(card).join('')}</div></section>`;
  if(done.length)h+=`<section class="gl-grp"><div class="gl-gh"><h2>Achieved</h2><span class="meta">${done.length}</span></div><div class="gl-cards">${done.map(card).join('')}</div></section>`;
- if(gone.length)h+=`<section class="gl-grp"><div class="gl-gh"><h2>Abandoned</h2><span class="meta">${gone.length}</span></div>${panel('',table([['Goal'],['Why it was abandoned'],['Best','num'],['Target','num']],gone.map(g=>`<tr class="click" onclick="if(!event.target.closest('a,button'))location.hash='goal/${enc(g.name)}'"><td><div class="two"><a href="#goal/${enc(g.name)}"><b>${esc(g.title)}</b></a><span class="sub mono">${esc(short(g.slice))}</span></div></td><td class="gl-why">${g.reason?esc(g.reason):'<span class="dash">No reason recorded</span>'}</td><td class="num">${gv(g,g.value)}</td><td class="num">${cmpSym(g)}&nbsp;${gv(g,g.target)}</td></tr>`)),{cls:'gl-ab'})}</section>`;
+ if(gone.length)h+=`<section class="gl-grp"><div class="gl-gh"><h2>Abandoned</h2><span class="meta">${gone.length}</span></div>${panel('',table([['Goal'],['Why it was abandoned'],['Best','num'],['Target','num']],gone.map(g=>`<tr class="click" onclick="if(!event.target.closest('a,button'))location.hash='goal/${enc(g.name)}'"><td><div class="two"><a href="#goal/${enc(g.name)}"><b>${esc(g.title)}</b></a><span class="sub mono">${esc(short(g.slice))}</span></div></td><td class="gl-why">${g.reason?esc(g.reason):'<span class="dash">No reason recorded</span>'}</td><td class="num">${gu(g,g.value)}${ofP(g)}</td><td class="num">${cmpSym(g)}&nbsp;${gt(g)}</td></tr>`)),{cls:'gl-ab'})}</section>`;
  return h;
 };
 const card=function(g){
- const gap=gapFig(g),vs=vsFig(g),hs=goalHills(g),way=wayText(g),ev=g.evidence;
+ const gap=gapFig(g),vs=vsFig(g),hs=goalHills(g),gn=gainFig(g),ev=g.evidence;
  const who=g.status==='achieved'?`achieved by ${mLink(ev?.model||g.model)}${g.achieved?`, ${stamp(g.achieved)}`:''}`:g.model?`${mLink(g.model)}, champion${g.runs>1?` · ${g.runs} runs pooled`:''}`:'no champion';
  return `<section class="card gl-card ${esc(g.status)}">
-  <div class="gl-top">${gst(g)}${g.slice_changed?pill('slice changed','neg'):''}${ev?.forced?pill('forced, target not met','warn'):''}<h3><a href="#goal/${enc(g.name)}">${esc(g.title)}</a></h3><span class="gl-r">${paperBtn(g)}</span></div>
-  <p class="gl-meta">${sLink(g.slice)}<span>n ${Number(g.n||0).toLocaleString()}</span><span>${esc(kpiName(g))} ${cmpSym(g)} ${gv(g,g.target)}</span>${g.created?`<span>opened ${stamp(g.created)}</span>`:''}</p>
+  <div class="gl-top">${gst(g)}${g.role&&g.role!=='main'?pill(ROLE[g.role]||g.role,g.role==='guard'?'ghost':'acc'):''}${g.slice_changed?pill('slice changed','neg'):''}${ev?.forced?pill('forced, target not met','warn'):''}<h3><a href="#goal/${enc(g.name)}">${esc(g.title)}</a></h3><span class="gl-r">${paperBtn(g)}</span></div>
+  <p class="gl-meta">${famLine(g)}${sLink(g.slice)}<span>${esc(kpiName(g))} ${cmpSym(g)} ${gt(g)}${byN(g)?` of ${N(g.n)}`:''}</span>${conChips(g)}${g.created?`<span>opened ${stamp(g.created)}</span>`:''}</p>
   <div class="gl-body">
-   <div class="gl-now"><div class="gl-big">${gv(g,g.status==='achieved'&&ev?ev.value:g.value)}</div><div class="sub">${who}</div></div>
+   <div class="gl-now"><div class="gl-big">${gu(g,g.status==='achieved'&&ev?ev.value:g.value)}${g.value!=null?ofN(g):''}</div><div class="sub">${who}</div></div>
    <div class="gl-mid">${track(g)}</div>
    <dl class="gl-figs">
-    <div><dt>To go</dt><dd>${g.status==='achieved'?'Met':gap.v}</dd><dd class="sub">${g.status==='achieved'?`${gamt(g,g.gap)} past it`:gap.s}</dd></div>
-    <div><dt>Of the way</dt><dd>${way}</dd><dd class="sub">${prog(g).mode==='rel'?`from ${gv(g,prog(g).b)}`:prog(g).b!=null&&g.value!=null?'baseline already past it':'no baseline run'}</dd></div>
+    <div><dt>To go</dt><dd>${g.status==='achieved'?'Met':gap.v}</dd><dd class="sub">${gap.s}</dd></div>
+    <div><dt>Since baseline</dt><dd>${gn.v}</dd><dd class="sub">${gn.s}</dd></div>
     <div><dt>vs baseline</dt><dd>${vs.v}</dd><dd class="sub" title="${esc((g.baseline?(S.state.models[g.baseline]?.title||g.baseline)+': ':'')+vs.s.replace(/&nbsp;/g,' '))}">${vs.s}</dd></div>
    </dl>
   </div>
@@ -165,41 +184,62 @@ const card=function(g){
  </section>`;
 }
 
+// ---------- the map: each main goal with its guards and sub-goals under it
+const mapNode=function(g,gs,depth=0){
+ const d=dist(g),P=prog(g),kids=kidsOf(g.name,gs);
+ const f=g.met||g.status==='achieved'?1:P.mode==='rel'?Math.max(0,Math.min(1,P.p)):P.mode==='abs'?Math.max(0,Math.min(1,sgn(g)>0?g.value/g.target:g.target/g.value)):0;
+ const fig=g.status==='abandoned'?'<span class="faint">abandoned</span>':g.status==='achieved'?'<span class="pos">Achieved</span>':d?(d.short?`<span class="neg">${d.v}</span> <span class="faint">${d.s}</span>`:`<span class="pos">Met</span> <span class="faint">${d.s}</span>`):'<span class="faint">not measured</span>';
+ const grp=(r,l)=>{const k=kids.filter(x=>(x.role||'sub')===r);return k.length?`<div class="gm-lvl"><div class="gm-lab">${l}</div>${k.map(x=>mapNode(x,gs,depth+1)).join('')}</div>`:''};
+ return `<div class="gm-tree${depth?'':' root'}"><a class="gm-node ${esc(g.role||'main')} ${esc(g.status)}" href="#goal/${enc(g.name)}"><span class="gm-t">${esc(g.title)}</span><span class="gm-d num">${fig}</span><span class="gm-bar ${g.met||g.status==='achieved'?'met':''} ${g.value==null?'none':''}"><i style="width:${(100*f).toFixed(1)}%"></i></span><span class="gm-m mono">${esc(kpiName(g))} ${cmpSym(g)} ${gt(g)}${byN(g)?` of ${N(g.n)}`:''}</span></a>${depth<3?grp('guard','Guards')+grp('sub','Sub-goals')+grp('main','Under it'):''}</div>`;
+}
+const goalMap=function(gs,{title='Map',focus=null}={}){
+ const names=new Set(gs.map(g=>g.name)),roots=gs.filter(g=>!g.parent||!names.has(g.parent));
+ return panel(title,`<div class="gm">${roots.map(r=>mapNode(r,gs)).join('')}</div>`,{cls:'gm-panel'+(focus?' focus':''),meta:`${plural(gs.length,'goal')}`});
+}
+const family=function(g){
+ const all=Object.values(S.state.goals||{});let root=g,seen=new Set([g.name]);
+ while(root.parent&&S.state.goals[root.parent]&&!seen.has(root.parent)){seen.add(root.parent);root=S.state.goals[root.parent]}
+ const inTree=[],walk=n=>{inTree.push(n);kidsOf(n.name,all).forEach(walk)};walk(root);
+ return inTree.length>1?goalMap(inTree,{focus:g.name}).replace(`href="#goal/${enc(g.name)}"`,`href="#goal/${enc(g.name)}" aria-current="page"`):'';
+}
+
 // ---------- detail
 const finding1=function(g){
- const P=prog(g),slice=`${sLink(g.slice)} (n ${Number(g.n||0).toLocaleString()})`;
- if(g.status==='abandoned')return `Abandoned${g.abandoned?` ${stamp(g.abandoned)}`:''} at ${gv(g,g.value)} against a target of ${cmpSym(g)} ${gv(g,g.target)} on ${slice}.`;
- if(g.status==='achieved'){const ev=g.evidence||{};return `Achieved${g.achieved?` ${stamp(g.achieved)}`:''} by <b>${mLink(ev.model)}</b> at <b>${gv(g,ev.value)}</b> on ${slice}${ev.forced?', forced without the target met':''}${g.vs_baseline?.delta!=null?`, ${gchg(g,g.vs_baseline.delta)} against the baseline ${mLink(g.baseline)}`:''}.`}
+ const P=prog(g),slice=`${sLink(g.slice)} (n ${N(g.n||0)})`;
+ if(g.status==='abandoned')return `Abandoned${g.abandoned?` ${stamp(g.abandoned)}`:''} at ${gu(g,g.value)} against a target of ${cmpSym(g)} ${gt(g)} on ${slice}.`;
+ if(g.status==='achieved'){const ev=g.evidence||{};return `Achieved${g.achieved?` ${stamp(g.achieved)}`:''} by <b>${mLink(ev.model)}</b> at <b>${gu(g,ev.value)}</b>${ofP(g)} on ${slice}${ev.forced?', forced without the target met':''}${g.vs_baseline?.delta!=null?`, ${gchg(g,g.vs_baseline.delta)} against the baseline ${mLink(g.baseline)}`:''}.`}
  if(g.value==null)return g.model?`The champion ${mLink(g.model)} has no complete run on ${slice} yet.`:`No champion yet; the goal measures the champion on ${slice}.`;
- let s=`${mLink(g.model)} holds <b>${gv(g,g.value)}</b> on ${slice}`;
- if(g.met)return s+`, past the target of ${cmpSym(g)} ${gv(g,g.target)}. Record it with <code>arx goal achieve ${esc(g.name)}</code>.`;
- const a=answers(g);
- s+=`: <b>${gamt(g,g.gap)}</b>${a!=null?` (${plural(a,'answer')})`:''} short of ${gv(g,g.target)}`;
- if(P.mode==='rel')s+=P.p<0?`, behind the baseline’s ${gv(g,P.b)}`:g.model===g.baseline?`, still the baseline`:`, ${Math.round(100*P.p)}% of the way from the baseline’s ${gv(g,P.b)}`;
+ let s=`${mLink(g.model)} holds <b>${gu(g,g.value)}</b>${ofP(g)} on ${sLink(g.slice)}`;
+ if(g.met)return s+`, past the target of ${cmpSym(g)} ${gt(g)}. Record it with <code>arx goal achieve ${esc(g.name)}</code>.`;
+ const d=dist(g);
+ s+=`: <b>${d.v}</b> ${d.s}${byN(g)?` to reach ${gt(g)}`:''}`;
+ if(P.mode==='rel'&&P.p<0)s+=`, behind the baseline’s ${gu(g,P.b)}`;
+ else if(P.mode==='rel'&&g.model===g.baseline)s+=`, still the baseline`;
  return s+'.';
 }
 VIEWS.goal=name=>{
  const L=S.state,g=(L.goals||{})[name];
  if(!g)return page({title:'Goal not found',crumbs:[['Goals','#goals'],[name]]})+panel('',empty(`No goal named ${esc(name)}`,'See <a class="ln" href="#goals">all goals</a>.'));
- const acts=`<span class="gl-acts">${gst(g)}${paperBtn(g)}</span>`;
+ const acts=`<span class="gl-acts">${g.role&&g.role!=='main'?pill(ROLE[g.role]||g.role,g.role==='guard'?'ghost':'acc'):''}${gst(g)}${paperBtn(g)}</span>`;
  let h=page({title:g.title,crumbs:[['Goals','#goals'],[g.title,'#goal/'+enc(name)]],finding:g.error?`<span class="neg">${esc(g.error)}</span>`:finding1(g),acts});
  if(g.slice_changed)h+=`<div class="banner">The slice ${esc(g.slice)} changed since this goal opened, so it cannot be achieved. Open a new goal on the new slice.</div>`;
  if(g.problem)h+=`<p class="gl-lede">${esc(g.problem)}</p>`;
- h+=`<div class="stack">${hero(g)}${chart(g)}<div class="gl-two">${hillsPanel(g)}${g.status==='open'?nextPanel(g):record(g)}</div></div>`;
+ if(g.constraints?.length)h+=`<p class="gl-cons">${conChips(g)}</p>`;
+ h+=`<div class="stack">${hero(g)}${family(g)}${chart(g)}<div class="gl-two">${hillsPanel(g)}${g.status==='open'?nextPanel(g):record(g)}</div></div>`;
  return h;
 };
 const hero=function(g){
- const gap=gapFig(g),vs=vsFig(g),c=hillCounts(g),ev=g.evidence;
+ const gap=gapFig(g),vs=vsFig(g),gn=gainFig(g),ev=g.evidence;
  const who=g.status==='achieved'?`${mLink(ev?.model)}, the model that achieved it`:g.model?`${mLink(g.model)}, the champion${g.runs>1?`, pooled over ${g.runs} runs`:''}`:'no champion';
- const head=`<div class="gl-hh"><div><div class="gl-hero">${gv(g,g.status==='achieved'?ev?.value:g.value)}</div><div class="sub">${who}${g.status==='achieved'?(ev?.task?` · <a class="ln" href="#task/${enc(ev.task)}">the run</a>`:''):g.task?` · <a class="ln" href="#task/${enc(g.task)}">latest run</a>`:''}</div></div>
-  <div class="gl-hgap"><div class="gl-gv">${g.status==='achieved'||g.met?'Met':gap.v}</div><div class="sub">${g.status==='achieved'?'target reached':g.met?gap.s:'to go'+(answers(g)!=null?` · ${plural(answers(g),'more answer')}`:'')}</div></div></div>`;
+ const head=`<div class="gl-hh"><div><div class="gl-hero">${gu(g,g.status==='achieved'?ev?.value:g.value)}${ofN(g)}</div><div class="sub">${who}${g.status==='achieved'?(ev?.task?` · <a class="ln" href="#task/${enc(ev.task)}">the run</a>`:''):g.task?` · <a class="ln" href="#task/${enc(g.task)}">latest run</a>`:''}</div></div>
+  <div class="gl-hgap"><div class="gl-gv">${g.status==='achieved'?'Met':gap.v}</div><div class="sub">${g.status==='achieved'?'target reached':gap.s}</div></div></div>`;
  const strip=kpis([
-  ['Of the way',wayText(g),prog(g).mode==='rel'?`from the baseline’s ${gv(g,prog(g).b)}`:prog(g).mode==='abs'&&prog(g).b!=null?'the baseline was already past it':'no baseline run'],
+  ['Since baseline',gn.v,gn.s],
   ['vs baseline',vs.v,vs.s],
-  ['Paired on',g.vs_baseline?.n?g.vs_baseline.n.toLocaleString():DASH,g.vs_baseline?.n?`questions; ${vs.wl}`:'needs a baseline run'],
+  ['Paired on',g.vs_baseline?.n?N(g.vs_baseline.n):DASH,g.vs_baseline?.n?`questions; ${vs.wl}`:'needs a baseline run'],
   ['Hills',String(goalHills(g).length),goalHills(g).length?hillSum(g):'none serve it yet'],
  ]);
- return panel('Progress',head+track(g,{big:true})+`<div class="gl-strip">${strip}</div>`,{meta:`${esc(kpiName(g))} ${cmpSym(g)} ${gv(g,g.target)} on ${sLink(g.slice)}`,cls:'gl-prog'});
+ return panel('Progress',head+track(g,{big:true})+`<div class="gl-strip">${strip}</div>`,{meta:`${esc(kpiName(g))} ${cmpSym(g)} ${gt(g)}${byN(g)?` of ${N(g.n)}`:''} on ${sLink(g.slice)}`,cls:'gl-prog'});
 }
 
 // ---------- runs on the goal slice over time: every run a dot, the champion's in the hue, the best so far as a step
@@ -294,6 +334,140 @@ const record=function(g){
  if(g.status==='abandoned')return panel('Why it was abandoned',`<p class="gl-reason">${g.reason?esc(g.reason):'<span class="dash">No reason recorded</span>'}</p><p class="sub">${g.abandoned?`Abandoned ${stamp(g.abandoned)}. `:''}The negative result stays in the ledger and in its paper.</p>${goalPaper(g.name)?'':`<div class="gl-cmd">${cmd('arx paper new --goal '+g.name)}</div>`}`,{cls:'gl-ev'});
  return panel('Record',empty('Nothing recorded',''),{cls:'gl-ev'});
 }
+// ---------- goal intake: the ask in your own words -> an agent's proposal (intake.py) -> answer, edit, open
+const IN={draft:'',ed:{},ans:{},err:{},busy:{}};
+const LOWER=['cost','latency_p50','latency_p95','latency_mean'];
+const KPI_OPTS=[['score','Correct answers'],['latency_p50','Median seconds'],['latency_p95','p95 seconds'],['cost','Cost per answer']];
+const ipost=(verb,body)=>fetch('api/intake/'+verb,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+ .then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.statusText);return j});
+const why=t=>t?`<span class="gi-why" tabindex="0" aria-label="Why">?<span class="tip">${esc(t)}</span></span>`:'';
+const items=()=>(S.state.intake||[]);
+const itemOf=id=>items().find(i=>i.id===id);
+// the card as the person has edited it; a new proposal from the agent starts it over
+const edOf=function(i){
+ const P=i.proposal;if(!P)return null;
+ const e=IN.ed[i.id];
+ if(e&&e.t===P.t)return e.g;
+ IN.ed[i.id]={t:P.t,g:JSON.parse(JSON.stringify(P.goal))};return IN.ed[i.id].g;
+}
+// a proposed goal read like a ledger goal, so dist() and the units helpers apply; `now` from the champion's latest run
+const asGoal=function(pg){
+ const L=S.state,sl=L.slices?.[pg.slice],n=sl?.n||pg.n||0,kpi=pg.kpi||'score';
+ const g={kpi,n,slice:pg.slice,higher_is_better:!LOWER.includes(kpi),target:kpi==='score'?(pg.count!=null&&n?pg.count/n:pg.target):Number(pg.target)};
+ const r=L.champion&&(L.leaderboard?.[pg.slice]||{})[L.champion],v=r?.[kpi==='score'?'score':kpi];
+ g.value=typeof v==='number'&&isFinite(v)?v:null;g.model=L.champion;g.task=r?.task;
+ return g;
+}
+const sameAs=function(pg){
+ const g=asGoal(pg);
+ return Object.values(S.state.goals||{}).find(x=>x.status==='open'&&x.slice===pg.slice&&(x.kpi||'score')===g.kpi&&(byN(g)?tcnt(x)===tcnt(g):Math.abs(x.target-g.target)<1e-9));
+}
+// the champion's best-so-far on the slice, as a small step line under the target
+const ispark=function(pg){
+ const g=asGoal(pg),k=kpiKey(g),s=sgn(g);
+ const runs=S.state.tasks.filter(t=>t.kind==='eval'&&t.slice===pg.slice&&(t.status==='done'||t.status==='completed')&&typeof t.summary?.[k]==='number'&&t.ended).sort((a,b)=>a.ended-b.ended);
+ if(runs.length<2||g.target==null||!isFinite(g.target))return '';
+ const W=120,H=28,ys=runs.map(r=>r.summary[k]).concat([g.target]),lo=Math.min(...ys),hi=Math.max(...ys),sp=(hi-lo)||1;
+ const X=t=>2+(t-runs[0].ended)/((runs.at(-1).ended-runs[0].ended)||1)*(W-4),Y=v=>H-3-(v-lo)/sp*(H-6);
+ let best=null,d='';runs.forEach(r=>{const v=r.summary[k];if(best==null||s*(v-best)>0){d+=d?`H${X(r.ended).toFixed(1)}V${Y(v).toFixed(1)}`:`M${X(r.ended).toFixed(1)} ${Y(v).toFixed(1)}`;best=v}});d+=`H${W-2}`;
+ return `<svg class="gi-spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="best run on this slice over time"><line x1="0" x2="${W}" y1="${Y(g.target).toFixed(1)}" y2="${Y(g.target).toFixed(1)}" stroke="var(--chart-3)" stroke-dasharray="3 3"/><path d="${d}" fill="none" stroke="var(--chart-1)" stroke-width="1.6"/></svg>`;
+}
+const nowCell=function(pg){
+ const g=asGoal(pg);
+ if(pg.missing_slice)return pill('slice not in the ledger','warn');
+ if(g.value==null)return `<span class="faint">${g.model?`${mn(g.model)} has no run here`:'no champion'}</span>`;
+ return `<span class="gi-big num">${gu(g,g.value)}</span>${byN(g)?`<span class="num faint">of ${N(g.n)}</span>`:''}<span class="num">${distLine(g)}</span>${ispark(pg)}`;
+}
+const tgtCell=function(i,pg){
+ const g=asGoal(pg),id=esc(i.id),val=g.kpi==='score'?(pg.count??''):(pg.target??'');
+ const unit=g.kpi==='score'?`of ${N(g.n)} correct`:/^latency/.test(g.kpi)?'s':'$ per answer';
+ return `<span class="gi-big num">${cmpSym(g)} <input id="gi-${id}-target" class="gi-in gi-num" inputmode="decimal" value="${esc(val)}" onchange="Intake.target('${id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></span><span class="num faint">${unit}</span>`;
+}
+const card1=function(i){
+ const pg=edOf(i),id=esc(i.id),same=sameAs(pg),W=pg.why||{},err=IN.err[i.id];
+ const slices=Object.values(S.state.slices||{}).sort((a,b)=>(a.kind==='full'?0:1)-(b.kind==='full'?0:1)||a.name.localeCompare(b.name));
+ const slOpts=(pg.missing_slice?[`<option selected>${esc(pg.slice)} · not in the ledger</option>`]:[]).concat(slices.map(s=>`<option value="${esc(s.name)}"${s.name===pg.slice?' selected':''}>${esc(s.name)} · ${N(s.n)}</option>`)).join('');
+ const row=(k,v)=>`<div class="k">${k}</div><div class="v">${v}</div>`;
+ return `<div class="gi-card">
+  <div class="gi-head"><input id="gi-${id}-title" class="gi-in gi-title" value="${esc(pg.title)}" aria-label="Title" oninput="Intake.set('${id}','title',this.value)"><input id="gi-${id}-name" class="gi-in gi-name mono" value="${esc(pg.name)}" aria-label="Name" oninput="Intake.set('${id}','name',this.value)">${same?pill('already open','acc'):''}</div>
+  <div class="gi-fields">
+   ${row('KPI',`<select id="gi-${id}-kpi" class="gi-in" onchange="Intake.kpi('${id}',this.value)">${KPI_OPTS.map(([v,l])=>`<option value="${v}"${v===pg.kpi?' selected':''}>${l}</option>`).join('')}</select>`)}
+   ${row('Judged on',`<select id="gi-${id}-slice" class="gi-in mono" onchange="Intake.slice('${id}',this.value)">${slOpts}</select>${why(W.slice)}`)}
+   ${row('Target',tgtCell(i,pg)+why(W.target))}
+   ${row('Now',nowCell(pg)+why(W.now))}
+   ${pg.against?row('Against',`<span>${esc(pg.against)}</span>${why(W.against)}`):''}
+   ${row('Constraints',`${(pg.constraints||[]).map((c,k)=>`<span class="gi-con">${esc(c)}<button type="button" aria-label="Remove" onclick="Intake.uncon('${id}',${k})">×</button></span>`).join('')}<input id="gi-${id}-con" class="gi-in gi-add" placeholder="+ add" size="8" onkeydown="Intake.con(event,'${id}',this)">${why(W.constraints)}`)}
+  </div>
+  <div class="gi-foot">${err?`<span class="neg gi-err">${esc(err)}</span>`:'<span></span>'}<button class="btn primary" type="button" ${IN.busy[i.id]||pg.missing_slice?'disabled':''} onclick="Intake.open('${id}')">${same?`Use ${esc(same.name)}`:'Open goal'}</button></div>
+ </div>`;
+}
+const relCard=function(i,r,k){
+ const g=asGoal(r),main=i.opened?.[0],added=(i.opened||[]).includes(r.name)||!!S.state.goals?.[r.name]&&S.state.goals[r.name].parent===main;
+ const can=main&&!r.missing_slice&&!added&&!IN.busy[i.id];
+ const fig=r.missing_slice?pill('slice not in the ledger','warn'):g.value==null?'<span class="faint">not measured</span>':distLine(g);
+ return `<div class="gi-sug ${added?'added':''}"><div class="t"><span>${esc(r.title)}</span>${pill(ROLE[r.role]||r.role,r.role==='guard'?'ghost':'acc')}${why(r.why?.target||Object.values(r.why||{})[0])}</div>
+  <div class="d mono">${esc(kpiName(g))} ${cmpSym(g)} ${g.kpi==='score'?N(r.count??tcnt(g)):gv(g,g.target)}${byN(g)?` of ${N(g.n)}`:''} · ${esc(r.slice)}</div>
+  <div class="row"><span class="d num">${fig}</span><button class="btn" type="button" ${can?'':'disabled'} onclick="Intake.add('${esc(i.id)}',${k})">${added?'✓ Added':'Add'}</button></div></div>`;
+}
+const statusLine=function(i,P){
+ const t=i.task&&byId(i.task),round=i.round||0;
+ if(i.status==='queued')return `<div class="gi-st"><span class="gi-dot"></span>Queued</div>`;
+ if(i.status==='running')return `<div class="gi-st"><span class="gi-dot live"></span>${t?`<a class="ln" href="#task/${enc(t.id)}">Agent working</a>${t.note?`<span class="faint"> · ${esc(t.note.text??t.note.msg)}</span>`:''}`:'Agent working'}</div>`;
+ if(i.status==='failed')return `<div class="gi-st neg">${esc(i.error||'The agent failed')}<button class="btn" type="button" onclick="Intake.retry('${esc(i.id)}')">Retry</button></div>`;
+ if(!P||P.round!==round)return `<div class="gi-st">${i.status==='done'?'No proposal came back':'Waiting for the agent'}<button class="btn" type="button" onclick="Intake.retry('${esc(i.id)}')">Retry</button></div>`;
+ return '';
+}
+const itemCard=function(i){
+ const P=i.proposal,id=esc(i.id),working=i.status==='queued'||i.status==='running',cur=P&&P.round===(i.round||0)&&!working;
+ const ans={...(i.answers||{}),...(IN.ans[i.id]||{})},main=i.opened?.[0],mg=main&&S.state.goals?.[main];
+ let h=`<div class="gi-said"><span>${esc(i.ask)}</span></div>`;
+ const asked=new Set((P?.questions||[]).map(q=>q.id)),said=(i.answered||[]).filter(a=>!asked.has(a.id));
+ if(said.length)h+=`<div class="gi-said-a">${said.map(a=>`<span><span class="faint">${esc(a.text)}</span> ${esc(a.label)}</span>`).join('')}</div>`;
+ h+=statusLine(i,P);
+ if(P?.questions?.length&&!main)h+=`<div class="gi-qs">${P.questions.map((q,k)=>`<div class="gi-q"><div class="gi-qt"><span class="faint">${k+1} of ${P.questions.length}</span> ${esc(q.text)}</div><div class="gi-opts">${q.options.map((o,j)=>`<button type="button" class="gi-opt ${ans[q.id]===o.value?'on':''}" ${working?'disabled':''} onclick="Intake.pick('${id}',${k},${j})">${esc(o.label)}${o.sub?`<small>${esc(o.sub)}</small>`:''}</button>`).join('')}</div></div>`).join('')}</div>`;
+ if(cur&&!main)h+=card1(i);
+ if(main)h+=`<div class="gi-done">${pill('opened','pos')}<a class="ln" href="#goal/${enc(main)}"><b>${esc(mg?.title||main)}</b></a>${mg?`<span class="num">${distLine(mg)}</span>`:''}</div>`;
+ if(P&&!working&&P.related?.length&&(cur||main))h+=`<div class="gi-rel"><h3>Related goals</h3><div class="gi-sugs">${P.related.map((r,k)=>relCard(i,r,k)).join('')}</div></div>`;
+ if(IN.err[i.id]&&main)h+=`<p class="neg gi-err">${esc(IN.err[i.id])}</p>`;
+ return `<section class="card gi-item${working?' working':''}" id="gi-${id}"><button class="iconbtn gi-x" type="button" aria-label="Dismiss" title="Dismiss" onclick="Intake.dismiss('${id}')">×</button>${h}</section>`;
+}
+const intake=function(){
+ const box=`<form class="gi-ask" onsubmit="event.preventDefault();Intake.submit()"><textarea id="gi-ask" rows="2" placeholder="New goal, in your own words" oninput="Intake.draft(this.value)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();Intake.submit()}">${esc(IN.draft)}</textarea><button class="btn primary" type="submit" ${IN.busy.ask?'disabled':''}>Go</button></form>${IN.err.ask?`<p class="neg gi-err">${esc(IN.err.ask)}</p>`:''}`;
+ return `<div class="gi">${panel('New goal',box,{cls:'gi-new'})}${items().map(itemCard).join('')}</div>`;
+}
+const act=async function(id,fn){
+ IN.busy[id]=true;IN.err[id]='';render(true);
+ try{await fn()}catch(e){IN.err[id]=e.message}
+ IN.busy[id]=false;await tick();render(true);
+}
+window.Intake={
+ draft:v=>{IN.draft=v},
+ submit:()=>{const ask=IN.draft.trim();if(!ask)return;act('ask',async()=>{await ipost('new',{ask});IN.draft=''})},
+ set:(id,f,v)=>{const i=itemOf(id);if(i)edOf(i)[f]=v},
+ kpi:(id,v)=>{const i=itemOf(id),g=edOf(i),old=asGoal(g);g.kpi=v;
+  // a new KPI starts from the champion now: a few more answers, or a tenth faster or cheaper
+  const now=asGoal(g);
+  if(v==='score'&&old.kpi!=='score'){const n=now.n;g.count=n?Math.min(n,(now.value!=null?cnt(now,now.value):Math.floor(.9*n))+Math.ceil(.03*n)):null}
+  if(v!=='score'&&old.kpi==='score'||g.target==null)g.target=now.value!=null?+(now.value*.9).toFixed(v==='cost'?4:1):null
+  render(true)},
+ slice:(id,v)=>{const i=itemOf(id),g=edOf(i),a=asGoal(g),n=S.state.slices?.[v]?.n;
+  if(g.kpi==='score'&&g.count!=null&&a.n&&n)g.count=Math.min(n,Math.ceil(g.count/a.n*n-1e-9));
+  g.slice=v;delete g.missing_slice;g.n=n;render(true)},
+ target:(id,v)=>{const i=itemOf(id),g=edOf(i),x=parseFloat(String(v).replace(/[, ]/g,''));
+  if(isFinite(x)){if(g.kpi==='score'){const n=asGoal(g).n;g.count=Math.max(1,Math.min(n||x,Math.round(x)))}else g.target=x;
+   if(g.why)g.why.target=g.kpi==='score'?`Set by hand: ${N(g.count)} of ${N(asGoal(g).n)}.`:`Set by hand: ${x}.`}
+  render(true)},
+ con:(e,id,el)=>{if(e.key!=='Enter')return;e.preventDefault();const v=el.value.trim();if(!v)return;const g=edOf(itemOf(id));(g.constraints=g.constraints||[]).push(v);el.value='';render(true);setTimeout(()=>document.getElementById(`gi-${id}-con`)?.focus())},
+ uncon:(id,k)=>{const g=edOf(itemOf(id));g.constraints.splice(k,1);render(true)},
+ pick:(id,k,j)=>{const i=itemOf(id),Q=i?.proposal?.questions?.[k],o=Q?.options?.[j];if(!o)return;IN.ans[id]={...(IN.ans[id]||{}),[Q.id]:o.value};
+  const all={...(i.answers||{}),...IN.ans[id]},qs=i.proposal?.questions||[];
+  if(qs.every(x=>all[x.id]!=null))act(id,async()=>{await ipost('answer',{id,answers:IN.ans[id]});delete IN.ans[id]});else render(true)},
+ open:id=>{const i=itemOf(id),g=edOf(i),same=sameAs(g);
+  act(id,()=>ipost('open',{id,goal:same?{use:same.name}:{...g,role:'main'}}))},
+ add:(id,k)=>{const i=itemOf(id),r=i.proposal.related[k];act(id,()=>ipost('open',{id,goal:{...r,parent:i.opened[0]}}))},
+ retry:id=>act(id,()=>ipost('retry',{id})),
+ dismiss:id=>act(id,()=>ipost('dismiss',{id})),
+};
 // the chart is sized to the sheet in pixels so its labels stay legible; redraw once a resize settles
 let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(route().r==='goal'&&S.state)render(true)},150)});
 }
