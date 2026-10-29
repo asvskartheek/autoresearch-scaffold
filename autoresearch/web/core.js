@@ -258,3 +258,53 @@ function copyText(btn,text){
 }
 const copyBtn=text=>`<button class="copy" type="button" aria-label="Copy" title="Copy" onclick="event.stopPropagation();event.preventDefault();copyText(this,${esc(JSON.stringify(String(text)))})">${ICON.copy}</button>`;
 const cmd=text=>`<span class="cmd"><code>${esc(text)}</code>${copyBtn(text)}</span>`;
+
+// ---------- glossary: term('champion') marks a research word where a view prints it. Hover, focus or tap shows a tiny
+// picture of the idea, one line and a link to its lesson (#course/<id>). Inside a link, a hover shows it and a click
+// still follows the link; on a touch screen the first tap shows it and the second follows the link.
+// Views: term(id) prints the word as written below; term(id, 'champions') prints your own wording.
+const TG=(d)=>`<svg viewBox="0 0 120 44" width="120" height="44" aria-hidden="true">${d}</svg>`;
+const TL='stroke="var(--grid)" stroke-width="1"',TA='fill="var(--accent)"',TF='fill="var(--faint)"',TT='stroke="var(--chart-3)" stroke-width="1.5" stroke-dasharray="3 2"';
+const TERMS={
+ goal:{w:'goal',d:'A target number on one frozen slice. The work is for it.',g:TG(`<rect x="6" y="18" width="108" height="8" rx="4" fill="var(--grid)"/><rect x="6" y="18" width="72" height="8" rx="4" ${TA}/><line x1="96" x2="96" y1="8" y2="36" ${TT}/><text x="98" y="10" font-size="9" fill="var(--chart-3)">target</text>`)},
+ champion:{w:'champion',d:'The best model so far. Every candidate is measured against it.',g:TG(`<rect x="14" y="24" width="16" height="16" ${TF}/><rect x="40" y="10" width="16" height="30" ${TA}/><rect x="66" y="20" width="16" height="20" ${TF}/><rect x="92" y="28" width="16" height="12" ${TF}/><path d="M42 6l3-4 3 3 3-3 3 4z" fill="var(--chart-3)"/>`)},
+ candidate:{w:'candidate',d:'One change to try. It must beat the champion on the same items.',g:TG(`<rect x="30" y="12" width="20" height="28" ${TA}/><rect x="66" y="6" width="20" height="34" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="3 2"/><text x="28" y="9" font-size="8" fill="var(--muted)">champ</text><text x="92" y="20" font-size="10" fill="var(--muted)">?</text>`)},
+ hill:{w:'hill',d:'One way the champion fails, with its own slice to climb.',g:TG(`<path d="M6 40L44 12L62 26L80 14L114 40Z" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.5"/><path d="M44 12V2l10 4-10 4" fill="var(--chart-3)"/>`)},
+ slice:{w:'slice',d:'A fixed set of test items, frozen so every score compares.',g:TG(Array.from({length:24},(_,i)=>`<rect x="${8+(i%12)*9}" y="${8+Math.floor(i/12)*16}" width="7" height="12" rx="1.5" ${i%3===0?TA:TF} opacity="${i%3===0?1:.35}"/>`).join(''))},
+ 'paired-delta':{w:'paired delta',d:'Both models on the same items; the mean of the per-item difference.',g:TG([[14,30,14],[34,30,18],[54,22,12],[74,28,28],[94,34,18]].map(([x,a,b])=>`<line x1="${x}" x2="${x+10}" y1="${a}" y2="${b}" stroke="var(--muted)" stroke-width="1"/><circle cx="${x}" cy="${a}" r="3" ${TF}/><circle cx="${x+10}" cy="${b}" r="3" ${TA}/>`).join(''))},
+ interval:{w:'interval',d:'Where the true difference likely lies (90%). If it crosses zero, it may be noise.',g:TG(`<line x1="6" x2="114" y1="24" y2="24" ${TL}/><line x1="44" x2="44" y1="10" y2="38" stroke="var(--muted)" stroke-width="1"/><text x="40" y="8" font-size="8" fill="var(--muted)">0</text><rect x="30" y="20" width="62" height="8" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/><circle cx="62" cy="24" r="4" ${TA}/>`)},
+ gate:{w:'gate',d:'The check a candidate must clear against the champion to move up.',g:TG(`<line x1="6" x2="114" y1="18" y2="18" ${TT}/><rect x="26" y="10" width="18" height="30" fill="var(--positive)"/><rect x="74" y="24" width="18" height="16" fill="var(--negative)" opacity=".8"/><text x="96" y="15" font-size="8" fill="var(--chart-3)">bar</text>`)},
+ rung:{w:'rung',d:'One step of the ladder: a bigger slice, passed only after the smaller one.',g:TG(`<path d="M40 4v38M80 4v38" stroke="var(--muted)" stroke-width="2"/><path d="M40 36h40M40 26h40M40 6h40" stroke="var(--muted)" stroke-width="2"/><path d="M40 16h40" stroke="var(--accent)" stroke-width="4"/>`)},
+ ladder:{w:'ladder',d:'Rungs from small to full: a cheap check first, the whole set last.',g:TG(`${[['dev',8,10],['50',36,14],['100',64,20],['full',92,26]].map(([l,x,w])=>`<rect x="${x}" y="${34-w}" width="20" height="${w}" rx="2" ${TA} opacity=".85"/><text x="${x}" y="42" font-size="8" fill="var(--muted)">${l}</text>`).join('')}`)},
+ brief:{w:'Brief',d:'Cards that catch you up on what changed, by doing, not reading.',g:TG(`<rect x="34" y="12" width="52" height="30" rx="4" fill="var(--surface)" stroke="var(--muted)"/><rect x="30" y="8" width="52" height="30" rx="4" fill="var(--surface)" stroke="var(--muted)"/><rect x="26" y="4" width="52" height="30" rx="4" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/><path d="M34 22h22M34 27h14" stroke="var(--accent)" stroke-width="2"/>`)},
+};
+const term=(id,label)=>{const x=TERMS[id];if(!x)return esc(label??id);return `<span class="term" data-term="${id}" tabindex="0">${esc(label??x.w)}</span>`};
+{
+ let pop=null,cur=null,hideT=0,showT=0;
+ const touch=matchMedia('(hover:none)').matches;
+ const hide=()=>{clearTimeout(showT);if(pop){pop.remove();pop=null;cur=null}};
+ const show=el=>{
+  clearTimeout(hideT);if(cur===el)return;hide();const x=TERMS[el.dataset.term];if(!x)return;
+  cur=el;pop=document.createElement('div');pop.className='term-pop';pop.setAttribute('role','tooltip');
+  pop.innerHTML=`${x.g}<b>${esc(x.w[0].toUpperCase()+x.w.slice(1))}</b><span>${esc(x.d)}</span><a href="#course/${enc(el.dataset.term)}">Lesson ${CHEVR}</a>`;
+  pop.addEventListener('mouseenter',()=>clearTimeout(hideT));pop.addEventListener('mouseleave',()=>{hideT=setTimeout(hide,200)});
+  pop.addEventListener('click',e=>{if(e.target.closest('a'))hide()});
+  document.body.append(pop);
+  const r=el.getBoundingClientRect(),w=pop.offsetWidth,h=pop.offsetHeight;
+  pop.style.left=Math.max(8,Math.min(r.left+r.width/2-w/2,innerWidth-w-8))+'px';
+  pop.style.top=(r.bottom+h+8>innerHeight&&r.top>h+8?r.top-h-6:r.bottom+6)+'px';
+ };
+ const CHEVR=I('<path d="M9 6l6 6-6 6"/>',12);
+ addEventListener('mouseover',e=>{const el=e.target.closest?.('.term');if(!el||touch)return;clearTimeout(hideT);clearTimeout(showT);showT=setTimeout(()=>show(el),250)});
+ addEventListener('mouseout',e=>{const el=e.target.closest?.('.term');if(!el||touch)return;clearTimeout(showT);hideT=setTimeout(hide,200)});
+ addEventListener('focusin',e=>{const el=e.target.closest?.('.term');if(el)show(el);else if(pop&&!pop.contains(e.target))hide()});
+ addEventListener('click',e=>{
+  const el=e.target.closest?.('.term');
+  if(!el){if(pop&&!pop.contains(e.target))hide();return}
+  const inLink=el.closest('a[href]');
+  if(inLink&&(!touch||cur===el)){hide();return}  // a link's own click
+  e.preventDefault();e.stopPropagation();cur===el?hide():show(el);
+ },true);
+ addEventListener('keydown',e=>{if(e.key==='Escape'&&pop){hide()}});
+ addEventListener('hashchange',hide);addEventListener('scroll',()=>{if(pop&&!touch)hide()},{passive:true});
+}
