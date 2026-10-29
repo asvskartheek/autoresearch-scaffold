@@ -57,7 +57,8 @@ function finding(t,d){
   const bits=[prog&&`<b>${prog}</b> done (${(100*pr.done/pr.total).toFixed(0)}%)`,run!=null&&`scoring ${scoreOf(run,slOf(t))} so far${sl?' on '+sl:''}`,t.eta&&(t.health?.state==='over'?`<b class="warn">will not finish in its budget</b>: the estimate is ${wbClock(t.eta.finish_at)}, the budget ends at ${wbClock(t.created+t.budget_s)}`:`finishes in about ${wbSpan(t.eta.eta_s)}, at ${wbClock(t.eta.finish_at)}`),k&&isLive(k)&&`counted live by <a class="ln" href="#task/${enc(k.id)}">${esc(k.title)}</a>`].filter(Boolean);
   return (bits.length?bits.join(', ')+'. ':'')+`Running for ${B?wbSpanB(now()-t.created):wbSpan(now()-t.created)}${budget}${subTxt}.`;
  }
- const took=t.ended?(B?wbSpanB:wbSpan)(t.ended-t.created):null;
+ const tk=wbTook(t),took=tk!=null?(B?wbSpanB:wbSpan)(tk):null;
+ if(emptyEval(t))return `<b class="neg">No results</b>: no example was scored${sm.missing?` (${sm.missing.toLocaleString()} of ${(pr.total||sm.missing).toLocaleString()} missing)`:''}${sl?` on ${sl}`:''}, so this run measured nothing.`;
  if(t.kind==='eval'&&sm.score!=null){
   const S_=slOf(t),c=isCont(S_);
   const verb=c&&timedSl(S_)?'took':'scored',av=c&&timedSl(S_)?' a question':'';
@@ -96,7 +97,7 @@ function kpiStrip(t,d){
   if(!items.length)return '';
  }
  if(t.status==='running')items.push(['Finishes',t.eta?`<span class="${t.health?.state==='over'?'warn':''}">in ${wbSpan(t.eta.eta_s)}</span>`:DASH,t.eta?`at ${wbClock(t.eta.finish_at)}`:'no rate yet']);
- const B=wbBudget(t);if(!live||B)items.push([live?'Elapsed':'Took',`<span class="${bc}">${(B?wbSpanB:wbSpan)((t.ended||now())-t.created)}</span>`,B?`of a ${wbSpanB(B)} budget`:'']);
+ const B=wbBudget(t);if(live?B:wbTook(t)!=null)items.push([live?'Elapsed':'Took',`<span class="${bc}">${(B?wbSpanB:wbSpan)(t.ended?wbTook(t):now()-t.created)}</span>`,B?`of a ${wbSpanB(B)} budget`:'']);
  return `<div class="section">${kpis(items.slice(0,6))}</div>`;
 }
 
@@ -244,7 +245,7 @@ function details(t,d){
  const kv=[['Task id',`<span class="tk-mono">${esc(t.id)}</span>${copyBtn(t.id)}`],
   ['Started',wbWhen(t.created)],
   [t.ended?'Ended':'Last heard',t.ended?wbWhen(t.ended):`${wbAgo(t.heartbeat)} <span class="faint">(${wbClock(t.heartbeat)})</span>`],
-  [t.ended?'Took':'Elapsed',`${(t.budget_s?wbSpanB:wbSpan)((t.ended||now())-t.created)}${t.budget_s?` <span class="faint">of a ${wbSpanB(t.budget_s)} budget</span>`:''}`]];
+  [t.ended?'Took':'Elapsed',t.ended&&wbTook(t)==null?'Recorded from another run':`${(t.budget_s?wbSpanB:wbSpan)(t.ended?wbTook(t):now()-t.created)}${t.budget_s?` <span class="faint">of a ${wbSpanB(t.budget_s)} budget</span>`:''}`]];
  if(t.model)kv.push(['Model',`<a class="ln" href="#model/${enc(t.model)}">${mn(t.model)}</a>${st.models[t.model]?.title&&st.models[t.model].title!==t.model?` <span class="tk-mono faint">${esc(t.model)}</span>`:''}`]);
  if(t.superseded_by){const by=byId(t.superseded_by);kv.push(['Superseded by',`<a class="ln" href="#task/${enc(t.superseded_by)}">${esc(by?.title||t.superseded_by)}</a> <span class="faint">gates and baselines skip this run</span>`])}
  if(t.slice)kv.push(['Slice',`<a class="ln" href="#slices/${enc(t.slice)}">${esc(t.slice)}</a>${sl?.n?` <span class="faint">${sl.n.toLocaleString()} examples</span>`:''}`]);

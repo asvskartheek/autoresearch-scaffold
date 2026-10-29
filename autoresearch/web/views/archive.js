@@ -11,7 +11,7 @@ function archiveFold(id){ARC.open.has(id)?ARC.open.delete(id):ARC.open.add(id);r
 function archiveSort(k){if(ARC.sort===k)ARC.dir=-ARC.dir;else{ARC.sort=k;ARC.dir=k==='title'||k==='model'||k==='state'?1:-1}render()}
 {
 const when=t=>t.ended||t.updated;
-const took=t=>t.ended?t.ended-t.created:null;
+const took=t=>wbTook(t);
 const score=t=>t.summary?.score??null;
 const mt=t=>t.model?S.state.models[t.model]?.title||t.model:'';
 // a continuous slice scores a mean (with its unit), not a share solved
@@ -70,7 +70,7 @@ VIEWS.archive=()=>{
   <td class="arc-mod">${t.model?`<div class="two"><a class="ell arc-ml" href="#model/${enc(t.model)}" title="${esc(t.model)}">${mn(t.model)}</a><span class="sub ell" title="${esc(t.slice||'')}">${t.slice?esc(short(t.slice)):''}</span></div>`:DASH}</td>
   <td>${st(sc,sl)}${t.superseded_by?`<span class="arc-sup" title="A later run replaced it; gates and baselines skip it">superseded</span>`:''}</td>
   <td class="num">${s!=null?`<div class="two"><span>${c?cv(s,t):pct(s)}</span><span class="sub">${n?(c?`mean of ${n.toLocaleString()}`:`${Math.round(s*n).toLocaleString()} of ${n.toLocaleString()}`):''}</span></div>`:DASH}</td>
-  <td class="num">${tk!=null?wbSpan(tk):DASH}</td>
+  <td class="num">${tk!=null?wbSpan(tk):t.ended?'<span class="faint" title="Rows recorded from another run">recorded</span>':DASH}</td>
   <td class="num"><div class="two"><span>${wbWhen(when(t))}</span><span class="sub">${wbAgo(when(t))}</span></div></td>
   <td class="arc-m"><div class="two"${depth?' style="padding-left:20px"':''}><a href="${href}" class="ell"><b>${esc(t.title)}</b></a><span class="sub ell">${[sl+(t.superseded_by?', superseded':''),s!=null?(c?cv(s,t):pct(s)+(n?` · ${Math.round(s*n)} of ${n}`:'')):'',t.model&&mn(t.model),tk!=null?wbSpan(tk):'',wbAgo(when(t))].filter(Boolean).join(' · ')}</span>${fold}</div></td></tr>`};
  const body=vis.map(t=>{const open=ARC.open.has(t.id)||(q&&!match(t,q));

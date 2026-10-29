@@ -12,9 +12,14 @@ const wbSpan=s=>span(s);
 const wbAgo=t=>ago(t);
 const wbKind=k=>{const s=String(k||'task').replace(/[_-]+/g,' ');return s[0].toUpperCase()+s.slice(1)};
 const endLabel=t=>t.status==='completed'?'done':t.status;
+// an eval that finished with no scored rows: it measured nothing, whatever its status says
+const emptyEval=t=>t.kind==='eval'&&!isLive(t)&&t.ended&&t.summary&&!t.summary.n&&(t.summary.missing>0||t.summary.score==null)&&t.status!=='failed';
+// how long a finished job ran: an eval recorded from another pass (its rows copied in a moment) has no run time of its
+// own, so it reads its harness's wall time when it has one, else null ("recorded")
+const wbTook=t=>!t.ended?null:t.ended-t.created>=2||t.kind!=='eval'?t.ended-t.created:(t.summary?.wall_s??null);
 const partialEval=t=>t.kind==='eval'&&(t.status==='done'||t.status==='completed')&&t.complete===false;
 // [label, class] for a task's state, sentence case
-const wbState=t=>partialEval(t)?['Partial','partial']:({done:['Done','done'],completed:['Done','done'],failed:['Failed','failed'],budget:['Out of time','budget'],stalled:['Stalled','stalled'],running:['Running','running']})[t.status]||[wbKind(t.status),t.status];
+const wbState=t=>emptyEval(t)?['No results','failed']:partialEval(t)?['Partial','partial']:({done:['Done','done'],completed:['Done','done'],failed:['Failed','failed'],budget:['Out of time','budget'],stalled:['Stalled','stalled'],running:['Running','running']})[t.status]||[wbKind(t.status),t.status];
 // a duration next to a budget: to the second under 10 min ("1 min 15 s of a 1 min 15 s budget"), else as span()
 const wbSpanB=s=>{const r=Math.round(s);return r>=60&&r<600&&r%60?`${Math.floor(r/60)} min ${r%60} s`:wbSpan(s)};
 // the budget worth showing: evals get a 1 h deadline by default, which only matters once half of it is used
