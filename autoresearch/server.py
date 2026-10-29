@@ -4,9 +4,9 @@ from __future__ import annotations
 import gzip, json, mimetypes, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qsl, unquote, urlsplit
 
-from . import papers, projects
+from . import features, papers, projects
 from .core import Project, paired, per_id
 from .readable import readable
 
@@ -57,7 +57,25 @@ def infer_parents(tasks: list[dict]) -> None:
 
 def state(p: Project) -> dict:
     with p.snapshot():
-        return _state(p)
+        out = _state(p)
+        for fn in features.STATE:
+            try:
+                fn(p, out)
+            except Exception as e:  # a broken feature never takes the dashboard down
+                out.setdefault("feature_errors", []).append(f"{fn.__module__}: {e}")
+        return out
+
+
+def _feature(routes, p, path, arg):
+    """The first registered feature route whose prefix matches: (status, body bytes, content type) or None."""
+    for prefix, fn in routes:
+        if path.startswith(prefix):
+            r = fn(p, path, arg)
+            code, payload = r[0], r[1]
+            if isinstance(payload, (bytes, bytearray)):
+                return code, bytes(payload), (r[2] if len(r) > 2 else "application/octet-stream")
+            return code, json.dumps(payload, default=str).encode(), "application/json"
+    return None
 
 
 _SUMMARY_KEEP = (int, float, bool, type(None))
@@ -222,6 +240,7 @@ def human_event(p: Project, name: str, kind: str, d: dict) -> dict | None:
 
 
 def serve(port: int = 8890, root=None):
+    features.load()
     home = Project(root)
     try:
         projects.register(home.root)
@@ -298,6 +317,9 @@ def serve(port: int = 8890, root=None):
                     return self._send(200, json.dumps(p.gate(path.rsplit("/", 1)[1]), default=str).encode(), "application/json")
                 if path == "/api/papers":
                     return self._send(200, json.dumps(papers.papers(p), default=str).encode(), "application/json")
+                r = _feature(features.GET, p, path, dict(parse_qsl(urlsplit(self.path).query)))
+                if r:
+                    return self._send(*r)
                 parts = [unquote(x) for x in path.strip("/").split("/")]
                 if parts[0] == "papers" and len(parts) == 2:  # the reader
                     return self._send(200, PAPER.read_bytes(), "text/html; charset=utf-8")
@@ -322,6 +344,12 @@ def serve(port: int = 8890, root=None):
             try:
                 p, path = pick(self.path.split("?")[0])
                 parts = [unquote(x) for x in path.strip("/").split("/")]
+                if any(path.startswith(pre) for pre, _ in features.POST):
+                    n = int(self.headers.get("Content-Length") or 0)
+                    if not 0 <= n <= 1_000_000:
+                        return self._send(413, b'{"error":"too large"}', "application/json")
+                    d = json.loads(self.rfile.read(n) or b"{}")
+                    return self._send(*_feature(features.POST, p, path, d))
                 if parts[:2] == ["api", "paper"] and len(parts) == 4 and parts[3] in HUMAN_KINDS:
                     n = int(self.headers.get("Content-Length") or 0)
                     if not 0 <= n <= 64_000:

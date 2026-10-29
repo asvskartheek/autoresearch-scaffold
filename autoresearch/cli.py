@@ -576,6 +576,10 @@ def main(argv=None):
     s.add_argument("--timeout", type=float, help="poll: give up after this many seconds")
     s.set_defaults(fn=cmd_paper)
 
+    from . import features
+    features.load()
+    for reg in features.CLI:
+        reg(sp)
     s = sp.add_parser("status", help="champion, running tasks, each candidate's ladder position, open hills"); s.set_defaults(fn=cmd_status)
     s = sp.add_parser("serve", help="run the dashboard in the foreground (`arx up` runs it in the background)"); s.add_argument("--port", type=int, default=8890, help="dashboard port"); s.set_defaults(fn=cmd_serve)
 

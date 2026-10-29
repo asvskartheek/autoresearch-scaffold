@@ -57,6 +57,8 @@ const ICON={
  models:I('<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M8.3 7l7.5 4M8.3 17l7.5-4"/>'),
  hills:I('<path d="M3 19l6-10 4 6 3-4 5 8z"/>'),
  slices:I('<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>'),
+ questions:I('<circle cx="12" cy="12" r="8.5"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/>'),
+ learn:I('<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5zM20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z"/>'),
  goals:I('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="0.6" fill="currentColor"/>'),
  papers:I('<path d="M7 3.5h7l4.5 4.5v12a.5.5 0 0 1-.5.5H7a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5z"/><path d="M14 3.5V8h4.5M9.5 12.5h6M9.5 16h6"/>'),
  search:I('<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>',14),
@@ -69,7 +71,7 @@ const ICON={
  copy:I('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',13)};
 // the product's mark: a ladder (two rails, three rungs) in the accent
 const MARK='<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="6" fill="var(--accent)"/><path d="M8 18.5V5.5M16 18.5V5.5M8 15h8M8 11.5h8M8 8h8" stroke="var(--surface)" stroke-width="1.8" stroke-linecap="round"/></svg>';
-const ROUTES=[['overview','Overview'],['workbench','Workbench'],['goals','Goals'],['models','Models'],['hills','Hills'],['papers','Papers'],['slices','Slices'],['archive','Archive']];
+const ROUTES=[['overview','Overview'],['learn','Brief'],['workbench','Workbench'],['goals','Goals'],['questions','Questions'],['models','Models'],['hills','Hills'],['papers','Papers'],['slices','Slices'],['archive','Archive']];
 // the project this page serves: /p/<key>/ for a registered project, the server's own at /
 const PKEY=(location.pathname.match(/^\/p\/([^/]+)/)||[])[1]&&decodeURIComponent(location.pathname.split('/')[2]);
 const mn=k=>esc(S.state?.models?.[k]?.title||k||'—');  // a model reads by its title; the id stays in the URL
