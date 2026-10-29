@@ -180,7 +180,28 @@ def _get(p, path: str, q: dict | None = None):
     return None
 
 
-def snapshot_data(p, key: str | None = None, tasks: int = 40) -> dict:
+TASK_BUDGET = 6_000_000  # bytes of task detail a snapshot carries in full; past it, older tasks come without per-example rows
+
+
+def _lite(d: dict) -> dict:
+    """A task detail cut to fit: the card, its notes and a thinned curve; no per-example rows."""
+    m = d.get("metrics") or []
+    step = max(1, len(m) // 120)
+    out = dict(task=d.get("task"), metrics=m[::step], events=(d.get("events") or [])[-60:], snapshot_cut=True)
+    if d.get("vs_champion"):
+        out["vs_champion"] = d["vs_champion"]
+    return out
+
+
+def _compact_rows(d: dict) -> dict:
+    if d.get("rows"):
+        d["rows"] = [{k: v for k, v in r.items() if v is not None and v is not False} for r in d["rows"]]
+    return d
+
+
+def snapshot_data(p, key: str | None = None, budget: int = TASK_BUDGET) -> dict:
+    """Every read the dashboard makes, as embedded JSON: every task's detail, newest first, in full while `budget`
+    lasts and cut (no per-example rows) after it."""
     data: dict = {}
     for path in ("api/state", "api/tasks", "api/comments", "api/papers", "api/questions", "api/predictions",
                  "api/understanding", "api/brief", "api/intake", "api/papers-missing"):
@@ -196,11 +217,18 @@ def snapshot_data(p, key: str | None = None, tasks: int = 40) -> dict:
             data[f"api/hill/{h}"] = _get(p, f"api/hill/{h}")
         except Exception:
             pass
-    for t in ((data.get("api/tasks") or {}).get("tasks") or [])[:tasks]:
+    spent = 0
+    for t in ((data.get("api/tasks") or {}).get("tasks") or []):
         try:
-            data[f"api/task/{t['id']}"] = _get(p, f"api/task/{t['id']}")
+            d = _compact_rows(_get(p, f"api/task/{t['id']}"))
         except Exception:
-            pass
+            continue
+        n = len(json.dumps(d, default=str, separators=(",", ":")))
+        if spent + n > budget:
+            d = _lite(d)
+            n = len(json.dumps(d, default=str, separators=(",", ":")))
+        spent += n
+        data[f"api/task/{t['id']}"] = d
     data["api/projects"] = [dict(key=key or "", name=(st.get("config") or {}).get("name") or "", root="")]
     try:  # this project's people (names on comments and "Seen" faces); nobody is "here" in a file
         from . import people
@@ -237,7 +265,10 @@ document.addEventListener('click',e=>{const a=e.target.closest&&e.target.closest
 addEventListener('DOMContentLoaded',()=>{const b=document.createElement('div');b.className='arx-snap';
  b.textContent='Snapshot · '+new Date(S.taken*1000).toLocaleString();document.body.append(b);
  const c=new URLSearchParams(location.search).get('c'),ts=(S.data['api/comments']||{}).threads||[];
- if(c&&!ts.some(t=>t.id===c))setTimeout(()=>note('That comment is not in this snapshot'),800)});})();"""
+ if(c&&!ts.some(t=>t.id===c))setTimeout(()=>note('That comment is not in this snapshot'),800);miss()});
+// a task or hill view this file has no data for says so instead of loading forever
+const miss=()=>{const m=location.hash.match(/^#(task|hill)\/([^?]+)/);if(m&&!(`api/${m[1]}/${decodeURIComponent(m[2])}` in S.data))note(`This ${m[1]} is not in this snapshot`)};
+addEventListener('hashchange',miss);})();"""
 
 SNAP_CSS = """.arx-snap{position:fixed;left:12px;bottom:12px;z-index:50;padding:4px 10px;border-radius:999px;font-size:12px;
 background:var(--surface,#fff);color:var(--muted,#666);box-shadow:0 0 0 1px var(--border,#ddd)}

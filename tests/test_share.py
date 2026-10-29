@@ -119,6 +119,21 @@ class Export(unittest.TestCase):
         for k in ("api/people", "api/understanding", "kind!=='seen'", "sendBeacon", "not in this snapshot"):
             self.assertIn(k, share.SHIM)
 
+    def test_snapshot_every_task(self):
+        from autoresearch.core import Task
+        p = ledger("zeta")
+        ids = []
+        for i in range(3):
+            t = Task(p, "train", f"run {i}")
+            for k in range(300):
+                t.log(step=k, loss=1 / (k + 1))
+            t.finish(); ids.append(t.id)
+        full = share.snapshot_data(p, "zeta")
+        self.assertTrue(all(f"api/task/{i}" in full and not full[f"api/task/{i}"].get("snapshot_cut") for i in ids))
+        tight = share.snapshot_data(p, "zeta", budget=1)  # past the budget a task still comes, cut
+        self.assertTrue(all(tight[f"api/task/{i}"]["snapshot_cut"] for i in ids))
+        self.assertLessEqual(len(tight[f"api/task/{ids[0]}"]["metrics"]), 150)
+
 
 if __name__ == "__main__":
     unittest.main()
