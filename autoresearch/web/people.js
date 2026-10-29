@@ -6,7 +6,7 @@
 //   ARXP.setName(n)           rename (the roster follows on the next beat)
 //   ARXP.start(api, routeFn)  beat to `api` (…/api/people) every 20 s and on hashchange; ARXP.on(fn) hears each answer
 //   ARXP.face(id|name, name)  a round initials chip in the person's colour
-//   ARXP.at(html)             @mentions of known people, wrapped in <b class="at">
+//   ARXP.at(html[, also])     @mentions of known people (and names they had before a rename), wrapped in <b class="at">
 //   ARXP.complete(textarea)   @ + letters offers matching names
 //   ARXP.figs(body)           an agent's answer split into [sanitised inline SVG figures (HTML), the rest as text]
 (()=>{
@@ -23,11 +23,17 @@ const color=s=>COLORS[[...String(s)].reduce((a,c)=>(a*31+c.charCodeAt(0))>>>0,7)
 const initials=n=>String(n||'').trim().split(/[\s._-]+/).filter(Boolean).map(w=>[...w][0]).slice(0,2).join('').toUpperCase()||'?';
 const esc=s=>String(s).replace(/[.*+?^${}()|[\]\\\/-]/g,'\\$&');
 const h=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// names people had before a rename: the server keeps only the current one (or `aka` if it sends it), so this browser
+// remembers each name it has seen per id (localStorage `arx-names`, 40 ids x 5 names), and an old @mention still reads as one
+let was={};try{was=JSON.parse(get('arx-names')||'{}')||{}}catch(e){}
+const keep=()=>{let ch=false;for(const [k,p] of Object.entries(roster)){const n=String(p.name||'').trim();if(!n)continue;const l=was[k]||(was[k]=[]);
+  if(!l.includes(n)){l.push(n);if(l.length>5)l.shift();ch=true}}
+ const ks=Object.keys(was);if(ks.length>40){ks.slice(0,ks.length-40).forEach(k=>delete was[k]);ch=true}if(ch)put('arx-names',JSON.stringify(was))};
 let roster={},here=[],api=null,routeFn=()=>location.hash.slice(1),subs=[],timer=null;
 const tell=()=>subs.forEach(f=>{try{f({roster,here,me})}catch(e){console.error(e)}});
 async function beat(){if(!api)return;
  try{const r=await fetch(api,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:me.id,name:me.name||'',route:routeFn()})});
-  if(r.ok){const d=await r.json();roster=d.people||{};here=(d.here||[]).filter(x=>x.id!==me.id);tell()}}catch(e){}}
+  if(r.ok){const d=await r.json();roster=d.people||{};here=(d.here||[]).filter(x=>x.id!==me.id);keep();tell()}}catch(e){}}
 const ARXP=window.ARXP={
  me:()=>me,
  named:()=>!!me.name,
@@ -41,9 +47,11 @@ const ARXP=window.ARXP={
  face(id,name,cls=''){const n=name||ARXP.name(id)||'?';return `<span class="px-face ${cls}" style="--pc:${color(id||n)}" title="${h(n)}">${h(initials(n))}</span>`},
  // names are data: every one is escaped, the match ends where a word does (so "C++" and "tester-1" work), and a
  // name the regex cannot take only loses its highlight, never the comment
- at(html){try{const names=Object.values(roster).map(p=>String(p.name||'').trim()).filter(Boolean);
+ // `also`: more names to match, e.g. the author names a thread stored with its messages
+ at(html,also){try{const names=Object.values(roster).map(p=>String(p.name||'').trim()).filter(Boolean);
   const firsts={};names.forEach(n=>{const f=n.split(' ')[0].toLowerCase();firsts[f]=(firsts[f]||0)+1});
-  const all=[...new Set([...names,...names.map(n=>n.split(' ')[0]).filter(f=>firsts[f.toLowerCase()]===1),'agent'])].sort((a,b)=>b.length-a.length);
+  const old=[...Object.keys(roster).flatMap(k=>[...(was[k]||[]),...(roster[k].aka||[])]),...(also||[])].map(n=>String(n||'').trim()).filter(Boolean);
+  const all=[...new Set([...names,...old,...names.map(n=>n.split(' ')[0]).filter(f=>firsts[f.toLowerCase()]===1),'agent'])].sort((a,b)=>b.length-a.length);
   const re=new RegExp('(^|[\\s(>])@('+all.map(n=>esc(h(n))).join('|')+')(?![\\w-])','gi');
   return String(html).replace(re,(m,pre,n)=>`${pre}<b class="at">@${n}</b>`)}catch(e){return html}},
  // the picker opens above the textarea (below only when there is no room), so the composer's buttons stay
