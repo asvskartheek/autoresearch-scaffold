@@ -1,7 +1,7 @@
 """`ar` command line: the same ledger operations agents use from Python, for shells and subagents."""
 from __future__ import annotations
 
-import argparse, json, os, shutil, socket, subprocess, sys, time
+import argparse, json, math, os, shutil, socket, subprocess, sys, time
 from pathlib import Path
 
 from .core import Project, Task, _jsonl
@@ -211,17 +211,28 @@ def cmd_hill(a):
     print(f"hill {a.name} open: target {h['target']}, control {h.get('control')}" + (f", serves goal {a.goal}" if a.goal else ""))
 
 
-def _kpi_fmt(g, v):
-    """A goal value in units: solved/n on a 0/1 slice, the slice's own unit on a continuous one."""
+KPI_UNITS = dict(latency_p50="s", latency_p95="s", latency_mean="s", cost="$")
+
+
+def _kpi_fmt(g, v, target=False):
+    """A goal value in units: solved/n on a 0/1 slice, seconds or dollars for latency and cost, the slice's own unit on
+    a continuous one. A target count is the count that meets it: rounded up for >=, down for <=, never to a count that
+    misses."""
     if v is None:
         return "—"
-    if g.get("kpi", "score") != "score":
-        return f"{v:.4g}"
+    kpi = g.get("kpi", "score")
+    if kpi != "score":
+        u = KPI_UNITS.get(kpi)
+        return f"${v:.4g}" if u == "$" else f"{v:.3g} {u}" if u else f"{v:.4g}"
     sl = Project().slices().get(g.get("slice")) or {}
     if sl.get("scale") == "continuous":
         return f"{v:.4g} {sl.get('unit') or ''}".rstrip()
     n = g.get("n") or sl.get("n")
-    return f"{round(v * n)}/{n} ({100 * v:.1f}%)" if n else f"{100 * v:.1f}%"
+    if not n:
+        return f"{100 * v:.1f}%"
+    hib = g.get("higher_is_better", True)
+    k = (math.ceil(v * n - 1e-9) if hib else math.floor(v * n + 1e-9)) if target else round(v * n)
+    return f"{k}/{n} ({100 * v:.1f}%)"
 
 
 def cmd_goal(a):
@@ -247,9 +258,12 @@ def cmd_goal(a):
             print(json.dumps(st, default=str))
             continue
         vs = st["vs_baseline"]
+        op = ">=" if st["higher_is_better"] else "<="
+        tgt = _kpi_fmt(st, st["target"], target=True)
         print(f"{name} [{st['status']}] {st['title']}\n"
-              f"  target {st['kpi']} {'>=' if st['higher_is_better'] else '<='} {_kpi_fmt(st, st['target'])} on {st['slice']} (n = {st['n']})\n"
-              f"  {st['model'] or 'no champion'}: {_kpi_fmt(st, st['value'])}{'  MET' if st['met'] else ''}"
+              f"  target {st['kpi']} {op} {tgt} on {st['slice']} (n = {st['n']})\n"
+              f"  {st['model'] or 'no champion'}: {_kpi_fmt(st, st['value'])} vs {op} {tgt}"
+              f"{'  MET' if st['met'] else '  not met' if st['value'] is not None else ''}"
               + (f"  Δ vs {st['baseline']} {_fmt(vs['delta'])} pts [{_fmt(vs['lo'])}, {_fmt(vs['hi'])}] n={vs['n']}" if vs and vs['delta'] is not None else ""))
         for h, s in st["hills"].items():
             print(f"  hill {h} [{s}]")
