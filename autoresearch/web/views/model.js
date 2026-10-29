@@ -35,13 +35,19 @@ function verdict(name,m,g){
  if(fail){const c=fail.checks.find(c=>c.state==='fail');
   return {text:`Cannot be promoted: it failed the ${esc(fail.rung)} rung${c?`, ${vsWords(c.slice,c.delta)} the champion on ${esc(short(c.slice))} (n ${c.n}) where the rule is “${(r=>r[0].toLowerCase()+r.slice(1))(rule(c))}”`:''}.${passed.length?` It had passed ${list(passed)}.`:''}`,cls:'neg',failed:true};}
  // in progress: the ladder itself is the verdict; one chip says who runs what next (people skip the sentence)
- const n=g.next?.[0];
+ // a next run already in progress shows as one live chip per task (a union pass covers several slices); the Next chip
+ // names the first run nobody has started
+ const live=[...new Map((g.next||[]).map(n=>[n,runTask(n)]).filter(([,t])=>t).map(([n,t])=>[t.id,[n,t]])).values()];
+ const n=(g.next||[]).find(n=>!runTask(n));
+ const rn=live.map(([n,t])=>{const pr=t.progress||{},sl=t.status==='stalled';return `<a class="md-nx md-run" href="#task/${enc(t.id)}" title="${esc(t.title||'Open the running task')}"><span class="md-nxa">${sl?'Silent':'Running'}</span>${esc(n.model!==name?'champion':'this model')} on <span class="mono">${esc(short(t.slice||n.slice))}</span>${pr.total?`<span class="num">${Number(pr.done||0).toLocaleString()}<span class="faint"> / ${Number(pr.total).toLocaleString()}</span></span>`:''}</a>`}).join('');
  const nx=n?`<span class="md-nx" title="${esc(n.model!==name?'The champion needs this run before the rung can be compared':'This model runs next')}"><span class="md-nxa">Next</span>${esc(n.model!==name?'champion':'this model')} on <span class="mono">${esc(short(n.slice))}</span></span>`:'';
- return {text:`<span class="md-vz">${ladder(g)}${nx}${noisy.length?pill('Noisy on '+noisy.map(x=>x).join(', '),'noisy'):''}</span>`,viz:true};
+ return {text:`<span class="md-vz">${ladder(g)}${rn}${nx}${noisy.length?pill('Noisy on '+noisy.map(x=>x).join(', '),'noisy'):''}</span>`,viz:true};
 }
 
 function gateTable(name,g,base='Champion'){
  const L=S.state,rows=[];
+ // the next run behind a check that has not run yet, when it is already in progress
+ const live=c=>(g.next||[]).find(n=>n.slice===c.slice&&(c.state==='need_run'?n.model===name:n.model!==name)&&runTask(n));
  for(const r of g.rungs){
   const head=`<td class="md-rung" rowspan="${Math.max(1,r.checks.length)}"><span class="ladder"><span class="rg ${esc(r.status)}"><i></i><span>${esc(r.rung)}</span></span></span></td>`;
   if(!r.checks.length){rows.push(`<tr class="md-locked">${head}<td colspan="8" class="sub">${r.status==='locked'?'Opens once the rung above passes':'No checks on this rung'}</td></tr>`);continue}
@@ -57,7 +63,7 @@ function gateTable(name,g,base='Champion'){
     <td class="num"><span class="${!ran?'':c.delta>0?'pos':c.delta<0?'neg':'sub'}">${ran?diff(c.delta,c.slice):DASH}</span></td>
     <td class="md-ci">${ran?(bin(c.slice)?ciBar(c):'')+`<div class="sub md-cil">${ciText(c,c.slice)}</div>`:DASH}</td>
     <td class="num md-hw">${c.wins!=null?`<span class="pos">${c.wins}</span> / <span class="${c.losses?'neg':''}">${c.losses}</span>`:DASH}</td>
-    <td class="md-res"><span class="row">${statePill(c.state)}${c.noisy?pill('Noisy','noisy'):''}</span></td></tr>`);
+    <td class="md-res"><span class="row">${(c.state==='need_run'||c.state==='need_baseline')&&live(c)?runChip(live(c)):statePill(c.state)}${c.noisy?pill('Noisy','noisy'):''}</span></td></tr>`);
   });
  }
  return `<div class="tbl md-gate"><table><thead><tr><th>Rung</th><th>Slice</th><th class="md-hm">Rule</th><th class="num md-hs">This model</th><th class="num md-hs">${base}</th><th class="num">Δ</th><th>90% CI</th><th class="num md-hw">Wins / losses</th><th class="md-res">Result</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
@@ -96,6 +102,14 @@ function promotion(name,m){
 }
 
 const nextRow=(lead,c)=>`<div class="md-next"><span class="md-lead">${lead}</span>${cmd(c)}</div>`;
+// the next runs: one row per run still to start, with its command; runs already in progress are one row per task,
+// the slices it covers and its live progress instead of a command
+function nxRows(name,nx){
+ const who=n=>n.model!==name?'Champion baseline on':'This model on',sl=a=>a.map(n=>esc(short(n.slice))).join(', ');
+ const by=new Map();for(const n of nx){const t=runTask(n);if(t)by.set(t.id,[...(by.get(t.id)||[]),n])}
+ return [...by.values()].map(a=>`<div class="md-next"><span class="md-lead">${who(a[0])} ${sl(a)}</span>${runChip(a[0])}</div>`).join('')
+  +nx.filter(n=>!runTask(n)).map(n=>nextRow(`${who(n)} ${sl([n])}`,runCmd(n))).join('');
+}
 
 // a model's plain-text label (page title, crumb, tab): its title, else the tail of a long +-chained id
 const label=k=>{const t=S.state.models[k]?.title;if(t)return t;const s=String(k||'—'),p=s.split('+');return p.length>3?'…+'+p.slice(-2).join('+'):s};
@@ -126,10 +140,10 @@ VIEWS.model=(name)=>{
 
  if(onLadder){
   const body=v.ready?nextRow('Every rung passed',`arx promote ${name}`)
-   :nx.length?nx.map(n=>nextRow(n.model!==name?`Champion baseline on ${esc(short(n.slice))}`:`This model on ${esc(short(n.slice))}`,runCmd(n))).join('')+nextRow('Then re-check the ladder',`arx gate ${name}`)
+   :nx.length?nxRows(name,nx)+nextRow('Then re-check the ladder',`arx gate ${name}`)
    :v.failed?nextRow('Record the failure',`arx reject ${name} --reason "failed ${g.rungs.find(r=>r.status==='fail').rung}"`)
    :empty('Nothing to run',`<code>arx gate ${esc(name)}</code> re-reads the ladder`);
-  h.push(panel(v.ready?'Promote':v.failed?'Close it out':'Next runs',body,{meta:nx.length?plural(nx.length,'run')+' before the next rung opens':'',cls:'section md-np'}));
+  h.push(panel(v.ready?'Promote':v.failed?'Close it out':'Next runs',body,{meta:nx.length?plural(nx.length,'run')+' before the next rung opens'+(nx.some(runTask)?` · ${nx.filter(runTask).length} running`:''):'',cls:'section md-np'}));
   h.push(panel('Gate',gateTable(name,g),{meta:`paired against ${mlink(g.champion||'')} on the same examples`,cls:'section flush md-gp'}));
  }else if(m.status==='champion'&&g&&!g.error){
   h.push(promotion(name,m));
