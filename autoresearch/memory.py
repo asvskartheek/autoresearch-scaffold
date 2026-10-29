@@ -63,7 +63,7 @@ SCHEMA = [
                           PRIMARY KEY (project, path));
     """,
 ]
-_lock = threading.Lock()
+_lock = threading.RLock()
 
 
 def path() -> Path:
