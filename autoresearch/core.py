@@ -827,7 +827,7 @@ class Task:
         return False
 
 
-def evaluate(project: Project, model: str, slice: str, run_one, workers: int = 8, deadline_s: float = 3600,
+def evaluate(project: Project, model: str, slice: str, run_one, workers: int = 8, deadline_s: float | None = None,
              title: str = None, description: str = None, agent: str = None, repeats: int = 1, config: dict = None,
              parent: str = None) -> Task:
     """Run `run_one(example_id) -> {"score": float, "cost": .., "latency_s": .., ...}` on every id of a slice.
@@ -841,20 +841,22 @@ def evaluate(project: Project, model: str, slice: str, run_one, workers: int = 8
         from .features import model_label  # features imports nothing from core; imported here to keep core light
         title = f"{model_label(project, model) or model} on {sl['name'].split('/', 1)[-1]}"
     t = Task(project, "eval", title, description, model=model, slice=sl["name"],
-             agent=agent, total=len(ids), parent=parent, budget_s=deadline_s,
-             config=(config or {}) | {"workers": workers, "deadline_s": deadline_s, "repeats": repeats})
+             agent=agent, total=len(ids), parent=parent, budget_s=deadline_s,  # a budget only when the caller set one
+             config=(config or {}) | {"workers": workers, "deadline_s": deadline_s or 3600, "repeats": repeats})
+    end = now() + (deadline_s or 3600)  # with no budget, still stop after an hour; a budget or a parent's may be tighter
     start, done, total_score, stop = now(), 0, 0.0, False
     pool = ThreadPoolExecutor(workers)
     queue, futs = list(reversed(ids)), {}
     try:
         while queue or futs:
-            stop = stop or not t.ok()
+            stop = stop or not t.ok() or now() >= end
             while queue and not stop and len(futs) < workers:  # submit lazily so a spent budget stops new calls
                 i = queue.pop()
                 futs[pool.submit(_timed, run_one, i)] = i
             if not futs:
                 break
             secs = t.left()
+            secs = end - now() if secs is None else min(secs, end - now())
             fin, _ = wait(futs, timeout=None if secs is None else max(0.0, secs), return_when=FIRST_COMPLETED)
             if not fin:
                 stop = True

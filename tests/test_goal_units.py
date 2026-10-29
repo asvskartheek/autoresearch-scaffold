@@ -55,5 +55,14 @@ class EvalTitleTest(unittest.TestCase):
         self.assertEqual(evaluate(p, "a+b+c+d", "cold/dev2", lambda i: {"score": 1.0}, workers=1).meta["title"], "…+c+d on dev2")
 
 
+    def test_budget_only_when_the_caller_sets_a_deadline(self):
+        from autoresearch.core import evaluate
+        p = ledger()
+        p.add_slice("cold/dev2", ["0", "1"])
+        p.add_model("m", status="champion")
+        self.assertIsNone(evaluate(p, "m", "cold/dev2", lambda i: {"score": 1.0}, workers=1).meta.get("budget_s"))
+        self.assertEqual(evaluate(p, "m", "cold/dev2", lambda i: {"score": 1.0}, workers=1, deadline_s=60).meta["budget_s"], 60)
+
+
 if __name__ == "__main__":
     unittest.main()
