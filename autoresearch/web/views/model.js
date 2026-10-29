@@ -70,7 +70,7 @@ VIEWS.model=(name)=>{
  const nx=onLadder?(g.next||[]):[];
  const acts=v.ready?cmd(`arx promote ${name}`):!g?"":`<span class="cmd md-gatecmd"><code>arx gate ${esc(name)}</code>${copyBtn('arx gate '+name)}</span>`;
  const titled=m.title&&m.title!==name;
- const h=[page({title:m.title||name,copy:titled?'':name,crumbs,finding:`<span class="${v.cls||''}">${v.text}</span>`,acts})];
+ const h=[page({title:m.title||name,copy:titled?'':name,crumbs,finding:`<span class="${v.cls||''}">${v.text}</span>`,acts:acts+`<a class="btn" href="reference/${enc(name)}">Paper</a>`})];
 
  // the object header: status, lineage, hill, the pre-declared change, the reason, the ladder
  const f=fullScore(name),fullKey=L.config.primary_dataset+'/full',fsl=L.slices[fullKey];

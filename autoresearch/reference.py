@@ -1,4 +1,404 @@
-"""reference feature (see features.py for the contracts)."""
+"""The paper (complete reference) for one model, built from the ledger alone, plus the explainer kit.
+
+Routes (see features.py for the contracts):
+  GET /reference/[<model>]     the page (web/reference.html); it fetches the data route below
+  GET /api/reference?model=&vs=  everything the page draws: system, lineage, every slice with paired deltas,
+                               the gate ladder, per-id fixed/broke, failure gallery, cost/latency, unknowns, reproduce
+  GET /explain-kit.js          the explainer toolkit (web/explain-kit.js)
+
+Default model: the champion. Default comparator: the model's parent (the system it had to beat), else the baseline of
+the goal it serves. Nothing here writes to the ledger.
+"""
 from __future__ import annotations
 
-from . import features  # noqa: F401
+import json
+import math
+import random
+import time
+from pathlib import Path
+
+from . import features
+from .core import per_id
+from .readable import readable
+
+WEB = Path(__file__).with_name("web")
+HTML = "text/html; charset=utf-8"
+KIND_ORDER = {"full": 0, "random": 1, "control": 2, "dev": 3, "synthetic": 4}
+CORE_FIELDS = ("created", "parent", "hill", "change", "title", "status", "reason", "promoted", "links", "updated")
+MAX_IDS = 40_000  # per-id cells sent to the page, over every slice
+
+
+def _r(x, d=6):
+    return round(x, d) if isinstance(x, float) and math.isfinite(x) else (None if isinstance(x, float) else x)
+
+
+def _txt(s):
+    return readable(s) if isinstance(s, str) else s
+
+
+class _Index:
+    """One pass over the ledger: complete runs per (model, slice) at the slice's current hash, rows read once."""
+
+    def __init__(self, p):
+        self.p = p
+        self.slices = p.slices()
+        self.runs: dict[tuple, list] = {}
+        for t in p.evals():
+            sl = self.slices.get(t.get("slice"))
+            if not sl or t.get("slice_hash") != sl.get("hash") or t.get("superseded_by"):
+                continue
+            self.runs.setdefault((t.get("model"), t["slice"]), []).append(t)
+        for v in self.runs.values():
+            v.sort(key=lambda t: t.get("ended", 0))
+        self._rows: dict[str, list] = {}
+        self._pooled: dict[tuple, dict] = {}
+        self.pairs: dict[tuple, dict | None] = {}
+
+    def has(self, m, sl):
+        return bool(m) and (m, sl) in self.runs
+
+    def latest(self, m, sl):
+        r = self.runs.get((m, sl))
+        return r[-1] if r else None
+
+    def rows(self, tid):
+        if tid not in self._rows:
+            self._rows[tid] = self.p.rows(tid)
+        return self._rows[tid]
+
+    def pooled(self, m, sl):
+        k = (m, sl)
+        if k not in self._pooled:
+            self._pooled[k] = per_id([r for t in self.runs.get(k, []) for r in self.rows(t["id"])])
+        return self._pooled[k]
+
+    def slices_of(self, m):
+        return [sl for (mm, sl) in self.runs if mm == m]
+
+
+def fast_paired(cand: dict, base: dict, sign: int = 1, iters: int = 2000) -> dict:
+    """core.paired with the same seed and draws, summed with fsum instead of statistics.mean (about 20x faster;
+    equal to it within one ulp)."""
+    ids = sorted(set(cand) & set(base))
+    if not ids:
+        return dict(n=0, delta=None, lo=None, hi=None, wins=0, losses=0)
+    d = [sign * (cand[i] - base[i]) for i in ids]
+    n, rng = len(d), random.Random(0)
+    boots = sorted(math.fsum(rng.choices(d, k=n)) / n for _ in range(iters))
+    return dict(n=n, delta=math.fsum(d) / n, lo=boots[int(0.05 * iters)], hi=boots[int(0.95 * iters) - 1],
+                wins=sum(x > 0 for x in d), losses=sum(x < 0 for x in d),
+                cand=math.fsum(cand[i] for i in ids) / n, base=math.fsum(base[i] for i in ids) / n)
+
+
+def _paired(ix, m, b, sl, sign):
+    if not (ix.has(m, sl) and ix.has(b, sl)) or m == b:
+        return None
+    key = (m, b, sl, sign)
+    if key not in ix.pairs:
+        d = fast_paired(ix.pooled(m, sl), ix.pooled(b, sl), sign)
+        if d.get("delta") is None:
+            ix.pairs[key] = None
+        else:
+            d = {k: _r(v) for k, v in d.items()}
+            d["noisy"] = d["lo"] is not None and d["lo"] < 0 < d["hi"]
+            ix.pairs[key] = d
+    return dict(ix.pairs[key]) if ix.pairs[key] else None
+
+
+def _ancestors(models, name):
+    chain, seen = [], set()
+    while name and name in models and name not in seen:
+        seen.add(name)
+        chain.append(name)
+        par = models[name].get("parent")
+        name = par if par != name else None
+    return chain[::-1]  # root first
+
+
+def _main_slice(p, ix, model, goals):
+    mine = set(ix.slices_of(model))
+    for g in goals.values():
+        if g.get("status") == "open" and g.get("slice") in mine:
+            return g["slice"]
+    for g in goals.values():
+        if g.get("slice") in mine:
+            return g["slice"]
+    full = f"{p.config.get('primary_dataset')}/full"
+    if full in mine:
+        return full
+    fulls = [s for s in mine if ix.slices[s].get("kind") == "full"]
+    pool = fulls or list(mine)
+    return max(pool, key=lambda s: ix.slices[s].get("n") or 0) if pool else None
+
+
+def _ladder(p, ix, model, base, sign):
+    """The ladder walked for `model` against `base` (not only the current champion): how the model earned its place."""
+    m = p.models().get(model) or {}
+    rungs, blocked = [], False
+    for rung in p.config.get("ladder", []):
+        checks = []
+        for chk in rung.get("checks", []):
+            if chk.get("manual"):
+                checks.append(dict(slice=chk.get("slice", "manual"), rule="manual", state="needs_review"))
+                continue
+            try:
+                targets = p._resolve(chk["slice"], m)
+            except SystemExit:
+                targets = []
+            for sl in targets:
+                thr = chk.get("margin", 0) if chk["rule"] == "better" else -chk.get("tolerance", 0)
+                c = dict(slice=sl, rule=chk["rule"], threshold=thr, ref=chk["slice"])
+                if not base:
+                    c["state"] = "no_comparator"
+                elif not ix.has(base, sl):
+                    c["state"] = "need_baseline"
+                elif not ix.has(model, sl):
+                    c["state"] = "need_run"
+                else:
+                    d = _paired(ix, model, base, sl, sign)
+                    ok = d and (d["delta"] > thr if chk["rule"] == "better" else d["delta"] >= thr)
+                    c |= dict(state="pass" if ok else "fail", **(d or {}))
+                checks.append(c)
+        states = {c["state"] for c in checks}
+        if blocked:
+            status = "locked"
+        elif not checks:
+            status = "skipped"
+        elif states <= {"pass"}:
+            status = "pass"
+        elif "fail" in states:
+            status, blocked = "fail", True
+        else:
+            status, blocked = "pending", True
+        rungs.append(dict(rung=rung.get("rung"), status=status, checks=checks))
+    return rungs
+
+
+def _flat(d, pre="", out=None, depth=0):
+    out = [] if out is None else out
+    for k, v in (d or {}).items():
+        key = f"{pre}{k}"
+        if isinstance(v, dict) and depth < 2:
+            _flat(v, key + ".", out, depth + 1)
+        else:
+            s = v if isinstance(v, (int, float, bool)) or v is None else (json.dumps(v, default=str) if not isinstance(v, str) else v)
+            out.append([key, s if not isinstance(s, str) else s[:400]])
+    return out
+
+
+def build(p, model: str | None = None, vs: str | None = None) -> dict:
+    with p.snapshot():
+        return _build(p, model, vs)
+
+
+def _build(p, model, vs):
+    cfg, models, hills = p.config, p.models(), p.hills()
+    champ = p.champion()
+    ix = _Index(p)
+    if not model:
+        model = champ or next((k for k, _ in sorted(((m, max(t.get("ended", 0) for t in r)) for (m, _s), r in ix.runs.items()),
+                                                     key=lambda x: -x[1])), None)
+    if not model or model not in models:
+        raise KeyError(model)
+    me = models[model]
+    sign = 1 if cfg.get("higher_is_better", True) else -1
+    goals = {}
+    for g in p.goals():
+        try:
+            goals[g] = p.goal_status(g)
+        except SystemExit:
+            goals[g] = dict(p.goals()[g], name=g)
+    # comparator: what this model had to beat, i.e. the nearest ancestor measured on the main slice
+    par = me.get("parent") if me.get("parent") != model else None
+    main = _main_slice(p, ix, model, goals)
+    up = _ancestors(models, model)[:-1][::-1]  # parent first
+    if vs and vs in models and vs != model:
+        base = vs
+    else:
+        base = next((a for a in up if ix.has(a, main)), None) or next((a for a in up if ix.slices_of(a)), None)
+        if not base:
+            base = next((g.get("baseline") for g in goals.values() if g.get("baseline") and g["baseline"] != model
+                         and ix.slices_of(g["baseline"])), None)
+        if not base and champ and champ != model:
+            base = champ
+
+    # every slice this model ran, with paired deltas vs the comparator and the field of every other try
+    roles = p.baseline_slices()
+    results, budget = [], MAX_IDS
+    for sl in sorted(ix.slices_of(model), key=lambda s: (s != main, KIND_ORDER.get(ix.slices[s].get("kind"), 9),
+                                                         -(ix.slices[s].get("n") or 0), s)):
+        meta = ix.slices[sl]
+        last = ix.latest(model, sl)
+        summ = last.get("summary") or {}
+        pm = ix.pooled(model, sl)
+        bm = ix.pooled(base, sl) if ix.has(base, sl) else {}
+        raw = {0.0 if x.get("error") else float(x.get("score") or 0) for t in ix.runs[(model, sl)] for x in ix.rows(t["id"])}
+        scale = meta.get("scale") or ("binary" if raw <= {0.0, 1.0} else "continuous")  # per run, not pooled means
+        bsum = (ix.latest(base, sl) or {}).get("summary") or {}
+        field = []
+        for (mm, ss), runs in ix.runs.items():
+            if ss == sl:
+                sc = ix.pooled(mm, ss)
+                field.append([mm, _r(sum(sc.values()) / len(sc) if sc else None), (models.get(mm) or {}).get("status")])
+        ids = [str(i) for i in meta.get("ids", [])]
+        cells = None
+        if ids and budget >= len(ids):
+            budget -= len(ids)
+            cells = dict(m=[_r(pm.get(i), 4) for i in ids], b=[_r(bm.get(i), 4) for i in ids] if bm else None)
+        results.append(dict(
+            slice=sl, kind=meta.get("kind"), n=meta.get("n"), hash=meta.get("hash"), scale=scale, unit=meta.get("unit"),
+            metric=meta.get("metric"), description=_txt(meta.get("description")), url=meta.get("url"), hill=meta.get("hill"),
+            roles=roles.get(sl, []), runs=len(ix.runs[(model, sl)]), task=last["id"], ended=last.get("ended"),
+            score=_r(sum(pm.values()) / len(pm) if pm else None), scored=len(pm),
+            right=round(sum(pm.values())) if scale == "binary" else None,
+            errors=summ.get("errors"), cost=_r(summ.get("cost")), cost_total=_r(summ.get("cost_total")),
+            latency_p50=_r(summ.get("latency_p50")), latency_p95=_r(summ.get("latency_p95")),
+            base=dict(task=(ix.latest(base, sl) or {}).get("id"), runs=len(ix.runs.get((base, sl), [])),
+                      cost=_r(bsum.get("cost")), latency_p50=_r(bsum.get("latency_p50")),
+                      latency_p95=_r(bsum.get("latency_p95"))) if bm else None,
+            vs=_paired(ix, model, base, sl, sign), field=sorted(field, key=lambda f: -(f[1] or -1e18) * sign), ids=ids if cells else None,
+            cells=cells))
+
+    # lineage: root -> model, each step's delta vs its own parent on the main slice, and the siblings that lost
+    chain = _ancestors(models, model)
+    lineage = []
+    for name in chain:
+        m = models[name]
+        pp = m.get("parent") if m.get("parent") != name else None
+        sib = [dict(name=k, title=_txt(o.get("title")), status=o.get("status"), reason=_txt(o.get("reason")),
+                    change=_txt(o.get("change")), hill=o.get("hill"))
+               for k, o in models.items() if pp and o.get("parent") == pp and k != name and k not in chain]
+        step_d = None
+        if pp:
+            sl = main if ix.has(name, main) and ix.has(pp, main) else next(
+                (s for s in ix.slices_of(name) if ix.has(pp, s) and ix.slices[s].get("kind") == "full"), None)
+            if sl:
+                step_d = dict(slice=sl, **(_paired(ix, name, pp, sl, sign) or {}))
+        lineage.append(dict(name=name, title=_txt(m.get("title")), change=_txt(m.get("change")), status=m.get("status"),
+                            hill=m.get("hill"), reason=_txt(m.get("reason")), created=m.get("created"),
+                            promoted=m.get("promoted"), parent=pp, delta=step_d, siblings=sib))
+    children = [dict(name=k, title=_txt(o.get("title")), status=o.get("status"), reason=_txt(o.get("reason")),
+                     change=_txt(o.get("change")), hill=o.get("hill"))
+                for k, o in models.items() if o.get("parent") == model and k != model]
+
+    # failure gallery: every hill, its examples, and how this model and the comparator score on its target
+    gallery = []
+    for k, h in hills.items():
+        t = h.get("target")
+        gallery.append(dict(
+            name=k, title=_txt(h.get("title")), status=h.get("status"), symptom=_txt(h.get("symptom")),
+            measure=_txt(h.get("measure")), problem=_txt(h.get("problem")), share=h.get("share"), goal=h.get("goal"),
+            target=t, control=h.get("control"), climbed_by=h.get("climbed_by"), mine=model == (h.get("climbed_by")) or me.get("hill") == k,
+            examples=[{f: _txt(e.get(f)) for f in ("input", "wrong", "right", "why")} for e in (h.get("examples") or []) if isinstance(e, dict)][:6],
+            score=_r(_mean(ix.pooled(model, t))) if ix.has(model, t) else None,
+            base_score=_r(_mean(ix.pooled(base, t))) if ix.has(base, t) else None,
+            vs=_paired(ix, model, base, t, sign) if t else None))
+    gallery.sort(key=lambda g: (not g["mine"], g["status"] not in ("climbed", "open"), g["name"]))
+
+    ladder = _ladder(p, ix, model, base, sign)
+    plan = p.baseline_plan(model)
+
+    # what is unknown or not run
+    unknown = []
+    for sl in plan["need"]:
+        unknown.append(dict(kind="not_run", slice=sl, roles=plan["roles"].get(sl, [])))
+    for r in results:
+        if r["vs"] and r["vs"]["noisy"]:
+            unknown.append(dict(kind="noisy", slice=r["slice"], n=r["vs"]["n"], lo=r["vs"]["lo"], hi=r["vs"]["hi"]))
+        if r["errors"]:
+            unknown.append(dict(kind="errors", slice=r["slice"], errors=r["errors"], n=r["n"]))
+        if base and not r["vs"]:
+            unknown.append(dict(kind="no_pair", slice=r["slice"], base=base))
+    for rg in ladder:
+        for c in rg["checks"]:
+            if c["state"] in ("need_run", "need_baseline"):
+                unknown.append(dict(kind=c["state"], slice=c["slice"], rung=rg["rung"]))
+    if results and all(r["cost"] is None for r in results):
+        unknown.append(dict(kind="no_cost"))
+    if results and all(r["latency_p50"] is None for r in results):
+        unknown.append(dict(kind="no_latency"))
+    for g in goals.values():
+        if g.get("status") == "open" and g.get("model") == model and not g.get("met"):
+            unknown.append(dict(kind="goal_open", goal=g["name"], title=g.get("title")))
+    for c in children:
+        if c["status"] in ("candidate", "planned"):
+            unknown.append(dict(kind="pending_child", model=c["name"], status=c["status"]))
+    seen, uniq = set(), []
+    for u in unknown:
+        key = json.dumps(u, sort_keys=True, default=str)
+        if key not in seen:
+            seen.add(key)
+            uniq.append(u)
+
+    # decisions that touch this model's story
+    touch = set(chain) | {s["name"] for st in lineage for s in st["siblings"]} | {c["name"] for c in children}
+    decisions = []
+    f = p.dir / "decisions.jsonl"
+    if f.exists():
+        for line in f.read_text().splitlines():
+            try:
+                d = json.loads(line)
+            except ValueError:
+                continue
+            if d.get("model") in touch or d.get("goal") in goals:
+                decisions.append({k: _txt(v) if k in ("reason", "note") else v for k, v in d.items() if k not in ("gate", "runs")})
+    decisions = decisions[-200:]
+
+    # reproduce: the spec on the model record, the runs behind every number, the commands
+    runs = []
+    for r in results:
+        t = ix.latest(model, r["slice"])
+        runs.append(dict(slice=r["slice"], hash=r["hash"], task=t["id"], command=str(t.get("command") or "")[:400],
+                         config=_flat(t.get("config")) if isinstance(t.get("config"), dict) else [],
+                         ended=t.get("ended"), url=r["url"]))
+    spec = _flat({k: v for k, v in me.items() if k not in CORE_FIELDS})
+
+    goal_list = []
+    for g in goals.values():
+        n = g.get("n")
+        need = math.ceil(g["target"] * n - 1e-9) if g.get("kpi", "score") == "score" and n and g.get("target") is not None else None
+        have = round(g["value"] * n) if need is not None and isinstance(g.get("value"), (int, float)) else None
+        goal_list.append(dict(name=g["name"], title=_txt(g.get("title")), status=g.get("status"), slice=g.get("slice"),
+                              n=n, kpi=g.get("kpi", "score"), target=g.get("target"), value=_r(g.get("value")),
+                              model=g.get("model"), met=g.get("met"), need=need, have=have, baseline=g.get("baseline"),
+                              vs_baseline={k: _r(v) for k, v in (g.get("vs_baseline") or {}).items()} or None,
+                              higher_is_better=g.get("higher_is_better", True), problem=_txt(g.get("problem")),
+                              hills=g.get("hills"), task=g.get("task")))
+
+    return dict(
+        generated=time.time(), project=dict(name=cfg.get("name"), higher_is_better=cfg.get("higher_is_better", True),
+                                            primary_dataset=cfg.get("primary_dataset"), ladder=cfg.get("ladder", []),
+                                            kpis=cfg.get("kpis")),
+        model=dict(name=model, title=_txt(me.get("title")), change=_txt(me.get("change")), status=me.get("status"),
+                   hill=me.get("hill"), parent=par, reason=_txt(me.get("reason")), created=me.get("created"),
+                   promoted=me.get("promoted"), links=me.get("links"), champion=model == champ),
+        champion=champ, base=base, base_title=_txt((models.get(base) or {}).get("title")) if base else None,
+        main=main, goals=goal_list, results=results, lineage=lineage, children=children, ladder=ladder,
+        gallery=gallery, unknown=uniq, decisions=decisions, runs=runs, spec=spec,
+        base_spec=_flat({k: v for k, v in models[base].items() if k not in CORE_FIELDS}) if base in models else [],
+        baseline=dict(have=list(plan["have"]), need=plan["need"]),
+        models=[dict(name=k, status=m.get("status"), title=_txt(m.get("title"))) for k, m in models.items()],
+        datasets={k: dict(title=v.get("title"), size=v.get("size"), url=v.get("url"), description=_txt(v.get("description")))
+                  for k, v in p.datasets().items()})
+
+
+def _mean(d):
+    return sum(d.values()) / len(d) if d else None
+
+
+# ---------------------------------------------------------------- routes
+@features.get("/reference")
+def _page(p, path, q):
+    if path.rstrip("/") == "/reference" or path.startswith("/reference/"):
+        return 200, (WEB / "reference.html").read_bytes(), HTML
+    raise KeyError(path)
+
+
+@features.get("/api/reference")
+def _data(p, path, q):
+    return 200, build(p, q.get("model") or None, q.get("vs") or None)
+
+
+@features.get("/explain-kit.js")
+def _kit(p, path, q):
+    return 200, (WEB / "explain-kit.js").read_bytes(), "text/javascript; charset=utf-8"
