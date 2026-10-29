@@ -6,56 +6,73 @@
 
 // one block keeps these helpers out of the shared global scope the other view files load into
 {
-// ---------- figures: a score KPI reads as a percentage and its gaps in points; latency in seconds; cost in dollars
+// ---------- figures, always in the goal's units: a 0/1 score as answers of N ("1,224 of 1,319", "43 more"), a
+// continuous score in its slice's unit ("1,458 ms", a "minus ms" metric shown as the plain amount), latency in
+// seconds, throughput in tok/s, cost in dollars. Never a bare percentage.
 const kpiOf=g=>g.kpi||'score';
 const isScore=g=>kpiOf(g)==='score';
 const isTime=g=>/^latency/.test(kpiOf(g));
+const isTput=g=>/tokens?_per_s|tok_?s\b|throughput/i.test(kpiOf(g));
+const cont=g=>isScore(g)&&(g.scale==='continuous'||isCont(g.slice));
+const neg=g=>cont(g)&&/^\s*minus\b/i.test(g.metric||sliceOf(g.slice).metric||'');
 const sgn=g=>g.higher_is_better===false?-1:1;
+const dsg=g=>neg(g)?-1:1;  // the sign a stored value takes when shown
+const unitG=g=>cont(g)?(g.unit||unitOf(g.slice)||''):isTime(g)?'s':isTput(g)?'tok/s':'';
 const KPI_NAME={score:'score',cost:'cost per question',latency_p50:'median latency',latency_p95:'p95 latency',latency_mean:'mean latency'};
-const kpiName=g=>KPI_NAME[kpiOf(g)]||kpiOf(g);
-const gv=function(g,v){
- if(v==null||!isFinite(v))return '—';
- if(isScore(g))return pct(v);
- if(isTime(g))return v.toFixed(1)+'&nbsp;s';
- if(kpiOf(g)==='cost')return money(v);
- return num(v);
-}
-// an unsigned amount of the KPI: points for a score, seconds, dollars
+const kpiName=g=>cont(g)?'':isTput(g)?'throughput':KPI_NAME[kpiOf(g)]||kpiOf(g);
+const kpiPre=g=>{const k=kpiName(g);return k?esc(k)+' ':''};
+// ---------- units: N answers of n on a 0/1 slice
+const N=v=>Number(v).toLocaleString('en-US');
+const byN=g=>isScore(g)&&!cont(g)&&g.n>0;
+const cnt=(g,v)=>Math.round(v*g.n)+0;
+const tcnt=g=>Math.ceil(g.target*g.n-1e-9)+0;  // rounded up, so rounding can't meet it; +0 turns -0 into 0
+const withU=(x,u)=>u?`${x}&nbsp;${u}`:x;
+// an unsigned amount in the goal's units
 const gamt=function(g,d){
  d=Math.abs(d);
- if(isScore(g))return (100*d).toFixed(1)+'&nbsp;pts';
- if(isTime(g))return d.toFixed(1)+'&nbsp;s';
+ if(byN(g))return N(Math.round(d*g.n));
+ if(isScore(g)&&!cont(g))return (100*d).toFixed(1)+'&nbsp;pts';
  if(kpiOf(g)==='cost')return money(d);
- return num(d);
+ return withU(grp(d),unitG(g));
 }
-// a change in the good direction gets a + ; colour says good or bad, grey for none
-const gchg=function(g,d,signedGood=true){
- if(d==null)return DASH;
- const good=signedGood?d:sgn(g)*d;
- if(Math.abs(d)<1e-12)return '<span class="faint">0</span>';
- const shown=isScore(g)?pts(good)+'&nbsp;pts':(good>0?'+':'−')+gamt(g,d);
- return `<span class="${good>0?'pos':'neg'}">${shown}</span>`;
+// a value as shown
+const gv=function(g,v){
+ if(v==null||!isFinite(v))return '—';
+ if(isScore(g)&&!cont(g))return pct(v);
+ if(kpiOf(g)==='cost')return money(v);
+ return withU(grp(dsg(g)*v)+'',unitG(g));
 }
-const cmpSym=g=>sgn(g)>0?'≥':'≤';
-const mLink=k=>k?(S.state.models[k]?`<a class="ln" href="#model/${enc(k)}">${mn(k)}</a>`:mn(k)):'—';
-const sLink=s=>`<a class="ln mono" href="#slices/${enc(s)}">${esc(s)}</a>`;
-const hLink=k=>{const x=S.state.hills[k];return `<a class="ln" href="#hill/${enc(k)}">${esc(x?.title||k)}</a>`};
-const kpiKey=g=>isScore(g)?'score':kpiOf(g);
-// ---------- units: a score goal reads as answers of N ("1,224 of 1,319", "43 more"), never a bare percentage
-const N=v=>Number(v).toLocaleString('en-US');
-const byN=g=>isScore(g)&&g.n>0;
-const cnt=(g,v)=>Math.round(v*g.n);
-const tcnt=g=>Math.ceil(g.target*g.n-1e-9);  // rounded up, so rounding can't meet it
 const gu=(g,v)=>v==null||!isFinite(v)?'—':byN(g)?N(cnt(g,v)):gv(g,v);
 const gt=g=>byN(g)?N(tcnt(g)):gv(g,g.target);
 const ofN=g=>byN(g)?`<span class="gl-of"> of ${N(g.n)}</span>`:'';
 const ofP=g=>byN(g)?` of ${N(g.n)}`:'';
-// how far is left, in the KPI's units: {v:'43 more', s:'of 1,319'} or {v:'Met', s:'12 spare'}
+// the comparator as read: a "minus ms" goal stored as score >= -1000 reads "≤ 1,000 ms"
+const cmpSym=g=>sgn(g)*dsg(g)>0?'≥':'≤';
+// a signed change as shown (a drop in ms reads "−458 ms"), coloured by whether it helps the goal.
+// signedGood: d is already in the good direction (a paired delta); otherwise d is a raw change of the stored value
+const gsigned=(g,x)=>(x>0?'+':x<0?'−':'')+gamt(g,x);
+const gchg=function(g,d,signedGood=true){
+ if(d==null||!isFinite(d))return DASH;
+ const good=signedGood?d:sgn(g)*d,x=dsg(g)*(signedGood?sgn(g)*d:d);
+ if(Math.abs(d)<1e-12||(byN(g)&&!Math.round(Math.abs(d)*g.n)))return '<span class="faint">0</span>';
+ return `<span class="${good>0?'pos':'neg'}">${gsigned(g,x)}</span>`;
+}
+// a paired CI (good-direction bounds) in the same terms as gchg: "+50 to +88", "−1,200 to −300 ms"
+const gci=function(g,lo,hi){
+ if(lo==null||hi==null)return '';
+ const f=v=>dsg(g)*sgn(g)*v,[a,b]=[f(lo),f(hi)].sort((x,y)=>x-y);
+ return `90% CI ${gsigned(g,a)} to ${gsigned(g,b)}`;
+}
+const mLink=k=>k?(S.state.models[k]?`<a class="ln" href="#model/${enc(k)}">${mn(k)}</a>`:mn(k)):'—';
+const sLink=s=>`<a class="ln mono" href="#slices/${enc(s)}">${esc(s)}</a>`;
+const hLink=k=>{const x=S.state.hills[k];return `<a class="ln" href="#hill/${enc(k)}">${esc(x?.title||k)}</a>`};
+const kpiKey=g=>isScore(g)?'score':kpiOf(g);
+// how far is left, in the KPI's units: {v:'43 more', s:'of 1,319'}, {v:'458 ms', s:'to cut'} or {v:'Met', s:'12 spare'}
 const dist=function(g){
  if(g.value==null)return null;
  if(byN(g)){const d=tcnt(g)-cnt(g,g.value);return d>0?{v:`${N(d)} more`,s:`of ${N(g.n)}`,short:true}:{v:'Met',s:d?`${N(-d)} spare`:'at the line'}}
  const d=sgn(g)*(g.target-g.value);
- return d>1e-12?{v:gamt(g,d),s:sgn(g)<0?'to cut':'to go',short:true}:{v:'Met',s:`${gamt(g,-d)} headroom`};
+ return d>1e-12?{v:gamt(g,d),s:cmpSym(g)==='≤'?'to cut':'to go',short:true}:{v:'Met',s:Math.abs(d)>1e-12?`${gamt(g,-d)} headroom`:'at the line'};
 }
 const distLine=g=>{const d=dist(g);return d?(d.short?`<span class="neg">${d.v}</span> ${d.s}`:`<span class="pos">${d.v}</span>, ${d.s}`):'<span class="faint">not measured</span>'};
 // what the champion gained since the baseline, in units
@@ -64,7 +81,8 @@ const gained=function(g){
  if(byN(g)){const d=cnt(g,g.value)-cnt(g,P.b);return {v:d?`<span class="${d>0?'pos':'neg'}">${d>0?'+':'−'}${N(Math.abs(d))}</span>`:'<span class="faint">0</span>',s:`from ${N(cnt(g,P.b))}`}}
  const good=sgn(g)*(g.value-P.b);
  if(Math.abs(good)<1e-12)return {v:'<span class="faint">0</span>',s:`from ${gv(g,P.b)}`};
- const w=isTime(g)?(good>0?'faster':'slower'):kpiOf(g)==='cost'?(good>0?'cheaper':'dearer'):(good>0?'better':'worse');
+ const timed=isTime(g)||/^(ms|s|sec|seconds?|min)$/i.test(unitG(g));
+ const w=timed?(good>0?'faster':'slower'):kpiOf(g)==='cost'?(good>0?'cheaper':'dearer'):(good>0?'better':'worse');
  return {v:`<span class="${good>0?'pos':'neg'}">${gamt(g,good)} ${w}</span>`,s:`from ${gv(g,P.b)}`};
 }
 const ROLE={guard:'guard',sub:'sub-goal'};
@@ -115,7 +133,7 @@ const track=function(g,{big=false}={}){
    <div class="gl-ends"><span>Baseline <b>${gu(g,P.b)}</b>${big?`<span class="gl-bn"> · ${mLink(g.baseline)}</span>`:''}</span><span>Target <b>${cmpSym(g)}&nbsp;${gt(g)}</b>${ofP(g)}</span></div></div>`;
  }
  // abs: the KPI's own scale from 0, the target as a tick; lower-is-better fills to the value and passes left of the tick
- const top=isScore(g)?1:Math.max(P.v,P.t,P.b??0)*1.15||1,f=P.v/top,m=P.t/top;
+ const D=v=>byN(g)?v:dsg(g)*v,top=byN(g)?1:Math.max(D(P.v),D(P.t),P.b!=null?D(P.b):0)*1.15||1,f=D(P.v)/top,m=D(P.t)/top;
  const mp=(100*Math.max(0,Math.min(1,m))).toFixed(1);
  return `<div class="gl-trk abs ${big?'big':''}">
   <div class="gl-tgt"><span style="--m:${mp}">Target <b>${cmpSym(g)}&nbsp;${gt(g)}</b></span></div>
@@ -131,7 +149,8 @@ const gapFig=function(g){
 const gainFig=g=>gained(g)||{v:DASH,s:g.baseline?'baseline not run on this slice':'no baseline'};
 const vsFig=function(g){
  const v=g.vs_baseline,P=prog(g);
- if(v&&v.delta!=null)return {v:gchg(g,v.delta),s:`90% CI ${pts(v.lo)} to ${pts(v.hi)}`,wl:`better on ${v.wins}, worse on ${v.losses}`};
+ if(v&&v.delta!=null)return {v:gchg(g,v.delta),s:`${byN(g)?`of ${N(g.n)} · `:''}${gci(g,v.lo,v.hi)}`,wl:`better on ${v.wins}, worse on ${v.losses}`};
+ if(g.value==null)return {v:DASH,s:'no run yet'};
  if(g.baseline&&g.model&&g.baseline===g.model)return {v:'<span class="faint">0</span>',s:'the champion is still the baseline'};
  if(P.b!=null&&g.value!=null)return {v:gchg(g,g.value-P.b,false),s:'latest runs, unpaired'};
  return {v:DASH,s:g.baseline?'baseline not run on this slice':'no baseline'};
@@ -162,7 +181,7 @@ VIEWS.goals=()=>{
  if(linked||open.length>1)h+=goalMap(gs.filter(g=>g.status==='open'||kidsOf(g.name,gs).some(k=>k.status==='open')));
  if(open.length)h+=`<section class="gl-grp"><div class="gl-gh"><h2>Open</h2><span class="meta">${open.length}</span></div><div class="gl-cards">${open.map(card).join('')}</div></section>`;
  if(done.length)h+=`<section class="gl-grp"><div class="gl-gh"><h2>Achieved</h2><span class="meta">${done.length}</span></div><div class="gl-cards">${done.map(card).join('')}</div></section>`;
- if(gone.length)h+=`<section class="gl-grp"><div class="gl-gh"><h2>Abandoned</h2><span class="meta">${gone.length}</span></div>${panel('',table([['Goal'],['Why it was abandoned'],['Best','num'],['Target','num']],gone.map(g=>`<tr class="click" onclick="if(!event.target.closest('a,button'))location.hash='goal/${enc(g.name)}'"><td><div class="two"><a href="#goal/${enc(g.name)}"><b>${esc(g.title)}</b></a><span class="sub mono">${esc(short(g.slice))}</span></div></td><td class="gl-why">${g.reason?esc(g.reason):'<span class="dash">No reason recorded</span>'}</td><td class="num">${gu(g,g.value)}${ofP(g)}</td><td class="num">${cmpSym(g)}&nbsp;${gt(g)}</td></tr>`)),{cls:'gl-ab'})}</section>`;
+ if(gone.length)h+=`<section class="gl-grp"><div class="gl-gh"><h2>Abandoned</h2><span class="meta">${gone.length}</span></div>${panel('',table([['Goal'],['Why it was abandoned'],['Best','num'],['Target','num']],gone.map(g=>`<tr class="click" onclick="if(!event.target.closest('a,button'))location.hash='goal/${enc(g.name)}'"><td><div class="two"><a href="#goal/${enc(g.name)}"><b>${esc(g.title)}</b></a><span class="sub mono">${esc(short(g.slice))}</span></div></td><td class="gl-why">${g.reason?esc(g.reason):'<span class="dash">No reason recorded</span>'}</td><td class="num">${gu(g,g.value)}${ofP(g)}</td><td class="num">${cmpSym(g)}&nbsp;${gt(g)}${ofP(g)}</td></tr>`)),{cls:'gl-ab'})}</section>`;
  return h;
 };
 const card=function(g){
@@ -170,7 +189,7 @@ const card=function(g){
  const who=g.status==='achieved'?`achieved by ${mLink(ev?.model||g.model)}${g.achieved?`, ${stamp(g.achieved)}`:''}`:g.model?`${mLink(g.model)}, champion${g.runs>1?` · ${g.runs} runs pooled`:''}`:'no champion';
  return `<section class="card gl-card ${esc(g.status)}">
   <div class="gl-top">${gst(g)}${g.role&&g.role!=='main'?pill(ROLE[g.role]||g.role,g.role==='guard'?'ghost':'acc'):''}${g.slice_changed?pill('slice changed','neg'):''}${ev?.forced?pill('forced, target not met','warn'):''}<h3><a href="#goal/${enc(g.name)}">${esc(g.title)}</a></h3><span class="gl-r">${paperBtn(g)}</span></div>
-  <p class="gl-meta">${famLine(g)}${sLink(g.slice)}<span>${esc(kpiName(g))} ${cmpSym(g)} ${gt(g)}${byN(g)?` of ${N(g.n)}`:''}</span>${conChips(g)}${g.created?`<span>opened ${stamp(g.created)}</span>`:''}</p>
+  <p class="gl-meta">${famLine(g)}${sLink(g.slice)}<span>${kpiPre(g)}${cmpSym(g)} ${gt(g)}${byN(g)?` of ${N(g.n)}`:''}</span>${conChips(g)}${g.created?`<span>opened ${stamp(g.created)}</span>`:''}</p>
   <div class="gl-body">
    <div class="gl-now"><div class="gl-big">${gu(g,g.status==='achieved'&&ev?ev.value:g.value)}${g.value!=null?ofN(g):''}</div><div class="sub">${who}</div></div>
    <div class="gl-mid">${track(g)}</div>
@@ -187,10 +206,11 @@ const card=function(g){
 // ---------- the map: each main goal with its guards and sub-goals under it
 const mapNode=function(g,gs,depth=0){
  const d=dist(g),P=prog(g),kids=kidsOf(g.name,gs);
- const f=g.met||g.status==='achieved'?1:P.mode==='rel'?Math.max(0,Math.min(1,P.p)):P.mode==='abs'?Math.max(0,Math.min(1,sgn(g)>0?g.value/g.target:g.target/g.value)):0;
+ const dv=dsg(g)*g.value,dt=dsg(g)*g.target,ab=cmpSym(g)==='≥'?dv/dt:dt/dv;
+ const f=g.met||g.status==='achieved'?1:P.mode==='rel'?Math.max(0,Math.min(1,P.p)):P.mode==='abs'&&isFinite(ab)?Math.max(0,Math.min(1,ab)):0;
  const fig=g.status==='abandoned'?'<span class="faint">abandoned</span>':g.status==='achieved'?'<span class="pos">Achieved</span>':d?(d.short?`<span class="neg">${d.v}</span> <span class="faint">${d.s}</span>`:`<span class="pos">Met</span> <span class="faint">${d.s}</span>`):'<span class="faint">not measured</span>';
  const grp=(r,l)=>{const k=kids.filter(x=>(x.role||'sub')===r);return k.length?`<div class="gm-lvl"><div class="gm-lab">${l}</div>${k.map(x=>mapNode(x,gs,depth+1)).join('')}</div>`:''};
- return `<div class="gm-tree${depth?'':' root'}"><a class="gm-node ${esc(g.role||'main')} ${esc(g.status)}" href="#goal/${enc(g.name)}"><span class="gm-t">${esc(g.title)}</span><span class="gm-d num">${fig}</span><span class="gm-bar ${g.met||g.status==='achieved'?'met':''} ${g.value==null?'none':''}"><i style="width:${(100*f).toFixed(1)}%"></i></span><span class="gm-m mono">${esc(kpiName(g))} ${cmpSym(g)} ${gt(g)}${byN(g)?` of ${N(g.n)}`:''}</span></a>${depth<3?grp('guard','Guards')+grp('sub','Sub-goals')+grp('main','Under it'):''}</div>`;
+ return `<div class="gm-tree${depth?'':' root'}"><a class="gm-node ${esc(g.role||'main')} ${esc(g.status)}" href="#goal/${enc(g.name)}"><span class="gm-t">${esc(g.title)}</span><span class="gm-d num">${fig}</span><span class="gm-bar ${g.met||g.status==='achieved'?'met':''} ${g.value==null?'none':''}"><i style="width:${(100*f).toFixed(1)}%"></i></span><span class="gm-m mono">${kpiPre(g)}${cmpSym(g)} ${gt(g)}${byN(g)?` of ${N(g.n)}`:''}</span></a>${depth<3?grp('guard','Guards')+grp('sub','Sub-goals')+grp('main','Under it'):''}</div>`;
 }
 const goalMap=function(gs,{title='Map',focus=null}={}){
  const names=new Set(gs.map(g=>g.name)),roots=gs.filter(g=>!g.parent||!names.has(g.parent));
@@ -239,7 +259,7 @@ const hero=function(g){
   ['Paired on',g.vs_baseline?.n?N(g.vs_baseline.n):DASH,g.vs_baseline?.n?`questions; ${vs.wl}`:'needs a baseline run'],
   ['Hills',String(goalHills(g).length),goalHills(g).length?hillSum(g):'none serve it yet'],
  ]);
- return panel('Progress',head+track(g,{big:true})+`<div class="gl-strip">${strip}</div>`,{meta:`${esc(kpiName(g))} ${cmpSym(g)} ${gt(g)}${byN(g)?` of ${N(g.n)}`:''} on ${sLink(g.slice)}`,cls:'gl-prog'});
+ return panel('Progress',head+track(g,{big:true})+`<div class="gl-strip">${strip}</div>`,{meta:`${kpiPre(g)}${cmpSym(g)} ${gt(g)}${byN(g)?` of ${N(g.n)}`:''} on ${sLink(g.slice)}`,cls:'gl-prog'});
 }
 
 // ---------- runs on the goal slice over time: every run a dot, the champion's in the hue, the best so far as a step
@@ -252,14 +272,17 @@ const chart=function(g){
  if(!runs.length)return panel(`Runs on ${esc(g.slice)}`,empty('No finished runs on this slice yet',`The champion’s eval on the goal slice puts the first point here.${g.model?` <code>arx gate ${esc(g.model)}</code> names it.`:''}`),{meta});
  const W=Math.round(Math.max(320,Math.min(1100,(innerWidth<=900?innerWidth-34:innerWidth-228-8-48-42)))),H=innerWidth<=600?200:240;
  const Lm=52,R=16,T=26,B=26;
- const ys=runs.map(r=>r.summary[k]).concat([g.target]);if(P.b!=null)ys.push(P.b);
- let lo=Math.min(...ys),hi=Math.max(...ys);if(hi===lo){hi+=Math.abs(hi)*.05||.01;lo-=Math.abs(lo)*.05||.01}
- const stp=niceStep(hi-lo,4);lo=Math.floor(lo/stp)*stp;hi=Math.ceil(hi/stp)*stp;if(hi<=Math.max(...ys)+1e-12)hi+=stp;
- if(isScore(g)){lo=Math.max(0,lo);hi=Math.min(1,hi)}else lo=Math.max(0,lo);
+ // plotted in the units the page reads in: answers of n, or the slice's unit with a "minus ms" metric turned positive
+ const D=v=>byN(g)?v*g.n:dsg(g)*v;
+ const ys=runs.map(r=>D(r.summary[k])).concat([D(g.target)]);if(P.b!=null)ys.push(D(P.b));
+ if(!ys.every(isFinite))return panel(`Runs on ${esc(g.slice)}`,empty('These runs have no plottable values',''),{meta});
+ let lo=Math.min(...ys),hi=Math.max(...ys);if(hi===lo){hi+=Math.abs(hi)*.05||1;lo-=Math.abs(lo)*.05||1}
+ const stp=byN(g)?Math.max(1,niceStep(hi-lo,4)):niceStep(hi-lo,4);lo=Math.floor(lo/stp)*stp;hi=Math.ceil(hi/stp)*stp;if(hi<=Math.max(...ys)+1e-12)hi+=stp;
+ if(Math.min(...ys)>=0)lo=Math.max(0,lo);if(byN(g))hi=Math.min(Math.max(g.n,Math.max(...ys)),hi);
  let x0=runs[0].ended,x1=Math.max(runs.at(-1).ended,g.created||0,g.achieved||0,g.abandoned||0);if(x1-x0<3600){x0-=1800;x1+=1800}
  const pad=(x1-x0)*.03;x0-=pad;x1+=pad;
  const X=x=>Lm+(x-x0)/(x1-x0)*(W-Lm-R),Y=y=>T+(1-(y-lo)/(hi-lo))*(H-T-B);
- const yl=v=>isScore(g)?(100*v).toFixed(Math.abs(Math.round(stp*1000)%10)?1:0)+'%':isTime(g)?(stp<1?v.toFixed(1):Math.round(v))+' s':kpiOf(g)==='cost'?'$'+v.toFixed(stp<.01?3:2):num(v,2);
+ const yl=v=>{v=Math.abs(v)<stp*1e-6?0:v;return byN(g)?N(Math.round(v)):kpiOf(g)==='cost'?'$'+v.toFixed(stp<.01?3:2):(grp(v)+' '+unitG(g)).trim()};
  let o='';
  for(let v=lo;v<=hi+stp*1e-6;v+=stp)o+=`<line class="ax" x1="${Lm}" x2="${W-R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"/><text x="${Lm-8}" y="${(Y(v)+3.5).toFixed(1)}" text-anchor="end">${yl(v)}</text>`;
  // x ticks on one round step that lands on local hours or days
@@ -268,22 +291,24 @@ const chart=function(g){
  for(let t=Math.ceil((x0+off)/step)*step-off;t<=x1;t+=step){const x=X(t);if(x<Lm+14||x>W-R-14)continue;
   const lab=step>=86400||((t+offs(t))%86400===0)?day(t):clock(t);o+=`<text x="${x.toFixed(1)}" y="${H-6}" text-anchor="middle">${lab}</text>`}
  // reference lines: the target dashed in the reference colour, the baseline thin and grey; labels above their lines
- const ty=Y(g.target),by=P.b!=null?Y(P.b):null,close=by!=null&&Math.abs(ty-by)<16;
- o+=`<line x1="${Lm}" x2="${W-R}" y1="${ty.toFixed(1)}" y2="${ty.toFixed(1)}" stroke="var(--chart-3)" stroke-width="1.5" stroke-dasharray="5 4"/><text x="${Lm+6}" y="${(ty-6).toFixed(1)}" style="fill:var(--chart-3)">Target ${cmpSym(g)} ${gv(g,g.target).replace('&nbsp;',' ')}</text>`;
- if(by!=null)o+=`<line x1="${Lm}" x2="${W-R}" y1="${by.toFixed(1)}" y2="${by.toFixed(1)}" stroke="var(--faint)" stroke-width="1"/><text x="${W-R-4}" y="${(close&&by>ty?by+14:by-6).toFixed(1)}" text-anchor="end">Baseline ${gv(g,P.b).replace('&nbsp;',' ')}</text>`;
+ // a label sits above its line, or below it when the line runs along the top where the goal-opened mark is written
+ const ty=Y(D(g.target)),by=P.b!=null?Y(D(P.b)):null,close=by!=null&&Math.abs(ty-by)<16,ly=y=>y-6<T+8?y+14:y-6;
+ const plain=h=>h.replace(/&nbsp;/g,' ');
+ o+=`<line x1="${Lm}" x2="${W-R}" y1="${ty.toFixed(1)}" y2="${ty.toFixed(1)}" stroke="var(--chart-3)" stroke-width="1.5" stroke-dasharray="5 4"/><text x="${Lm+6}" y="${ly(ty).toFixed(1)}" style="fill:var(--chart-3)">Target ${cmpSym(g)} ${plain(gt(g))}</text>`;
+ if(by!=null)o+=`<line x1="${Lm}" x2="${W-R}" y1="${by.toFixed(1)}" y2="${by.toFixed(1)}" stroke="var(--faint)" stroke-width="1"/><text x="${W-R-4}" y="${(close?(by>ty?by+14:by-6):ly(by)).toFixed(1)}" text-anchor="end">Baseline ${plain(gu(g,P.b))}</text>`;
  // when the goal opened (and closed): runs after the line are work toward it
  const marks=[[g.created,'Goal opened'],[g.achieved,'Achieved'],[g.abandoned,'Abandoned']].filter(([t])=>t&&t>=x0&&t<=x1);
- const grp=[];for(const [t,l] of marks.sort((a,b)=>a[0]-b[0])){const last=grp.at(-1);if(last&&X(t)-X(last[0])<90)last[1]+=', '+l.toLowerCase();else grp.push([t,l])}
- for(const [t,l] of grp){const x=X(t),end=x>W-R-140;o+=`<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${T-12}" y2="${H-B}" stroke="var(--control)" stroke-width="1" stroke-dasharray="3 3"/><text x="${(end?x-5:x+5).toFixed(1)}" y="${T-4}" text-anchor="${end?'end':'start'}">${l}</text>`}
+ const mk=[];for(const [t,l] of marks.sort((a,b)=>a[0]-b[0])){const last=mk.at(-1);if(last&&X(t)-X(last[0])<90)last[1]+=', '+l.toLowerCase();else mk.push([t,l])}
+ for(const [t,l] of mk){const x=X(t),end=x>W-R-140;o+=`<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${T-12}" y2="${H-B}" stroke="var(--control)" stroke-width="1" stroke-dasharray="3 3"/><text x="${(end?x-5:x+5).toFixed(1)}" y="${T-4}" text-anchor="${end?'end':'start'}">${l}</text>`}
  // best so far, as a step in the good direction
  let best=null,path='';
- runs.forEach((r,i)=>{const v=r.summary[k];if(best==null||s*(v-best)>0){path+=(path?`H${X(r.ended).toFixed(1)}V${Y(v).toFixed(1)}`:`M${X(r.ended).toFixed(1)} ${Y(v).toFixed(1)}`);best=v}});
+ runs.forEach((r,i)=>{const v=r.summary[k];if(best==null||s*(v-best)>0){path+=(path?`H${X(r.ended).toFixed(1)}V${Y(D(v)).toFixed(1)}`:`M${X(r.ended).toFixed(1)} ${Y(D(v)).toFixed(1)}`);best=v}});
  path+=`H${X(Math.min(x1,Math.max(runs.at(-1).ended,now()))).toFixed(1)}`;
  o+=`<path d="${path}" fill="none" stroke="var(--chart-1)" stroke-width="1.5" stroke-opacity=".55" stroke-linejoin="round"/>`;
  const champ=g.status==='achieved'?g.evidence?.model:g.model;
  for(const r of runs){const v=r.summary[k],me=r.model===champ,base=r.model===g.baseline&&!me,rej=S.state.models[r.model]?.status==='rejected';
-  const tip=`${S.state.models[r.model]?.title||r.model} · ${gv(g,v).replace('&nbsp;',' ')} · ${stamp(r.ended)}`;
-  o+=`<a href="#task/${enc(r.id)}"><circle class="gl-pt" cx="${X(r.ended).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="${me?4.5:4}" ${me?'fill="var(--chart-1)" stroke="var(--surface)" stroke-width="1.5"':base?'fill="var(--surface)" stroke="var(--muted)" stroke-width="1.5"':`fill="var(--faint)" fill-opacity="${rej?.45:.8}"`}><title>${esc(tip)}</title></circle></a>`}
+  const tip=`${mnt(r.model)} · ${plain(gu(g,v)+ofP(g))} · ${stamp(r.ended)}`;
+  o+=`<a href="#task/${enc(r.id)}"><circle class="gl-pt" cx="${X(r.ended).toFixed(1)}" cy="${Y(D(v)).toFixed(1)}" r="${me?4.5:4}" ${me?'fill="var(--chart-1)" stroke="var(--surface)" stroke-width="1.5"':base?'fill="var(--surface)" stroke="var(--muted)" stroke-width="1.5"':`fill="var(--faint)" fill-opacity="${rej?.45:.8}"`}><title>${esc(tip)}</title></circle></a>`}
  const sw=(svg,l)=>`<span class="gl-lg"><svg width="14" height="10" aria-hidden="true">${svg}</svg>${l}</span>`;
  const legend=[sw('<circle cx="7" cy="5" r="4" fill="var(--chart-1)"/>',g.status==='achieved'?'achieving model':'champion'),
   runs.some(r=>r.model===g.baseline&&r.model!==champ)?sw('<circle cx="7" cy="5" r="3.3" fill="var(--surface)" stroke="var(--muted)" stroke-width="1.5"/>','baseline'):P.b!=null?sw('<path d="M0 5H14" stroke="var(--faint)" stroke-width="1"/>','baseline'):'',
@@ -300,7 +325,7 @@ const hillsPanel=function(g){
  if(!hs.length)return panel('Hills',empty('No hill serves this goal',`Open one from error analysis on the champion’s failures.`)+`<div class="gl-cmd">${cmd(`arx hill open <name> --goal ${g.name} --title "…" --target <dev slice>`)}</div>`,{cls:'gl-hills'});
  const cap=Math.max(5,hs.filter(([,s])=>s!=='closed').length),more=hs.slice(cap);
  const rows=hs.slice(0,cap).map(([k,s])=>{const x=L.hills[k]||{},sh=x.share&&x.share.of?x.share.count/x.share.of:null,p=paperOf(k);
-  return `<tr class="click" onclick="if(!event.target.closest('a,button'))location.hash='hill/${enc(k)}'"><td><div class="two">${hLink(k)}<span class="sub">${x.target?`<span class="mono">${esc(short(x.target))}</span>`:'no dev set'}${p&&p.hill===k?` · <a class="ln" href="${paperUrl(p)}">notes</a>`:''}</span></div></td><td>${st(s)}</td><td class="num">${sh!=null?pct(sh):DASH}</td></tr>`});
+  return `<tr class="click" onclick="if(!event.target.closest('a,button'))location.hash='hill/${enc(k)}'"><td><div class="two">${hLink(k)}<span class="sub">${x.target?`<span class="mono">${esc(short(x.target))}</span>`:'no dev set'}${p&&p.hill===k?` · <a class="ln" href="${paperUrl(p)}">notes</a>`:''}</span></div></td><td>${st(s)}</td><td class="num">${sh!=null?`${N(x.share.count)} <span class="faint">of ${N(x.share.of)}</span>`:DASH}</td></tr>`});
  return panel('Hills',table([['Hill'],['Status'],['<span title="Share of the failures the hill was counted against">Share</span>','num']],rows)+(more.length?`<p class="gl-note">${plural(more.length,'more hill')}: ${more.map(([k])=>hLink(k)).join(', ')}.</p>`:''),{meta:hillSum(g),cls:'gl-hills'});
 }
 // ---------- what to run next on an open goal
@@ -325,8 +350,8 @@ const nextPanel=function(g){
 const record=function(g){
  const ev=g.evidence;
  if(g.status==='achieved'&&ev){
-  const kv=[['Model',mLink(ev.model)],['Run',ev.task?`<a class="ln mono" href="#task/${enc(ev.task)}">${esc(ev.task)}</a>${copyBtn(ev.task)}`:DASH],['Value',`${gv(g,ev.value)}${ev.runs>1?` <span class="sub">pooled over ${ev.runs} runs</span>`:''}`],['Slice',`${sLink(ev.slice||g.slice)} <span class="sub">n ${Number(ev.n||g.n).toLocaleString()}</span>`],
-   ['vs baseline',ev.vs_baseline?.delta!=null?`${gchg(g,ev.vs_baseline.delta)} <span class="sub">90% CI ${pts(ev.vs_baseline.lo)} to ${pts(ev.vs_baseline.hi)}</span>`:DASH],['Achieved',g.achieved?stamp(g.achieved):DASH]];
+  const kv=[['Model',mLink(ev.model)],['Run',ev.task?`<a class="ln mono" href="#task/${enc(ev.task)}">${esc(ev.task)}</a>${copyBtn(ev.task)}`:DASH],['Value',`${gu(g,ev.value)}${ofP(g)}${ev.runs>1?` <span class="sub">pooled over ${ev.runs} runs</span>`:''}`],['Slice',`${sLink(ev.slice||g.slice)} <span class="sub">n ${Number(ev.n||g.n).toLocaleString()}</span>`],
+   ['vs baseline',ev.vs_baseline?.delta!=null?`${gchg(g,ev.vs_baseline.delta)}${ofP(g)} <span class="sub">${gci(g,ev.vs_baseline.lo,ev.vs_baseline.hi)}</span>`:DASH],['Achieved',g.achieved?stamp(g.achieved):DASH]];
   if(ev.forced)kv.push(['Forced','<span class="neg">target not met</span>']);
   if(ev.note)kv.push(['Note',esc(ev.note)]);
   return panel('Evidence',`<dl class="gl-kv">${kv.map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>${goalPaper(g.name)?'':`<div class="gl-cmd">${cmd('arx paper new --goal '+g.name)}</div>`}`,{cls:'gl-ev'});
