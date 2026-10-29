@@ -42,6 +42,10 @@ class People(unittest.TestCase):
         self.assertEqual(people.mentioned("@ann what?", r), [])  # two Anns: the first name alone is ambiguous
         self.assertEqual(people.mentioned("@Ann Ray look", r), ["p-c0000003"])
         self.assertEqual(people.mentioned("mail bo@x.com", r), [])
+        self.assertEqual(people.mentioned("@C++ dev hi", {"p-9": dict(name="C++ dev")}), ["p-9"])
+        self.assertEqual(people.mentioned("@tester-1b hi", {"p-8": dict(name="tester"), "p-7": dict(name="tester-1b")}), ["p-7"])
+        people.remember("p-f0000006", "Old Name", None); people.remember("p-f0000006", "New Name", None)
+        self.assertEqual(people.roster()["p-f0000006"]["aka"], ["Old Name"])
 
     def test_seen_and_people_talk(self):
         post = lambda d: call(features.POST, "/api/comments", self.p, d)

@@ -58,7 +58,9 @@ def remember(pid: str, name: str, key: str | None = None, remote: bool = False) 
         ps = sorted(set(cur.get("projects") or []) | ({key} if key else set()))
         if cur.get("name") == name and ps == (cur.get("projects") or []) and t - (cur.get("last") or 0) < 300:
             return True  # unchanged: one write per five minutes per person is enough for "last seen"
-        r[pid] = dict(name=name, created=cur.get("created") or t, last=t, projects=ps, **({"remote": True} if remote or cur.get("remote") else {}))
+        aka = [n for n in (cur.get("aka") or []) + ([cur["name"]] if cur.get("name") and cur["name"] != name else []) if n != name][-5:]
+        r[pid] = dict(name=name, created=cur.get("created") or t, last=t, projects=ps, **({"aka": aka} if aka else {}),
+                      **({"remote": True} if remote or cur.get("remote") else {}))
         f = _file()
         f.parent.mkdir(parents=True, exist_ok=True)
         tmp = f.with_suffix(f".{os.getpid()}.tmp")
@@ -104,13 +106,15 @@ def mentioned(body: str, people: dict | None = None) -> list[str]:
         if not n or fulls[n] > 1:
             continue  # two people with one name: an @ cannot say which
         first = n.split(" ")[0]
-        if re.search(r"[\s(]@" + re.escape(n) + r"\b", text) or (len(firsts.get(first, [])) == 1 and re.search(r"[\s(]@" + re.escape(first) + r"\b", text)):
+        end = r"(?![\w-])"  # a name ends where a word or a hyphen ends: @tester-1b is not @tester, and C++ matches
+        if re.search(r"[\s(]@" + re.escape(n) + end, text) or (len(firsts.get(first, [])) == 1 and re.search(r"[\s(]@" + re.escape(first) + end, text)):
             out.append(k)
     return out
 
 
 def view(p) -> dict:
-    return dict(people={k: dict(name=v.get("name"), last=v.get("last")) for k, v in members(p).items()}, here=here(p))
+    return dict(people={k: dict(name=v.get("name"), last=v.get("last"), **({"aka": v["aka"]} if v.get("aka") else {}))
+                        for k, v in members(p).items()}, here=here(p))
 
 
 @features.get("/api/people")
