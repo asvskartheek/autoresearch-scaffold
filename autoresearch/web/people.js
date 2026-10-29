@@ -20,6 +20,7 @@ addEventListener('storage',e=>{if(e.key===K)try{const m=JSON.parse(e.newValue);i
 const COLORS=['#2563eb','#db2777','#059669','#d97706','#0891b2','#dc2626','#4f46e5','#65a30d'];
 const color=s=>COLORS[[...String(s)].reduce((a,c)=>(a*31+c.charCodeAt(0))>>>0,7)%COLORS.length];
 const initials=n=>String(n||'').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase()||'?';
+const esc=s=>String(s).replace(/[.*+?^${}()|[\]\\\/-]/g,'\\$&');
 const h=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let roster={},here=[],api=null,routeFn=()=>location.hash.slice(1),subs=[],timer=null;
 const tell=()=>subs.forEach(f=>{try{f({roster,here,me})}catch(e){console.error(e)}});
@@ -37,9 +38,13 @@ const ARXP=window.ARXP={
  name:id=>id===me.id?me.name:roster[id]?.name,
  color,initials,
  face(id,name,cls=''){const n=name||ARXP.name(id)||'?';return `<span class="px-face ${cls}" style="--pc:${color(id||n)}" title="${h(n)}">${h(initials(n))}</span>`},
- at(html){const names=Object.values(roster).map(p=>p.name).filter(Boolean).sort((a,b)=>b.length-a.length);
-  if(!names.length)return html;const re=new RegExp('(^|[\\s(])@('+names.map(n=>n.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|')+'|'+[...new Set(names.map(n=>n.split(' ')[0]))].join('|')+'|agent)\\b','gi');
-  return html.replace(re,(m,pre,n)=>`${pre}<b class="at">@${n}</b>`)},
+ // names are data: every one is escaped, the match ends where a word does (so "C++" and "tester-1" work), and a
+ // name the regex cannot take only loses its highlight, never the comment
+ at(html){try{const names=Object.values(roster).map(p=>String(p.name||'').trim()).filter(Boolean);
+  const firsts={};names.forEach(n=>{const f=n.split(' ')[0].toLowerCase();firsts[f]=(firsts[f]||0)+1});
+  const all=[...new Set([...names,...names.map(n=>n.split(' ')[0]).filter(f=>firsts[f.toLowerCase()]===1),'agent'])].sort((a,b)=>b.length-a.length);
+  const re=new RegExp('(^|[\\s(>])@('+all.map(n=>esc(h(n))).join('|')+')(?![\\w-])','gi');
+  return String(html).replace(re,(m,pre,n)=>`${pre}<b class="at">@${n}</b>`)}catch(e){return html}},
  complete(ta){if(!ta||ta.dataset.px)return;ta.dataset.px='1';let box=null;
   const close=()=>{box?.remove();box=null};
   ta.addEventListener('input',()=>{const v=ta.value.slice(0,ta.selectionStart),m=/(^|\s)@([\w-]{0,20})$/.exec(v);close();if(!m)return;
