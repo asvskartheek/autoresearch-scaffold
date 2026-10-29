@@ -383,7 +383,7 @@ function cleanSvg(src){const t=document.createElement('template');t.innerHTML=sr
  const walk=el=>{for(const a of [...el.attributes])if(!ATTR_OK.test(a.name)||/url\s*\(|javascript:|expression|&#|\\/i.test(a.value))el.removeAttribute(a.name);
   for(const c of [...el.childNodes]){if(c.nodeType===3)continue;if(c.nodeType!==1||!SVG_OK.has(c.localName)){c.remove();continue}walk(c)}};
  walk(svg);return `<div class="cm-fig">${svg.outerHTML}</div>`}
-const linky=s=>h(s).replace(/(https?:\/\/[^\s<]+[^\s<.,;:)])|(^|[\s(])(#[a-z]+(?:\/[^\s<]*[^\s<.,;:)])?)/g,(m,url,pre,hash)=>url?`<a href="${url}" target="_blank" rel="noopener">${url}</a>`:`${pre}<a href="${hash}">${hash}</a>`);
+const linky=s=>h(s).replace(/(https?:\/\/[^\s<]+[^\s<.,;:)])|(^|[\s(])(#[a-z]+(?:\/[^\s<]*[^\s<.,;:)])?)/g,(m,url,pre,hash)=>url?`<a href="${url}" target="_blank" rel="noopener">${url}</a>`:`${pre}<a href="${hash}">${/^#answer\//.test(hash)?'Open the full answer':hash}</a>`);  // a long answer: its own view
 // the figure first, then the words
 const rich=b=>{const parts=String(b||'').split(/(<svg[\s\S]*?<\/svg>)/i);
  return parts.filter((x,i)=>i%2).map(cleanSvg).join('')+linky(parts.filter((x,i)=>!(i%2)).join('').replace(/\n{3,}/g,'\n\n').trim())};
