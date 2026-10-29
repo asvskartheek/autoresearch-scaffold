@@ -23,7 +23,10 @@ const here=()=>location.hash.slice(1)||'overview';
 const P=window.ARXP,me=()=>P?P.me().name:'',myId=()=>P?P.me().id:'',setMe=n=>P&&P.setName(n);
 const at=html=>P?P.at(html):html,face=(m)=>m.agent?'<span class="px-face sm" style="--pc:var(--accent,#3b82f6)">AI</span>':P?P.face(m.by||m.author,m.author,'sm'):'';
 // a thread is for you when it @mentions you, or you are in it and someone else wrote since you last read it
-const unread=c=>{const s=(c.seen||{})[myId()]||0;return c.last_t>s&&c.messages.at(-1).by!==myId()};
+// read here: the thread version (last_t) this browser has already marked seen, kept even when the POST failed (a snapshot,
+// a dropped connection), so one version is posted once and never again
+const readHere={};
+const unread=c=>{const s=Math.max((c.seen||{})[myId()]||0,readHere[c.id]||0);return c.last_t>s&&c.messages.at(-1).by!==myId()};
 const forMe=c=>!c.resolved&&((c.mentions||[]).includes(myId())||(c.people||[]).includes(myId())&&unread(c));
 
 /* ---------- anchors: stable keys first, cssPath last */
@@ -307,7 +310,7 @@ function thread(id){const c=all.find(t=>t.id===id);if(!c)return;
  <textarea placeholder="Reply"></textarea><div class="cm-row">${nameField()}<button class="cm-sm ln" title="Copy a link to this thread">Link</button><button class="cm-sm rs">${c.resolved?'Reopen':'Resolve'}</button><button class="cm-sm pri go">Reply</button></div>`;
  if(p.querySelector('.cm-fig'))p.classList.add('wide');pops.append(p);fitFigs(p);const [x,y]=pos(c)||[innerWidth-360,innerHeight-120];place(p,x,y);const ta=p.querySelector('textarea');ta.value=draft;
  const ms=p.querySelector('.cm-msgs');ms.scrollTop=ms.scrollHeight;P&&P.complete(ta);
- if(myId()&&unread(c)){c.seen={...(c.seen||{}),[myId()]:c.last_t};post({kind:'seen',parent:id})}  // you read it as it stands
+ if(myId()&&unread(c)&&readHere[id]!==c.last_t){readHere[id]=c.last_t;drawList();post({kind:'seen',parent:id},false)}  // you read it as it stands: once per version, no reload
  const send=async()=>{if(p.dataset.busy)return;const body=ta.value.trim();if(!body)return needText(ta);busy(p,true,'Sending…');
   const ev=await post({kind:'reply',parent:id,body,author:takeName(p)});if(!ev)return p.isConnected&&failed(p);
   if(p.isConnected&&open===id){ta.value='';thread(id)}};
@@ -327,7 +330,7 @@ function drawList(){const you=all.filter(forMe);$c('.cm-lst').classList.toggle('
  list.querySelectorAll('.cm-it[data-id]').forEach(el=>el.onclick=()=>{const c=all.find(t=>t.id===el.dataset.id);
   if(c.route!==here())return thread(c.id);const n=anchorEl(c);if(n)n.scrollIntoView({block:'center'});setTimeout(()=>thread(c.id),300)})}
 
-async function post(row){let ev=null;row.by=myId();try{const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(row)});if(r.ok)ev=await r.json()}catch(e){}await load();return ev}
+async function post(row,reload=true){let ev=null;row.by=myId();try{const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(row)});if(r.ok)ev=await r.json()}catch(e){}if(reload)await load();return ev}
 async function load(){try{const r=await fetch(API,{cache:'no-store'});if(!r.ok)return;const d=await r.json();all=d.threads||[];agentOn=!d.answer_agent||!!d.answer_agent.running;
  const p=pops.firstChild,reopen=open&&p&&!p.dataset.busy&&!p.contains(document.activeElement);drawPins();drawList();if(reopen)thread(open)}catch(e){}}
 document.body.append(host);
