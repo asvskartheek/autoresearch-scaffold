@@ -146,7 +146,7 @@ function flatText(root){const map=[];let flat='';const w=document.createTreeWalk
  while((t=w.nextNode())&&flat.length<200000){const v=t.nodeValue;for(let i=0;i<v.length;i++){const ch=/\s/.test(v[i])?' ':v[i];if(ch===' '&&(!flat||flat.endsWith(' ')))continue;flat+=ch;map.push([t,i])}}
  return [flat,map]}
 function findRange(root,quote,qn=0){const q=String(quote||'').replace(/\s+/g,' ').trim();if(!root||!q)return null;const [flat,map]=flatText(root);
- let at=-1,from=0;for(let k=0;k<=qn;k++){const i=flat.indexOf(q,from);if(i<0)break;at=i;from=i+1}if(at<0)return null;
+ let at=-1,from=0;for(let k=0;k<=qn;k++){at=flat.indexOf(q,from);if(at<0)return null;from=at+1}
  const [sn,so]=map[at],[en,eo]=map[at+q.length-1];const r=document.createRange();r.setStart(sn,so);r.setEnd(en,eo+1);return r}
 function quoteAnchor(rg){  // a text range -> {anchor fields}: the element holding it, the quote and which occurrence it is
  let el=rg.commonAncestorContainer;if(el.nodeType!==1)el=el.parentElement;const quote=String(rg).replace(/\s+/g,' ').trim().slice(0,500);
@@ -252,7 +252,7 @@ const anchorEl=c=>resolve(c.anchor||{});
 // where an anchor sits now: its element's box, the shape's transform and, for a quote, the text range
 function where(a){const el=resolve(a),s=a.shape||null;let r=el&&el.getBoundingClientRect();if(r&&!r.width&&!r.height)r=null;
  const g={el,r,rg:null,tx:0,ty:0,sx:1,sy:1};
- if(a.quote&&el&&(!s||s.mode==='text')){const rg=findRange(el,a.quote,a.qn||0);if(rg&&rg.getClientRects().length)g.rg=rg}
+ if(a.quote&&el&&(!s||s.mode==='text')){const rg=findRange(el,a.quote,a.qn||0)||findRange(el,a.quote,0);if(rg&&rg.getClientRects().length)g.rg=rg}
  if(s){if(s.mode==='tip'){if(r){g.tx=r.left+s.tx*r.width;g.ty=r.top+s.ty*r.height}else{g.tx=s.ox-scrollX;g.ty=s.oy-scrollY}}
   else{g.tx=s.ox-scrollX;g.ty=s.oy-scrollY;if(r){g.tx=r.left;g.ty=r.top;if(s.fit){g.sx=r.width/Math.max(1,s.bw);g.sy=r.height/Math.max(1,s.bh)}}}}
  return g}
