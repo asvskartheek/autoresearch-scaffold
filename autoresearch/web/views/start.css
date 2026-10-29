@@ -13,19 +13,21 @@ a.sx-go:hover{color:var(--accent)}
 
 /* (1) goals on one figure: label | rail from baseline to target | distance. The dashed line is the target for all */
 .sx-fig{position:relative;display:flex;flex-direction:column;gap:14px}
-.sx-fig+.sx-axis{margin-left:calc(var(--sx-lw) + 14px);margin-right:calc(var(--sx-dw) + 14px)}
-.sx{--sx-lw:150px;--sx-dw:96px}
-a.sx-g{display:grid;grid-template-columns:var(--sx-lw) minmax(0,1fr) var(--sx-dw);align-items:center;gap:14px;color:var(--text);min-width:0}
+.sx-fig+.sx-axis{margin-right:calc(var(--sx-dw) + 14px)}
+.sx{--sx-dw:96px}
+/* the title sits over its rail, the distance beside both, so long goal names are never cut */
+a.sx-g{display:grid;grid-template-columns:minmax(0,1fr) var(--sx-dw);grid-template-areas:"t d" "r d";align-items:center;column-gap:14px;row-gap:6px;color:var(--text);min-width:0}
+.sx-gt{grid-area:t}.sx-rail{grid-area:r}.sx-gd{grid-area:d}
 a.sx-g:hover .sx-gt{color:var(--accent)}
 .sx-gt{font-weight:500}
 .sx-g.sub .sx-gt{font-weight:400;color:var(--muted)}
-.sx-rail{position:relative;height:10px;border-radius:5px;background:var(--rule);margin:14px 0 4px}
+.sx-rail{position:relative;height:10px;border-radius:5px;background:var(--rule);margin:0 0 18px}
 .sx-rail.none{background:repeating-linear-gradient(90deg,var(--rule) 0 6px,transparent 6px 10px)}
 .sx-rail i{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:var(--accent)}
 .sx-rail.met i{background:var(--positive)}
 .sx-rail b{position:absolute;top:-3px;width:16px;height:16px;margin-left:-8px;border-radius:50%;background:var(--surface);border:3px solid var(--accent);box-sizing:border-box}
 .sx-rail.met b{border-color:var(--positive)}
-.sx-rail b span{position:absolute;bottom:17px;left:50%;transform:translateX(-50%);font-size:11.5px;font-weight:500;color:var(--text);white-space:nowrap}
+.sx-rail b span{position:absolute;top:15px;left:50%;transform:translateX(-50%);font-size:11.5px;font-weight:500;color:var(--text);white-space:nowrap}
 .sx-tline{position:absolute;top:-4px;bottom:-4px;right:calc(var(--sx-dw) + 14px);width:0;border-left:2px dashed var(--chart-3);pointer-events:none}
 .sx-gd{display:flex;flex-direction:column;align-items:flex-end;line-height:1.15}
 .sx-gd b{font-size:20px;font-weight:600}
@@ -33,13 +35,7 @@ a.sx-g:hover .sx-gt{color:var(--accent)}
 .sx-champ{display:inline-flex;align-items:center;gap:8px;color:var(--text);min-width:0}
 a.sx-champ:hover b{color:var(--accent)}
 .sx-champ b{font-weight:500}
-@media (max-width:600px){
- .sx{--sx-lw:0px;--sx-dw:84px}
- a.sx-g{grid-template-columns:minmax(0,1fr) var(--sx-dw);grid-template-areas:"t t" "r d";row-gap:2px}
- .sx-gt{grid-area:t}.sx-rail{grid-area:r}.sx-gd{grid-area:d}
- .sx-fig+.sx-axis{margin-left:0}
- .sx-tline{display:none}
-}
+@media (max-width:600px){.sx{--sx-dw:80px}.sx-gd b{font-size:17px}}
 
 /* (2) live jobs */
 .sx-jobs{display:flex;flex-direction:column}
@@ -94,3 +90,4 @@ a.sx-pg b{grid-area:l;font-weight:500}
 @media (max-width:600px){.sx-map{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .sx-strip .tk{stroke:var(--control);stroke-width:1}
 .sx-k{font-size:12px;color:var(--muted);flex:none}
+.sx-rail b.lo span{left:-3px;transform:none}.sx-rail b.hi span{left:auto;right:-3px;transform:none}

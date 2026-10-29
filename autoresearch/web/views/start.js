@@ -55,7 +55,7 @@ function goalsBlock(){
   const tip=`Now ${now}${u.ofP(g)} · target ${u.cmpSym(g)} ${u.gt(g)}`.replace(/&nbsp;/g,' ');
   return `<a class="sx-g ${u.isMain(g)?'':'sub'}" href="#goal/${enc(g.name)}" title="${esc(tip)}">
    <span class="sx-gt ell">${esc(g.title||g.name)}</span>
-   <span class="sx-rail ${g.met?'met':''} ${f==null?'none':''}">${f!=null?`<i style="width:${(100*f).toFixed(1)}%"></i><b style="left:${(100*f).toFixed(1)}%"><span class="num">${now}</span></b>`:''}</span>
+   <span class="sx-rail ${g.met?'met':''} ${f==null?'none':''}">${f!=null?`<i style="width:${(100*f).toFixed(1)}%"></i><b style="left:${(100*f).toFixed(1)}%" class="${f<.1?'lo':f>.9?'hi':''}"><span class="num">${now}</span></b>`:''}</span>
    <span class="sx-gd num">${fig}</span></a>`}).join('');
  const axis=`<div class="sx-axis"><span>baseline</span><span>target</span></div>`;
  return panel('Goal',`<div class="sx-fig">${rows}<i class="sx-tline" aria-hidden="true"></i></div>${axis}<div class="sx-foot">${champ}</div>`,{right:go('#goals','Goals')});
