@@ -108,7 +108,7 @@ function gateTable(name,g,base='Champion'){
     <td class="md-res"><span class="row">${(c.state==='need_run'||c.state==='need_baseline')&&live(c)?runChip(live(c)):statePill(c.state)}${c.noisy?pill('Noisy','noisy'):''}</span></td></tr>`);
   });
  }
- return `<div class="tbl md-gate"><table><thead><tr><th>Rung</th><th>Slice</th><th class="md-hm">Rule</th><th class="num md-hs">This model</th><th class="num md-hs">${base}</th><th class="num">Δ</th><th>90% CI</th><th class="num md-hw">Wins / losses</th><th class="md-res">Result</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+ return `<div class="tbl md-gate"><table><thead><tr><th>${term('rung','Rung')}</th><th>${term('slice','Slice')}</th><th class="md-hm">Rule</th><th class="num md-hs">This model</th><th class="num md-hs">${base}</th><th class="num">${term('paired-delta','Δ')}</th><th>${term('interval','90% CI')}</th><th class="num md-hw">Wins / losses</th><th class="md-res">Result</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
 }
 
 // a champion's promotion evidence: the gate it passed, stored on the promote decision; for older promotions, the
@@ -191,14 +191,14 @@ VIEWS.model=(name)=>{
    :v.failed?nextRow('Record the failure',`arx reject ${name} --reason "failed ${g.rungs.find(r=>r.status==='fail').rung}"`)
    :empty('Nothing to run',`<code>arx gate ${esc(name)}</code> re-reads the ladder`);
   h.push(panel(v.ready?'Promote':v.failed?'Close it out':v.nochamp?'Next':'Next runs',body,{meta:nx.length?plural(nx.length,'run')+' before the next rung opens'+(nx.some(runTask)?` · ${nx.filter(runTask).length} running`:''):'',cls:'section md-np'}));
-  h.push(panel('Gate',gateTable(name,g),{meta:g.champion?`paired against ${mlink(g.champion)} on the same examples`:'no champion to pair against yet',cls:'section flush md-gp'}));
+  h.push(panel(term('gate','Gate'),gateTable(name,g),{meta:g.champion?`paired against ${mlink(g.champion)} on the same examples`:'no champion to pair against yet',cls:'section flush md-gp'}));
  }else if(m.status==='champion'&&g&&!g.error){
   h.push(promotion(name,m));
   h.push(panel('Ladder slices',table(['Rung','Slice',['n','num'],['Score','num']],g.rungs.flatMap(r=>r.checks.map((c,i)=>{const s=L.leaderboard[c.slice]?.[name],n=s?.n??L.slices[c.slice]?.n;
    return `<tr><td>${i?'':esc(r.rung)}</td><td><a class="mono md-sl ln" href="#slices/${enc(c.slice)}">${slw(c.slice)}</a></td><td class="num">${n!=null?n.toLocaleString():DASH}</td><td class="num">${s?(s.task?`<a href="#task/${enc(s.task)}">${score(s.score,c.slice,s.n)}</a>`:score(s.score,c.slice,s.n)):DASH}</td></tr>`}))),{meta:'the scores candidates are paired against',cls:'section'}));
  }
 
- if(v.rej)h.push(panel('Gate, walked again',v.rej.wait&&!v.rej.rungs.some(r=>r.checks.some(c=>c.delta!=null))?'<div class="sub">Reading its runs…</div>':gateTable(name,v.rej),{meta:`its runs paired against ${mlink(v.rej.champion)}, the champion now, on the same examples`,cls:'section flush md-gp'}));
+ if(v.rej)h.push(panel(`${term('gate','Gate')}, walked again`,v.rej.wait&&!v.rej.rungs.some(r=>r.checks.some(c=>c.delta!=null))?'<div class="sub">Reading its runs…</div>':gateTable(name,v.rej),{meta:`its runs paired against ${mlink(v.rej.champion)}, the champion now, on the same examples`,cls:'section flush md-gp'}));
 
  const tasks=L.tasks.filter(t=>t.model===name&&!t.detail_of).sort((a,b)=>(isLive(b)-isLive(a))||(b.updated-a.updated));
  h.push(panel('Tasks',tasks.length?`<div class="md-tasks">${tasks.slice(0,30).map(t=>kidRow([t,0])).join('')}</div>${tasks.length>30?`<a class="more" href="#archive">${tasks.length-30} more in the archive</a>`:''}`:empty('No tasks for this model',`Evals recorded with <code>arx eval record --model ${esc(name)}</code> show here`),{meta:tasks.length?plural(tasks.length,'task'):'',cls:'section'}));

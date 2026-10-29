@@ -109,7 +109,7 @@ VIEWS.overview=()=>{
  ])}</div>`;
 
  // goals first: each open goal as its distance to target, in units, with the best run on its slice over time
- if(gs.length)h+=panel('Goals',`<div class="ov-gl">${gs.map(ovGoal).join('')}</div>`,{cls:'section ov-goals',right:'<a class="more" href="#goals">View goals</a>'});
+ if(gs.length)h+=panel(term('goal','Goals'),`<div class="ov-gl">${gs.map(ovGoal).join('')}</div>`,{cls:'section ov-goals',right:'<a class="more" href="#goals">View goals</a>'});
 
  // the ladder: one column per rung, so each name is said once in the header and the track reads across
  const RUNGS=ovRungs(),CAP=6,seen=cands.slice(0,CAP).map(([k])=>mnt(k));
@@ -123,7 +123,7 @@ VIEWS.overview=()=>{
    ${cells}<td class="ov-nx"><span class="ell ${cls}">${lbl||DASH}</span></td></tr>`;
  });
  const lg=`<div class="ov-lg">${[['pass','passed'],['fail','failed'],['pending','next'],['locked','locked']].map(([c,l])=>`<span class="ov-rg ${c}"><i></i>${l}</span>`).join('')}${sup?`<a class="faint" href="#models">${sup} superseded by the champion</a>`:''}</div>`;
- const ladderCard=panel('Ladder',cands.length?`<div class="ov-ladtbl">${table(['Candidate',...RUNGS.map(r=>[`<span class="ov-rgh">${esc(r)}</span>`,'ov-rg']),['<span class="ov-nxh">Next</span>','ov-nx']],ladderRows)}</div>${lg}`:
+ const ladderCard=panel(term('ladder','Ladder'),cands.length?`<div class="ov-ladtbl">${table([term('candidate','Candidate'),...RUNGS.map(r=>[`<span class="ov-rgh">${esc(r)}</span>`,'ov-rg']),['<span class="ov-nxh">Next</span>','ov-nx']],ladderRows)}</div>${lg}`:
   empty('No candidates climbing',''),
   {meta:champ?`each candidate vs ${st.models[champ]?.title?`champion ${mn(champ)}`:`<a class="ln" href="#model/${enc(champ)}" title="${esc(champ)}">the champion</a>`}`:'',right:cands.length>CAP?`<a class="more" href="#models">All ${cands.length}</a>`:''});
 
@@ -138,7 +138,7 @@ VIEWS.overview=()=>{
  // the champion's baseline: the slices it has no run on yet, as chips
  if(champ&&bl?.need?.length){
   const nr=Object.keys(bl.roles).length;
-  h+=panel('Champion baseline',`<div class="ov-bchips">${bl.need.map(s=>`<a class="ov-bchip ${ovRunning(champ,s)?'run':''}" href="#slices/${enc(s)}" title="${esc(s)}">${esc(short(s))}<span class="faint"> ${ovN(st.slices[s]?.n)}</span></a>`).join('')}</div>`,
+  h+=panel(`${term('champion','Champion')} baseline`,`<div class="ov-bchips">${bl.need.map(s=>`<a class="ov-bchip ${ovRunning(champ,s)?'run':''}" href="#slices/${enc(s)}" title="${esc(s)}">${esc(short(s))}<span class="faint"> ${ovN(st.slices[s]?.n)}</span></a>`).join('')}</div>`,
    {meta:`${bl.need.length} of ${plural(nr,'slice')} not run`,cls:'section ov-base'});
  }
 
@@ -160,7 +160,7 @@ VIEWS.overview=()=>{
  const tabs=`<div class="tabs ov-tabs" role="tablist">${ds.map(d=>`<button role="tab" aria-selected="${d===S.lbDataset}" class="${d===S.lbDataset?'on':''}" onclick="S.lbDataset=${esc(JSON.stringify(d))};S.lbSlice=null;S.ovLbAll=false;render()">${esc(d)}<small>${ovN(st.datasets[d]?.size??Object.values(st.slices).filter(s=>s.dataset===d).reduce((a,s)=>Math.max(a,s.n||0),0))}</small></button>`).join('')}</div>`;
  const opt=s=>`<option value="${esc(s.name)}" ${s.name===S.lbSlice?'selected':''}>${esc(short(s.name))} · n ${ovN(s.n)}${st.leaderboard[s.name]?` · ${plural(Object.keys(st.leaderboard[s.name]).length,'model')}`:' · no runs'}</option>`;
  const kinds=[...new Set(sl.map(s=>s.kind))];
- const sel=`<label class="ov-pickl"><span>Slice</span><select class="ov-sel" onchange="ovPickSlice(this.value)">${kinds.map(k=>`<optgroup label="${esc(ovKind[k]||k)}">${sl.filter(s=>s.kind===k).map(opt).join('')}</optgroup>`).join('')}</select></label><span class="faint ov-pickn">${plural(sl.length,'slice')}</span>`;
+ const sel=`<label class="ov-pickl"><span>${term('slice','Slice')}</span><select class="ov-sel" onchange="ovPickSlice(this.value)">${kinds.map(k=>`<optgroup label="${esc(ovKind[k]||k)}">${sl.filter(s=>s.kind===k).map(opt).join('')}</optgroup>`).join('')}</select></label><span class="faint ov-pickn">${plural(sl.length,'slice')}</span>`;
  const pick=sl.length>7?sel:`<div class="ov-pick-s">${sel}</div><div class="seg ov-hide-s" role="tablist" aria-label="Slice">${sl.map(s=>`<button role="tab" aria-selected="${s.name===S.lbSlice}" class="${s.name===S.lbSlice?'on':''}" onclick="ovPickSlice(${esc(JSON.stringify(s.name))})">${esc(short(s.name))}<small>${ovN(s.n)}</small></button>`).join('')}</div>`;
  const sh=(label,k,cls)=>[`<button class="ov-sort ${so.k===k?'on':''}" onclick="ovSortBy('${k}')" aria-label="Sort by ${esc(label.replace(/<span class="ov-show-s">[^<]*<\/span>/g,'').replace(/<[^>]+>/g,''))}">${label}${so.k===k?`<span class="ov-arr">${so.d<0?'↓':'↑'}</span>`:''}</button>`,cls];
  const rows=shown.map(([m,r])=>{

@@ -179,7 +179,7 @@ VIEWS.goals=()=>{
  if(gs.length){
   if(!open.length)finding=`No open goals. ${[done.length?`${done.length} achieved`:'',gone.length?`${gone.length} abandoned`:''].filter(Boolean).join(', ')}.`;
   else{
-   finding=`<b>${plural(open.length,'open goal')}</b>. `;
+   finding=`<b>${open.length} open ${term('goal',open.length===1?'goal':'goals')}</b>. `;
    if(met.length)finding+=`${gl(met[0])} meets its target and waits to be recorded.`;
    else if(lead){const d=dist(lead);finding+=`${mains.length>1?'Furthest along: ':''}${gl(lead)}, ${d.v} ${d.s}.`}
    else finding+=open.some(g=>g.value==null)?'The champion has no complete run on a goal slice yet.':'No goal has a baseline to measure progress from.';
@@ -341,7 +341,7 @@ const hillsPanel=function(g){
  const rows=hs.slice(0,cap).map(([k,s])=>{const x=L.hills[k]||{},sh=x.share&&x.share.of?x.share.count/x.share.of:null,p=paperOf(k);
   const ow=sh!=null?String(x.share.of_what||'').replace(new RegExp('^of\\s+('+x.share.of+'\\s+)?','i'),'').trim():'';
   return `<tr class="click" onclick="if(!event.target.closest('a,button'))location.hash='hill/${enc(k)}'"><td><div class="two">${hLink(k)}<span class="sub">${x.target?`<span class="mono">${esc(short(x.target))}</span>`:'no dev set'}${p&&p.hill===k?` · <a class="ln" href="${paperUrl(p)}">notes</a>`:''}</span></div></td><td>${st(s)}</td><td class="num gl-sh">${sh!=null?`<div class="two"><span>${N(x.share.count)} <span class="faint">of ${N(x.share.of)}</span></span>${ow?`<span class="sub ell" title="${esc(ow)}">${esc(ow)}</span>`:''}</div>`:DASH}</td></tr>`});
- return panel('Hills',table([['Hill'],['Status'],['Share','num']],rows)+(more.length?`<p class="gl-note">${plural(more.length,'more hill')}: ${more.map(([k])=>hLink(k)).join(', ')}.</p>`:''),{meta:hillSum(g),cls:'gl-hills'});
+ return panel(term('hill','Hills'),table([['Hill'],['Status'],['Share','num']],rows)+(more.length?`<p class="gl-note">${plural(more.length,'more hill')}: ${more.map(([k])=>hLink(k)).join(', ')}.</p>`:''),{meta:hillSum(g),cls:'gl-hills'});
 }
 // ---------- what to run next on an open goal
 const nextPanel=function(g){

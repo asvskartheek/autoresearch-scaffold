@@ -121,7 +121,7 @@ VIEWS.hills=()=>{
  const open=hs.filter(([,x])=>x.status==='open');
   const climbing=open.filter(([,x])=>hillRuns(x).some(o=>o.m!==ch)).length;
  const finding=!hs.length?'':!open.length?`No open hills; ${plural(hs.length,'hill')} climbed or closed.`:
-  `<b>${plural(open.length,'open hill')}</b>, ${climbing===open.length?(open.length===1?'with an attempt':'all with an attempt'):`${climbing} with an attempt`}.`;
+  `<b>${open.length} open ${term('hill',open.length===1?'hill':'hills')}</b>, ${climbing===open.length?(open.length===1?'with an attempt':'all with an attempt'):`${climbing} with an attempt`}.`;
  let h=page({title:'Hills',crumbs:[['Hills']],finding});
  if(!hs.length)return h+panel('',empty('No hills yet','Find a failure mode by error analysis, then open it.')+`<div class="hcmd">${cmd('arx hill open <name> --title "…" --target <dev slice> --control <control slice>')}</div>`);
  for(const [s,l] of [['open','Open'],['climbed','Climbed']]){
@@ -255,7 +255,7 @@ function hAttempts(x,runs,U){
    ${cr?`<td class="num fig hfl">${fl?`<span class="${fl.f?'pos':'faint'}">+${fl.f}</span><span class="faint"> / </span><span class="${fl.k?'neg':'faint'}">−${fl.k}</span>`:DASH}</td>`:''}
    ${ctl?`<td class="num fig">${o.c?run(o.c,pFig(o.c,false,ctl,D?.control,o.m)):'<span class="faint">not run</span>'}</td>${now?`<td class="num fig hdc">${me||!o.c?DASH:(p=>p?pairCell(p,x.control):hDelta(o.c,now.c,false,ctl))(hPaired(o.m,x.control,D?.control?.runs?.[o.m],D?.control?.runs?.[ch]))}</td>`:''}`:''}</tr>`});
  const head=[['Model'],[''],[isRate(runs[0].r,sl)?'Solved':isTime(sl,U)?'Mean time':'Mean','num'],['']];
- if(now)head.push(['<span title="Paired change against the champion on the same dev examples, with its 90% interval">Δ vs champion</span>','num hdl']);
+ if(now)head.push([`${term('paired-delta','Δ')} vs ${term('champion')}`,'num hdl']);
  if(cr)head.push(bin?['<span title="Examples the champion got wrong and this got right / right and this got wrong">Fixed / broke</span>','num hfl']
   :[`<span title="Examples where this scored more than 10% ${isTime(sl,U)?'faster':'better'} / ${isTime(sl,U)?'slower':'worse'} than the champion">${isTime(sl,U)?'Faster / slower':'Better / worse'}</span>`,'num hfl']);
  if(ctl){head.push(['Control','num']);if(now)head.push(['<span title="Change against the champion on the control">Δ control</span>','num hdc'])}
