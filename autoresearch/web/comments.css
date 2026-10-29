@@ -39,6 +39,11 @@
 .cm-pop textarea,.cm-name{width:100%;background:var(--raised);color:var(--text);border:1px solid var(--control);border-radius:var(--radius-control);padding:7px 8px;font:inherit}
 .cm-pop textarea{min-height:64px;resize:vertical}
 .cm-pop textarea:focus,.cm-name:focus{outline:2px solid var(--accent);border-color:transparent}
+.cm-row .cm-name{width:auto;min-width:0;height:28px;padding:3px 8px}
+.cm-pop textarea.need{outline:2px solid var(--warning);animation:cm-shake .25s}
+@keyframes cm-shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.cm-err{font-size:var(--fs-small);color:var(--pill-warning-ink)}
+.cm-pop [disabled]{opacity:.6;cursor:default}
 .cm-row{display:flex;justify-content:flex-end;gap:6px;align-items:center}
 .cm-sp{flex:1;font-size:var(--fs-small);color:var(--faint)}
 .cm-sm{height:28px;padding:0 10px;border-radius:var(--radius-control);border:1px solid var(--control);background:var(--surface);color:var(--text);cursor:pointer}

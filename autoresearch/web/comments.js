@@ -215,17 +215,23 @@ const rich=b=>String(b||'').split(/(<svg[\s\S]*?<\/svg>)/i).map((x,i)=>i%2?clean
 function place(p,x,y){p.style.left=Math.max(12,Math.min(innerWidth-332,x+14))+'px';p.style.top=Math.max(12,Math.min(innerHeight-p.offsetHeight-60,y+14))+'px'}  // clear of the buttons
 function closePop(){pops.innerHTML='';open=null;if(pending){pending=null;drawPins()}}
 const focusLater=ta=>{ta.focus({preventScroll:true});setTimeout(()=>{ta.focus({preventScroll:true});requestAnimationFrame(()=>{if(document.activeElement!==ta)ta.focus({preventScroll:true})})},0)};
-const nameField=()=>me()?'':'<input class="cm-name" placeholder="Your name" maxlength="60">';
+const nameField=()=>me()?'<span class="cm-sp"></span>':'<input class="cm-name cm-sp" placeholder="Your name" maxlength="60">';
+// while a post is in flight: fields locked, the button says so; on failure the popover says it was not sent
+function busy(p,on,label){p.dataset.busy=on?'1':'';p.querySelectorAll('textarea,input,button').forEach(b=>b.disabled=on);
+ const go=p.querySelector('.go');if(on){go.dataset.label=go.textContent;go.textContent=label}else if(go.dataset.label)go.textContent=go.dataset.label}
+function failed(p){busy(p,false);const e=p.querySelector('.cm-err')||p.insertBefore(Object.assign(document.createElement('div'),{className:'cm-err'}),p.querySelector('.cm-row'));e.textContent='Not sent. Try again.'}
+function needText(ta){ta.classList.remove('need');void ta.offsetWidth;ta.classList.add('need');ta.focus({preventScroll:true})}
 function takeName(p){const n=p.querySelector('.cm-name');if(!n)return me()||'you';const v=n.value.trim();if(v)setMe(v);return v||'you'}
 const shapeName={box:'Box',arrow:'Arrow',pen:'Drawing',highlight:'Highlight'};
 const anchorText=a=>{const bare=a.what&&a.text&&a.what.split('.')[0]===a.text;  // an element with no text of its own: name its card
  return a.quote?'“'+a.quote.slice(0,120)+'”':(a.shape?shapeName[a.shape.tool]+' on ':'')+(bare&&a.ctx?a.ctx:a.text||'page')};
 function compose(a,x,y){closePop();a.route=here();a.vw=innerWidth;const p=document.createElement('div');p.className='cm-pop';
- p.innerHTML=`<div class="cm-anchor">${h(anchorText(a))}</div>${nameField()}<textarea placeholder="Comment"></textarea><div class="cm-row"><span class="cm-sp">⌘↵</span><button class="cm-sm x">Cancel</button><button class="cm-sm pri go">Comment</button></div>`;
- pops.append(p);place(p,x,y);const ta=p.querySelector('textarea');focusLater(p.querySelector('.cm-name')||ta);
+ p.innerHTML=`<div class="cm-anchor">${h(anchorText(a))}</div><textarea placeholder="Comment"></textarea><div class="cm-row">${nameField()}<button class="cm-sm x">Cancel</button><button class="cm-sm pri go" title="⌘↵">Comment</button></div>`;
+ pops.append(p);place(p,x,y);const ta=p.querySelector('textarea');focusLater(ta);
  if(a.shape||a.quote){pending=a;drawPins()}
- const send=async()=>{const body=ta.value.trim();if(!body)return;const author=takeName(p);
-  const ev=await post({kind:'comment',anchor:a,body,author});closePop();if(ev&&ev.id)thread(ev.id)};
+ const send=async()=>{if(p.dataset.busy)return;const body=ta.value.trim();if(!body)return needText(ta);const author=takeName(p);busy(p,true,'Sending…');
+  const ev=await post({kind:'comment',anchor:a,body,author});if(!ev||!ev.id)return p.isConnected&&failed(p);
+  if(p.isConnected){closePop();thread(ev.id)}};  // closed with Esc while sending: the pin shows, the popover stays shut
  p.querySelector('.go').onclick=send;p.querySelector('.x').onclick=closePop;
  p.querySelectorAll('textarea,input').forEach(f=>f.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))send();if(e.key==='Escape')closePop()})}
 
@@ -277,12 +283,15 @@ function thread(id){const c=all.find(t=>t.id===id);if(!c)return;
  const msg=m=>`<div class="cm-m"><div class="cm-who">${h(m.agent?'Agent':m.author)} · ${when(m.t)}</div><div class="cm-msg ${m.agent?'agent':''}${m.error?' err':''}">${m.agent?rich(m.body):linky(m.body)}</div></div>`;
  const ag=working(c)?`<div class="cm-m"><div class="cm-who">Agent</div><div class="cm-msg agent cm-busy"><span class="cm-dot"></span>${h(c.agent.note||(c.agent.status==='queued'?'Queued':'Working'))}${c.agent.task?` <a href="#task/${encodeURIComponent(c.agent.task)}">task</a>`:''}</div></div>`:'';
  p.innerHTML=`<div class="cm-anchor">${mine().indexOf(c)+1} · ${h(anchorText(c.anchor||{}))}</div><div class="cm-msgs">${c.messages.map(msg).join('')}${ag}</div>
- ${nameField()}<textarea placeholder="Reply"></textarea><div class="cm-row"><span class="cm-sp">${c.resolved?'Resolved':''}</span><button class="cm-sm rs">${c.resolved?'Reopen':'Resolve'}</button><button class="cm-sm pri go">Reply</button></div>`;
+ <textarea placeholder="Reply"></textarea><div class="cm-row">${nameField()}<button class="cm-sm rs">${c.resolved?'Reopen':'Resolve'}</button><button class="cm-sm pri go">Reply</button></div>`;
  pops.append(p);const [x,y]=pos(c)||[innerWidth-360,innerHeight-120];place(p,x,y);const ta=p.querySelector('textarea');ta.value=draft;
  const ms=p.querySelector('.cm-msgs');ms.scrollTop=ms.scrollHeight;
- const send=async()=>{const body=ta.value.trim();if(!body)return;await post({kind:'reply',parent:id,body,author:takeName(p)});ta.value='';thread(id)};
+ const send=async()=>{if(p.dataset.busy)return;const body=ta.value.trim();if(!body)return needText(ta);busy(p,true,'Sending…');
+  const ev=await post({kind:'reply',parent:id,body,author:takeName(p)});if(!ev)return p.isConnected&&failed(p);
+  if(p.isConnected&&open===id){ta.value='';thread(id)}};
  p.querySelector('.go').onclick=send;
- p.querySelector('.rs').onclick=async()=>{await post({kind:c.resolved?'reopen':'resolve',parent:id,author:me()||'you'});closePop()};
+ p.querySelector('.rs').onclick=async()=>{if(p.dataset.busy)return;busy(p,true,'Reply');const ev=await post({kind:c.resolved?'reopen':'resolve',parent:id,author:me()||'you'});
+  if(!ev)return p.isConnected&&failed(p);if(p.isConnected&&open===id)closePop()};
  p.querySelectorAll('textarea,input').forEach(f=>f.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))send();if(e.key==='Escape')closePop()})}
 function drawList(){if(!list.classList.contains('on'))return;const ts=[...mine(),...all.filter(t=>t.route!==here())];
  const item=c=>{const i=mine().indexOf(c);return `<div class="cm-it ${klass(c)}" data-id="${c.id}"><span class="cm-n">${i>=0?i+1:'#'+h(c.route)}</span>${h(c.messages[0].body.slice(0,140))}<div class="cm-who">${h(anchorText(c.anchor||{}))} · ${c.messages.length-1} ${c.messages.length===2?'reply':'replies'}${c.resolved?' · resolved':working(c)?' · agent working':''}</div></div>`};
@@ -293,7 +302,7 @@ function drawList(){if(!list.classList.contains('on'))return;const ts=[...mine()
 
 async function post(row){let ev=null;try{const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(row)});if(r.ok)ev=await r.json()}catch(e){}await load();return ev}
 async function load(){try{const r=await fetch(API,{cache:'no-store'});if(!r.ok)return;all=(await r.json()).threads||[];
- const p=pops.firstChild,reopen=open&&p&&!p.contains(document.activeElement);drawPins();drawList();if(reopen)thread(open)}catch(e){}}
+ const p=pops.firstChild,reopen=open&&p&&!p.dataset.busy&&!p.contains(document.activeElement);drawPins();drawList();if(reopen)thread(open)}catch(e){}}
 document.body.append(host);
 addEventListener('scroll',drawPins,{passive:true,capture:true});addEventListener('resize',drawPins);
 addEventListener('hashchange',()=>{closePop();setMode(false);chip.style.display='none';setTimeout(()=>{drawPins();drawList()},0)});
