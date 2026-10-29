@@ -65,6 +65,37 @@ def _port_open(port: int) -> bool:
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
+def _served(p: Project) -> str | None:
+    """The base URL that serves this project, or None. Its own server.json first; else any running dashboard of
+    another registered project, since one server lists every registered project at /p/<key>/."""
+    from . import projects
+    import urllib.request
+    own = p.dir / "server.json"
+    try:
+        port = int(json.loads(own.read_text()).get("port") or 0) if own.exists() else 0
+    except (ValueError, TypeError):
+        port = 0
+    if port and _port_open(port):
+        return f"http://127.0.0.1:{port}"
+    key = projects.key_for(p.root)
+    if not key:
+        return None
+    ports = set()
+    for r in projects.registry().values():
+        try:
+            ports.add(int(json.loads((Path(r["root"]) / ".research" / "server.json").read_text()).get("port") or 0))
+        except (OSError, ValueError, TypeError, KeyError):
+            pass
+    for port in sorted(x for x in ports if x and _port_open(x)):
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/projects", timeout=1.5) as r:
+                if any(q.get("key") == key for q in json.loads(r.read())):
+                    return f"http://127.0.0.1:{port}/p/{key}"
+        except (OSError, ValueError):
+            continue
+    return None
+
+
 def _up(root: Path, port: int, restart: bool = False) -> str:
     """Start the dashboard detached (idempotent); its port and pid are kept in .research/server.json."""
     info = root / ".research" / "server.json"
@@ -316,7 +347,7 @@ def cmd_task(a):
             sys.exit(3)
     elif a.action == "finish":
         t.finish(a.status, summary=json.loads(Path(a.summary_file).read_text()) if a.summary_file else None)
-    if a.action != "start" and not _port_open(json.loads((p.dir / "server.json").read_text()).get("port", 0)) if (p.dir / "server.json").exists() else True:
+    if a.action != "start" and not _served(p):
         print("warning: dashboard is not running; `arx up`", file=sys.stderr)
 
 
@@ -354,20 +385,21 @@ def _is_dashboard(pid: int, port: int) -> bool:
 def cmd_paper(a):
     from . import papers
     p = Project()
-    port = (json.loads((p.dir / "server.json").read_text()).get("port") if (p.dir / "server.json").exists() else None) or 8890
-    if not _port_open(port):  # stale server.json: point at the command that serves it rather than a dead port
-        print(f"(this project's dashboard is not running on {port}: `arx up` prints where it is served)", file=sys.stderr)
+    base = _served(p)
+    if not base:  # no dashboard serves it: point at the command rather than a dead port
+        base = "http://127.0.0.1:8890"
+        print("(this project's dashboard is not running: `arx up` prints where it is served)", file=sys.stderr)
     if a.verb in ("add", "edit"):  # edit = republish; open pages swap the new version in without reloading
         if not a.name or not a.file:
             sys.exit(f"usage: arx paper {a.verb} <name> --file paper.html")
         if a.goal and a.goal not in p.goals():
             sys.exit(f"unknown goal {a.goal}")
         f = papers.add(p, a.name, Path(a.file), title=a.title, hill=a.hill, goal=a.goal)
-        print(f"{f}\nhttp://127.0.0.1:{port}/papers/{a.name}")
+        print(f"{f}\n{base}/papers/{a.name}")
     elif a.verb == "ls":
         for name, m in papers.papers(p).items():
             print(f"{name}  {m.get('title') or ''}  threads={m['comments']} open={m['open']} waiting={m['waiting']}"
-                  f"  http://127.0.0.1:{port}/papers/{name}")
+                  f"  {base}/papers/{name}")
     elif a.verb == "poll":  # blocks until a person is waiting on the agent; one JSON line per thread
         for th in papers.poll(p, a.name, timeout=a.timeout):
             print(json.dumps(dict(paper=th["paper"], thread=th["id"], quote=(th.get("anchor") or {}).get("quote"),
@@ -378,7 +410,7 @@ def cmd_paper(a):
     elif a.verb == "attach":
         if not a.file:
             sys.exit("usage: arx paper attach <name> --file page.html")
-        print(f"http://127.0.0.1:{port}" + papers.attach(p, a.name, Path(a.file)))
+        print(base + papers.attach(p, a.name, Path(a.file)))
     elif a.verb == "new" and a.goal:  # the public paper: the worked goal example, to rewrite with this goal's result
         if a.goal not in p.goals():
             sys.exit(f"unknown goal {a.goal}")
