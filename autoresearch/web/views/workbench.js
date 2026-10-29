@@ -111,8 +111,8 @@ function card(t){
 }
 const row=t=>`<article class="wb-job short ${t.status==='stalled'?'stalled':''}">${head(t,true)}${t.status==='stalled'?`<div class="wb-fix wb-in">${cmd(wbFixCmd(t))}</div>`:''}</article>`;
 // finished leaf jobs, newest first: what just landed
-function strip(){
- const done=S.state.tasks.filter(t=>!isLive(t)&&t.ended&&!S.state.tasks.some(k=>k.parent===t.id)).sort((a,b)=>b.ended-a.ended).slice(0,6);
+function strip(skip=new Set()){
+ const done=S.state.tasks.filter(t=>!isLive(t)&&t.ended&&!skip.has(t.id)&&!S.state.tasks.some(k=>k.parent===t.id)).sort((a,b)=>b.ended-a.ended).slice(0,6);
  if(!done.length)return '';
  return `<div class="wb-strip">${done.map(t=>{const ok=t.status==='done'||t.status==='completed',sm=t.summary||{};
   const res=t.kind==='eval'&&sm.score!=null?(S.state.slices[t.slice]?.scale==='continuous'?fmtv(sm.score):`${n0(sm.score*(sm.n||0))} of ${n0(sm.n||0)}`):span(t.ended-t.created);
@@ -143,11 +143,11 @@ VIEWS.workbench=()=>{
  const parts=[];
  if(stalled.length)parts.push(`<b class="neg">${stalled.length} stalled</b>`);
  if(run.length)parts.push(`<b>${run.length} running</b>`+(last?`, ${ends.length<run.length?`${ends.length} with an estimate `:'all '}done by <b>${wbClock(last)}</b>`:''));
- const h=page({title:'Workbench',crumbs:[['Workbench','#workbench']],finding:parts.length?parts.join(' · '):'Nothing running.'});
  const failed=failedJobs();
  if(failed.length)parts.unshift(`<b class="neg">${failed.length} failed</b>`);
  if(dead.length)parts.push(`${dead.length} abandoned`);
+ const h=page({title:'Workbench',crumbs:[['Workbench','#workbench']],finding:parts.length?parts.join(' · '):'Nothing running.'});
  const list=[...failed.map(failRow),...stalled.map(t=>t.long?card(t):row(t)),...long.map(card),...shortJ.map(row),deadGroup(dead)].filter(Boolean);
- return h+strip()+(list.length?`<div class="wb-jobs section">${list.join('')}</div>`:`<section class="section">${panel('',empty('Nothing running','Start one with <code>arx task start --title …</code> or <code>arx.task(...)</code> in Python.'))}</section>`);
+ return h+strip(new Set(failed.map(t=>t.id)))+(list.length?`<div class="wb-jobs section">${list.join('')}</div>`:`<section class="section">${panel('',empty('Nothing running','Start one with <code>arx task start --title …</code> or <code>arx.task(...)</code> in Python.'))}</section>`);
 };
 }

@@ -56,7 +56,8 @@
 .wb-mem{margin-top:6px}.wb-mem .meter{height:4px;background:var(--active)}.wb-mem .meter i{background:var(--chart-2)}
 
 .wb-job.failed{border-color:color-mix(in srgb,var(--negative) 45%,var(--border))}
-.wb-err{flex:1 1 auto;min-width:0;font:13px var(--mono);color:var(--negative);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wb-job.failed .wb-ttl{flex:0 1 auto;max-width:45%}
+.wb-err{flex:1 1 0;min-width:0;font:13px var(--mono);color:var(--negative);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* abandoned jobs (stalled over a day): one line, opens to the list and one close command */
 .wb-dead summary{cursor:pointer;list-style:none;padding:11px 16px}.wb-dead summary::-webkit-details-marker{display:none}
@@ -77,7 +78,7 @@
  .wb-pn.lead{grid-column:1/-1;grid-row:auto}
  .wb-vit.n3 .wb-pn:not(.lead){grid-column:auto}
  .wb-hl{flex-wrap:wrap;row-gap:4px}
- .wb-ttl{flex:1 1 100%;order:-1;white-space:normal}
+ .wb-ttl,.wb-job.failed .wb-ttl{flex:1 1 100%;max-width:none;order:-1;white-space:normal}
  .wb-eta{margin-left:0}
 }
 @media (max-width:640px){
