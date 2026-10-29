@@ -96,7 +96,7 @@ VIEWS.overview=()=>{
  });
  const ladderCard=panel('Ladder',cands.length?`<div class="ov-ladtbl">${table(['Candidate',...RUNGS.map(r=>[`<span class="ov-rgh">${esc(r)}</span>`,'ov-rg']),['<span class="ov-nxh">Next</span>','ov-nx']],ladderRows)}</div>`:
   empty('No candidates climbing',''),
-  {meta:champ?`against ${mn(champ)}`:'',right:cands.length>CAP?`<a class="more" href="#models">All ${cands.length}</a>`:''});
+  {meta:champ?`each candidate vs champion ${mn(champ)}`:'',right:cands.length>CAP?`<a class="more" href="#models">All ${cands.length}</a>`:''});
 
  // running now: one compact row each; stalled rows marked; work dead for over a day is one line, not a card
  const RC=6,byNew=(a,b)=>b.created-a.created;
