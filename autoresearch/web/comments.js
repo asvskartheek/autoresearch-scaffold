@@ -131,10 +131,14 @@ function over(el){const r=el.getBoundingClientRect(),d=el.ownerDocument,rg=d.cre
    if(q.width&&cx>=r.left&&cx<=r.right&&cy>=r.top&&cy<=r.bottom)out.push(t.nodeValue.trim())}
   if(out.length)return out.join(' ')}
  return ''}
-// the path from one element down to another: tag:nth-of-type steps (SVG tags too)
+// one step of a path: by its data-id when that names it among its siblings (a heatmap cell keeps its example when the
+// rows re-sort), else tag:nth-of-type (SVG tags too)
+function step(el){const id=el.getAttribute('data-id'),p=el.parentElement;
+ if(id&&p){const q=`${el.localName}[data-id="${id.replace(/["\\]/g,'\\$&')}"]`;try{if(p.querySelectorAll(':scope>'+q).length===1)return q}catch(e){}}
+ let i=1,s=el;while((s=s.previousElementSibling))if(s.localName===el.localName)i++;return el.localName+`:nth-of-type(${i})`}
+// the path from one element down to another
 function path(from,el){const parts=[];
- while(el&&el!==from){let i=1,s=el;while((s=s.previousElementSibling))if(s.localName===el.localName)i++;
-  parts.unshift(el.localName+`:nth-of-type(${i})`);el=el.parentElement}
+ while(el&&el!==from){parts.unshift(step(el));el=el.parentElement}
  return el===from?parts.join('>'):null}
 const CSS0=`.pk-box{position:fixed;z-index:2147482000;pointer-events:none;border:2px solid var(--pk,#f59f00);border-radius:3px;box-shadow:0 0 0 1px rgba(0,0,0,.35);
 background:color-mix(in srgb,var(--pk,#f59f00) 12%,transparent);display:none;transition:all .06s ease-out}
@@ -162,7 +166,7 @@ function ARXPICK(o){
   if(!cur.isConnected){let again=null;try{again=kept&&D().documentElement.querySelector(':scope>'+kept)}catch(e){}again=again||(last&&leaf(last.x,last.y));cur=null;if(again&&ok(again))cur=again;if(!cur){box.style.display=tag.style.display='none';return}}
   const r=cur.getBoundingClientRect(),f=O(),L=r.left+f.x,T=r.top+f.y;
   Object.assign(box.style,{display:'block',left:L-2+'px',top:T-2+'px',width:r.width+4+'px',height:r.height+4+'px'});
-  const k=kind(cur),t=text(cur,48),c=!t||MARK.test(k)?around(cur,40):'';tag.innerHTML='';tag.append(k);
+  const k=kind(cur),t=text(cur,72),c0=!t||MARK.test(k)?around(cur,40):'',c=c0&&!t.includes(c0.slice(0,16))?c0:'';tag.innerHTML='';tag.append(k);
   if(t){const i=top.createElement('i');i.textContent=' · ';tag.append(i,t)}
   if(c&&c!==t){const i=top.createElement('i');i.textContent=' · in ';tag.append(i,c)}
   tag.style.display='block';const tw=tag.offsetWidth,th=tag.offsetHeight;
@@ -256,10 +260,7 @@ function keyOf(el){let fall=null;
   if(hs.size===1&&a.parentElement&&(CARD.test(a.tagName)||/card|job|row|item/.test(a.getAttribute("class")||"")||hrefs(a.parentElement).size>1)&&(hit=ok({href:[...hs][0],card:sig(a)},a)))return hit;
  }
  return fall||[null,null]}
-function relPath(from,el){const parts=[];
- while(el&&el!==from){let i=1,s=el;while((s=s.previousElementSibling))if(s.tagName===el.tagName)i++;
-  parts.unshift(el.tagName.toLowerCase()+`:nth-of-type(${i})`);el=el.parentElement}
- return el===from?parts.join('>'):null}
+const relPath=ARXPICK.path;
 function cssPath(el){const parts=[];while(el&&el.nodeType===1&&el!==document.body){
  if(el.id&&!/^\d/.test(el.id)){parts.unshift('#'+CSS.escape(el.id));break}
  let i=1,s=el;while((s=s.previousElementSibling))if(s.tagName===el.tagName)i++;
