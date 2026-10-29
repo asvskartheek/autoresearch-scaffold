@@ -143,6 +143,15 @@ def _answered(p: Project, item: dict, since: float) -> bool:
     if k == "paper":
         th = next((t for t in papers.threads(papers.thread(p, pl["paper"])) if t["id"] == pl["thread"]), None)
         return th is None or not th["waiting"]
+    if k == "question":  # settled, handed to a person, or split into follow-ups since the agent started
+        from . import questions
+        qs, qid = questions.stored(p), item.get("ref")
+        rec = qs.get(qid) or {}
+        return ((rec.get("settled") or 0) >= since - 1 or bool(rec.get("needs_human")) and (rec.get("updated") or rec.get("settled") or since) >= since - 1
+                or any(v.get("parent") == qid and (v.get("created") or 0) >= since - 1 for v in qs.values() if isinstance(v, dict)))
+    if k == "goal":  # the intake agent leaves a proposal on its item
+        cur = next((i for i in features.inbox(p) if i["id"] == item["id"]), {})
+        return bool(cur.get("proposal"))
     return True  # other kinds report through their own commands; the exit code decides
 
 
@@ -153,6 +162,13 @@ def _fail_reply(p: Project, item: dict, msg: str) -> None:
             comments.reply(p, pl.get("thread") or item["ref"], msg, error=True)
         elif k == "paper":
             papers.post(p, pl["paper"], "reply", parent=pl["thread"], body=msg, agent=True, author="agent")
+        elif k == "question":  # back to open with the reason, so it never spins as "agent working" forever
+            from . import questions
+            with questions.locked(questions._file(p)):
+                data = questions.stored(p)
+                if item.get("ref") in data and data[item["ref"]].get("status") == "agent":
+                    data[item["ref"]] |= dict(status="open", error=msg[:300])
+                    questions._write(questions._file(p), data)
     except (KeyError, OSError, ValueError):
         pass
 

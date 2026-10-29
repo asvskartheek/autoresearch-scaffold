@@ -97,6 +97,17 @@ class Daemon(unittest.TestCase):
         self.assertIn("usage limit", comments.with_agent(p, [th])[0]["agent"]["note"])
         self.assertIsNone(answer.limited(Path(p.root / "research.json")))
 
+    def test_silent_question_agent_is_not_answered(self):
+        from autoresearch import questions
+        p = project()
+        q = questions.ask(p, "Give me an intro to the data") if hasattr(questions, "ask") else None
+        self.assertIsNotNone(q)
+        self.run_daemon(p, fake_agent(p.root, "echo 'a glossary written only to the log'"))
+        item = features.inbox(p)[0]
+        self.assertEqual(item["status"], "failed")
+        rec = questions.stored(p)[q["id"]]
+        self.assertEqual(rec["status"], "open"); self.assertIn("without replying", rec["error"])
+
     def test_timeout(self):
         p = project()
         a = comments._post(p, "/api/comments", dict(kind="comment", body="slow", anchor=ANCHOR))[1]
