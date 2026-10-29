@@ -39,6 +39,10 @@ function pFig(r,U,sl,M,m){
 // a continuous score against the champion's on one example: 1 better, -1 worse, 0 level (within 10%)
 const cmpC=(v,c)=>Math.abs(v-c)<=Math.max(1e-9,.1*Math.abs(c))?0:better(v,c)?1:-1;
 const hShare=x=>x.share&&x.share.of?x.share.count/x.share.of:null;
+// what a share counts, in the hill's own words without a leading "of 183": shares are counts over different
+// denominators (wrong answers of one run, flaky questions, slow questions), so a bare "% of failures" would mislead
+const ofWhat=x=>String(x.share?.of_what||'').replace(new RegExp('^of\\s+('+x.share?.of+'\\s+)?','i'),'').trim();
+const shareTxt=x=>`<b>${x.share.count.toLocaleString()}</b> of ${x.share.of.toLocaleString()}`;
 const H_ORDER={open:0,climbed:1,closed:2};
 const exsOf=x=>x?x.examples||(x.example?[x.example]:[]):[];
 function hillRuns(x){
@@ -115,10 +119,9 @@ VIEWS.hills=()=>{
  const L=S.state,ch=L.champion;
  const hs=Object.entries(L.hills).sort((a,b)=>(H_ORDER[a[1].status]??3)-(H_ORDER[b[1].status]??3)||(hShare(b[1])??-1)-(hShare(a[1])??-1)||b[1].created-a[1].created);
  const open=hs.filter(([,x])=>x.status==='open');
- const big=open.find(([,x])=>hShare(x)!=null);
- const climbing=open.filter(([,x])=>hillRuns(x).some(o=>o.m!==ch)).length;
+  const climbing=open.filter(([,x])=>hillRuns(x).some(o=>o.m!==ch)).length;
  const finding=!hs.length?'':!open.length?`No open hills; ${plural(hs.length,'hill')} climbed or closed.`:
-  `<b>${plural(open.length,'open hill')}</b>, ${climbing===open.length?(open.length===1?'with an attempt':'all with an attempt'):`${climbing} with an attempt`}.${big?` The biggest, <b>${esc(big[1].title)}</b>, explains ${pct(hShare(big[1]))} of the failures it was counted against.`:''}`;
+  `<b>${plural(open.length,'open hill')}</b>, ${climbing===open.length?(open.length===1?'with an attempt':'all with an attempt'):`${climbing} with an attempt`}.`;
  let h=page({title:'Hills',crumbs:[['Hills']],finding});
  if(!hs.length)return h+panel('',empty('No hills yet','Find a failure mode by error analysis, then open it.')+`<div class="hcmd">${cmd('arx hill open <name> --title "…" --target <dev slice> --control <control slice>')}</div>`);
  for(const [s,l] of [['open','Open'],['climbed','Climbed']]){
@@ -140,7 +143,8 @@ function hCard([k,x]){
  const row=(o,m,label,role,cls,mark)=>`<div class="hc-run"><span class="nm ${o?'':'faint'}" title="${esc(m||'')}"><span class="nmt">${label}</span>${role?`<span class="rl">${role}</span>`:''}</span><span class="fig">${o?hFig(o.r,U,sl):'<span class="faint">not run</span>'}</span>${bar(o?.r,mark,cls)}</div>`;
  // the card is an article whose title link stretches over it, so the notes link can sit inside as its own stop
  return `<article class="card hcard ${esc(x.status)}">
-  <div class="hc-top">${st(x.status)}${sh!=null?`<span class="hc-share" title="${x.share.count} of ${x.share.of} ${esc(x.share.of_what||'')}"><b>${pct(sh)}</b> of failures</span>`:''}${hPaper(k,'hc-paper')}</div>
+  <div class="hc-top">${st(x.status)}${sh!=null?`<span class="hc-share" title="${esc(ofWhat(x))}">${shareTxt(x)}</span>`:''}${hPaper(k,'hc-paper')}</div>
+  ${sh!=null&&ofWhat(x)?`<p class="hc-ofw ell" title="${esc(ofWhat(x))}">${esc(ofWhat(x))}</p>`:''}
   <h3><a href="#hill/${enc(k)}">${esc(x.title)}</a></h3>
   <p class="hc-sym">${esc(x.symptom||firstLine(x.problem))||'<span class="faint">No symptom written yet</span>'}</p>
   <div class="hc-runs">
@@ -156,7 +160,7 @@ function hClosed(rest){
  const lede=one?`<p class="hcl-why">${esc(one)}${sup.length?` Replaced by ${sup.map(s=>L.hills[s]?`<a class="ln" href="#hill/${enc(s)}">${esc(L.hills[s].title)}</a>`:esc(s)).join(', ')}.`:''}</p>`:'';
  const rows=rest.map(([k,x])=>{const sh=hShare(x),att=hillRuns(x).filter(o=>o.m!==L.champion).length;
   return `<tr class="click" onclick="location.hash='#hill/${enc(k)}'"><td><div class="two"><a href="#hill/${enc(k)}"><b>${esc(x.title)}</b></a><span class="sub ell" title="${esc(one?x.symptom||'':x.reason||x.symptom||'')}">${esc(one?x.symptom||firstLine(x.problem):x.reason||x.symptom||'')}</span></div></td>
-   <td class="num fig">${sh!=null?pct(sh):DASH}</td><td class="num fig">${att}</td><td class="num hcl-d">${x.closed?stamp(x.closed):DASH}</td></tr>`});
+   <td class="num fig"${sh!=null?` title="${esc(ofWhat(x))}"`:''}>${sh!=null?shareTxt(x):DASH}</td><td class="num fig">${att}</td><td class="num hcl-d">${x.closed?stamp(x.closed):DASH}</td></tr>`});
  return `<section class="hgroup"><div class="hgh"><h2>${rest.every(([,x])=>x.status==='closed')?'Closed':'Closed and other'}</h2><span class="meta">${rest.length}</span></div>${panel('',lede+table([['Hill'],['Share','num'],['Attempts','num'],['Closed','num']],rows),{cls:'hcl'})}</section>`;
 }
 
@@ -227,9 +231,9 @@ function hCommon(x){
  const sh=hShare(x);
  const found=x.found_in?`<p class="hfin">Found in ${mLink(x.found_in)}</p>`:'';
  if(sh==null)return panel('How common',empty('Not counted yet',`Count it with <code>arx hill explain ${esc(x._key)} --share COUNT/OF --share-of "…"</code>`)+found,{cls:'hcom'});
- return panel('How common',`<div class="hbig"><b>${pct(sh)}</b><span>of failures</span></div>
+ return panel('How common',`<div class="hbig"><b>${x.share.count.toLocaleString()}</b><span>of ${x.share.of.toLocaleString()}</span></div>
   ${meter(sh,{cls:'warn'})}
-  <p class="hofw"><b>${x.share.count} of ${x.share.of}</b> ${esc(String(x.share.of_what||'analysed failures').replace(new RegExp('^of\\s+('+x.share.of+'\\s+)?','i'),''))}</p>${found}`,{cls:'hcom'});
+  <p class="hofw">${esc(ofWhat(x)||'analysed failures')}</p>${found}`,{cls:'hcom'});
 }
 // who fixed it: every run on the dev set, the champion first
 function hAttempts(x,runs,U){
