@@ -1,0 +1,475 @@
+{
+  "projector": {
+    "source": "Read-only ledger metadata captured 2026-10-30; no rows or private client data",
+    "config": {
+      "primary_dataset": null
+    },
+    "champion": "v0",
+    "models": {
+      "v0": {
+        "title": "Launcher as shipped, with Bluetooth button",
+        "status": "champion"
+      },
+      "v1": {
+        "parent": "v0",
+        "hill": "cold-start",
+        "status": "rejected"
+      },
+      "v2": {
+        "parent": "v0",
+        "hill": "cold-start",
+        "status": "rejected"
+      },
+      "v3": {
+        "parent": "v0",
+        "hill": "cold-start",
+        "status": "candidate"
+      },
+      "v4": {
+        "parent": "v0",
+        "hill": "cold-start",
+        "status": "candidate"
+      }
+    },
+    "slices": {
+      "cold/n24": {
+        "n": 24,
+        "scale": "continuous",
+        "unit": "ms",
+        "metric": "minus ms from the launcher's START to its Home row tiles painted (cold process); higher is better",
+        "kind": "synthetic"
+      },
+      "home/n20": {
+        "n": 20,
+        "scale": "continuous",
+        "unit": "ms",
+        "metric": "minus ms from the HOME key's START to the launcher's repainted frame; higher is better",
+        "kind": "synthetic"
+      },
+      "focus/n40": {
+        "n": 40,
+        "scale": "continuous",
+        "unit": "ms",
+        "metric": "minus ms from a D-pad key event to the frame after the focus moved; higher is better",
+        "kind": "synthetic"
+      },
+      "mem/n12": {
+        "n": 12,
+        "scale": "continuous",
+        "unit": "MB",
+        "metric": "minus PSS in MB of the launcher plus its WebView renderer, 6 s after a cold start; higher is better",
+        "kind": "control"
+      },
+      "android/checks": {
+        "n": 13,
+        "metric": "1 if the check passes on the device, 0 if not",
+        "kind": "synthetic"
+      }
+    },
+    "datasets": {},
+    "goals": {
+      "launcher-speed": {
+        "name": "launcher-speed",
+        "title": "Home appears in under a second",
+        "slice": "cold/n24",
+        "status": "open",
+        "kpi": "score",
+        "target": -1000.0,
+        "value": -1458.125,
+        "model": "v0",
+        "n": 24,
+        "scale": "continuous",
+        "higher_is_better": true,
+        "met": false
+      },
+      "plain-android": {
+        "name": "plain-android",
+        "title": "The projector behaves like plain Android",
+        "slice": "android/checks",
+        "status": "open",
+        "kpi": "score",
+        "target": 1.0,
+        "value": null,
+        "model": "v0",
+        "n": 13,
+        "scale": "binary",
+        "higher_is_better": true,
+        "met": false
+      }
+    },
+    "hills": {
+      "cold-start": {
+        "title": "Slow cold start",
+        "status": "open",
+        "target": "cold/n24",
+        "control": "mem/n12",
+        "symptom": "Pressing Home after a heavy app shows a blank or tile-less screen for a while"
+      }
+    }
+  },
+  "qwen": {
+    "source": "Read-only ledger metadata captured 2026-10-30; no rows or private client data",
+    "config": {
+      "primary_dataset": null
+    },
+    "champion": null,
+    "models": {
+      "transformers-baseline": {
+        "parent": "",
+        "status": "historical"
+      },
+      "vllm-baseline": {
+        "parent": "",
+        "status": "historical"
+      },
+      "gdn-bv16": {
+        "parent": "vllm-baseline",
+        "hill": "gdn-decode",
+        "status": "rejected"
+      },
+      "gemv-small": {
+        "parent": "vllm-baseline",
+        "hill": "gemv-small",
+        "status": "candidate"
+      }
+    },
+    "slices": {
+      "throughput/128-256": {
+        "n": 8,
+        "metric": "generated tokens/sec (artifact-only)",
+        "kind": "synthetic"
+      },
+      "throughput/controls": {
+        "n": 6,
+        "metric": "generated tokens/sec (artifact-only)",
+        "kind": "control"
+      }
+    },
+    "datasets": {},
+    "goals": {
+      "c1-throughput": {
+        "name": "c1-throughput",
+        "title": "Single-sequence vLLM throughput +3%",
+        "slice": "throughput/128-256",
+        "status": "open",
+        "kpi": "tokens_per_second_c1",
+        "target": 322.0,
+        "value": null,
+        "model": null,
+        "n": 8,
+        "scale": "binary",
+        "higher_is_better": true,
+        "met": false
+      }
+    },
+    "hills": {
+      "gdn-decode": {
+        "title": "Recurrent attention limits batched throughput",
+        "status": "open",
+        "target": "throughput/128-256",
+        "control": "throughput/controls",
+        "examples": [
+          {
+            "input": "128 sequences on RTX A5000.",
+            "wrong": "Packed GDN consumes 39% of profiled kernel time.",
+            "right": "Reduce kernel duration while preserving outputs.",
+            "why": "Launch geometry affects memory access and occupancy."
+          }
+        ],
+        "symptom": "Large batches spend much of their GPU time updating recurrent attention state."
+      },
+      "gemv-small": {
+        "title": "Single-vector projection overhead",
+        "status": "open",
+        "target": "throughput/128-256",
+        "control": "throughput/controls",
+        "examples": [
+          {
+            "input": "One sequence, output projection 1024 by 2048.",
+            "wrong": "Stock kernel takes 8.54 microseconds in isolation.",
+            "right": "Candidate takes 4.11 microseconds in isolation; end-to-end gain unverified.",
+            "why": "A dedicated vector reduction avoids generic matrix multiplication overhead."
+          }
+        ],
+        "symptom": "One-request inference spends most GPU time in matrix-vector projections."
+      }
+    }
+  },
+  "gsm8k": {
+    "source": "Read-only ledger metadata captured 2026-10-30; no rows or private client data",
+    "config": {
+      "primary_dataset": "gsm8k-test"
+    },
+    "champion": "percent-base-1024-v1",
+    "models": {
+      "qwen3-4b-rl-archived": {
+        "title": "Qwen3-4B RL \u2014 archived baseline",
+        "parent": "qwen3-4b-rl-archived",
+        "status": "historical"
+      },
+      "planned-percent-base": {
+        "title": "Planned: Percentages and the quantity they apply to",
+        "parent": "qwen3-4b-rl-archived",
+        "hill": "percent-base",
+        "status": "planned"
+      },
+      "planned-time-rate": {
+        "title": "Planned: Time, rates, and repeated schedules",
+        "parent": "qwen3-4b-rl-archived",
+        "hill": "time-rate",
+        "status": "planned"
+      },
+      "planned-group-count": {
+        "title": "Planned: Groups, per-item quantities, and multiplicity",
+        "parent": "qwen3-4b-rl-archived",
+        "hill": "group-count",
+        "status": "planned"
+      },
+      "qwen3-4b-rl-fresh-v1": {
+        "title": "Qwen3-4B RL \u2014 fresh audited harness",
+        "parent": "qwen3-4b-rl-archived",
+        "status": "retired"
+      },
+      "percent-sft-v1": {
+        "title": "Percentage SFT \u00b7 1 epoch \u00b7 1e-6",
+        "parent": "qwen3-4b-rl-fresh-v1",
+        "hill": "percent-base",
+        "status": "rejected"
+      },
+      "percent-rlvr-v1": {
+        "title": "percent-rlvr-v1",
+        "parent": "qwen3-4b-rl-fresh-v1",
+        "hill": "percent-base",
+        "status": "rejected"
+      },
+      "percent-structured-v1": {
+        "title": "percent-structured-v1",
+        "parent": "qwen3-4b-rl-fresh-v1",
+        "hill": "percent-base",
+        "status": "rejected"
+      },
+      "percent-vote5-v1": {
+        "title": "Percentage keyword-routed five-answer voting",
+        "parent": "qwen3-4b-rl-fresh-v1",
+        "hill": "percent-base",
+        "status": "rejected"
+      },
+      "percent-base-ablation-v1": {
+        "title": "Raw pinned base versus original RL adapter",
+        "parent": "qwen3-4b-rl-fresh-v1",
+        "hill": "percent-base",
+        "status": "rejected"
+      },
+      "percent-base-1024-v1": {
+        "title": "Raw pinned base with 1024 output tokens",
+        "parent": "qwen3-4b-rl-fresh-v1",
+        "hill": "percent-base",
+        "status": "champion"
+      },
+      "percent-rlvr-v2": {
+        "title": "percent-rlvr-v2",
+        "parent": "qwen3-4b-rl-fresh-v1",
+        "hill": "percent-base",
+        "status": "rejected"
+      },
+      "percent-base-2048-v1": {
+        "title": "Raw pinned base with 2048 output tokens",
+        "parent": "percent-base-1024-v1",
+        "hill": "percent-base",
+        "status": "candidate"
+      },
+      "raw-vote5-2048-v1": {
+        "title": "Raw4B global five-answer self-consistency",
+        "parent": "percent-base-1024-v1",
+        "hill": "percent-base",
+        "status": "rejected"
+      },
+      "raw-sft-lr5e6-v1": {
+        "title": "Fresh raw-base LoRA SFT \u00b7 lr5e-6",
+        "parent": "percent-base-1024-v1",
+        "hill": "percent-base",
+        "status": "candidate"
+      },
+      "raw-vllm-vote5-v1": {
+        "title": "Raw4B vLLM global5vote",
+        "parent": "percent-base-1024-v1",
+        "hill": "percent-base",
+        "status": "rejected"
+      },
+      "fresh-sft-vllm-vote5-v1": {
+        "title": "FreshSFT4B vLLM global5vote",
+        "parent": "percent-base-1024-v1",
+        "hill": "percent-base",
+        "status": "rejected"
+      },
+      "raw-vllm-verify-v1": {
+        "title": "Raw4B generic verification",
+        "parent": "percent-base-1024-v1",
+        "hill": "percent-base",
+        "status": "rejected"
+      },
+      "raw-vllm-program-v1": {
+        "title": "Raw4B restricted arithmetic programs",
+        "parent": "percent-base-1024-v1",
+        "hill": "percent-base",
+        "status": "rejected"
+      },
+      "thinking4b-8192-v1": {
+        "title": "Separate Qwen3 4B Thinking checkpoint",
+        "parent": "percent-base-1024-v1",
+        "hill": "percent-base",
+        "status": "rejected"
+      },
+      "raw-rft-vllm-greedy-v1": {
+        "title": "Verified-trace RFT LoRA greedy1024",
+        "parent": "percent-base-1024-v1",
+        "hill": "percent-base",
+        "status": "rejected"
+      },
+      "raw-sft-lr2e5-v1": {
+        "title": "Fresh SFT LoRA one epoch lr2e-5",
+        "parent": "percent-base-1024-v1",
+        "hill": "percent-base",
+        "status": "rejected"
+      },
+      "thinking4b-numeric32768-v1": {
+        "title": "Thinking4B universal numeric final line",
+        "parent": "percent-base-1024-v1",
+        "hill": "percent-base",
+        "status": "candidate"
+      },
+      "thinking4b-numeric8192-v1": {
+        "title": "Thinking4B universal numeric final line",
+        "parent": "percent-base-1024-v1",
+        "hill": "percent-base",
+        "status": "candidate"
+      },
+      "raw-numeric4096-v1": {
+        "title": "Raw Instruct4B numeric final line plus4096 tokens",
+        "parent": "percent-base-1024-v1",
+        "hill": "percent-base",
+        "status": "candidate"
+      }
+    },
+    "slices": {
+      "gsm8k-test/full": {
+        "n": 1319,
+        "kind": "full"
+      },
+      "gsm8k-test/random50": {
+        "n": 50,
+        "kind": "random"
+      },
+      "gsm8k-test/random100": {
+        "n": 100,
+        "kind": "random"
+      },
+      "gsm8k-test/control-ordinary-v1": {
+        "n": 100,
+        "metric": "Archived extracted numeric answer equals reference; no new inference.",
+        "kind": "control"
+      },
+      "gsm8k-test/dev-percent-base-v1": {
+        "n": 185,
+        "metric": "Numeric exact match using archived extracted answer and reference.",
+        "kind": "dev"
+      },
+      "gsm8k-test/dev-time-rate-v1": {
+        "n": 500,
+        "metric": "Numeric exact match using archived extracted answer and reference.",
+        "kind": "dev"
+      },
+      "gsm8k-test/dev-group-count-v1": {
+        "n": 447,
+        "metric": "Numeric exact match using archived extracted answer and reference.",
+        "kind": "dev"
+      }
+    },
+    "datasets": {
+      "gsm8k-test": {
+        "size": 1319
+      }
+    },
+    "goals": {
+      "gsm8k-96": {
+        "name": "gsm8k-96",
+        "title": "GSM8K at 96%",
+        "slice": "gsm8k-test/full",
+        "status": "open",
+        "kpi": "score",
+        "target": 0.96,
+        "value": 0.9279757391963609,
+        "model": "percent-base-1024-v1",
+        "n": 1319,
+        "scale": "binary",
+        "higher_is_better": true,
+        "met": false
+      }
+    },
+    "hills": {
+      "percent-base": {
+        "title": "Percentages and the quantity they apply to",
+        "status": "climbed",
+        "target": "gsm8k-test/dev-percent-base-v1",
+        "control": "gsm8k-test/control-ordinary-v1",
+        "examples": [
+          {
+            "input": "Buy for $80k; repair for $50k; value increases by 150%. Profit?",
+            "wrong": "80k \u00d7 1.5 \u2212 130k = \u221210k",
+            "right": "80k \u00d7 2.5 \u2212 130k = 70k",
+            "why": "An increase of 150% includes the original value."
+          },
+          {
+            "input": "$40 groceries, 25% fee, $3 delivery, $4 tip. Total?",
+            "wrong": "Solve backwards from a $40 final bill.",
+            "right": "40 \u00d7 1.25 + 3 + 4 = 57",
+            "why": "The $40 is the pre-fee amount."
+          }
+        ],
+        "symptom": "The model sometimes applies a percentage to the wrong quantity or confuses an increase with the final value."
+      },
+      "time-rate": {
+        "title": "Time, rates, and repeated schedules [lead: fresh baseline needed]",
+        "status": "open",
+        "target": "gsm8k-test/dev-time-rate-v1",
+        "control": "gsm8k-test/control-ordinary-v1",
+        "examples": [
+          {
+            "input": "60 miles over 3 hours, then 1.5 hours on each of two days. Speed?",
+            "wrong": "Compute 12 miles and divide by 6 hours.",
+            "right": "60 / (3 + 1.5 + 1.5) = 10 mph",
+            "why": "The stated distance must be preserved."
+          },
+          {
+            "input": "Three 1-hour classes on three days; two 2-hour classes on two days; 16 weeks.",
+            "wrong": "(9 + 4) \u00d7 16 = 208 hours",
+            "right": "(9 + 8) \u00d7 16 = 272 hours",
+            "why": "The second schedule needs both class count and class duration."
+          }
+        ],
+        "symptom": "The model sometimes mixes units, drops a time interval, or miscounts a repeated schedule."
+      },
+      "group-count": {
+        "title": "Groups, per-item quantities, and multiplicity [lead: fresh baseline needed]",
+        "status": "open",
+        "target": "gsm8k-test/dev-group-count-v1",
+        "control": "gsm8k-test/control-ordinary-v1",
+        "examples": [
+          {
+            "input": "Four schools each send two five-player teams and one coach per team.",
+            "wrong": "4 \u00d7 (2 + 2) = 16 people",
+            "right": "4 \u00d7 (2 \u00d7 5 + 2) = 48 people",
+            "why": "Teams are groups, not individual people."
+          },
+          {
+            "input": "13 toy sets; sell some at $15 each, buy 8 games at $20, keep $5. Sets left?",
+            "wrong": "Assume all 13 sets were sold: zero remain.",
+            "right": "13 \u2212 (8 \u00d7 20 + 5) / 15 = 2",
+            "why": "Infer the number sold from the spending and remainder."
+          }
+        ],
+        "symptom": "The model sometimes counts groups instead of their members or applies a multiplier twice."
+      }
+    }
+  }
+}

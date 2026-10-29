@@ -116,19 +116,61 @@ def _amt(u: str, x: float) -> str:
     return f"{sg}{num} {u}".strip()
 
 
-def _goal(p: Project) -> dict | None:
-    """The first open goal counted in examples right (a 0/1 slice), else any such goal."""
-    best = None
-    for name, g in p.goals().items():
+def _goals(p: Project) -> list[dict]:
+    out = []
+    for name in p.goals():
         try:
-            st = p.goal_status(name)
+            out.append(p.goal_status(name))
         except SystemExit:
             continue
-        if st.get("kpi", "score") != "score" or st.get("value") is None or not st.get("n") or st.get("scale") == "continuous":
-            continue
-        if best is None or (st.get("status") == "open" and best.get("status") != "open"):
-            best = st
-    return best
+    return sorted(out, key=lambda g: g.get("status") != "open")
+
+
+def _goal(p: Project) -> dict | None:
+    """A measured binary goal, used only by exercises that count correct answers."""
+    from . import learn
+    return next((g for g in _goals(p) if g.get("kpi", "score") == "score" and
+                 g.get("value") is not None and g.get("n") and not learn._cont(p, g["slice"])), None)
+
+
+def _goal_row(p, st, learn):
+    """Normalize the ledger's score convention once; no unitless negative latency."""
+    sl, kpi = st["slice"], st.get("kpi", "score")
+    row = dict(label=st.get("title") or st["name"], status=st.get("status"), slice=sl,
+               met=st.get("met", False), measured=st.get("value") is not None,
+               n=st.get("n") or (p.slices().get(sl) or {}).get("n"),
+               model=learn._title(p, st.get("model")) if st.get("model") else None)
+    if kpi == "score" and st.get("n") and not learn._cont(p, sl):
+        n = int(st["n"])
+        row.update(N=n, have=round(st["value"] * n) if st.get("value") is not None else None,
+                   need=math.ceil(st["target"] * n - 1e-9))
+    else:
+        sign = -1 if kpi == "score" and learn._neg(p, sl) else 1
+        from .questions import _goal_units_of
+        unit = _goal_units_of(st, learn._slc(p, sl))["unit"]
+        if kpi in ("cost", "cost_per_example"):
+            unit = "USD/example"
+        row.update(value=sign * st["value"] if st.get("value") is not None else None,
+                   target=sign * st["target"], unit=unit, kpi=kpi,
+                   lower=((not st.get("higher_is_better", True)) != (sign == -1)))
+    return row
+
+
+def _goal_checks(p, st, learn):
+    """Test the evidence needed for this claim, not copying a displayed count."""
+    title, sl = st.get("title") or st["name"], st["slice"]
+    if not st.get("model"):
+        answer = f"Register a champion and measure it on {sl}"
+        return [_check(f"“{title}” has a target, but no champion is registered. What evidence step comes first?",
+                       [answer, "Treat the target as the current result", "Promote an unmeasured candidate"], answer,
+                       "The claim needs a named reference system and a qualifying measurement; the target alone supplies neither.")]
+    if st.get("value") is None:
+        return [_check(f"“{title}” has a target on {sl}, but no qualifying champion measurement. What is missing?",
+                       [f"A complete champion measurement on {sl}", "A successful development example", "A finished implementation task"],
+                       f"A complete champion measurement on {sl}", "A target is a requirement, not evidence that it has been met.")]
+    return [_check(f"A candidate improves one targeted failure, but its result on {sl} is still unknown. Does that establish “{title}”?",
+                   [f"No; the champion must meet the target on {sl}", "Yes; a hill improvement establishes the goal", "Yes; any complete run establishes it"],
+                   f"No; the champion must meet the target on {sl}", "The goal claim is tied to its declared slice and target; a local improvement does not establish it.")]
 
 
 def _ledger(p: Project) -> dict:
@@ -150,28 +192,28 @@ def _ledger(p: Project) -> dict:
                 for c in r.get("checks", []):
                     if c.get("delta") is not None and c.get("state") in ("pass", "fail"):
                         checks.append(dict(c, model=m, rung=r["rung"]))
-    return dict(champ=champ, models=models, full=full, promo=promo, checks=checks, goal=_goal(p))
+    return dict(champ=champ, models=models, full=full, promo=promo, checks=checks, goal=_goal(p), goals=_goals(p))
 
 
 def lesson_goal(p, L, learn):
-    g = L["goal"]
-    if g:
-        N, have, need = int(g["n"]), round(g["value"] * g["n"]), math.ceil(g["target"] * g["n"] - 1e-9)
-        fig = dict(kind="goal", N=N, have=have, need=need, slice=learn._short(g["slice"]), title=g.get("title") or g["name"])
-    else:
-        N, have, need = 100, 80, 90
-        fig = dict(kind="goal", N=N, have=have, need=need, slice="full", title="Example goal", example=True)
-    left = max(0, need - have)
-    return dict(say="A goal is one target on one frozen slice. Work counts when it moves that number.", fig=fig,
-                checks=[_check(f"The champion gets {_n(have)} of {_n(N)} right. The goal needs {_n(need)}. How many more?",
-                               [left, need, have, left + 10], left, f"{_n(need)} − {_n(have)} = {_n(left)}." if left else "The champion already meets the target."),
-                        _check("Is a goal a task?", ["No: tasks serve it", "Yes: one long task"], "No: tasks serve it",
-                               "A task is one job with an end. A goal is what the jobs are for.")])
+    goals = L.get("goals") or _goals(p)
+    if goals:
+        g = goals[0]
+        if g.get("value") is not None and g.get("kpi", "score") == "score" and g.get("n") and not learn._cont(p, g["slice"]):
+            n = int(g["n"])
+            fig = dict(kind="goal", N=n, have=round(g["value"] * n), need=math.ceil(g["target"] * n - 1e-9), slice=g["slice"], title=g.get("title") or g["name"])
+        else:
+            fig = dict(kind="goals", rows=[_goal_row(p, g, learn)])
+        return dict(say="This goal fixes the measurement and target for the project's claim; development results are evidence toward it, not substitutes for it.", fig=fig, checks=_goal_checks(p, g, learn))
+    return dict(say="No goal is registered yet. Define a measurement, a frozen slice and a target before claiming progress.",
+                fig=dict(kind="goals", rows=[]), checks=[_check("What makes a research goal testable?",
+                     ["A named metric, frozen slice and target", "A model name alone", "A deadline alone"], "A named metric, frozen slice and target",
+                     "These specify exactly what evidence can meet the goal.")])
 
 
 def _scores(p, L, learn, k=7):
     """Models with a run on the primary full slice, as counts right (0/1) or values."""
-    sl = L["full"]
+    sl = L["full"] or next((g["slice"] for g in L.get("goals", []) if g.get("kpi", "score") == "score"), None)
     if not sl:
         return sl, []
     out = []
@@ -189,15 +231,15 @@ def lesson_champion(p, L, learn):
     sl, rs = _scores(p, L, learn)
     n = (p.slices().get(sl) or {}).get("n") if sl else None
     cont = bool(sl) and learn._cont(p, sl)
-    fig = dict(kind="bars", slice=learn._short(sl) if sl else "", n=None if cont else n,
-               rows=[dict(label=r["label"], v=r["v"], status=r["status"], hl=r["champ"]) for r in rs])
+    fig = dict(kind="bars", slice=sl or "", n=None if cont else n,
+               empty="No recorded champion measurement on a declared goal slice." if not sl else f"No completed measurements on {sl}.",
+               unit=learn._unit(p, sl) if cont else "", better=-1 if cont and learn._neg(p, sl) else 1,
+               provenance="Separate recorded runs; scores are not necessarily harness-matched",
+               rows=[dict(label=r["label"], v=-r["v"] if cont and learn._neg(p, sl) else r["v"], status=r["status"], hl=r["champ"]) for r in rs])
     champ = next((r for r in rs if r["champ"]), None)
     cs = [_check("A new idea is measured against what?", ["The champion, on the same examples", "Its own earlier run", "Nothing"],
-                 "The champion, on the same examples", "Same examples, so every difference is the change itself.")]
-    if champ and len(rs) >= 3:
-        cs.insert(0, _check("Which one is the champion?", [champ["label"]] + [r["label"] for r in rs if not r["champ"]][:2],
-                            champ["label"], "The champion is the model every candidate must beat."))
-    return dict(say="The champion is the best model so far. Every candidate is compared with it.", fig=fig, checks=cs)
+                 "The champion, on the same examples", "Use the same examples and compatible evaluation setup; a changed judge or harness can confound the comparison.")]
+    return dict(say="The champion is the registered reference system. A fair candidate comparison uses the same examples and a compatible evaluation setup.", fig=fig, checks=cs)
 
 
 def lesson_candidate(p, L, learn):
@@ -208,39 +250,38 @@ def lesson_candidate(p, L, learn):
                               parent=learn._title(p, v["parent"]) if v.get("parent") and v.get("parent") != m else ""))
         if len(rows_) >= 6:
             break
-    rej = sum(v.get("status") == "rejected" for v in L["models"].values())
-    cs = [_check("A candidate passes every rung. What happens?", ["It is promoted to champion", "It stays a candidate", "It is rejected"],
-                 "It is promoted to champion", "Passing the whole ladder is what earns a promotion.")]
-    if rej:
-        cs.append(_check("How many candidates were rejected here so far?", [rej, rej + 2, max(0, rej - 2), rej * 2], rej,
-                         "Rejected candidates stay in the ledger with their reason."))
-    return dict(say="A candidate is one change to the champion. It climbs the ladder and is promoted, or is rejected with its reason kept.",
+    cs = [_check("A candidate passes every required rung, but no promotion has been recorded. What is its status?",
+                 ["Ready for promotion; still a candidate", "Already the champion", "Rejected until retrained"],
+                 "Ready for promotion; still a candidate", "Passing gates makes promotion eligible. The registered champion changes only when promotion is recorded.")]
+    return dict(say="A candidate tests a proposed change. Its gates can make it ready for promotion; the recorded promotion is a separate decision.",
                 fig=dict(kind="list", rows=rows_), checks=cs)
 
 
 def _slice_rows(p, learn, only=None):
-    out = []
-    for name, s in p.slices().items():
+    out, datasets = [], p.datasets()
+    selected = [(name, sl) for name, sl in p.slices().items() if not only or name.split("/", 1)[0] == only]
+    many = len({name.split("/", 1)[0] for name, _ in selected}) > 1
+    for name, sl in selected:
         ds = name.split("/", 1)[0]
-        if only and ds != only:
-            continue
-        out.append(dict(name=learn._short(name), ds=ds, n=s.get("n") or len(s.get("ids") or []), kind=s.get("kind") or ""))
+        owner = datasets.get(ds)
+        dataset_n = owner.get("size") if owner else None
+        n = sl.get("n") if sl.get("n") is not None else len(sl.get("ids") or [])
+        # A registered dataset supplies the denominator; another slice never does.
+        if dataset_n is not None and dataset_n < n:
+            dataset_n = None
+        out.append(dict(id=name, name=name if many else learn._short(name), ds=ds, n=n,
+                        dataset_n=dataset_n, kind=sl.get("kind") or ""))
     return sorted(out, key=lambda r: (r["ds"], -r["n"]))
 
 
 def lesson_slice(p, L, learn):
-    ds = (p.config.get("primary_dataset") or "")
-    rs = _slice_rows(p, learn, ds or None)
-    N = max((r["n"] for r in rs), default=0)
-    cs = []
-    pick = next((r for r in rs if r["n"] != N), None)
-    if pick:
-        cs.append(_check(f"How many examples are in {pick['name']}?", [pick["n"], N, pick["n"] * 2, max(1, pick["n"] // 2)], pick["n"],
-                         f"{pick['name']} holds {_n(pick['n'])} of the {_n(N)}."))
-    cs.append(_check("A slice is frozen. Someone needs it changed. What now?", ["Make a new slice with a new name", "Edit the slice"],
-                     "Make a new slice with a new name", "Old runs stay comparable only if their slice never changes."))
-    return dict(say="A slice is a frozen list of example ids. Two runs on one slice ran on the same examples, so they pair.",
-                fig=dict(kind="slices", N=N, rows=rs[:8]), checks=cs)
+    rs = _slice_rows(p, learn, p.config.get("primary_dataset") or None)
+    picked = rs[0]["id"] if rs else "a frozen slice"
+    return dict(say="A slice fixes which examples are measured. Its size is not a score, and slices from different datasets do not share a denominator.",
+                fig=dict(kind="slices", scale_max=max((r["n"] for r in rs), default=1), rows=rs[:8]),
+                checks=[_check(f"One example must change in {picked}. How can earlier results remain interpretable?",
+                               ["Create a new slice and measure both systems on it", "Edit the frozen slice and reuse the old scores", "Compare the new candidate score with any old baseline"],
+                               "Create a new slice and measure both systems on it", "A changed ID set is a new measurement scope; both sides need matching evidence.")])
 
 
 def lesson_paired(p, L, learn):
@@ -253,8 +294,9 @@ def lesson_paired(p, L, learn):
     right = f"{100 * (w - l) / n:+.2f} pts"
     return dict(say="Pair each example: fixed if the new model gets it and the champion did not, broken the other way. Δ = (fixed − broken) / n.",
                 fig=dict(kind="paired", fixed=w, broken=l, n=n, example=ex, provenance="Frozen promotion evidence" if not ex else ""),
-                checks=[_check(f"{w} fixed, {l} broken, n = {n:,}. Δ?", [right, f"{100 * w / n:+.2f} pts", f"{100 * (w + l) / n:+.2f} pts"], right,
-                               "Broken examples cancel fixed ones: (fixed − broken) / n."),
+                checks=[_check(f"On the same {n:,} examples, one extra case changes from correct under the baseline to wrong under the candidate. Fixed cases do not change. What happens to paired Δ?",
+                               [f"It falls by {100 / n:.3g} points", f"It rises by {100 / n:.3g} points", "It stays unchanged"], f"It falls by {100 / n:.3g} points",
+                               "The broken count increases by one while n and the fixed count stay constant."),
                         _check("Two models score the same on one slice. Can their paired Δ be non-zero?", ["No", "Yes"], "No",
                                "Same score means fixed = broken, so the Δ is 0.")])
 
@@ -262,7 +304,7 @@ def lesson_paired(p, L, learn):
 def _ci_of(p, learn, c):
     """A check or card as an interval figure in display units, ends in order (a "minus" metric flips them)."""
     v = learn._ci_viz(c, p, c.get("slice")) if c.get("slice") else c
-    return dict(delta=v["delta"], lo=min(v["lo"], v["hi"]), hi=max(v["lo"], v["hi"]), n=v["n"], unit=v.get("unit") or "pts")
+    return dict(delta=v["delta"], lo=min(v["lo"], v["hi"]), hi=max(v["lo"], v["hi"]), n=v["n"], unit=v.get("unit") or "pts", better=v.get("better", 1))
 
 
 def lesson_interval(p, L, learn):
@@ -273,11 +315,11 @@ def lesson_interval(p, L, learn):
     ans = "Not yet: it crosses zero" if crosses else "Yes: it clears zero"
     return dict(say="An interval crossing zero does not establish a direction. This projection holds the effect fixed and narrows uncertainty as 1/√n; it is not a new measurement. If the effect is zero, more examples alone cannot make it clear zero.",
                 fig=fig,
-                checks=[_check(f"Δ {_amt(fig['unit'], fig['delta'])}, 90% interval {_amt(fig['unit'], fig['lo'])} to {_amt(fig['unit'], fig['hi'])}. Is the change shown?",
-                               ["Yes: it clears zero", "Not yet: it crosses zero"], ans,
-                               "Shown means the whole interval sits on one side of zero."),
-                        _check("What narrows an interval most?", ["More examples", "Re-running the same greedy eval"], "More examples",
-                               "The width shrinks as 1/√n. A greedy rerun gives the same answers.")])
+                checks=[_check("In this fixed-effect projection, four times as many independent observations would do what to interval width?",
+                               ["Halve the width", "Quarter the width", "Leave the width unchanged"], "Halve the width",
+                               "Width scales as 1/√n, so multiplying n by four divides width by two. A real new sample may also change the measured effect."),
+                        _check("Under this fixed-effect projection, what can reduce uncertainty?", ["More independent observations from the same population", "Recounting identical observations as new data"], "More independent observations from the same population",
+                               "The 1/√n approximation assumes independent observations; repeating identical data does not add independent evidence.")])
 
 
 def lesson_gate(p, L, learn):
@@ -292,8 +334,11 @@ def lesson_gate(p, L, learn):
     else:
         fig = dict(kind="gate", rule="not_worse", bar=-1.0, delta=-0.4, unit="pts", slice="random100", model="Example", rung="random100", example=True)
         ok, q = True, "It may lose at most 1 pt. Δ −0.4 pts. Pass or fail?"
-    return dict(say="A gate check sets a bar for Δ. “Better” needs Δ above zero; “not worse” allows a small loss.", fig=fig,
-                checks=[_check(q, ["Pass", "Fail"], "Pass" if ok else "Fail", "Pass when Δ is on the good side of the bar.")])
+    direction = "below" if fig.get("better", 1) < 0 else "above"
+    return dict(say=f"For this metric, improvement moves Δ {direction} zero. The configured gate compares Δ with its declared bar; uncertainty is shown separately.", fig=fig,
+                checks=[_check("The candidate passes this comparison, but the next run uses a changed harness. Can the old gate result establish that the new run passes?",
+                               ["No; obtain a compatible baseline and apply the declared rule", "Yes; the model name is unchanged", "Yes; a prior pass applies to every harness"],
+                               "No; obtain a compatible baseline and apply the declared rule", "A gate result belongs to its measured scope and evaluation setup; it is not a permanent property of a model.")])
 
 
 def _ladder(p):
@@ -307,7 +352,7 @@ def lesson_rung(p, L, learn):
     r = max(lad, key=lambda r: len(r["checks"]), default=None) or dict(rung="dev", checks=[dict(slice="@hill.target", rule="better", bar=0),
                                                                                           dict(slice="@hill.control", rule="not_worse", bar=-0.02)])
     k = len(r["checks"])
-    cs = [_check(f"A rung has {k if k > 1 else 3} checks and one fails. Does the rung pass?", ["No", "Yes"], "No",
+    cs = [_check(f"A rung has {k} checks and one fails. Does the rung pass?", ["No", "Yes"], "No",
                  "Every check on a rung must pass.")]
     return dict(say="A rung is a set of checks run together. It passes only when every check passes.",
                 fig=dict(kind="rung", rung=r["rung"], checks=r["checks"]), checks=cs)
@@ -328,7 +373,7 @@ def lesson_ladder(p, L, learn):
         cs.append(_check(f"A candidate passes {names[0]}. What runs next?", names[1:3] + names[:1], names[1],
                          "Rungs run in order, small and cheap first."))
     cs.append(_check("A candidate fails a rung. Do later rungs run?", ["No", "Yes"], "No", "The first fail stops the climb."))
-    return dict(say="Rungs go from small, cheap slices to the full one. A candidate climbs one rung at a time and stops at the first fail.",
+    return dict(say="The project declares its gate order. A candidate follows that order and stops at the first failed rung; passing the ladder makes it ready for a promotion decision.",
                 fig=dict(kind="ladder", rungs=lad, model=learn._title(p, cand) if cand else "", status=status), checks=cs)
 
 
@@ -337,8 +382,9 @@ def _hill_rows(p, learn):
     for name, h in p.hills().items():
         sh = h.get("share") if isinstance(h.get("share"), dict) else {}
         out.append(dict(id=name, label=learn._first(h.get("title") or name, 60).split(" [")[0], status=h.get("status") or "",
-                        count=sh.get("count"), of=sh.get("of"), of_what=learn._first(sh.get("of_what") or "", 60),
-                        target=learn._short(h.get("target") or ""), control=learn._short(h.get("control") or ""),
+                        count=sh.get("count"), of=sh.get("of"), of_what=sh.get("of_what") or "",
+                        target=h.get("target") or "", control=h.get("control") or "",
+                        examples=h.get("examples") or [], example_provenance="Illustrative hill examples, not per-example evaluation evidence",
                         detail=learn._first(h.get("symptom") or h.get("problem"), 140)))
     return sorted(out, key=lambda r: -(r["count"] or 0))
 
@@ -348,65 +394,43 @@ def lesson_hill(p, L, learn):
     h = next((r for r in hs if r["target"] and r["control"]), None)
     cs = []
     if h:
-        cs.append(_check(f"“{h['label']}”: which slice measures it?", [h["target"], h["control"], "full"], h["target"],
+        cs.append(_check(f"“{h['label']}”: which slice measures it?", [h["target"], h["control"]], h["target"],
                          "A hill's own slice holds the failure. Its control slice checks nothing else broke."))
     cs.append(_check("A hill is climbed when…", ["a candidate fixes that failure without breaking others", "its slice is edited", "a task ends"],
-                     "a candidate fixes that failure without breaking others", "Climbed means passed on the target and not worse on the control."))
+                     "a candidate fixes that failure without breaking others", "The declared gate ladder and recorded promotion establish the hill result; one illustrative example cannot establish it."))
     return dict(say="A hill is one kind of failure with its own slice to measure it.", fig=dict(kind="share", rows=hs[:5]), checks=cs)
 
 
 def lesson_brief(p, L, learn):
     g = L["goal"]
-    fig = dict(kind="guess", N=int(g["n"]), truth=round(g["value"] * g["n"]), slice=learn._short(g["slice"]),
-               tol=max(2, round(int(g["n"]) * 0.01))) if g else dict(kind="guess", N=100, truth=81, slice="full", tol=2, example=True)
-    return dict(say="The Brief turns what changed into cards. You guess first, then see: the guess makes it stick.", fig=fig,
-                checks=[_check("When does a Brief card show its answer?", ["After you answer it", "Before you answer", "Never"],
-                               "After you answer it", "Guessing first is the point.")])
+    if g:
+        fig = dict(kind="guess", N=int(g["n"]), truth=round(g["value"] * g["n"]), slice=g["slice"], tol=max(2, round(int(g["n"]) * .01)))
+    else:
+        fig = dict(kind="goals", rows=[_goal_row(p, g, learn) for g in (L.get("goals") or _goals(p))])
+    return dict(say="The Brief asks you to predict a recorded result before revealing its evidence. A prediction changes your understanding, not the research record.", fig=fig,
+                checks=[_check("Your prediction was wrong, but the measured result is valid. What should change?",
+                               ["Your expectation; keep the measured evidence", "The recorded score to match your prediction", "The goal target to make the prediction right"],
+                               "Your expectation; keep the measured evidence", "The exercise is for learning; it does not edit research evidence or acceptance criteria.")])
 
 
 def lesson_project_goal(p, L, learn):
-    rows_ = []
-    for name, g in p.goals().items():
-        try:
-            st = p.goal_status(name)
-        except SystemExit:
-            continue
-        if st.get("value") is None:
-            continue
-        if st.get("kpi", "score") == "score" and st.get("n") and st.get("scale") != "continuous":
-            N = int(st["n"])
-            rows_.append(dict(label=st.get("title") or name, status=st.get("status"), have=round(st["value"] * N), need=math.ceil(st["target"] * N - 1e-9),
-                              N=N, slice=learn._short(st["slice"]), met=st.get("met")))
-        else:
-            rows_.append(dict(label=st.get("title") or name, status=st.get("status"), value=st["value"], target=st["target"], kpi=st.get("kpi"),
-                              slice=learn._short(st["slice"]), met=st.get("met"), lower=not st.get("higher_is_better", True)))
-    g = L["goal"]
-    cs = []
-    if g:
-        sls = [learn._short(s) for s in p.slices() if s != g["slice"]][:2]
-        cs.append(_check(f"“{g.get('title') or g['name']}”: on which slice?", [learn._short(g["slice"])] + sls, learn._short(g["slice"]),
-                         f"It is measured on all {int(g['n']):,} examples of {learn._short(g['slice'])}."))
-        left = math.ceil(g["target"] * g["n"] - 1e-9) - round(g["value"] * g["n"])
-        if left > 0:
-            cs.append(_check("How many more right answers does it need?", [left, left * 2, max(1, left // 2), left + 25], left, ""))
-    say = f"{len(rows_)} goals here." if len(rows_) != 1 else "One goal here."
-    return dict(say=say, fig=dict(kind="goals", rows=rows_), checks=cs)
+    goals = L.get("goals") or _goals(p)
+    rows_ = [_goal_row(p, g, learn) for g in goals]
+    return dict(say="Each goal keeps its own metric, slice and target. Unmeasured goals remain requirements, not results." if goals else "No goal has been registered.",
+                fig=dict(kind="goals", rows=rows_), checks=_goal_checks(p, goals[0], learn) if goals else [])
 
 
 def lesson_project_data(p, L, learn):
-    dss = [dict(name=k, title=learn._first(v.get("title") or k, 80), n=v.get("size") or 0) for k, v in p.datasets().items()]
+    dss = [dict(name=k, title=learn._first(v.get("title") or k, 80), n=v.get("size")) for k, v in p.datasets().items()]
     rs = _slice_rows(p, learn)
-    N = max((d["n"] for d in dss), default=max((r["n"] for r in rs), default=0))
-    cs = []
+    checks = []
     if rs:
-        small = min(rs, key=lambda r: r["n"])
-        cs.append(_check("Which slice is the smallest?", [small["name"]] + [r["name"] for r in rs if r is not small][:2], small["name"],
-                         f"{small['name']}: {_n(small['n'])} examples."))
-    if dss:
-        d = dss[0]
-        cs.append(_check(f"How many examples are in {d['name']}?", [d["n"], d["n"] // 2, d["n"] * 2, 1000], d["n"], ""))
-    return dict(say=" ".join(f"{d['title']}: {_n(d['n'])} examples." for d in dss[:2]) or "No dataset yet.",
-                fig=dict(kind="slices", N=N, rows=rs[:10], datasets=dss), checks=cs)
+        selected = rs[0]
+        checks.append(_check(f"A candidate is measured on {selected['id']}, but its baseline uses different example IDs. Can their score difference isolate the change?",
+                             ["No; measure both on the same frozen IDs and compatible setup", "Yes; equal example counts are enough", "Yes; choose the baseline with the closest score"],
+                             "No; measure both on the same frozen IDs and compatible setup", "Equal counts do not imply the same cases, difficulty or evaluation setup."))
+    return dict(say="These are the project's recorded measurement scopes. A denominator appears only when the owning dataset is registered; otherwise the row gives a slice count.",
+                fig=dict(kind="slices", scale_max=max((r["n"] for r in rs), default=1), rows=rs[:10], datasets=dss), checks=checks)
 
 
 def lesson_project_champion(p, L, learn):
@@ -421,27 +445,29 @@ def lesson_project_champion(p, L, learn):
         chain.append(dict(label=learn._title(p, m), status=v.get("status") or "", detail=learn._first(v.get("change"), 160),
                           score=learn.sv(p, L["full"], sc) if sc is not None else ""))
         m = v.get("parent")
-    cs = []
-    if len(chain) >= 2:
-        cs.append(_check("Which model did the champion grow from?", [chain[1]["label"]] + [r["label"] for r in _scores(p, L, learn)[1] if r["label"] not in (chain[0]["label"], chain[1]["label"])][:2],
-                         chain[1]["label"], "Each model names its parent; the change is what differs."))
-    sc = learn._score(p, champ, L["full"]) if L["full"] else None
-    if sc is not None and not learn._cont(p, L["full"]):
-        n = (p.slices().get(L["full"]) or {}).get("n")
-        have = round(sc * n)
-        cs.append(_check(f"How many of {n:,} does it get right on {learn._short(L['full'])}?", [have, have - 40, min(n, have + 40), have - 90], have, ""))
-    return dict(say=f"{chain[0]['label']}. {chain[0]['detail']}".strip(), fig=dict(kind="list", rows=chain, lineage=True), checks=cs)
+    hill = p.hills().get((L["models"].get(champ) or {}).get("hill")) or {}
+    if hill.get("examples"):
+        chain[0].update(examples=hill["examples"], example_provenance="Illustrative hill examples, not per-example evaluation evidence")
+    parent = L["models"].get(champ, {}).get("parent")
+    comparator = learn._title(p, parent) if parent else "the registered baseline"
+    cs = [_check(f"To test whether {chain[0]['label']} improved on {comparator}, which comparison is valid?",
+                 ["Both systems on the same frozen examples with a compatible harness", "Their highest scores from any available runs", "The new system's targeted score against the old full-set score"],
+                 "Both systems on the same frozen examples with a compatible harness", "Model identity alone does not make runs comparable; scope and evaluation setup must match.")]
+    return dict(say=f"{chain[0]['label']} is the registered champion. Its recorded changes and lineage explain what was tried; matched measurements establish what improved.",
+                fig=dict(kind="list", rows=chain, lineage=True), checks=cs)
 
 
 def lesson_project_hills(p, L, learn):
     hs = _hill_rows(p, learn)
-    cs = []
-    big = [h for h in hs if h["count"] is not None]
-    if len(big) >= 2:
-        cs.append(_check(f"Which hill covers the most {big[0]['of_what'] or 'errors'}?", [h["label"] for h in big[:3]], big[0]["label"], ""))
-    op = sum(h["status"] == "open" for h in hs)
-    cs.append(_check("How many hills are open?", [op, op + 1, op + 2, op - 1], op, ""))
-    return dict(say=f"{len(hs)} hills: {op} open, {sum(h['status'] == 'climbed' for h in hs)} climbed.", fig=dict(kind="share", rows=hs), checks=cs)
+    h = next((h for h in hs if h["status"] == "open" and h["target"]), hs[0] if hs else None)
+    checks = []
+    if h:
+        example = "the illustrated error" if h.get("examples") else "an observed target failure"
+        checks.append(_check(f"For “{h['label']}”, a candidate fixes {example}, but its control result violates the declared tolerance. Is that enough to promote?",
+                             ["No; inspect the regression and satisfy the required gates", "Yes; one target failure is fixed", "Yes; a targeted improvement overrides the control"],
+                             "No; inspect the regression and satisfy the required gates", "An individual fix does not establish an acceptable system change. The target, control and remaining gate measurements determine that."))
+    return dict(say="Each hill links a concrete failure to a testable change. Its examples illustrate the failure; the measured target and controls determine whether a fix generalizes safely.",
+                fig=dict(kind="share", rows=hs), checks=checks)
 
 
 BUILD = {"goal": lesson_goal, "champion": lesson_champion, "candidate": lesson_candidate, "slice": lesson_slice,

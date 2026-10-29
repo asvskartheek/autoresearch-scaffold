@@ -33,7 +33,7 @@ class Course(unittest.TestCase):
         g = ls["goal"]["fig"]
         self.assertEqual((g["N"], g["have"], g["need"]), (40, 28, 36))  # this project's goal: 28 of 40, needs 36
         self.assertFalse(g.get("example"))
-        self.assertEqual(ls["goal"]["checks"][0]["a"], "8")
+        self.assertIn("champion must meet the target", ls["goal"]["checks"][0]["a"])
         self.assertEqual(ls["gate"]["fig"]["rule"], "better")  # the candidate's own dev check
         self.assertEqual([r["rung"] for r in ls["ladder"]["fig"]["rungs"]], ["dev", "random10", "full"])
         sl = {r["name"]: r["n"] for r in ls["project-data"]["fig"]["rows"]}
@@ -43,7 +43,8 @@ class Course(unittest.TestCase):
         p = ledger()
         ls = {x["id"]: x for x in course.lessons(p)}
         self.assertTrue(ls["paired-delta"]["fig"]["example"])
-        self.assertTrue(ls["goal"]["fig"]["example"])
+        self.assertEqual(ls["goal"]["fig"]["rows"], [])
+        self.assertIn("No goal", ls["goal"]["say"])
 
     def test_spaced_review(self):
         t0 = 1_000_000.0
@@ -77,12 +78,12 @@ class Course(unittest.TestCase):
             self.assertEqual(code, 400)
         self.assertEqual(course.rows(self.p, "ann"), [])
 
-    def test_achieved_goal_needs_no_negative_answers(self):
+    def test_met_goal_uses_an_evidence_check_instead_of_numeric_distractors(self):
         self.p.open_goal("met", "Already met", "full", 0.5)
         data = course._ledger(self.p)
         data["goal"] = self.p.goal_status("met")
         lesson = course.lesson_goal(self.p, data, learn)
-        self.assertEqual(lesson["checks"][0]["a"], "0")
+        self.assertTrue(all(not option.lstrip("-").isdigit() for c in lesson["checks"] for option in c["o"]))
 
     def test_cards_name_the_lessons_they_need(self):
         self.assertEqual(course.needs("promote|x"), ["champion", "paired-delta", "interval"])
