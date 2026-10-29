@@ -51,5 +51,25 @@ class GoalLintTitles(unittest.TestCase):
         self.assertTrue(any("'Context engine v2' or 'a+b+c+d'" in m for m in errs), errs)
 
 
+class OwedEdit(unittest.TestCase):
+    def test_promised_edit_stays_pending_until_republished(self):
+        p, src = project()
+        papers.add(p, "demo", src, hill="h")
+        c = papers.post(p, "demo", "comment", body="draw it", anchor=dict(block="b1"), author="Ann")
+        time.sleep(0.02)
+        papers.post(p, "demo", "reply", parent=c["id"], body="Agreed, I will redraw it.", agent=True, owe=True)
+        self.assertEqual([t["id"] for t in papers.owed(p)], [c["id"]])
+        self.assertEqual(papers.papers(p)["demo"]["owed"], 1)
+        self.assertFalse(papers.threads(papers.thread(p, "demo"))[0]["waiting"])
+        time.sleep(0.02)
+        papers.add(p, "demo", src, hill="h")  # republished
+        self.assertEqual(papers.owed(p), [])
+
+    def test_promise_detection(self):
+        self.assertTrue(papers.promises("Agreed, the figure is thin. I'll draw each part with its input."))
+        self.assertFalse(papers.promises("Redrawn and republished: each part now shows its input."))
+        self.assertFalse(papers.promises("The judge is a separate model with no rubric."))
+
+
 if __name__ == "__main__":
     unittest.main()

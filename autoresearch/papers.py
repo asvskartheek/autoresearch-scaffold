@@ -69,11 +69,12 @@ def papers(p: Project) -> dict:
     out = {}
     for name in names(p):
         d = pdir(p, name)
-        ts = threads(thread(p, name))
+        v = version(p, name)
+        ts = threads(thread(p, name), published=v)
         meta = _read(d / "meta.json", {})
-        out[name] = dict(meta, title=title_of(p, name, meta), name=name, version=version(p, name),
+        out[name] = dict(meta, title=title_of(p, name, meta), name=name, version=v,
                          comments=len(ts), open=sum(1 for t in ts if not t["resolved"]),
-                         waiting=sum(1 for t in ts if t["waiting"]))
+                         waiting=sum(1 for t in ts if t["waiting"]), owed=sum(1 for t in ts if t["owed"]))
     return out
 
 
@@ -150,10 +151,11 @@ def post(p: Project, name: str, kind: str, **fields) -> dict:
     return ev
 
 
-def threads(log: list[dict]) -> list[dict]:
+def threads(log: list[dict], published: float = None) -> list[dict]:
     """Fold the event log into threads, oldest first. Each has its messages (edits applied, deletes dropped),
-    `resolved`, `waiting` (the last message is from a person: the agent owes an answer) and `thinking`
-    (the agent has seen that message)."""
+    `resolved`, `waiting` (the last message is from a person: the agent owes an answer), `thinking`
+    (the agent has seen that message) and `owed` (the agent said it would change the paper, `owe: true` on its
+    reply, and the paper has not been republished since `published`, its version)."""
     out, msgs, owner = {}, {}, {}  # owner: message id -> thread id
     for e in log:
         if not isinstance(e, dict) or not isinstance(e.get("id"), str) or e.get("kind") not in KINDS:
@@ -169,7 +171,7 @@ def threads(log: list[dict]) -> list[dict]:
         elif k == "reply" and e.get("parent") in out:
             m = dict(id=e["id"], t=e["t"], author=e.get("author") or ("agent" if e.get("agent") else "you"),
                      body=e.get("body") or "", agent=bool(e.get("agent")), link=e.get("link"), by=e.get("by"),
-                     mentions=e.get("mentions") or [])
+                     mentions=e.get("mentions") or [], owe=bool(e.get("owe") and e.get("agent")))
             out[e["parent"]]["messages"].append(m)
             msgs[e["id"]] = m; owner[e["id"]] = e["parent"]
         elif k in ("resolve", "reopen") and e.get("parent") in out:
@@ -204,6 +206,8 @@ def threads(log: list[dict]) -> list[dict]:
         th["mentions"] = sorted({x for m in th["messages"] for x in m.get("mentions") or []})
         th["thinking"] = bool(th["waiting"] and last["id"] in th["seen"])
         th["last"] = last["id"] if last else None
+        owe = [m["t"] for m in th["messages"] if m.get("owe")]
+        th["owed"] = bool(owe and isinstance(owe[-1], (int, float)) and (published is None or published < owe[-1]))
         th.pop("seen")
         res.append(th)
     return res
@@ -212,6 +216,22 @@ def threads(log: list[dict]) -> list[dict]:
 def pending(log: list[dict]) -> list[dict]:
     """Threads where the agent owes an answer, oldest first."""
     return [t for t in threads(log) if t["waiting"]]
+
+
+PROMISE = re.compile(r"\b(I'll|I will|I'm going to|will (?:redraw|update|change|edit|add|rewrite|fix|replace|remove|"
+                     r"move|split|draw|rework|redo|show)|agreed|good (?:idea|point)|you're right)\b", re.I)
+DONE = re.compile(r"\b(republished|redrawn|rebuilt|replaced|now (?:shows|draws|reads)|is now|done)\b", re.I)
+
+
+def promises(body: str) -> bool:
+    """An agent reply that agrees to change the paper without saying it already did: the edit is owed."""
+    return bool(body and PROMISE.search(body) and not DONE.search(body))
+
+
+def owed(p: Project, name: str = None) -> list[dict]:
+    """Threads where the agent agreed to change the paper and has not republished it since, with `paper` set."""
+    return [dict(th, paper=n) for n in ([name] if name else names(p))
+            for th in threads(thread(p, n), published=version(p, n)) if th["owed"]]
 
 
 def poll(p: Project, name: str = None, timeout: float = None, interval: float = 1.0) -> list[dict]:

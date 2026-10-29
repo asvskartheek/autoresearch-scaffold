@@ -416,8 +416,11 @@ def cmd_paper(a):
     elif a.verb == "ls":
         for name, m in papers.papers(p).items():
             print(f"{name}  {m.get('title') or ''}  threads={m['comments']} open={m['open']} waiting={m['waiting']}"
-                  f"  {base}/papers/{name}")
+                  + (f" edits-owed={m['owed']}" if m.get("owed") else "") + f"  {base}/papers/{name}")
     elif a.verb == "poll":  # blocks until a person is waiting on the agent; one JSON line per thread
+        for th in papers.owed(p, a.name):  # promised edits stay in view until the paper is republished
+            print(f"edit owed: {th['paper']} thread {th['id']}: you agreed to change the paper and have not "
+                  f"republished it (arx paper edit {th['paper']} --file ...)", file=sys.stderr)
         for th in papers.poll(p, a.name, timeout=a.timeout):
             print(json.dumps(dict(paper=th["paper"], thread=th["id"], quote=(th.get("anchor") or {}).get("quote"),
                                   block=(th.get("anchor") or {}).get("block"), mention=th["mention"],
@@ -484,8 +487,13 @@ def cmd_paper(a):
         elif a.link:
             label, _, url = a.link.rpartition("=") if "=" in a.link else ("", "", a.link)
             link = dict(label=label or url, url=url)
-        papers.post(p, a.name, a.verb, parent=a.comment, body=" ".join(a.text) or None, link=link, agent=True,
-                    author=a.author)
+        body = " ".join(a.text) or None
+        owe = a.verb == "reply" and not a.no_edit and (a.edit or papers.promises(body))
+        papers.post(p, a.name, a.verb, parent=a.comment, body=body, link=link, agent=True, author=a.author,
+                    owe=True if owe else None)
+        if owe:
+            print(f"edit owed on {a.name}: the thread shows as pending until you republish the paper "
+                  f"(arx paper edit {a.name} --file ...); pass --no-edit if the reply promises no change", file=sys.stderr)
 
 
 def cmd_serve(a):
@@ -626,7 +634,8 @@ def main(argv=None):
   add|edit <name> --file F         publish / republish (open pages update in place)
   ls                               papers with thread counts
   poll [name]                      block until someone waits on the agent; one JSON line per thread
-  reply <name> <thread> "text"     answer a thread (--link label=url, --file page.html)
+  reply <name> <thread> "text"     answer a thread (--link label=url, --file page.html); a reply that agrees to
+                                   change the paper (or --edit) keeps the thread pending until you republish
   resolve <name> <thread> [note]   close a thread
   attach <name> --file F           serve a page next to the paper""")
     s.add_argument("verb", choices=["new", "add", "edit", "check", "ls", "poll", "reply", "resolve", "attach"]); s.add_argument("name", nargs="?")
@@ -636,6 +645,8 @@ def main(argv=None):
     s.add_argument("--link", help="reply: label=url (url may be #block, /papers/<name>#block, an arx page or https://)")
     s.add_argument("--author", default="agent", help="reply: the name shown on the agent's message")
     s.add_argument("--timeout", type=float, help="poll: give up after this many seconds")
+    s.add_argument("--edit", action="store_true", help="reply: you will change the paper; pending until republished")
+    s.add_argument("--no-edit", action="store_true", help="reply: the reply promises no change to the paper")
     s.set_defaults(fn=cmd_paper)
 
     from . import features

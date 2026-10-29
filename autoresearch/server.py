@@ -624,7 +624,7 @@ def serve(port: int = 8890, root=None):
                                       {"Content-Security-Policy": "sandbox allow-scripts allow-popups"})
                 if parts[:2] == ["api", "paper"] and len(parts) == 3:
                     body = dict(version=papers.version(p, parts[2]), meta=papers._read(papers.pdir(p, parts[2]) / "meta.json", {}),
-                                threads=papers.threads(papers.thread(p, parts[2])))
+                                threads=papers.threads(papers.thread(p, parts[2]), published=papers.version(p, parts[2])))
                     return self._send(200, json.dumps(body, default=str).encode(), "application/json")
             except (KeyError, SystemExit, OSError, ValueError):
                 return self._send(404, b'{"error":"not found"}', "application/json")
