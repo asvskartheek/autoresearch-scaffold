@@ -413,8 +413,9 @@ How to answer
 - Read-only: read research.json, PROTOCOL.md and the ledger in .research/ (models.json, hills.json, slices.json,
   goals.json, tasks/*/task.json, decisions), and use read-only commands (arx status, arx gate <model>,
   arx goal status, arx comment show {th['id']}). Never change models, slices, hills, goals, tasks or files.
-- Name models by their titles (below), never by raw ids. Link views as #route (e.g. #model/v3, #hill/please,
-  #task/<id>); they become links. Write the title first and the route after it ("Fresh LoRA SFT #model/v3").
+- Name models by their titles (below), never by raw ids. To link a model, hill, goal or task, write its #route in
+  place of its name (#model/v3, #hill/please, #task/<id>): the page draws it as a link whose text is the title, so
+  never write the title and the route side by side.
 - If the ledger cannot answer it, say what is missing and which run would answer it.
 - A question about how or why something decides gets the rule itself first, then the numbers that applied it.
 

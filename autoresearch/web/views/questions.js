@@ -49,9 +49,9 @@ function qDefaultClosed(by,kids){
 }
 function qRow(id,ix,focus){
  const n=ix.by[id],k=ix.kids[id]||[],cl=QS.closed.has(id),on=id===focus;
- return `<li><div class="q-row ${on?'on':''} ${cl?'closed':''} ${n.status==='dead'?'dead':''} ${QS.fresh.has(id)?'fresh':''}" data-qgo="${esc(id)}" data-qnode="${esc(id)}" tabindex="0"${n.claim&&!on?` data-qtip="${esc(n.claim)}"`:''}>`+
+ return `<li><div class="q-row ${on?'on':''} ${cl?'closed':''} ${n.status==='dead'?'dead':''} ${QS.fresh.has(id)?'fresh':''}" data-qgo="${esc(id)}" data-qnode="${esc(id)}" tabindex="0"${n.claim&&!on?` data-qtip="${esc(qPlain(n.claim))}"`:''}>`+
   `<button class="q-car ${k.length?'':'none'}" data-qcar="${esc(id)}" aria-label="Toggle" tabindex="-1"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 3.5L5 6.5L8 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>`+
-  `<span class="q-sh">${qShape(n)}</span><span class="q-tx"><span class="q-q">${esc(n.title)}</span>${on&&n.claim?`<span class="q-cl">${esc(n.claim)}</span>`:''}</span>`+
+  `<span class="q-sh">${qShape(n)}</span><span class="q-tx"><span class="q-q">${esc(n.title)}</span>${on&&n.claim?`<span class="q-cl">${esc(qPlain(n.claim))}</span>`:''}</span>`+
   `${k.length&&cl?`<span class="q-ct">${qCount(id,ix.kids)}</span>`:''}</div>`+
   (k.length&&!cl?`<ul class="q-t">${k.map(c=>qRow(c,ix,focus)).join('')}</ul>`:'')+`</li>`;
 }
@@ -66,6 +66,13 @@ function qCol(e){
 // a model's readable label as plain text (mnt() without the HTML escaping; data-qtip is escaped once by esc())
 const qM=k=>{if(!k)return '';const t=S.state?.models?.[k]?.title;if(t)return t;const s=String(k);return s.split('+').length>3?'…+'+s.split('+').slice(-2).join('+'):s};
 const qCI=e=>e.lo==null?'':isCont(e.slice)?`90% CI ${sd(e.slice,e.lo)} to ${sd(e.slice,e.hi)}`:`90% CI ${pts(e.lo)} to ${pts(e.hi)} pts`;
+// a claim's #model/<id>, #hill/<id>, #goal/<id>, #task/<id> or #answer/<id> becomes a link titled with the name it stands for
+function qRouteName(k,id){
+ const st=S.state||{};
+ if(k==='model')return qM(id);if(k==='hill')return st.hills?.[id]?.title||id;if(k==='goal')return st.goals?.[id]?.title||QS.data?.goals?.[id]?.title||id;
+ if(k==='task')return byId(id)?.title||id;if(k==='answer')return 'the full answer';if(k==='questions')return QS.data?.nodes?.find(n=>n.id===id)?.title||id;return id}
+const qLinky=t=>esc(t).replace(/(^|[\s(])#(model|hill|goal|task|answer|questions)\/([^\s<),;]*[^\s<.,;:)])/g,(m,pre,k,id)=>{let raw=id;try{raw=decodeURIComponent(id.replace(/&amp;/g,'&'))}catch(e){}return `${pre}<a href="#${k}/${enc(raw)}">${esc(qRouteName(k,raw))}</a>`});
+const qPlain=t=>String(t||'').replace(/(^|[\s(])#(model|hill|goal|task|answer|questions)\/([^\s<),;]*[^\s<.,;:)])/g,(m,pre,k,id)=>{let raw=id;try{raw=decodeURIComponent(id)}catch(e){}return pre+qRouteName(k,raw)});
 function qVal(e){
  if(e.kind==='missing')return 'Not run';
  if(e.kind==='paired')return e.delta==null?'—':sd(e.slice,e.delta);
@@ -134,7 +141,8 @@ function qPanel(id,ix){
   const L=n.live||{},pr=L.progress,f=pr&&pr.total?Math.min(1,(pr.done||0)/pr.total):null;
   const line=L.status==='failed'?('Agent failed'+(L.error?': '+L.error:'')):L.note||(L.status==='running'?'Agent working':'Queued for an agent');
   h+=`<div class="q-claim agent">${esc(line)}${L.task?` <a class="q-tl" href="#task/${enc(L.task)}">${esc(L.task)}</a>`:''}${f!=null?`<div class="pb"><i style="width:${(100*f).toFixed(1)}%"></i></div>`:''}</div>`;
- }else if(n.claim)h+=`<div class="q-claim ${cls}">${esc(n.claim)}${n.settled_by&&!['agent','you'].includes(n.settled_by)?`<span class="q-by">${esc(n.settled_by)}</span>`:''}</div>`;
+ }else if(n.claim)h+=`<div class="q-claim ${cls}">${qLinky(n.claim)}${n.settled_by&&!['agent','you'].includes(n.settled_by)?`<span class="q-by">${esc(n.settled_by)}</span>`:''}</div>`;
+ if(n.why&&n.status!=='answered'&&n.status!=='dead')h+=`<div class="q-why">${qLinky(n.why)}</div>`;
  if(n.doc)h+=qDocCard(n.doc,n.fig);
  if(n.quote)h+=`<div class="q-quote"><mark>${esc(n.quote)}</mark></div>`;
  h+=qEvidence(n);
@@ -142,7 +150,7 @@ function qPanel(id,ix){
  if(w&&n.choices?.length)h+=`<div class="q-acts">${n.choices.map((c,i)=>`<button class="btn ${i?'':'q-warn'}" data-qpick="${esc(c)}">${esc(c)}</button>`).join('')}</div>`;
  if(live)h+=`<div class="q-form ${w?'on':''}" id="q-af"><input class="q-in" id="q-ans" aria-label="Your answer" placeholder="Your answer"><button class="btn primary" data-qact="answer">Answer</button><button class="btn" data-qact="dead">Close as dead end</button></div>`;
  const ks=ix.kids[id]||[];
- if(ks.length)h+=`<div class="q-kids">${ks.map(k=>{const c=ix.by[k];return `<button class="q-kid" data-qgo="${esc(k)}" data-qnode="${esc(k)}"${c.claim?` data-qtip="${esc(c.claim)}"`:''}><span class="q-sh">${qShape(c)}</span><span>${esc(c.title)}</span></button>`}).join('')}</div>`;
+ if(ks.length)h+=`<div class="q-kids">${ks.map(k=>{const c=ix.by[k];return `<button class="q-kid" data-qgo="${esc(k)}" data-qnode="${esc(k)}"${c.claim?` data-qtip="${esc(qPlain(c.claim))}"`:''}><span class="q-sh">${qShape(c)}</span><span>${esc(c.title)}</span></button>`}).join('')}</div>`;
  const open=n.model?['model','#model/'+enc(n.model)]:n.hill?['hill','#hill/'+enc(n.hill)]:n.goal?['goal','#goal/'+enc(n.goal)]:null;
  h+=`<div class="q-acts"><button class="btn primary" data-qact="branch">Ask a follow-up</button>`+
   (live&&!w?`<button class="btn" data-qact="settle">Answer</button>`:'')+(live?`<button class="btn ${n.needs_human?'on':''}" data-qact="flag" aria-pressed="${!!n.needs_human}">${n.needs_human?'Waiting on a person':'Needs a person'}</button>`:`<button class="btn" data-qact="reopen">Reopen</button>`)+
@@ -229,7 +237,7 @@ VIEWS.questions=arg=>{
  // a deep link on a narrow screen: the panel sits under the tree, so bring it into view once per link
  if(arg&&QS.deep!==arg){QS.deep=arg;if(innerWidth<=820)setTimeout(()=>document.getElementById('q-panel')?.scrollIntoView({block:'start'}),0)}
  const hs=QS.data.nodes.filter(qWaiting);
- const need=hs.length?`<details class="q-need"><summary class="q-ib">${qShape('human',10)}${hs.length}</summary><div class="q-pop">${hs.map(n=>`<button data-qgo="${esc(n.id)}">${qShape('human',10)}<span>${esc(n.title)}</span></button>`).join('')}</div></details>`:'';
+ const need=hs.length?`<details class="q-need"><summary class="q-ib">${qShape('human',10)}${hs.length} need${hs.length>1?'':'s'} you</summary><div class="q-pop">${hs.map(n=>`<button data-qgo="${esc(n.id)}">${qShape('human',10)}<span>${esc(n.title)}</span></button>`).join('')}</div></details>`:'';
  const key=`<span class="q-ib key" tabindex="0" data-qtip="key"><svg width="14" height="14" viewBox="0 0 14 14" aria-label="Key"><circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="7" cy="4.3" r=".9" fill="currentColor"/><path d="M7 6.5V10.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span>`;
  const roots=ix.kids['']||[];
  return page({title:'Questions',crumbs:[['Questions']],acts:qDistance(qRootGoal(focus,ix))})+
