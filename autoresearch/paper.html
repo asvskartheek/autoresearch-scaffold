@@ -198,6 +198,7 @@ kbd{font:11px var(--mono);border:1px solid var(--input);border-bottom-width:2px;
 <div class="ov" id="ov"><div class="dlg"><header><b id="ovT"></b><a class="btn sm outline" id="ovOpen" target="_blank" rel="noopener">Open in new tab</a>
   <button class="btn icon sm ghost" id="ovX" title="Close"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button></header><iframe id="ovF"></iframe></div></div>
 <script src="../people.js"></script>
+<script src="../keys.js"></script>
 <script>
 (() => {
 const $ = s => document.querySelector(s);
@@ -318,7 +319,7 @@ function prepare(f, ready) {
   d.addEventListener("selectionchange", () => f === frame && onSelect());
   d.addEventListener("mouseup", () => f === frame && setTimeout(onSelect, 0));
   d.addEventListener("click", e => f === frame && onPaperClick(e), true);
-  d.addEventListener("keydown", onKey);
+  d.addEventListener("keydown", e => { window.ARXK && ARXK.key(e); if (!e.defaultPrevented) onKey(e); });  // keys pressed while the paper has focus
   d.addEventListener("pointerover", () => hoverId && setHover(null));  // on the paper itself: no mark or card is under the pointer
 }
 function syncHlVars(d) {
@@ -848,6 +849,9 @@ $("#prev").onclick = () => step(-1); $("#next").onclick = () => { if (mobile() &
 $("#sheetX").onclick = () => { col.classList.remove("open", "all"); if (active) setActive(null); cancelDraft(); };
 const toggleRes = () => { showResolved = !showResolved; store.set("arx-show-resolved", showResolved ? "1" : "0"); renderAll(); };
 $("#showRes").onclick = toggleRes; $("#showRes").onkeydown = e => (e.key === " " || e.key === "Enter") && (e.preventDefault(), toggleRes());
+// keys.js gives the reader its Vim keys (j k through the comments, n N, f, g + a page, ?); the tools keep B A D H, and P
+// stays the paper's own (explain-kit pause)
+window.ARXK && ["b", "a", "d", "h", "p"].forEach(ARXK.reserve);
 function onKey(e) {
   const typing = e.target.closest && e.target.closest("input,textarea,[contenteditable]");
   const k = { b: "box", a: "arrow", d: "pen", h: "highlight" }[e.key];
