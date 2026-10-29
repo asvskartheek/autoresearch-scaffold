@@ -6,7 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlsplit
 
-from . import features, papers, people, projects
+from . import features, papers, people, projects, share
 from .core import Project, _read, paired, per_id
 from .readable import readable
 
@@ -73,7 +73,7 @@ def _feature(routes, p, path, arg):
             r = fn(p, path, arg)
             code, payload = r[0], r[1]
             if isinstance(payload, (bytes, bytearray)):
-                return code, bytes(payload), (r[2] if len(r) > 2 else "application/octet-stream")
+                return (code, bytes(payload), (r[2] if len(r) > 2 else "application/octet-stream")) + tuple(r[3:4])
             return code, json.dumps(payload, default=str).encode(), "application/json"
     return None
 
@@ -465,6 +465,33 @@ def serve(port: int = 8890, root=None):
             self.end_headers()
             self.wfile.write(body)
 
+        def _token(self) -> str | None:
+            q = dict(parse_qsl(urlsplit(self.path).query))
+            if q.get("k"):
+                return q["k"]
+            for part in (self.headers.get("Cookie") or "").split(";"):
+                k, _, v = part.strip().partition("=")
+                if k == "arx_k":
+                    return v
+            return None
+
+        def _remote_ok(self, path: str, write: bool = False) -> bool:
+            """Another machine: a share token that names this project (share.py); a write must also be same-origin."""
+            parts = path.split("/")
+            key = unquote(parts[2]) if len(parts) > 2 and parts[1] == "p" else None
+            asset = key is None and not path.startswith(("/api/", "/papers")) and path not in ("/", "/index.html")
+            if key is None and not asset:
+                key = projects.key_for(home.root)  # the server's own project at /
+            if path.startswith("/api/projects"):
+                key = None  # answered with the granted projects only
+            if not share.allowed(self._token(), None if asset or key is None else key):
+                return False
+            if write:
+                origin = self.headers.get("Origin")
+                host = urlsplit("//" + (self.headers.get("Host") or "")).netloc
+                return bool(origin) and urlsplit(origin).netloc == host
+            return True
+
         def _local(self) -> bool:
             # loopback only: a DNS-rebound page carries a foreign Host; a cross-site POST carries a foreign Origin
             host = urlsplit("//" + (self.headers.get("Host") or "")).hostname
@@ -473,8 +500,15 @@ def serve(port: int = 8890, root=None):
 
         def do_GET(self):
             path = self.path.split("?")[0]
-            if not self._local():
-                return self._send(403, b'{"error":"not local"}', "application/json")
+            remote = not self._local()
+            if remote and not self._remote_ok(path):
+                return self._send(403, b'{"error":"not shared"}', "application/json")
+            q0 = dict(parse_qsl(urlsplit(self.path).query))
+            if remote and q0.get("k"):  # the link's token becomes a cookie; the address bar loses it
+                rest = "&".join(f"{k}={v}" for k, v in q0.items() if k != "k")
+                self.send_response(302); self.send_header("Location", path + ("?" + rest if rest else ""))
+                self.send_header("Set-Cookie", f"arx_k={q0['k']}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000")
+                self.end_headers(); return
             if path.startswith("/p/") and path.count("/") == 2:  # /p/<key> -> /p/<key>/ so relative fetches resolve
                 self.send_response(302); self.send_header("Location", path + "/"); self.end_headers(); return
             try:
@@ -482,7 +516,11 @@ def serve(port: int = 8890, root=None):
                 p, path = pick(path)
                 base = full[:len(full) - len(path)]  # "/p/<key>" or ""
                 if path == "/api/projects":
-                    return self._send(200, json.dumps(project_list(home), default=str).encode(), "application/json")
+                    ps = project_list(home)
+                    if remote:  # someone else sees only what was shared with them, and no paths on this machine
+                        keep = share.granted(self._token())
+                        ps = [dict(x, root="") for x in ps if x.get("key") in keep]
+                    return self._send(200, json.dumps(ps, default=str).encode(), "application/json")
                 if path == "/ui.css":
                     return self._send(200, UI.read_bytes(), "text/css; charset=utf-8")
                 if path == "/ui-base.css":  # tokens and base type only: what an embedded paper inherits
@@ -507,9 +545,9 @@ def serve(port: int = 8890, root=None):
                     return self._send(200, json.dumps(p.gate(path.rsplit("/", 1)[1]), default=str).encode(), "application/json")
                 if path == "/api/papers":
                     return self._send(200, json.dumps(papers.papers(p), default=str).encode(), "application/json")
-                r = _feature(features.GET, p, path, dict(parse_qsl(urlsplit(self.path).query)))
+                r = _feature(features.GET, p, path, dict(parse_qsl(urlsplit(self.path).query), _port=str(self.server.server_port)))
                 if r:
-                    return self._send(*r)
+                    return self._send(*r[:3], r[3] if len(r) > 3 else None)
                 parts = [unquote(x) for x in path.strip("/").split("/")]
                 if parts[0] == "papers" and len(parts) == 2:  # the reader
                     return self._send(200, PAPER.read_bytes(), "text/html; charset=utf-8")
@@ -529,7 +567,7 @@ def serve(port: int = 8890, root=None):
             self._send(404, b"not found", "text/plain")
 
         def do_POST(self):
-            if not self._local():
+            if not self._local() and not self._remote_ok(self.path.split("?")[0], write=True):
                 return self._send(403, b'{"error":"cross-origin"}', "application/json")
             try:
                 p, path = pick(self.path.split("?")[0])
@@ -559,7 +597,7 @@ def serve(port: int = 8890, root=None):
     srv = None
     for port_try in range(port, port + 20):
         try:
-            srv = ThreadingHTTPServer(("127.0.0.1", port_try), H)
+            srv = ThreadingHTTPServer((share.bind_host(), port_try), H)
             break
         except OSError:
             continue
