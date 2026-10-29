@@ -61,20 +61,23 @@ function gateTable(name,g){
 
 const nextRow=(lead,c)=>`<div class="md-next"><span class="md-lead">${lead}</span>${cmd(c)}</div>`;
 
+// a model's plain-text label (page title, crumb, tab): its title, else the tail of a long +-chained id
+const label=k=>{const t=S.state.models[k]?.title;if(t)return t;const s=String(k||'—'),p=s.split('+');return p.length>3?'…+'+p.slice(-2).join('+'):s};
+
 VIEWS.model=(name)=>{
  const L=S.state,m=L.models[name];
- const crumbs=[['Models','#models'],[L.models[name]?.title||name,'#model/'+enc(name)]];
+ const crumbs=[['Models','#models'],[label(name),'#model/'+enc(name)]];
  if(!m)return page({title:name,crumbs,finding:'There is no model by this name in the ledger.'})+panel('',empty('Model not found',`<code>arx model add ${esc(name)}</code> registers it`));
  const g=L.gates[name],hill=m.hill?L.hills[m.hill]:null,v=verdict(name,m,g);
  const onLadder=g&&!g.error&&m.status!=='champion';
  const nx=onLadder?(g.next||[]):[];
  const acts=v.ready?cmd(`arx promote ${name}`):!g?"":`<span class="cmd md-gatecmd"><code>arx gate ${esc(name)}</code>${copyBtn('arx gate '+name)}</span>`;
  const titled=m.title&&m.title!==name;
- const h=[page({title:m.title||name,copy:titled?'':name,crumbs,finding:`<span class="${v.cls||''}">${v.text}</span>`,acts:acts+`<a class="btn" href="reference/${enc(name)}">Paper</a>`})];
+ const h=[page({title:label(name),copy:titled?'':name,crumbs,finding:`<span class="${v.cls||''}">${v.text}</span>`,acts:acts+`<a class="btn" href="reference/${enc(name)}">Paper</a>`})];
 
  // the object header: status, lineage, hill, the pre-declared change, the reason, the ladder
  const f=fullScore(name),fullKey=L.config.primary_dataset+'/full',fsl=L.slices[fullKey];
- const meta=[st(m.status,m.status[0].toUpperCase()+m.status.slice(1))+(m.phase?' '+pill(m.phase):''),titled?`<span class="md-idc"><span class="mono md-id">${esc(name)}</span>${copyBtn(name)}</span>`:'',m.parent&&m.parent!==name?`<span>from ${mlink(m.parent)}</span>`:'',
+ const meta=[st(m.status,m.status[0].toUpperCase()+m.status.slice(1))+(m.phase?' '+pill(m.phase):''),titled||label(name)!==name?`<span class="md-idc"><span class="mono md-id">${esc(name)}</span>${copyBtn(name)}</span>`:'',m.parent&&m.parent!==name?`<span>from ${mlink(m.parent)}</span>`:'',
   m.hill?`<span>hill <a class="ln" href="#hill/${enc(m.hill)}">${esc(hill?.title||m.hill)}</a></span>`:'',m.created?`<span>registered ${stamp(m.created)}</span>`:'',
   f?`<span>${f.task?`<a href="#task/${enc(f.task)}">${score(f.score,fsl)}</a>`:score(f.score,fsl)} on ${esc(short(fullKey))}, n ${f.n.toLocaleString()}</span>`:''].filter(Boolean).join('<span class="sep">·</span>');
  const lad=g&&!g.error?ladder(g):'';

@@ -28,7 +28,7 @@ function full(k){
 const titled=(k,m)=>!!(m.title&&m.title!==k);
 const nameCell=(k,m,sub=true)=>{
  const t=titled(k,m),line=[m.phase?esc(m.phase):'',t?`<span class="ms-id"><span class="mono ms-kid">${esc(k)}</span>${copyBtn(k)}</span>`:''].filter(Boolean).join('<span class="faint"> · </span>');
- return `<div class="two">${t?`<a class="ms-nm" href="#model/${enc(k)}">${mn(k)}</a>`:`<span class="ms-id"><a class="ms-nm mono" href="#model/${enc(k)}">${esc(k)}</a>${copyBtn(k)}</span>`}${line?`<span class="sub ms-line">${line}</span>`:''}${sub&&!t&&m.change?`<span class="sub ms-ch">${esc(firstLine(m.change))}</span>`:''}</div>`;
+ return `<div class="two">${t?`<a class="ms-nm" href="#model/${enc(k)}">${mn(k)}</a>`:`<span class="ms-id"><a class="ms-nm mono" href="#model/${enc(k)}" title="${esc(k)}">${mn(k)}</a>${copyBtn(k)}</span>`}${line?`<span class="sub ms-line">${line}</span>`:''}${sub&&!t&&m.change?`<span class="sub ms-ch">${esc(firstLine(m.change))}</span>`:''}</div>`;
 };
 const parentCell=(k,p)=>p&&p!==k?`<a class="ms-par" href="#model/${enc(p)}" title="${esc(p)}">${mn(p)}</a>`:DASH;
 const hillCell=h=>{const x=S.state.hills[h];return h?`<a class="ms-hill" href="#hill/${enc(h)}">${esc(x?.title||h)}</a>`:DASH};
