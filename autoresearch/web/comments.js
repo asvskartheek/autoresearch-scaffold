@@ -57,6 +57,7 @@ function kind(el){const t=el.localName,c=cls(el),r=el.getBoundingClientRect();
  const m=NAMED.exec(c);if(m){const k=m[2];return {pill:'chip',badge:'chip',tag:'chip',dot:'point',seg:'bar',kpi:'tile',stat:'tile',rung:'step',lane:'track'}[k]||k}
  const T={tr:'row',td:'cell',th:'cell',li:'item',p:'paragraph',a:'link',button:'button',img:'image',canvas:'chart',table:'table',figure:'figure',
   figcaption:'caption',pre:'code',code:'code',blockquote:'quote',input:'field',select:'field',textarea:'field',summary:'heading',label:'label',dt:'term',dd:'value',caption:'caption',video:'video',iframe:'frame',mark:'mark'};
+ if((t==='a'||t==='button')&&r.height>40)return r.width>=5*r.height?'row':area(r)<=90000?'tile':'card';  // a link that is a whole card
  if(T[t])return T[t];if(/^h[1-6]$/.test(t))return 'heading';if(el.getAttribute('role'))return el.getAttribute('role');
  if(boxed(el)||!ownText(el)&&!el.children.length){if(Math.min(r.width,r.height)<=3)return 'tick';if(r.height<=18&&r.width>=3*r.height||r.width<=18&&r.height>=3*r.width)return 'bar';
   if(Math.max(r.width,r.height)<=18)return 'point';return area(r)<=90000?'tile':'card'}
@@ -243,7 +244,8 @@ tools.querySelectorAll('button').forEach(b=>b.onclick=()=>setTool(b.dataset.tool
 setTool('pick');
 // a picked element: its stable key (anchorFor), what it is, its own words and the card around it
 function pickEl(el){const r=el.getBoundingClientRect(),k=ARXPICK.kind(el),t=ARXPICK.text(el);
- const a={...anchorFor(el),what:k,text:t||k,ctx:(t?'':ARXPICK.around(el,80))||ctxOf(el,t),rx:0,ry:0,px:r1(r.left+scrollX),py:r1(r.top+scrollY)};
+ const card=el.parentElement?.closest('section,article,.card'),head=card&&card!==el&&[...card.querySelectorAll('h1,h2,h3,h4,.hd,header')].find(x=>!x.contains(el));
+ const a={...anchorFor(el),what:k,text:t||k,ctx:(t?'':ARXPICK.around(el,80))||(head&&textOf(head,80))||ctxOf(el,t),rx:0,ry:0,px:r1(r.left+scrollX),py:r1(r.top+scrollY)};
  setMode(false);compose(a,Math.min(r.right,innerWidth-20),Math.max(r.top,8))}
 $c('.cm-lst').onclick=()=>{list.classList.toggle('on');drawList()};
 const KEYS={p:'pick',b:'box',a:'arrow',d:'pen',h:'highlight'};
