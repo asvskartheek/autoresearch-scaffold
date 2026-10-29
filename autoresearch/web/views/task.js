@@ -210,7 +210,7 @@ function subTasks(t){
 const jsonOf=s=>{if(!/^\s*\{[\s\S]*\}\s*$/.test(s||''))return null;try{const o=JSON.parse(s);return o&&typeof o==='object'&&!Array.isArray(o)?o:null}catch(e){return null}};
 function jsonNote(o){
  const kv=flat(o).filter(([,v])=>v!=null&&v!==''),word=k=>{const a=k.split('.'),l=a.at(-1);return wbMetric(l)};
- const v=(k,x)=>{const l=k.split('.').at(-1);if(typeof x==='number')return mval(l,x);if(typeof x==='boolean')return x?'yes':'no';
+ const v=(k,x)=>{const l=k.split('.').at(-1);if(typeof x==='number')return /seed|^id$/.test(l)?String(x):Number.isInteger(x)&&!isScoreKey(l)?x.toLocaleString():mval(l,x);if(typeof x==='boolean')return x?'yes':'no';
   const s=String(x);if(/^[0-9a-f]{32,}$/i.test(s))return `<span class="tk-mono" title="${esc(s)}">${esc(s.slice(0,12))}</span>${copyBtn(s)}`;
   if(s.includes('/')&&!/\s/.test(s))return `<span class="tk-mono" title="${esc(s)}">${esc(tail(s))}</span>`;return esc(s)};
  return `<dl class="tk-jn">${kv.map(([k,x])=>`<div><dt>${esc(word(k))}</dt><dd>${v(k,x)}</dd></div>`).join('')}</dl>`;
