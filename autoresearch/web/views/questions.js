@@ -57,7 +57,6 @@ function qRow(id,ix,focus){
 
 // ---------- evidence: one lane per run
 const qFmt=n=>n==null?'—':Number(n).toLocaleString('en-US');
-const qSgn=v=>(v>0?'+':v<0?'−':'')+Math.abs(v).toFixed(1);
 function qTag(e){return e.role||(e.slice||'').split('/').pop()}
 function qCol(e){
  if(e.lo!=null&&e.hi!=null)return e.lo>0?'var(--positive)':e.hi<0?'var(--negative)':'var(--muted)';
@@ -65,33 +64,45 @@ function qCol(e){
 }
 // a model's readable label as plain text (mnt() without the HTML escaping; data-qtip is escaped once by esc())
 const qM=k=>{if(!k)return '';const t=S.state?.models?.[k]?.title;if(t)return t;const s=String(k);return s.split('+').length>3?'…+'+s.split('+').slice(-2).join('+'):s};
+const qCI=e=>e.lo==null?'':isCont(e.slice)?`90% CI ${sd(e.slice,e.lo)} to ${sd(e.slice,e.hi)}`:`90% CI ${pts(e.lo)} to ${pts(e.hi)} pts`;
+function qVal(e){
+ if(e.kind==='missing')return 'Not run';
+ if(e.kind==='paired')return e.delta==null?'—':sd(e.slice,e.delta);
+ if(e.c==null||!e.n)return '—';
+ return e.slice&&isCont(e.slice)?sv(e.slice,e.c/e.n):`${qFmt(e.c)} of ${qFmt(e.n)}`;
+}
 function qTipOf(e){
  if(e.kind==='missing')return `${qM(e.model)||e.task}\n${e.slice||''}\nNot run`;
  const head=`${e.label||qM(e.model)}\n${e.slice||e.what||''}${e.n?' · n '+qFmt(e.n):''}`;
- if(e.kind==='raw')return `${head}\n${qFmt(e.c)} of ${qFmt(e.n)}`+(e.what?`\n${e.what}`:'');
- return `${head}\n${qFmt(e.c)} vs ${qFmt(e.bc)} (${qM(e.base)})\n${qSgn(100*e.delta)} pts`+(e.lo!=null?` · 90% CI ${qSgn(100*e.lo)} to ${qSgn(100*e.hi)}`:'')+
+ if(e.kind==='raw')return `${head}\n${qVal(e)}`+(e.what?`\n${e.what}`:'');
+ const cont=isCont(e.slice);
+ return `${head}\n${cont?sv(e.slice,e.c/e.n):qFmt(e.c)} vs ${cont?sv(e.slice,e.bc/e.n):qFmt(e.bc)} (${qM(e.base)})\n${qVal(e)}`+(e.lo!=null?` · ${qCI(e)}`:'')+
   `\n${e.wins??0} fixed · ${e.losses??0} broke`;
 }
 function qSquares(e){
  if(e.kind!=='paired'||(!e.wins&&!e.losses))return '';
  const u=Math.max(1,Math.ceil((e.wins+e.losses)/28));
- return `<span title="${e.wins} fixed · ${e.losses} broke">`+'<i class="f"></i>'.repeat(Math.ceil(e.wins/u))+'<i class="b"></i>'.repeat(Math.ceil(e.losses/u))+'</span>';
+ return `<span class="sqs" title="${e.wins} fixed · ${e.losses} broke">`+'<i class="f"></i>'.repeat(Math.ceil(e.wins/u))+'<i class="b"></i>'.repeat(Math.ceil(e.losses/u))+'</span>';
 }
 function qEvidence(n){
+ // one lane per run: role, the delta (or count) as a dot with its CI, the value in the slice's units, and under it
+ // the slice, n and CI in words, so nothing needs a hover. 0/1 lanes share one pts axis; continuous lanes scale alone.
  const ev=n.ev||[];if(!ev.length)return '';
- const dl=ev.filter(e=>e.kind==='paired'&&e.delta!=null);
- const R=Math.max(3,Math.ceil(Math.max(0,...dl.flatMap(e=>[Math.abs(100*e.delta),Math.abs(100*(e.lo??0)),Math.abs(100*(e.hi??0))]))*1.1));
- const x=v=>50+Math.max(-R,Math.min(R,v))/R*48;
+ const isPts=e=>e.kind==='paired'&&e.delta!=null&&!isCont(e.slice);
+ const span=e=>Math.max(...[e.delta,e.lo,e.hi].filter(v=>v!=null).map(Math.abs),0);
+ const R=Math.max(3,Math.ceil(Math.max(0,...ev.filter(isPts).map(e=>100*span(e)))*1.1));
  const rows=ev.map(e=>{
-  let lane;
-  if(e.kind==='missing')lane=`<div class="trk dashed"></div>`;
-  else if(e.kind==='raw')lane=`<div class="trk"></div><div class="fill" style="width:${e.n?(100*e.c/e.n).toFixed(1):0}%"></div>`;
-  else{const col=qCol(e),d=100*e.delta;
-   lane=`<div class="z"></div>`+(e.lo!=null?`<div class="ci" style="left:${x(100*e.lo)}%;width:${Math.max(.5,x(100*e.hi)-x(100*e.lo))}%;background:${col}"></div>`:'')+`<div class="d" style="left:${x(d)}%;background:${col}"></div>`}
+  let lane='';
+  if(e.kind==='raw')lane=`<div class="trk"></div><div class="fill" style="width:${e.n&&e.c!=null&&!(e.slice&&isCont(e.slice))?Math.max(0,Math.min(100,100*e.c/e.n)).toFixed(1):0}%"></div>`;
+  else if(e.kind==='paired'&&e.delta!=null){
+   const col=qCol(e),k=isPts(e)?100:1,r=isPts(e)?R:(span(e)*1.15||1),x=v=>50+Math.max(-r,Math.min(r,k*v))/r*48;
+   lane=`<div class="z"></div>`+(e.lo!=null?`<div class="ci" style="left:${x(e.lo)}%;width:${Math.max(.5,x(e.hi)-x(e.lo))}%;background:${col}"></div>`:'')+`<div class="d" style="left:${x(e.delta)}%;background:${col}"></div>`}
   const href=e.task?`#task/${enc(e.task)}`:e.model?`#model/${enc(e.model)}`:'';
-  return `<${href?'a':'div'} class="q-lr"${href?` href="${href}"`:''} tabindex="0" data-qtip="${esc(qTipOf(e))}"><span class="tag">${esc(qTag(e))}</span><div class="lane">${lane}</div><div class="sq">${qSquares(e)}</div></${href?'a':'div'}>`;
+  const cap=[e.kind==='raw'&&e.role==='errors'?(e.what||e.label):e.slice,e.n?'n '+qFmt(e.n):'',e.kind==='paired'&&e.base?'vs '+qM(e.base):'',qCI(e)].filter(Boolean).map(esc).join(' · ');
+  const tag=e.role==='errors'?'errors':qTag(e);
+  return `<${href?'a':'div'} class="q-lr ${e.kind}"${href?` href="${href}"`:''} data-qtip="${esc(qTipOf(e))}"><span class="tag">${esc(tag)}</span><div class="lane">${lane}</div><b class="val">${esc(qVal(e))}</b><span class="cap">${cap}${qSquares(e)}</span></${href?'a':'div'}>`;
  }).join('');
- const axis=dl.length?`<div class="q-lr axis"><span></span><div class="ax"><span>−${R}</span><span>0</span><span>+${R} pts</span></div><span></span></div>`:'';
+ const axis=ev.some(isPts)?`<div class="q-lr axis"><span></span><div class="ax"><span>−${R}</span><span>0</span><span>+${R} pts</span></div><span></span></div>`:'';
  return `<div class="q-ev">${rows}${axis}</div>`;
 }
 
