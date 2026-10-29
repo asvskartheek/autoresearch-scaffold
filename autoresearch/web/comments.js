@@ -47,7 +47,16 @@ function cssPath(el){const parts=[];while(el&&el.nodeType===1&&el!==document.bod
  let i=1,s=el;while((s=s.previousElementSibling))if(s.tagName===el.tagName)i++;
  parts.unshift(el.tagName.toLowerCase()+`:nth-of-type(${i})`);el=el.parentElement}
  return parts.join('>')}
-const label=el=>{const t=(el.innerText||el.textContent||el.getAttribute?.('aria-label')||'').trim().replace(/\s+/g,' ');
+// the element's text as it reads on screen: text nodes in different elements that sit apart get a space between them
+// ("+1" and "90% CI" are two spans with a margin, never "+190% CI"); hidden text is skipped
+function textOf(el,max=90){let out='',pr=null,pe=null,n=0;const w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let t;
+ while((t=w.nextNode())&&n++<400&&out.length<max+40){const s=t.nodeValue;if(!s.trim()){if(out&&!/\s$/.test(out))out+=' ';continue}
+  const rg=document.createRange();rg.selectNodeContents(t);const rs=rg.getClientRects();if(!rs.length&&el.getClientRects().length)continue;
+  const r0=rs[0],rl=rs[rs.length-1];
+  if(pr&&r0&&t.parentElement!==pe&&!/\s$/.test(out)&&!/^\s/.test(s)&&(r0.left-pr.right>1.5||Math.abs(r0.top-pr.top)>4))out+=' ';
+  out+=s;pr=rl||pr;pe=t.parentElement}
+ return out.replace(/\s+/g,' ').trim().slice(0,max)}
+const label=el=>{const t=textOf(el)||(el.getAttribute?.('aria-label')||el.getAttribute?.('title')||'').trim();
  return (t||el.tagName.toLowerCase()).slice(0,90)};
 function anchorFor(el){const [key,node]=keyOf(el);const rel=node?relPath(node,el):null;
  return key&&rel!=null?{key,rel,sel:cssPath(el),text:label(el)}:{sel:cssPath(el),text:label(el)}}
