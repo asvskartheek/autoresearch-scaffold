@@ -1,6 +1,7 @@
 'use strict';
 // Brief: "since you last looked" as predict-then-reveal cards from the ledger (autoresearch/learn.py builds them),
-// calibration from .research/predictions.jsonl, and understanding telemetry posted to api/understanding.
+// calibration from .research/predictions.jsonl, and understanding telemetry posted to api/understanding (only after
+// the viewer has answered something: see leaveCard).
 // The deck's `since` is fixed when the page opens; finishing the deck moves last-seen for the next visit.
 const L={b:null,loading:false,err:null,at:0,cur:null,ui:{},since:null,mode:null,dlg:null,timer:{id:null,ms:0,t0:0},visits:{}};
 const LK=()=>'arx-brief-seen:'+(PKEY||'home');
@@ -43,8 +44,10 @@ function sendU(ev){
  try{if(navigator.sendBeacon&&ev.beacon){navigator.sendBeacon('api/understanding',new Blob([body],{type:'application/json'}));return}}catch(e){}
  fetch('api/understanding',{method:'POST',headers:{'Content-Type':'application/json'},body}).catch(()=>{});
 }
+// Looking writes nothing: time on cards is sent only once this visit has answered something (a card or a concept
+// check), so a read-only look or a shared link leaves no rows in someone else's project.
 function leaveCard(extra={}){
- const t=L.timer;if(!t.id)return;const ms=tTake();
+ const t=L.timer;if(!t.id)return;const ms=tTake();if(extra.check)L.wrote=true;if(!L.wrote)return;
  if(ms>300||extra.check)sendU({doc:'brief',step:t.id,ms:Math.round(Math.min(ms,30*60000)),replays:Math.max(0,(L.visits[t.id]||1)-1),...extra});
 }
 addEventListener('pagehide',()=>leaveCard({beacon:true}));
@@ -242,7 +245,7 @@ function drawDlg(){
 }
 function answerConcept(i){const st=L.dlg;if(!st||st.ans!=null)return;const q=st.c.qs[st.qi],o=shuf(st.c.id+'#'+st.qi,q.o);if(i>=o.length)return;
  st.ans=o[i];const ok=st.ans===q.a,ms=Math.round(performance.now()-st.t0),check=st.c.id+'#'+st.qi;
- sendU({doc:'concept:'+st.c.id,step:st.qi,ms,check,ok});
+ L.wrote=true;sendU({doc:'concept:'+st.c.id,step:st.qi,ms,check,ok});
  const d=L.b.understanding.docs['concept:'+st.c.id]||(L.b.understanding.docs['concept:'+st.c.id]={results:{}});d.results=d.results||{};d.results[check]=ok;
  L.b.understanding.missed=(L.b.understanding.missed||[]).filter(m=>!(m.doc==='concept:'+st.c.id&&m.check===check)).concat(ok?[]:[{doc:'concept:'+st.c.id,check}]);
  drawDlg()}
