@@ -7,6 +7,7 @@
 //   pill(text, cls) / st(status, label?)         status marks; ladder(gate, {compact}) the gate track
 //   meter(frac, {mark, cls}) / ciBar(check) / lineChart(series, opts) / spark(ys)
 //   empty(title, hint) / table(head, rows)
+//   sv(slice, v) / sd(slice, delta)            a score or delta in its slice's units (count of n, ms, tok/s)
 const S={projects:[],ex:{},state:null,detail:null,hill:null,ok:true,lbDataset:null,lbSlice:null,archiveKind:'all',crumbs:[]};
 const VIEWS={};
 const $=s=>document.querySelector(s);
@@ -35,6 +36,16 @@ const fmtv=v=>typeof v!=='number'?esc(v):num(v);
 const short=s=>String(s||'').split('/').slice(1).join('/')||s;
 const plural=(n,w,ws)=>`${n} ${n===1?w:(ws||w+'s')}`;
 const solved=r=>Math.round(r.score*r.n);
+// a score in its slice's terms. 0/1 slice: "1,224 of 1,319" and deltas in pts. Continuous slice: its unit, and a
+// "minus ms" metric (stored negated so higher is better) reads as the plain amount: sv -> "387 ms", sd(+1071) -> "−1,071 ms"
+const sliceOf=s=>S.state?.slices?.[s]||{};
+const isCont=s=>sliceOf(s).scale==='continuous';
+const negSlice=s=>/^\s*minus\b/i.test(sliceOf(s).metric||'');
+const unitOf=s=>sliceOf(s).unit||(/tokens?\s*\/\s*s/i.test(sliceOf(s).metric||'')?'tok/s':'');
+const grp=x=>Math.abs(x)>=100?Math.round(x).toLocaleString('en-US'):(+x.toPrecision(3)).toLocaleString('en-US');
+const sv=(s,v,n)=>{if(v==null||!isFinite(v))return '—';if(isCont(s)){const x=negSlice(s)?-v:v;return (grp(x)+' '+unitOf(s)).trim()}
+ n=n??sliceOf(s).n;return n?`${Math.round(v*n).toLocaleString('en-US')} of ${n.toLocaleString('en-US')}`:pct(v)};
+const sd=(s,d)=>{if(d==null||!isFinite(d))return '—';if(isCont(s)){const x=negSlice(s)?-d:d;return ((x>0?'+':x<0?'−':'')+grp(Math.abs(x))+' '+unitOf(s)).trim()}return pts(d)+' pts'};
 const firstLine=t=>String(t||'').split(/(?<=\.)\s/)[0];
 
 // ---------- ledger queries
