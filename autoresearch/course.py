@@ -389,7 +389,7 @@ def lesson_rung(p, L, learn):
     k = len(r["checks"])
     cs = [_check(f"A rung has {k} required checks and one fails. Does the rung pass?", ["No", "Yes"], "No",
                  "Every required check on a rung must pass.")]
-    return dict(say="These checks belong to the displayed candidate's evaluation scope; changing the switches below is a hypothetical exercise, not a new result.",
+    return dict(say="Toggle a check to explore whether this rung would pass. The switches simulate outcomes for the displayed candidate's evaluation scope.",
                 fig=dict(kind="rung", rung=r["rung"], checks=r["checks"], model=r.get("model")), checks=cs)
 
 
