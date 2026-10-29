@@ -64,7 +64,7 @@ const FIG={
   const sign=f.better||1,ok=f.rule==='better'?sign*d>sign*f.bar:sign*d>=sign*f.bar,word=sign<0?(f.rule==='better'?'below':'at or below'):(f.rule==='better'?'above':'at or above');
   return `${ex(f)}<div class="crs-big ${ok?'pos':'neg'}">${ok?'Pass':'Fail'}<span> Δ ${amt(f.unit,d)} is ${ok?word:(sign<0?'above':'below')} the bar ${amt(f.unit,f.bar)}</span></div>`+
    svg(w,72,axis(-e,e,x,58,f.unit)+`<rect x="${f.bar>0?x(f.bar):L0}" y="22" width="${f.bar>0?R-x(f.bar):x(f.bar)-L0}" height="0" />
-   <rect x="${x(f.bar)}" y="16" width="${R-x(f.bar)}" height="28" fill="var(--positive)" opacity=".08"/><line x1="${x(f.bar)}" x2="${x(f.bar)}" y1="14" y2="46" stroke="var(--warning)" stroke-width="2" stroke-dasharray="4 3"/><text x="${x(f.bar)}" y="10" text-anchor="middle" style="fill:var(--warning)">bar</text>
+   <rect x="${sign<0?L0:x(f.bar)}" y="16" width="${sign<0?x(f.bar)-L0:R-x(f.bar)}" height="28" fill="var(--positive)" opacity=".08"/><line x1="${x(f.bar)}" x2="${x(f.bar)}" y1="14" y2="46" stroke="var(--warning)" stroke-width="2" stroke-dasharray="4 3"/><text x="${x(f.bar)}" y="10" text-anchor="middle" style="fill:var(--warning)">bar</text>
    <circle cx="${x(d)}" cy="30" r="7" fill="${ok?'var(--positive)':'var(--negative)'}"/>`,'gate')+
    `<label class="crs-rg"><span>Δ</span><input type="range" data-w="${id}:d" min="${-e}" max="${e}" step="${e/200}" value="${d}"><output>${amt(f.unit,d)}</output></label><p class="crs-cap">${esc(f.model)} · ${esc(f.slice)} · ${esc(f.rung)}</p>`},
  rung(f,s,id){const st=s.st||f.checks.map(()=>true),ok=st.every(Boolean);
@@ -126,6 +126,7 @@ function lessonHTML(id,how){
  const body=how==='review'&&!done?checkHTML(x,how,key):`${fig(x)}<p class="crs-say">${esc(x.say)}</p>${checkHTML(x,how,key)}`;
  return head+`<div class="crs crs-one">${body}${C.err?`<p role="alert">${esc(C.err)}</p>`:''}<div class="actions">${done?`<a class="btn primary" href="${nx}" data-next data-how="${how}">${how==='review'?(dd[0]?'Next review':'Done'):'Next'} <kbd>space</kbd></a>`:''}<a class="btn" href="#course">All lessons</a></div></div>`}
 VIEWS.course=arg=>{
+ ensure();
  if(!C.d){ensure();return page({title:'101',crumbs:[['101']]})+(C.err?empty('Could not load the course',esc(C.err)):'<div class="crs"><div class="stage skel"></div></div>')}
  if(Date.now()-C.at>60000)ensure(true);
  if(!C.d.lessons.length)return page({title:'101',crumbs:[['101']]})+empty('No lessons available');

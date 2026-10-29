@@ -25,10 +25,10 @@ function ciWin(t,s){const z=s.z??t.view??zFull(t);let a=Math.max(t.min,-z),b=Mat
 function zoom(c,dir){const s=st(c),t=c.task||s.tk,f=zFull(t),z=s.z??t.view??f;s.z=dir>0?Math.max(f/1000,niceD(z/2)):Math.min(f,niceU(z*2));const fo=document.activeElement?.id==='tsk';render(true);if(fo)document.getElementById('tsk')?.focus()}
 function sketchCI(c,s){
  const t=c.task||s.tk;s.tv=c.reveal?.viz||null;if(!s.sk){const [a0,b0]=ciWin(t,s);s.sk={delta:0,lo:-(b0-a0)*.08,hi:(b0-a0)*.08}}const k=s.sk;
- const W=LW(),H=92,Lx=16,R=W-16,[a,b]=ciWin(t,s),x=q=>Lx+(Math.max(a,Math.min(b,q))-a)/(b-a)*(R-Lx),span=b-a;
+ const W=LW(),H=122,Lx=16,R=W-16,[a,b]=ciWin(t,s),x=q=>Lx+(Math.max(a,Math.min(b,q))-a)/(b-a)*(R-Lx),span=b-a;
  const stp=nstep(span,W<420?5:9);let g='';
  for(let q=Math.ceil(a/stp)*stp;q<=b+1e-9;q+=stp){const qq=+q.toPrecision(6);g+=`<line x1="${x(qq)}" x2="${x(qq)}" y1="30" y2="60" stroke="var(--grid)"/><text x="${x(qq)}" y="76" text-anchor="middle">${qq>0?'+':qq<0?'−':''}${grp(Math.abs(qq))}</text>`}
- const tr=c.reveal?.viz;const truth=tr?`<line x1="${x(tr.lo)}" x2="${x(tr.hi)}" y1="56" y2="56" stroke="var(--text)" stroke-width="4" stroke-linecap="round" opacity=".5"/><circle cx="${x(tr.delta)}" cy="56" r="5" fill="var(--text)"/><text x="${R}" y="14" text-anchor="end" class="mono strong">${amt(t.unit,tr.delta)} [${amt(t.unit,tr.lo)}, ${amt(t.unit,tr.hi)}]</text>`:'';
+ const tr=c.reveal?.viz;const truth=tr?`<line x1="${x(tr.lo)}" x2="${x(tr.hi)}" y1="56" y2="56" stroke="var(--text)" stroke-width="4" stroke-linecap="round" opacity=".5"/><circle cx="${x(tr.delta)}" cy="56" r="5" fill="var(--text)"/><text x="${R}" y="110" text-anchor="end" class="mono strong">${amt(t.unit,tr.delta)} [${amt(t.unit,tr.lo)}, ${amt(t.unit,tr.hi)}]</text>`:'';
  const bar=t.bar!=null&&t.bar>=a&&t.bar<=b?`<line x1="${x(t.bar)}" x2="${x(t.bar)}" y1="24" y2="64" stroke="var(--warning)" stroke-width="2" stroke-dasharray="4 3"/><text x="${x(t.bar)}" y="88" text-anchor="middle" style="fill:var(--warning)">bar ${amt(t.unit,t.bar)}</text>`:'';
  const lab=`${amt(t.unit,k.delta)} [${amt(t.unit,k.lo)}, ${amt(t.unit,k.hi)}]`;
  return `<svg class="lv t-sk" id="tsk" data-kind="ci" viewBox="0 0 ${W} ${H}" role="slider" tabindex="${c.pred?-1:0}" aria-label="your sketch: arrow keys move it, up and down widen the interval" aria-valuetext="${lab}">
@@ -43,7 +43,7 @@ function zoomBtns(c,s){const t=c.task||s.tk;if(c.pred||t.kind==='bars')return ''
  return `<div class="t-zoom"><button class="btn" data-t="zout" aria-label="Zoom out" title="Zoom out (−)" ${b-a>=zFull(t)*1.99?'disabled':''}>−</button><button class="btn" data-t="zin" aria-label="Zoom in" title="Zoom in (+)" ${(s.z??t.view??zFull(t))<=zFull(t)/1000+1e-9?'disabled':''}>+</button></div>`;
 }
 function sketchBars(c,s){
- const t=c.task||s.tk,W=LW(),rh=44,H=t.rows.length*rh+4,R=W-(W<420?96:120);
+ const t=c.task||s.tk,W=LW(),rh=60,H=t.rows.length*rh+4,R=W-(W<420?96:120);
  if(!s.sb)s.sb=t.rows.map(()=>t.max/2);const tr=c.reveal?.viz?.rows?.filter(r=>r.v!=null&&r.hl!==3),row=s.row||0;
  const M=tr?Math.max(t.max,...tr.map(r=>r.v*1.05)):t.max;  // the truth stays on the sketch's scale, widened only to fit
  const fmt=(r,v)=>r.unit?(grp(v)+' '+r.unit):r.n?`${Math.round(v*r.n).toLocaleString()} of ${r.n.toLocaleString()}`:pct(v);
@@ -52,7 +52,7 @@ function sketchBars(c,s){
   return `<text x="0" y="${y+12}" ${i===row&&!c.pred?'class="strong"':''}>${esc(r.label)}${r.tag?' · '+esc(r.tag):''}</text><rect x="0" y="${y+18}" width="${R}" height="16" rx="3" fill="var(--active)" data-row="${i}"/>
    <rect x="0" y="${y+18}" width="${Math.max(2,w)}" height="16" rx="3" fill="var(--accent)" opacity=".75" data-row="${i}" pointer-events="none"/>
    ${tv!=null?`<line x1="${tv}" x2="${tv}" y1="${y+14}" y2="${y+38}" stroke="var(--text)" stroke-width="3"/>`:''}
-   <text x="${Math.min(R,Math.max(w,tv??0))+6}" y="${y+31}" class="mono" style="fill:var(--accent)">${fmt(r,v)}${tv!=null?`<tspan class="strong" style="fill:var(--text)"> · ${fmt(r,tr[i].v)}</tspan>`:''}</text>`}).join('')}</svg>`;
+   <text x="${Math.min(R,Math.max(w,tv??0))+6}" y="${y+31}" class="mono" style="fill:var(--accent)">${fmt(r,v)}${tv!=null?`<tspan x="0" y="${y+50}" class="strong" style="fill:var(--text)">Result: ${fmt(r,tr[i].v)}</tspan>`:''}</text>`}).join('')}</svg>`;
 }
 // redraw the sketch in place; keep keyboard focus on it
 function redrawSketch(c,s){const g=document.getElementById('tsk');if(!g)return;const f=document.activeElement===g;
@@ -76,7 +76,7 @@ function dragSketch(e,c){
   const off=near.length?k[which]-val(px0):0;  // a grabbed handle keeps its offset from the pointer: it never jumps
   move=ev=>{const px=toX(ev);if(px==null)return;setCI(t,s,which,Math.round((val(px)+off)/step)*step);redrawSketch(c,s)};
   if(!near.length)move(e)}
- else{const R=vw-(vw<420?96:120),y0=toY(e);if(y0==null)return;const i=Math.max(0,Math.min(t.rows.length-1,Math.floor(y0/44)));s.row=i;
+ else{const R=vw-(vw<420?96:120),y0=toY(e);if(y0==null)return;const i=Math.max(0,Math.min(t.rows.length-1,Math.floor(y0/60)));s.row=i;
   const off=Math.abs(px0-s.sb[i]/t.max*R)<=12?s.sb[i]-px0/R*t.max:0;
   move=ev=>{const px=toX(ev);if(px==null)return;s.sb[i]=Math.max(0,Math.min(t.max,px/R*t.max+off));if(!t.rows[i].unit&&t.rows[i].n)s.sb[i]=Math.round(s.sb[i]*t.rows[i].n)/t.rows[i].n;s.sbm=true;redrawSketch(c,s)};
   if(!off)move(e)}

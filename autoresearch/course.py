@@ -164,7 +164,7 @@ def lesson_goal(p, L, learn):
     left = max(0, need - have)
     return dict(say="A goal is one target on one frozen slice. Work counts when it moves that number.", fig=fig,
                 checks=[_check(f"The champion gets {_n(have)} of {_n(N)} right. The goal needs {_n(need)}. How many more?",
-                               [left, need, have, left + 10], left, f"{_n(need)} − {_n(have)} = {_n(left)}."),
+                               [left, need, have, left + 10], left, f"{_n(need)} − {_n(have)} = {_n(left)}." if left else "The champion already meets the target."),
                         _check("Is a goal a task?", ["No: tasks serve it", "Yes: one long task"], "No: tasks serve it",
                                "A task is one job with an end. A goal is what the jobs are for.")])
 
