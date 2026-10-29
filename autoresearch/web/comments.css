@@ -74,7 +74,9 @@
 .cm-n{font:600 11px var(--mono);color:var(--warning);margin-right:6px}
 .cm-chip{position:fixed;pointer-events:auto;display:none;gap:4px}
 #main::after{content:"";display:block;height:56px}  /* room under the last card for the Comment button */
-@media (max-width:600px){.cm-btn b{display:none}.cm-tools button:not(.pk){padding:0 5px}}  /* no keyboard hints on a phone */
+@media (max-width:600px){.cm-btn b{display:none}.cm-tools button:not(.pk){padding:0 5px}
+ .cm-fab{left:16px;flex-wrap:wrap;justify-content:flex-end;pointer-events:none}.cm-fab>*{pointer-events:auto}}  /* a phone: the tools take their own line */
+.cm-btn{white-space:nowrap}  /* no keyboard hints on a phone */
 @media print{.cm-host{display:none}#main::after{display:none}}
 /* people: faces on messages, who has read the thread, threads for you */
 .cm-who{display:flex;align-items:center;gap:6px}
