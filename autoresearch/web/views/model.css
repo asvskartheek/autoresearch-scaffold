@@ -54,3 +54,8 @@
 @container (max-width:1060px){.md-gate .md-hw{display:none}}
 @container (max-width:900px){.md-gate .md-hm{display:none}}
 @container (max-width:700px){.md-gate .md-hs{display:none}.md-gate .md-ci .ci{display:none}}
+/* a candidate's verdict: its ladder track and the next run as one chip */
+.md-vz{display:inline-flex;align-items:center;gap:10px 14px;flex-wrap:wrap}
+.md-vz .ladder .rg{font-size:13px}
+.md-nx{display:inline-flex;align-items:center;gap:6px;padding:3px 10px 3px 4px;border-radius:999px;background:var(--accent-soft);color:var(--text);font-size:13px}
+.md-nxa{padding:1px 7px;border-radius:999px;background:var(--accent);color:var(--accent-fg,#fff);font-size:11px;font-weight:600}

@@ -34,10 +34,10 @@ function verdict(name,m,g){
  const fail=g.rungs.find(r=>r.status==='fail');
  if(fail){const c=fail.checks.find(c=>c.state==='fail');
   return {text:`Cannot be promoted: it failed the ${esc(fail.rung)} rung${c?`, ${vsWords(c.slice,c.delta)} the champion on ${esc(short(c.slice))} (n ${c.n}) where the rule is “${(r=>r[0].toLowerCase()+r.slice(1))(rule(c))}”`:''}.${passed.length?` It had passed ${list(passed)}.`:''}`,cls:'neg',failed:true};}
- const pend=g.rungs.find(r=>r.status==='pending'),n=g.next?.[0];
- let t=passed.length?`Passed ${list(passed)}. `:'Has not passed a rung yet. ';
- if(n)t+=n.model!==name?`Next, the champion needs a run on ${esc(short(n.slice))} so the ${esc(pend?.rung||'next')} rung can be compared.`:`Next: run it on ${esc(short(n.slice))} for the ${esc(pend?.rung||'next')} rung.`;
- return {text:t+tail};
+ // in progress: the ladder itself is the verdict; one chip says who runs what next (people skip the sentence)
+ const n=g.next?.[0];
+ const nx=n?`<span class="md-nx" title="${esc(n.model!==name?'The champion needs this run before the rung can be compared':'This model runs next')}"><span class="md-nxa">Next</span>${esc(n.model!==name?'champion':'this model')} on <span class="mono">${esc(short(n.slice))}</span></span>`:'';
+ return {text:`<span class="md-vz">${ladder(g)}${nx}${noisy.length?pill('Noisy on '+noisy.map(x=>x).join(', '),'noisy'):''}</span>`,viz:true};
 }
 
 function gateTable(name,g,base='Champion'){
@@ -113,10 +113,10 @@ VIEWS.model=(name)=>{
 
  // the object header: status, lineage, hill, the pre-declared change, the reason, the ladder
  const f=fullScore(name),fullKey=L.config.primary_dataset+'/full';
- const meta=[st(m.status,m.status[0].toUpperCase()+m.status.slice(1))+(m.phase?' '+pill(m.phase):''),titled||label(name)!==name?`<span class="md-idc"><span class="mono md-id">${esc(name)}</span>${copyBtn(name)}</span>`:'',m.parent&&m.parent!==name?`<span>from ${mlink(m.parent)}</span>`:'',
+ const meta=[st(m.status,m.status[0].toUpperCase()+m.status.slice(1))+(m.phase?' '+pill(m.phase):''),titled||label(name)!==name?`<span class="md-idc"><span class="mono md-id">${esc(name)}</span>${copyBtn(name)}</span>`:'',m.parent&&m.parent!==name?`<span title="The model this one was built from">built on ${mlink(m.parent)}${L.models[m.parent]?.status==='champion'?' (champion)':''}</span>`:'',
   m.hill?`<span>hill <a class="ln" href="#hill/${enc(m.hill)}">${esc(hill?.title||m.hill)}</a></span>`:'',m.created?`<span>registered ${stamp(m.created)}</span>`:'',
   f?`<span>${f.task?`<a href="#task/${enc(f.task)}">${score(f.score,fullKey,f.n)}</a>`:score(f.score,fullKey,f.n)} on ${esc(short(fullKey))}, n ${f.n.toLocaleString()}</span>`:''].filter(Boolean).join('<span class="sep">·</span>');
- const lad=g&&!g.error?ladder(g):'';
+ const lad=g&&!g.error&&!v.viz?ladder(g):'';  // a candidate's ladder already leads the page
  h.push(`<section class="card md-obj"><div class="md-top"><div class="md-meta">${meta}</div>${lad?`<div class="md-lad">${lad}</div>`:''}</div>
   <dl class="md-dl">
    <div><dt>Expected change</dt><dd>${m.change?reasonHTML(m.change):'<span class="dash">Not declared. State what this should move before running it, with <code>arx model add '+esc(name)+' --change "…"</code>.</span>'}</dd></div>
