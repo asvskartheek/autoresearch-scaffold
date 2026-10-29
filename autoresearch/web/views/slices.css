@@ -12,7 +12,8 @@
 .sl-clr{height:28px;padding:0 10px}
 .sl-id{width:52%;max-width:0}
 .sl-id .two,.sl-id .row{min-width:0}
-.sl-id b.mono{font-size:13px;font-weight:500}
+.sl-id .sl-nm{font-size:13px;font-weight:500;color:var(--text)}
+.sl-id .sl-nm:hover{color:var(--accent)}
 .sl-kind{width:88px}
 th.sl-n{width:56px}th.sl-runs{width:84px}
 .sl-hash{white-space:nowrap;width:136px}
@@ -47,3 +48,13 @@ th.sl-ch,td.sl-ch{width:96px;white-space:nowrap}
 a.sl-cs{color:var(--text);font-variant-numeric:tabular-nums}
 a.sl-cs:hover{color:var(--accent)}
 @media (max-width:640px){th.sl-ch,td.sl-ch{width:auto}}
+tr.sl-runs-row td{padding-top:4px;padding-bottom:12px}
+.sl-runl{list-style:none;margin:0;padding:0;display:grid;gap:4px;max-width:640px}
+.sl-runl li{display:grid;grid-template-columns:minmax(0,1fr) auto 120px;gap:12px;align-items:baseline;font-size:13px}
+.sl-rm{color:var(--text);min-width:0;overflow-wrap:anywhere}
+.sl-rm:hover,.sl-rs a:hover{color:var(--accent)}
+.sl-rs{font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+.sl-rs a{color:var(--text)}
+.sl-rt{font-size:12px;text-align:right;white-space:nowrap}
+.sl-runf{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+@media (max-width:640px){.sl-runl li{grid-template-columns:minmax(0,1fr) auto}.sl-rt{display:none}}
