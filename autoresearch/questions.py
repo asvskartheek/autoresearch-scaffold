@@ -78,7 +78,8 @@ def parse_evidence(p, items) -> list[dict]:
 
 
 def add(p, title, parent=None, needs_human=False, by="agent", status="open", quote=None, route=None,
-        choices=None, claim=None, lenient=False) -> dict:
+        choices=None, claim=None, lenient=False, why=None, evidence=None) -> dict:
+    """An open question. `why` (a hand-off to a person: what is blocked and what it costs) and `evidence` show with it."""
     title = re.sub(r"\s+", " ", str(title or "")).strip()
     if not title:
         raise SystemExit("a question needs a title")
@@ -87,7 +88,8 @@ def add(p, title, parent=None, needs_human=False, by="agent", status="open", quo
             raise SystemExit(f"unknown question {parent}")
         parent = None
     qid = "q-" + uuid.uuid4().hex[:6]
-    rec = dict(title=title[:120], parent=parent or None, status=status, claim=claim, evidence=[],
+    rec = dict(title=title[:120], parent=parent or None, status=status, claim=claim, evidence=list(evidence or []),
+               why=(re.sub(r"\s+", " ", str(why)).strip()[:300] if why else None),
                needs_human=bool(needs_human), created=time.time(), by=by or "agent",
                quote=(str(quote)[:400] if quote else None), route=(str(route)[:200] if route else None),
                choices=[str(c)[:60] for c in choices][:4] if choices else None)
@@ -421,6 +423,94 @@ def _pd(r, model, base, sl, role, **kw):
     if n and r.get("cand") is not None:
         out |= dict(c=round(r["cand"] * n), bc=round(r["base"] * n))
     return out
+
+
+# ---------------------------------------------------------------- the numbers an answer quotes
+def _pts(x) -> str:
+    return f"{100 * x:+.1f}".replace("-", "−")
+
+
+def number_lines(p, models=None, slices=None) -> list[str]:
+    """Each model's score on each slice it has runs on, as the gates and the Questions evidence compute it: every
+    complete run at the slice's current hash pooled per example, paired against the model's parent (else the hill's
+    baseline, else the champion) with the 90% CI. `arx q numbers` prints these; answer agents quote them as written."""
+    with p.snapshot():
+        p._q_evals = None
+        p._q_evals = _evals(p)
+        try:
+            ms, sls, champ = p.models(), p.slices(), p.champion()
+            want = [m for m in (models or [champ]) if m]
+            for m in want:
+                if m not in ms:
+                    raise SystemExit(f"unknown model {m}")
+            only = {p.slice(s)["name"] for s in slices or []}
+            ctx = dict(hills=p.hills(), goals=p.goals(), models=ms, champion=champ, goal_status={})
+            out = []
+            for m in want:
+                have = sorted({t["slice"] for t in _evals(p) if t.get("model") == m and (not only or t["slice"] in only)})
+                head = f"{features.model_label(p, m)} [{m}]" + (" (champion)" if m == champ else "")
+                if not have:
+                    out.append(f"{head}: no complete run" + (" on " + ", ".join(sorted(only)) if only else ""))
+                    continue
+                out.append(head)
+                for sl in have:
+                    r = resolve(p, dict(model=m, slice=sl), dict(model=m), ctx) or {}
+                    cont = (sls.get(sl) or {}).get("scale") == "continuous"
+                    runs = len(_runs(p, m, sl))
+                    pooled = f"pooled over {runs} runs" if runs > 1 else "1 run"
+                    if cont:
+                        sc = p.pooled_scores(m, sl)
+                        unit = (sls.get(sl) or {}).get("unit") or ""
+                        val = f"mean {_grp(sum(sc.values()) / len(sc))} {unit}".rstrip() if sc else "—"
+                    else:
+                        val = f"{r['c']:,} of {r['n']:,}" if r.get("c") is not None and r.get("n") else "—"
+                    line = f"  {sl}: {val} ({pooled})"
+                    if r.get("kind") == "paired" and r.get("delta") is not None:
+                        d = (f"{_grp(r['delta'])}" if cont else f"{_pts(r['delta'])} pts")
+                        ci = (f"{_grp(r['lo'])} to {_grp(r['hi'])}" if cont else f"{_pts(r['lo'])} to {_pts(r['hi'])}")
+                        line += (f"; vs {features.model_label(p, r['base'])} [{r['base']}]"
+                                 + ("" if cont else f" {r['bc']:,} of {r['n']:,}")
+                                 + f": {d} (90% CI {ci}), {r.get('wins') or 0} fixed, {r.get('losses') or 0} broke")
+                    out.append(line)
+            return out
+        finally:
+            p._q_evals = None
+
+
+NUMBERS_RULE = """\
+- Numbers come from `arx q numbers [model ...] [--slice s]` and are quoted exactly as it prints them. They are what the
+  dashboard and the gates show: every complete run of a model on a slice pooled per example, and the paired delta vs
+  the model's parent (else the champion) with its 90% CI. Never take a score from one run's summary or a task note,
+  and never average runs yourself.
+- Counts with thousands separators and their n ("1,224 of 1,319 on gsm8k-test/full"), never a bare percentage. A gap
+  to a goal is the goal line's own text below; do not subtract it again.
+- Say what a comparison is on: "leads" or "best" names the slice and the n."""
+
+
+def ledger_brief(p) -> str:
+    """What every answering prompt gets: the numbers rule, the goals as the dashboard reads them, and the champion's
+    pooled numbers, so an answer and the page beside it never disagree."""
+    lines = [NUMBERS_RULE, "", "Goals (as the dashboard reads them):"]
+    try:
+        gs = _goal_status(p, p.goals())
+    except Exception:  # a broken goal never takes a prompt down
+        gs = {}
+    for k, g in gs.items():
+        if g.get("status") != "open" and g.get("status") != "achieved":
+            continue
+        tx = _goal_text(p, g)
+        lines.append(f"- {k} ({g.get('status')}): {_goal_title(g, k, p.slices().get(g.get('slice') or ''))} "
+                     f"Now {tx.get('value_txt')} on {g.get('slice')} by {features.model_label(p, g.get('model'))}; "
+                     f"target {tx.get('target_txt', '—')}" + (f"; {tx['gap_txt']}" if tx.get("gap_txt") else "")
+                     + ("; met" if g.get("met") else "") + ".")
+    if len(lines) == 3:
+        lines.append("- (no open goals)")
+    try:
+        champ = number_lines(p)
+    except SystemExit:
+        champ = []
+    lines += ["", "The champion's numbers now (`arx q numbers`):", *(champ or ["  (no champion runs yet)"])]
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------- the tree a viewer gets
@@ -760,40 +850,60 @@ def _prompt(p, item) -> str:
         lines.append(f"They selected this text when asking: \"{pay.get('quote') or n.get('quote')}\"")
     if pay.get("route") or n.get("route"):
         lines.append(f"They were on the dashboard view: {pay.get('route') or n.get('route')}")
+    ask_text = f"{n.get('title') or pay.get('title') or ''} {pay.get('quote') or ''}"
     lines += [
         "",
         "Rules:",
         "- Read-only ledger access. Read research.json, PROTOCOL.md and .research/ (models.json, hills.json, goals.json,",
-        "  slices.json, decisions.jsonl, tasks/*/task.json and events.jsonl). Use `arx status`, `arx gate <model>`,",
-        "  `arx goal status` and `arx q list`. Do not run evals, train, edit the ledger or change any file.",
+        "  slices.json, decisions.jsonl, tasks/*/task.json and events.jsonl). Use `arx q numbers`, `arx status`,",
+        "  `arx gate <model>`, `arx goal status` and `arx q list`. Do not run evals, train, edit the ledger or change any file.",
+        "- Name models by their titles (list below), never by raw ids, in the claim and in the document.",
         "- Reporting rules from PROTOCOL.md: every number names its slice and n; show paired deltas vs the champion",
         "  (or the model's parent) with the 90% CI, not raw scores from different slices; a CI that crosses zero is a",
         "  lead, not a result; say 'not run' when the ledger has no run, never guess a number.",
+        ledger_brief(p),
         "",
         "Answer with exactly one of:",
         f"  arx q answer {qid} \"<claim>\" --evidence <model>:<slice> [--evidence task:<id> ...]",
         f"  arx q dead {qid} \"<claim>\"     (the question has no useful answer, or the idea it asks about failed)",
-        "The claim is one plain sentence of at most 25 words that answers the question, with its numbers,",
-        "e.g. \"No. 150 vs 157 of 185 on the target slice, paired delta -3.8 pts (90% CI -6.5 to -1.1).\"",
-        "Evidence: every model:slice run the claim rests on (the dashboard draws each as a paired-delta dot with its CI).",
+        "The claim answers the question in plain words with its numbers, e.g.",
+        "\"No. 150 vs 157 of 185 on the target slice, paired delta -3.8 pts (90% CI -6.5 to -1.1).\"",
+        "- A fact, a number or a yes/no: one sentence, at most 25 words.",
+        "- How or why something works or decides (\"how did the gate decide\", \"why was it rejected\"): state the rule",
+        "  or the reason itself, then the numbers that applied it; up to two sentences (about 50 words). A list of",
+        "  deltas does not answer a how question.",
+        "Evidence: each model:slice run the claim rests on, once (the dashboard draws each as a paired-delta dot with its",
+        "CI; a task:<id> for the same run draws it twice).",
         "",
         "Short or long: judge what the person asked. A question that wants a fact, a number or a yes/no gets the claim",
-        "above and nothing more (most do). A question that asks to explain, introduce or walk through something",
-        "(\"give me an intro to the data\", \"how does the agent work\") also gets a LONG answer: one self-contained HTML",
-        "document, passed with --doc - on stdin (you cannot write files); the claim stays its one-line summary:",
+        "above and nothing more (most do). A question that asks to explain, introduce or walk through something, or how",
+        "a rule or a process decides (\"give me an intro to the data\", \"how does the gate decide\"), also gets a LONG",
+        "answer: one self-contained HTML document, passed with --doc - on stdin (you cannot write files); the claim stays",
+        "its summary:",
         f"  arx q answer {qid} \"<claim>\" [--evidence ...] --doc - <<'HTML'",
         "    <!doctype html><html>...the document...</html>",
         "    HTML",
         *(["This ask reads like a request for an explanation: a long answer is probably right."]
-          if comments.wants_long(f"{n.get('title') or pay.get('title') or ''} {pay.get('quote') or ''}") else []),
+          if comments.wants_long(ask_text) else []),
         "The document, following PROTOCOL.md's paper non-negotiables where they apply: sections",
-        "(<section data-block=\"<id>\">) each with a heading and at most 100 words of prose; an inline SVG figure for every",
-        "section that states a number (the FIRST <svg> is the summary figure shown under the question: make it stand",
-        "alone, viewBox about 400 wide, text in currentColor at font-size 12 or more); at least one small widget the",
-        "reader drives; ledger numbers only, each naming its slice and n; dark mode under :root[data-theme=\"dark\"];",
-        "sans-serif fonts; a <title>; inline CSS and JS only; no client text, answers or traces (ids and paraphrase).",
-        "If answering needs new runs or a human decision, still answer what the ledger shows now, and add the follow-up as",
-        f"  arx q add \"<title, at most 6 words>\" --parent {qid} --needs-human",
+        "(<section data-block=\"<id>\">) each with a heading and at most 100 words of prose; the figure comes first in each",
+        "section, prose captions it; an inline SVG figure for every section that states a number. " + comments.FIGURE_RULE,
+        "At least one small widget the reader drives; ledger numbers only, each naming its slice and n; dark mode under",
+        ":root[data-theme=\"dark\"]; sans-serif fonts; a <title> (the page shows it, so no <h1> repeating it); inline",
+        "CSS and JS only; no client text, answers or traces (ids and paraphrase). Link a model, hill or goal with its",
+        "title as the text: <a href=\"#model/<id>\">its title</a>.",
+        "",
+        "Handing work to a person: if answering needs a new run or a human decision, still answer what the ledger shows",
+        "now, then ask the person ONE question they can answer in one tap:",
+        f"  arx q add \"<a question, at most 8 words, ending in ?>\" --parent {qid} --needs-human \\",
+        "    --choice \"<option>\" --choice \"<option>\" --why \"<one sentence: what is blocked, with the numbers and the cost>\" \\",
+        "    [--evidence <model>:<slice> ...]",
+        "  e.g. \"Rerun the stalled full-set evals?\" --choice \"Rerun both (about 40 GPU min)\" --choice \"Drop them\"",
+        "  --why \"Two candidates stopped at 812 and 640 of 1,319 on gsm8k-test/full; the gate needs complete runs.\"",
+        "  Never an instruction (\"Restart the evals\"): a question with 2 to 4 choices, the first the one you recommend.",
+        "",
+        "Model titles (id: title):",
+        comments._titles(p),
     ]
     return "\n".join(lines)
 
@@ -811,9 +921,15 @@ def _cmd(a):
         if a.verb == "ask":
             q = ask(p, title, parent=a.parent, by=a.by or "you")
             return print(f"{q['id']} asked; an agent answers it (inbox {q['inbox']})")
-        q = add(p, title, parent=a.parent, needs_human=a.needs_human, by=a.by or "agent", choices=a.choice)
-        if len(title.split()) > 6:
-            print("note: keep titles to 6 words or fewer", flush=True)
+        if a.needs_human and not title.rstrip().endswith("?"):
+            raise SystemExit("a hand-off to a person is a question they can answer: end the title with ?, give 2 to 4 "
+                             "--choice options and --why")
+        q = add(p, title, parent=a.parent, needs_human=a.needs_human, by=a.by or "agent", choices=a.choice,
+                why=a.why, evidence=parse_evidence(p, a.evidence))
+        if len(title.split()) > 8:
+            print("note: keep titles to 8 words or fewer", flush=True)
+        if a.needs_human and (not a.choice or not a.why):
+            print("note: a person answers fastest with --choice options and a --why", flush=True)
         return print(q["id"])
     if a.verb in ("answer", "dead"):
         if len(a.args) < 2:
@@ -825,6 +941,10 @@ def _cmd(a):
         r = settle(p, a.args[0], "answered" if a.verb == "answer" else "dead", " ".join(a.args[1:]), ev, by=a.by or "agent",
                    doc=doc)
         return print(f"{a.args[0]} {r['status']}: {r['claim']}")
+    if a.verb == "numbers":
+        for line in number_lines(p, a.args or None, a.slice):
+            print(line)
+        return
     if a.verb == "list":
         t = tree(p, full=False)["byid"]
         if a.json:
@@ -849,17 +969,21 @@ def _register(sp):
     import argparse
     s = sp.add_parser("q", help="questions: the project as a tree of questions with evidence",
                       formatter_class=argparse.RawDescriptionHelpFormatter, description="""verbs:
-  add "<title>" [--parent id] [--needs-human]     an open question (title: 6 words or fewer)
+  add "<title>" [--parent id] [--needs-human]     an open question (title: 8 words or fewer)
+      [--choice c ...] [--why "..."]              a hand-off to a person: one-tap choices and what is blocked
   ask "<title>" [--parent id]                     a question for an agent (inbox kind=question)
   answer <id> "<claim>" --evidence model:slice    answered, with the runs it rests on (task:<id> also works)
                        [--doc answer.html | -]    plus a long answer: an HTML document read at #answer/<id>
   dead <id> "<claim>"                             a dead end
-  list [--claims] [--json]                        the tree (seeded from goals, hills and models)""")
-    s.add_argument("verb", choices=["add", "ask", "answer", "dead", "list"])
+  list [--claims] [--json]                        the tree (seeded from goals, hills and models)
+  numbers [model ...] [--slice s]                 the pooled counts and paired deltas the dashboard draws (read-only)""")
+    s.add_argument("verb", choices=["add", "ask", "answer", "dead", "list", "numbers"])
+    s.add_argument("--slice", action="append", help="numbers: only this slice (repeat)")
     s.add_argument("args", nargs="*")
     s.add_argument("--parent")
     s.add_argument("--needs-human", action="store_true")
     s.add_argument("--choice", action="append", help="add: a one-tap answer for the person (repeat, up to 4)")
+    s.add_argument("--why", help="add: why a person is needed, with the numbers and the cost (one sentence)")
     s.add_argument("--evidence", action="append", default=[], help="model:slice or task:<id> (repeat)")
     s.add_argument("--doc", help="answer: a long answer, a self-contained HTML file (- reads stdin), read at #answer/<id>")
     s.add_argument("--by", help="who is writing (default: agent)")
