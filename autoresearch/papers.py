@@ -303,12 +303,23 @@ def _kpi_text(kpi: str, v: float) -> list[str]:
     return list(dict.fromkeys([f"{100 * v:g}%", f"{100 * v:.1f}%", f"{100 * v:.0f}%", f"{100 * v:.1f} %"]))
 
 
-def check_goal(html: str, st: dict, hill_papers=()) -> list[tuple[str, str]]:
+def _names(who: str, titles: dict | None) -> list[str]:
+    """The ways a paper may name a model: its readable title (preferred; raw `a+b+c` ids are unreadable), else its id."""
+    t = (titles or {}).get(who)
+    return [x for x in (t, _html.escape(t, quote=False) if t else None, who) if x]
+
+
+def _says(text: str, who: str, titles: dict | None) -> bool:
+    return any(x in text for x in _names(who, titles))
+
+
+def check_goal(html: str, st: dict, hill_papers=(), titles: dict | None = None) -> list[tuple[str, str]]:
     """The goal paper is the public one. On top of `check`: a `result` section that states the goal KPI, slice
     and n, the champion's value and the paired delta vs the starting champion; links to every internal hill paper
     of the goal (relative `../<hill>`, marked class="internal"); a `system` section that shows the starting
     system and the champion side by side; and a draft / negative-result label that matches
-    the goal's status. `st` is `Project.goal_status(goal)`."""
+    the goal's status. `st` is `Project.goal_status(goal)`; `titles` maps model ids to titles, and a model is named
+    by its title or its id."""
     out = []
     body = re.sub(r"<script\b.*?</script>|<style\b.*?</style>", "", html, flags=re.S | re.I)
     m = re.search(r'<section\b[^>]*data-block="result"[^>]*>(.*?)</section>', body, re.S | re.I)
@@ -327,8 +338,9 @@ def check_goal(html: str, st: dict, hill_papers=()) -> list[tuple[str, str]]:
                                  f"({st['model']}); numbers come from the ledger"))
         vs = st.get("vs_baseline")
         if vs and vs.get("delta") is not None:
-            if st.get("baseline") and st["baseline"] not in text:
-                out.append(("error", f"result section does not name the starting champion {st['baseline']}"))
+            if st.get("baseline") and not _says(text, st["baseline"], titles):
+                out.append(("error", f"result section does not name the starting champion "
+                                     f"({' or '.join(map(repr, _names(st['baseline'], titles)[::2]))})"))
             if f"{100 * vs['delta']:+.1f}" not in text:
                 out.append(("error", f"result section does not give the paired delta {100 * vs['delta']:+.1f} pts vs the start"))
             if not re.search(r"90% CI|interval", text):
@@ -339,8 +351,9 @@ def check_goal(html: str, st: dict, hill_papers=()) -> list[tuple[str, str]]:
                              "champion side by side, how each added part works and what each one fixed"))
     else:
         for who in (st.get("baseline"), st.get("model")):
-            if who and who not in m.group(1):
-                out.append(("error", f"system section does not name {who}: it compares the start with the champion"))
+            if who and not _says(m.group(1), who, titles):
+                out.append(("error", f"system section does not name {' or '.join(map(repr, _names(who, titles)[::2]))}: "
+                                     "it compares the start with the champion"))
         if not VISUAL.search(m.group(1)):
             out.append(("error", "system section has no visual: draw the before and after systems"))
     for h in st.get("hills") or {}:

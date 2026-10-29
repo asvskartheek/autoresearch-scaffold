@@ -465,7 +465,8 @@ def cmd_paper(a):
             sys.exit(f"unknown goal {goal}")
         found = papers.check(src.read_text(), slices=list(p.slices()))
         if goal:  # the public paper: final result, paired delta, internal hill papers
-            found += papers.check_goal(src.read_text(), p.goal_status(goal), hill_papers=papers.names(p))
+            found += papers.check_goal(src.read_text(), p.goal_status(goal), hill_papers=papers.names(p),
+                                       titles={k: m["title"] for k, m in p.models().items() if m.get("title")})
         for level, msg in found:
             print(f"{level}: {msg}")
         errs = sum(1 for lv, _ in found if lv == "error")

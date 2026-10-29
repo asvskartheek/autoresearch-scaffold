@@ -32,5 +32,24 @@ class OnePaper(unittest.TestCase):
         self.assertEqual(papers.owner(p, goal="g1"), "g1")
 
 
+class GoalLintTitles(unittest.TestCase):
+    ST = dict(slice="pid/full", n=183, kpi="score", target=0.84, value=0.825, model="a+b+c+d", baseline="a",
+              vs_baseline=dict(delta=0.137, lo=0.07, hi=0.19, n=183), hills={}, status="open")
+
+    def html(self, system):
+        return (f'<section data-block="result"><p data-block="r">draft. pid/full n = 183, target 84%, now 82.5%, '
+                f'Context engine v2 vs Start: +13.7 pts, 90% CI</p></section>'
+                f'<section data-block="system"><figure data-block="f"><svg></svg>{system}</figure></section>')
+
+    def test_title_names_the_model(self):
+        titles = {"a+b+c+d": "Context engine v2", "a": "Start"}
+        errs = [m for _, m in papers.check_goal(self.html("Start then Context engine v2"), self.ST, titles=titles)]
+        self.assertEqual(errs, [])
+        errs = [m for _, m in papers.check_goal(self.html("a then a+b+c+d"), self.ST, titles=titles)]
+        self.assertEqual(errs, [])  # the id still counts
+        errs = [m for _, m in papers.check_goal(self.html("Start only"), self.ST, titles=titles)]
+        self.assertTrue(any("'Context engine v2' or 'a+b+c+d'" in m for m in errs), errs)
+
+
 if __name__ == "__main__":
     unittest.main()
