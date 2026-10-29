@@ -118,6 +118,14 @@ def lan_ip() -> str:
         s.close()
 
 
+PATH_RX = re.compile(r"(?<![\w.])(?:/(?:Users|home|private|tmp|var|Volumes)/[^\s\"'<>]*)")
+
+
+def redact(text: str) -> str:
+    """What someone else sees: no absolute paths on this machine (a path keeps its last two parts, e.g. …/run/gate.json)."""
+    return PATH_RX.sub(lambda m: "…/" + "/".join(m.group(0).rstrip("/").split("/")[-2:]), text)
+
+
 def link(key: str, port: int, target: str = "", token: str | None = None) -> str:
     """The URL someone else opens: the project's view, a paper, or one comment thread."""
     token = token or token_for(key)
