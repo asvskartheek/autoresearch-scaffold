@@ -68,11 +68,25 @@ def _paper_where(a: dict) -> str:
     """The anchor in words: the block, and for a drawn mark what it covers (a box or pen around, an arrow pointing at)."""
     sh = a.get("shape") if isinstance(a.get("shape"), dict) else None
     q = a.get("quote") or ""
-    if sh:
-        verb = {"arrow": "an arrow pointing at", "box": "a box around", "pen": "a pen mark on", "highlight": "a highlight over"}.get(sh.get("tool"), "a mark on")
-        return (f"{verb} part of block {a.get('block')!r} ({sh.get('w', '?')} x {sh.get('h', '?')} px, "
-                f"{sh.get('x', '?')} px from its left, {sh.get('y', '?')} px from its top); the words there: \"{q}\"")
-    return f"block {a.get('block')!r}, quoted text: \"{q}\""
+    if not sh:
+        return f"block {a.get('block')!r}, quoted text: \"{q}\""
+    tool = sh.get("tool")
+    verb = {"arrow": "an arrow pointing at", "box": "a box around", "pen": "a pen mark on", "highlight": "a highlight over"}.get(tool, "a mark on")
+    where = f"part of block {a['block']!r}" if a.get("block") else "the page (outside any block)"
+    out = f"{verb} {where}"
+    bw, bh = sh.get("bw"), sh.get("bh")
+    if bw and bh and all(isinstance(sh.get(k), (int, float)) for k in ("x", "y", "w", "h")):
+        out += (f" (the block is {bw:g} x {bh:g} px; the mark is {sh['w']:g} x {sh['h']:g} px, its top-left "
+                f"{sh['x'] / bw:.0%} across and {sh['y'] / bh:.0%} down the block)")
+    word = a.get("suffix")  # a mark drawn since the reader re-anchors: the word it holds on to (paper.html refWord)
+    if not word:
+        return out + f"; the words there: \"{q}\""
+    pre = " ".join((a.get("prefix") or "").split())
+    ctx = f" (after \"...{pre}\")" if pre else ""
+    if tool == "arrow":
+        return out + (f"; the word at its tip: \"{q}\"{ctx}" if q == word else f"; no word at its tip; nearest words: \"{q}\"")
+    inside = bool(q.split()) and q.split()[0] in word  # the words inside start in its reference word (wordsIn)
+    return out + (f"; the words inside it: \"{q}\"" if inside else f"; no words inside it; nearest words: \"{q}\"")
 
 
 features.PROMPTS.setdefault("paper", paper_prompt)

@@ -631,20 +631,50 @@ ink.addEventListener("pointerup", e => {
   if (w < 6 && ht < 6) return drawInk();
   const d = paperDoc(), fo = fOff(), cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2;
   // what the mark is about: an arrow points with its tip, anything else covers its middle
-  const tip = s.tool === "arrow" ? s.pts.at(-1) : { x: cx, y: cy }, tx = tip.x - fo.x, ty = tip.y - fo.y;
+  const tip = s.tool === "arrow" ? s.pts.at(-1) : { x: cx, y: cy }, fw = frame.contentWindow;
+  const tx = Math.min(Math.max(tip.x - fo.x, 1), fw.innerWidth - 1), ty = Math.min(Math.max(tip.y - fo.y, 1), fw.innerHeight - 1);  // a mark past the edge: the nearest point inside
   const cr = caretAt(d, tx, ty), under = d.elementFromPoint(tx, ty) || d.body;
   // the block under the point; in the margin, the block of the nearest text
   const b = blockOf(under) || (cr && blockOf(cr[0])) || d.body, br = b.getBoundingClientRect();
   const ox = fo.x + br.left, oy = fo.y + br.top, rel = s.pts.map(p => ({ x: p.x - ox, y: p.y - oy }));
-  let q = under; while (q && q !== b && !(q.textContent || "").trim()) q = q.parentElement;  // a bar or a tick: its figure's words
-  const quote = texts(q || b).map(([n]) => n.data.trim()).filter(Boolean).join(" ").replace(/\s+/g, " ").slice(0, 120);
-  const ref = cr && wordAt(b, cr[0], cr[1]);
+  // the words it is about (the agent reads them): the word at an arrow's tip, or the words inside a box, a pen mark's
+  // span or a highlight's band; with none, the nearest element's words (a bar or a tick: its figure's)
+  let ref = cr && wordAt(b, cr[0], cr[1]), quote = "";
+  if (s.tool === "arrow") { if (ref && near(ref.rect, tx, ty, 12)) quote = ref.full.slice(ref.s, ref.e); }
+  else { const pad = { highlight: 9, pen: 4 }[s.tool] || 0, inside = wordsIn(b, { l: Math.min(...xs) - fo.x - pad, r: Math.max(...xs) - fo.x + pad, t: Math.min(...ys) - fo.y - pad, b: Math.max(...ys) - fo.y + pad });
+    if (inside) { quote = inside.quote; ref = inside.first || ref; } }
+  if (!quote && ref && !b.contains(under)) {  // in the margin: the whole words beside it
+    const a0 = Math.max(0, ref.s - 60), a1 = ref.e + 60; let t = ref.full.slice(a0, a1);
+    if (a0 > 0) t = t.replace(/^\S*\s+/, ""); if (a1 < ref.full.length) t = t.replace(/\s+\S*$/, "");
+    quote = t.replace(/\s+/g, " ").trim(); }
+  if (!quote) { let q = under; while (q && q !== b && !(q.textContent || "").trim()) q = q.parentElement;
+    quote = texts(b.contains(q) ? q : b).map(([n]) => n.data.trim()).filter(Boolean).join(" ").replace(/\s+/g, " ").slice(0, 120); }
   const shape = { tool: s.tool, d: refD(ref, br) + shapeD(s.tool, rel), bw: r1(br.width), bh: r1(br.height), x: r1(Math.min(...rel.map(p => p.x))), y: r1(Math.min(...rel.map(p => p.y))), w: r1(w), h: r1(ht) };
   const anchor = { block: b === d.body ? "" : b.dataset.block, quote: quote || "", shape };
   if (ref) Object.assign(anchor, { prefix: ref.full.slice(Math.max(0, ref.s - 40), ref.s), suffix: ref.full.slice(ref.s, ref.e) });
   if (!anchor.block && !anchor.quote) anchor.quote = TOOLN[s.tool];  // the server keeps an anchor only with a block or words
   setPen(null); startDraft({ anchor, y: page.offsetTop + oy + shape.y }); drawInk();
 });
+const near = (r, x, y, m) => x >= r.left - m && x <= r.right + m && y >= r.top - m && y <= r.bottom + m;
+// the characters of block b whose middle lies inside box (frame px): their words in reading order (a space between
+// text nodes or gaps) and the first one as the mark's reference word; null when none
+function wordsIn(b, box) {
+  const nodes = texts(b), r = b.ownerDocument.createRange(), hit = [];
+  nodes.forEach(([n, p], k) => {
+    r.selectNodeContents(n); const nb = r.getBoundingClientRect();
+    if (!nb.width || nb.right < box.l || nb.left > box.r || nb.bottom < box.t || nb.top > box.b) return;
+    for (let i = 0; i < n.data.length; i++) {
+      if (!/\S/.test(n.data[i])) continue;
+      r.setStart(n, i); r.setEnd(n, i + 1); const q = r.getBoundingClientRect(), mx = q.left + q.width / 2, my = q.top + q.height / 2;
+      if (q.width && mx >= box.l && mx <= box.r && my >= box.t && my <= box.b) hit.push([p + i, k, n, i]);
+    }
+  });
+  if (!hit.length) return null;
+  const full = nodes.map(([n]) => n.data).join("");
+  let quote = full[hit[0][0]];
+  for (let j = 1; j < hit.length; j++) quote += (hit[j][0] === hit[j - 1][0] + 1 && hit[j][1] === hit[j - 1][1] ? "" : " ") + full[hit[j][0]];
+  return { quote: quote.slice(0, 300), first: wordAt(b, hit[0][2], hit[0][3]) };
+}
 function caretAt(d, x, y) {
   if (d.caretPositionFromPoint) { const p = d.caretPositionFromPoint(x, y); return p && [p.offsetNode, p.offset]; }
   if (d.caretRangeFromPoint) { const r = d.caretRangeFromPoint(x, y); return r && [r.startContainer, r.startOffset]; }
