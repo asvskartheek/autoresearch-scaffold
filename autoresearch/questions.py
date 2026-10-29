@@ -193,17 +193,57 @@ def _goal_title(g, k, sl=None) -> str:
     return " ".join(q.split()[:14]) + "?"
 
 
-def _model_title(k, m) -> str:
+def _tail(k: str) -> str:
+    """A model id short enough for a title: long `a+b+c+d` chains cut to their last two changes."""
+    return k if k.count("+") < 3 else "…+" + "+".join(k.split("+")[-2:])
+
+
+def _rerun(k, models):
+    """`base.r4` (or `-r4`, `.rerun4`) where `base` is a model: a repeat run, not a change."""
+    m = re.fullmatch(r"(.+?)[._-]r(?:erun)?(\d+)", k)
+    return (m.group(1), m.group(2)) if m and m.group(1) in models else None
+
+
+def _model_change(k, m) -> str | None:
     par = m.get("parent") or ""
     if par and par != k and k.startswith(par) and len(k) > len(par):
         what = k[len(par):]
-        what = "+" + what if what[0].isalnum() else what
+        return "+" + what if what[0].isalnum() else what
+    return None
+
+
+def _model_title(k, m, models=None, label=None) -> str:
+    """"Does +hint help?" for a model named after its parent plus a change; a repeat run asks whether the base holds;
+    otherwise the model's readable label (its title, else its id cut to its tail)."""
+    rr = _rerun(k, models or {})
+    if rr:
+        return f"Does {_tail(rr[0])} hold on rerun {rr[1]}?"
+    what = _model_change(k, m)
+    if what:
         return f"Does {what} help?"
-    t = m.get("title")
-    if t and len(t.split()) <= 4:
-        t = t[0].lower() + t[1:] if len(t) > 1 and not t[1].isupper() and not t[1].isdigit() else t
-        return f"Does {t} help?"
-    return f"Does {k} help?"
+    t = re.sub(r"\s+", " ", str(m.get("title") or "")).strip()
+    if t and t != k:
+        return f"Does {_short(t, 10)} help?"
+    return f"Does {label or _tail(k)} help?"
+
+
+def _distinct_siblings(out, models):
+    """Siblings with the same title ("Does +count help?" twice) say what each change was made on; if that still
+    collides (two models with one title), each names its id."""
+    def groups():
+        seen = {}
+        for k, n in out.items():
+            if n.get("seed") == "model":
+                seen.setdefault((n["parent"], n["title"]), []).append(k)
+        return [ks for ks in seen.values() if len(ks) > 1]
+    for ks in groups():
+        for k in ks:
+            par = (models.get(out[k]["model"]) or {}).get("parent")
+            if par and out[k]["title"].endswith(" help?"):
+                out[k]["title"] = out[k]["title"][:-len(" help?")] + f" help on {_tail(par)}?"
+    for ks in groups():
+        for k in ks:
+            out[k]["title"] = f"Does {_tail(out[k]['model'])} help?"
 
 
 def seeded(p) -> dict:
@@ -250,8 +290,9 @@ def seeded(p) -> dict:
             claim = "Yes. " + (claim or "Promoted.")
         elif st == "dead":
             claim = "No. " + (claim or "Rejected.")
-        out[f"m:{k}"] = dict(title=_model_title(k, m), parent=par, status=st, claim=claim, created=m.get("created"),
+        out[f"m:{k}"] = dict(title=_model_title(k, m, models, features.model_label(p, k)), parent=par, status=st, claim=claim, created=m.get("created"),
                              evidence=_model_evidence(p, k, m, hills, goals), model=k, seed="model")
+    _distinct_siblings(out, models)
     if other:
         out[other] = dict(title="Changes outside any hill", parent=None, status="open", created=None, evidence=[], seed="group")
     return out

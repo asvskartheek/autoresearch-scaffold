@@ -79,5 +79,27 @@ class GoalTitles(unittest.TestCase):
             self.assertEqual(got, want)
 
 
+class ModelTitles(unittest.TestCase):
+    def test_titles_reruns_and_sibling_collisions(self):
+        p = ledger()
+        p.add_slice("ds/hard", list(range(10)))
+        p.add_model("po4", parent="", status="champion")
+        p.open_hill("count", "Counting", "ds/hard")
+        p.add_model("po4+inv", parent="po4", hill="count")
+        p.add_model("po4+inv+trace", parent="po4+inv", status="candidate")
+        p.add_model("po4+inv+count", parent="po4+inv", hill="count")
+        p.add_model("po4+inv+trace+count", parent="po4+inv+trace", hill="count")
+        p.add_model("po4+inv.r4", parent="po4+inv", hill="count")
+        p.add_model("sft-v1", parent="po4", hill="count", title="Percentage SFT · 1 epoch · 1e-6")
+        p.add_model("twin-a", parent="po4", hill="count", title="Same idea")
+        p.add_model("twin-b", parent="po4", hill="count", title="Same idea")
+        t = {k: n["title"] for k, n in q.tree(p, full=False)["byid"].items()}
+        self.assertEqual(t["m:po4+inv+count"], "Does +count help on po4+inv?")
+        self.assertEqual(t["m:po4+inv+trace+count"], "Does +count help on po4+inv+trace?")
+        self.assertEqual(t["m:po4+inv.r4"], "Does po4+inv hold on rerun 4?")
+        self.assertEqual(t["m:sft-v1"], "Does Percentage SFT · 1 epoch · 1e-6 help?")
+        self.assertEqual((t["m:twin-a"], t["m:twin-b"]), ("Does twin-a help?", "Does twin-b help?"))
+
+
 if __name__ == "__main__":
     unittest.main()
