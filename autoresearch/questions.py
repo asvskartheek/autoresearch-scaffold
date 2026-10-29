@@ -14,12 +14,11 @@ from __future__ import annotations
 
 import json
 import re
-import threading
 import time
 import uuid
 
 from . import features
-from .core import _read, _write, paired
+from .core import _read, _write, locked, paired
 from .readable import readable
 
 STATUSES = ("open", "answered", "dead", "agent")
@@ -34,11 +33,8 @@ def stored(p) -> dict:
     return _read(_file(p), {}) or {}
 
 
-_lock = threading.Lock()
-
-
 def _save(p, qid: str, rec: dict) -> dict:
-    with _lock:
+    with locked(_file(p)):  # across processes: parallel `arx q add` calls used to drop each other's questions
         data = stored(p)
         data[qid] = rec
         _write(_file(p), data)

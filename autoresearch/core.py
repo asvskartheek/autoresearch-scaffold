@@ -5,7 +5,7 @@ truth. Gate results are never stored; they are derived from finished eval tasks 
 """
 from __future__ import annotations
 
-import hashlib, json, math, os, random, shlex, signal, statistics, subprocess, sys, threading, time, uuid
+import contextlib, fcntl, hashlib, json, math, os, random, shlex, signal, statistics, subprocess, sys, threading, time, uuid
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 
@@ -54,9 +54,21 @@ def _copy(o):
 
 def _write(p: Path, obj) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(p.suffix + ".tmp")
+    tmp = p.with_suffix(f"{p.suffix}.{os.getpid()}.{threading.get_ident()}.tmp")  # one per writer: no shared tmp to race on
     tmp.write_text(json.dumps(obj, indent=2, default=str))
     os.replace(tmp, p)
+
+
+@contextlib.contextmanager
+def locked(p: Path):
+    """Hold an exclusive lock on `p` (via `p.lock`) across processes and threads, for read-modify-write of a ledger file."""
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p.with_suffix(p.suffix + ".lock"), "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 
 def _append(p: Path, obj) -> None:
@@ -147,10 +159,11 @@ class Project:
         return next((k for k, m in self.models().items() if m.get("status") == "champion"), None)
 
     def _upsert(self, coll: str, key: str, **fields) -> dict:
-        data = self._coll(coll)
-        rec = {**data.get(key, {"created": now()}), **{k: v for k, v in fields.items() if v is not None}}
-        data[key] = rec
-        self._save(coll, data)
+        with locked(self.dir / f"{coll}.json"):
+            data = self._coll(coll)
+            rec = {**data.get(key, {"created": now()}), **{k: v for k, v in fields.items() if v is not None}}
+            data[key] = rec
+            self._save(coll, data)
         return rec
 
     def log_decision(self, kind: str, **fields) -> None:
