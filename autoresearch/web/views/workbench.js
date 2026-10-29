@@ -62,7 +62,8 @@ const binary=t=>S.state.slices?.[t.slice]?.scale!=='continuous';
 function champRef(t){
  const c=S.state.champion;if(!c||c===t.model)return null;
  const r=S.state.leaderboard?.[t.slice]?.[c];
- return typeof r?.score==='number'?{y:r.score,label:'champion'}:null;
+ // a union slice has no champion run of its own: the server pools the champion's runs on the slices it is made of
+ return typeof r?.score==='number'?{y:r.score,label:'champion'}:t.champ_ref?{y:t.champ_ref.y,label:t.champ_ref.runs>1?`champion, ${t.champ_ref.runs} runs`:'champion'}:null;
 }
 // an eval's panels, completed from its harness sub-task: the sub-task's score becomes the eval's "Score so far"
 function evVitals(t){

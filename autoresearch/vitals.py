@@ -204,6 +204,48 @@ def panels(p, t: dict, st: dict, eta: dict | None) -> list[dict]:
     return out[:4]
 
 
+def champion_base(p, slice_name: str, champ: str) -> tuple[dict, int]:
+    """The champion's per-example scores on a slice, pooled over every complete run, and how many runs that is.
+    A union slice (a harness that runs several slices in one pass, e.g. a dev rung of 131 = 108 + 30 + 23 + 27) has
+    no champion run of its own: then the champion's runs on the slices it is made of are pooled too, so the running
+    score still has a line to read against. Only ids of this slice count."""
+    from .core import per_id
+    sls = p.slices()
+    ids = set(sls.get(slice_name, {}).get("ids") or [])
+    mine = [e for e in p.evals() if e.get("model") == champ and not e.get("superseded_by")]
+    cur = lambda name: [e for e in mine if e.get("slice") == name and e.get("slice_hash") == sls.get(name, {}).get("hash")]
+    runs = cur(slice_name)
+    rows = [r for e in runs for r in p.rows(e["id"])]
+    base = per_id(rows)
+    if ids and not ids <= set(base):
+        for name, sl in sls.items():
+            sid = set(sl.get("ids") or [])
+            if name != slice_name and sid and sid <= ids:
+                ev = cur(name)
+                runs += ev
+                rows += [r for e in ev for r in p.rows(e["id"])]
+        base = per_id(rows)
+    if ids:
+        base = {k: v for k, v in base.items() if k in ids}
+    return base, len(runs)
+
+
+def champion_ref(p, st: dict, t: dict) -> dict | None:
+    """The champion's score on the eval's slice, the line its running score is read against: the leaderboard's when
+    the champion ran this slice, else pooled from the slices that make it up, only when they cover every example."""
+    champ = st.get("champion")
+    if not champ or champ == t.get("model") or not t.get("slice"):
+        return None
+    lb = ((st.get("leaderboard") or {}).get(t["slice"]) or {}).get(champ)
+    if lb and _num(lb.get("score")):
+        return dict(y=lb["score"], label="champion")
+    base, runs = champion_base(p, t["slice"], champ)
+    ids = (p.slices().get(t["slice"]) or {}).get("ids") or []
+    if not base or (ids and len(base) < len(ids)):
+        return None
+    return dict(y=sum(base.values()) / len(base), label="champion", n=len(base), runs=runs, pooled=True)
+
+
 def _eval_panels(p, t, st, ml, total):
     sl = (st.get("slices") or {}).get(t.get("slice")) or {}
     binary = sl.get("scale") != "continuous"
@@ -211,19 +253,18 @@ def _eval_panels(p, t, st, ml, total):
     main = None
     if pts:
         band = [[n, *_wilson(round(s * n), n)] for n, s in pts if n] if binary else None
-        champ = st.get("champion")
-        ref = ((st.get("leaderboard") or {}).get(t.get("slice")) or {}).get(champ) if champ and champ != t.get("model") else None
+        ref = champion_ref(p, st, t)
         main = dict(id="main", title="Score so far", fmt="pct" if binary else "num", value=pts[-1][1], n=pts[-1][0],
                     ymin=0 if binary else None, ymax=1 if binary else None,
                     series=[dict(name="Score", pts=thin(pts, 240))], band=thin(band, 240) if band else None, smooth=False,
-                    ref=dict(y=ref["score"], label="champion") if ref and _num(ref.get("score")) else None)
+                    ref=ref)
     out = [main, _eta_panel(t.get("eta"))]
     rows = p.rows(t["id"])
     champ = st.get("champion")
     pair = None
     if binary and champ and champ != t.get("model") and rows:
         try:
-            base = p.pooled_scores(champ, t["slice"])
+            base = champion_base(p, t["slice"], champ)[0]
         except Exception:
             base = {}
         if base:
@@ -295,6 +336,8 @@ def _vitals(p, st):
             if is_dead(t, now):
                 t["dead"], t["long"], t["vitals"] = True, False, []
                 continue
+            if t.get("kind") == "eval" and t.get("status") == "running":
+                t["champ_ref"] = champion_ref(p, st, t)
             ps = panels(p, t, st, t.get("eta"))
             t["long"] = is_long(t, t.get("eta"), now, len(ps))
             t["vitals"] = ps

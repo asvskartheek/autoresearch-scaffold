@@ -80,6 +80,47 @@ class Vitals(unittest.TestCase):
         self.assertEqual(len(main["band"]), 12)
         t.finish()
 
+    def test_union_slice_pools_the_champions_member_runs(self):
+        # the dev rung runs 30 ids in one pass; the champion only ran the two 15-id slices it is made of
+        self.p.add_dataset("q", range(30))
+        self.p.add_slice("q/a", list(range(15)))
+        self.p.add_slice("q/b", list(range(15, 30)))
+        self.p.add_slice("q/ab", list(range(30)))
+        self.p.add_model("base", status="champion")
+        self.p.add_model("c")
+        evaluate(self.p, "base", "q/a", lambda i: {"score": 1.0})                      # 15 of 15
+        evaluate(self.p, "base", "q/b", lambda i: {"score": float(int(i) < 20)})      # 5 of 15
+        evaluate(self.p, "base", "q/b", lambda i: {"score": float(int(i) < 25)})      # 10 of 15: pooled 7.5
+        base, runs = vitals.champion_base(self.p, "q/ab", "base")
+        self.assertEqual((len(base), runs), (30, 3))
+        self.assertAlmostEqual(sum(base.values()), 22.5)
+        t = Task(self.p, "eval", "c on q/ab", model="c", slice="q/ab")
+        for k, i in enumerate(range(12), 1):
+            t.add_row(dict(id=str(i), score=1.0))
+            t.progress(k)
+            t.log(step=k, running_score=1.0)
+        features.load()
+        st = server.state(self.p)
+        tt = next(x for x in st["tasks"] if x["id"] == t.id)
+        self.assertAlmostEqual(tt["vitals"][0]["ref"]["y"], 0.75)
+        self.assertAlmostEqual(tt["champ_ref"]["y"], 0.75)
+        self.assertEqual(tt["champ_ref"]["runs"], 3)
+        self.assertIsNotNone(next((p for p in tt["vitals"] if p["id"] == "pair"), None))
+        t.finish()
+
+    def test_union_slice_without_full_cover_has_no_line(self):
+        self.p.add_dataset("q", range(30))
+        self.p.add_slice("q/a", list(range(15)))
+        self.p.add_slice("q/ab", list(range(30)))
+        self.p.add_model("base", status="champion")
+        self.p.add_model("c")
+        evaluate(self.p, "base", "q/a", lambda i: {"score": 1.0})
+        self.assertIsNone(vitals.champion_ref(self.p, dict(champion="base", leaderboard={}), dict(model="c", slice="q/ab")))
+
+    def test_metric_formats_from_names(self):
+        self.assertEqual([vitals.fmt_of(k) for k in ("latency_p50", "errors", "accuracy", "train_runtime", "tokens_per_second")],
+                         ["s", "int", "num", "s", "num"])
+
     def test_series_route(self):
         t = Task(self.p, "train", "x")
         t.log(step=1, loss=1.0)
