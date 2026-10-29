@@ -9,19 +9,17 @@ const nextCell=(name,g)=>{
  if(!g||g.error)return g?.error?`<span class="neg">${esc(g.error)}</span>`:DASH;
  if(g.promotable)return cmd(`arx promote ${name}`);
  const r=rungsOf(g);
- if(r?.fail){const c=r.fail.checks.find(c=>c.state==='fail');return `<span class="neg">Fails ${esc(r.fail.rung)}</span>${c?`<span class="sub"> · ${esc(short(c.slice))} ${pts(c.delta)} pts</span>`:''}`}
+ if(r?.fail){const c=r.fail.checks.find(c=>c.state==='fail');return `<span class="neg">Fails ${esc(r.fail.rung)}</span>${c?`<span class="sub"> · ${esc(short(c.slice))} ${esc(sd(c.slice,c.delta))}</span>`:''}`}
  const n=g.next?.[0];if(!n)return DASH;
  return `<span class="sub">${n.model!==name?'Champion needs':'Needs'} a run on</span> <a class="ln ms-sl" href="#slices/${enc(n.slice)}">${esc(short(n.slice))}</a>${g.next.length>1?`<span class="faint"> +${g.next.length-1} more</span>`:''}`;
 };
-// a slice scores 0/1 per example unless it says `scale: continuous` (then a mean, with its unit, and no %)
-const bin=sl=>sl?.scale!=='continuous';
-const val=(v,sl)=>(Math.abs(v)>=10?v.toFixed(1):num(v,3))+(sl?.unit?' '+sl.unit:'');
-const score=(v,sl)=>bin(sl)?pct(v):esc(val(v,sl));
-const diff=(d,sl)=>bin(sl)?pts(d):(d>0?'+':d<0?'−':'')+esc(val(Math.abs(d),sl));
+// figures in the slice's own units (core sv/sd): a count of n on 0/1 slices, "387 ms" on continuous ones, never a %
+const score=(v,k,n)=>esc(sv(k,v,n));
+const diff=(d,k)=>esc(sd(k,d));
 // a figure on the primary dataset's full set, and its difference to the champion on the same slice and n
 function full(k){
- const L=S.state,f=fullScore(k),c=L.champion&&k!==L.champion?fullScore(L.champion):null,sl=L.slices[L.config.primary_dataset+'/full'];
- const v=f?(f.task?`<a href="#task/${enc(f.task)}">${score(f.score,sl)}</a>`:score(f.score,sl)):DASH;
+ const L=S.state,f=fullScore(k),c=L.champion&&k!==L.champion?fullScore(L.champion):null,sl=L.config.primary_dataset+'/full';
+ const v=f?(f.task?`<a href="#task/${enc(f.task)}">${score(f.score,sl,f.n)}</a>`:score(f.score,sl,f.n)):DASH;
  return {v,d:f&&c?`<span class="${f.score===c.score?'sub':better(f.score,c.score)?'pos':'neg'}">${diff(f.score-c.score,sl)}</span>`:DASH};
 }
 // a model reads by its title; the id (what every command takes) sits under it in mono, with its phase
@@ -78,7 +76,7 @@ VIEWS.models=()=>{
  let finding;
  if(!champ)finding=`No champion yet. Register a baseline with <code>arx model add &lt;name&gt; --champion</code>; candidates climb against it.`;
  else{
-  finding=`${mlink(champ)} is champion${cf?` at <b>${score(cf.score,L.slices[fullKey])}</b> on ${esc(short(fullKey))} (n ${cf.n.toLocaleString()})`:''}. `;
+  finding=`${mlink(champ)} is champion${cf?` at <b>${score(cf.score,fullKey,cf.n)}</b> on ${esc(short(fullKey))} (n ${cf.n.toLocaleString()})`:''}. `;
   if(promotable.length)finding+=`${mlink(promotable[0][0])} has passed every rung and is ready to promote.`;
   else if(lr?.done)finding+=`Closest challenger: ${mlink(lead[0])}, ${lr.done} of ${lr.of} rungs passed${lr.pending?`; ${esc(lr.pending.rung)} is next`:''}.`;
   else if(cands.length)finding+=`${plural(cands.length,'candidate')} registered; none has passed a rung yet.`;
@@ -87,7 +85,7 @@ VIEWS.models=()=>{
  const acts=promotable.length?cmd('arx promote '+promotable[0][0]):lead?`<a class="btn" href="#model/${enc(lead[0])}" title="${mnt(lead[0])}">Open closest candidate</a>`:'';
  const h=[page({title:'Models',crumbs:[['Models','#models']],finding,acts})];
  h.push(kpis([
-  ['Champion',cf?score(cf.score,L.slices[fullKey]):DASH,champ?`<a class="ms-kn" href="#model/${enc(champ)}" title="${esc(champ)}">${mn(champ)}</a>${cf?` · ${esc(short(fullKey))}, n ${cf.n.toLocaleString()}`:''}`:'No champion yet'],
+  ['Champion',cf?score(cf.score,fullKey,cf.n):DASH,champ?`<a class="ms-kn" href="#model/${enc(champ)}" title="${esc(champ)}">${mn(champ)}</a>${cf?` · ${esc(short(fullKey))}, n ${cf.n.toLocaleString()}`:''}`:'No champion yet'],
   ['Climbing',String(cands.length),cands.length?`${promotable.length} ready to promote · ${failing.length} failing a rung`:'none registered'],
   ['Rejected',String(rej.length),rej.length?'kept with their reasons':'none'],
   ['Planned or archived',String(other.length),other.length?[...new Set(other.map(([,m])=>m.status))].join(' · '):'none'],
@@ -103,7 +101,7 @@ VIEWS.models=()=>{
   return row(k,m,[`<td>${nameCell(k,m)}</td>`,`<td>${gates[k]?.promotable?st('pass','Ready'):r?.fail?st('fail','Failing'):st('running','Climbing')}${r?`<div class="sub">${r.done} of ${r.of} rungs</div>`:''}</td>`,...(oneHill!=null?[]:[`<td>${hillCell(m.hill)}</td>`]),`<td>${ladder(gates[k],{compact:true})||DASH}</td>`,`<td class="ms-next">${nextCell(k,gates[k])}</td>`,`<td class="num">${f.v}</td>`,`<td class="num">${f.d}</td>`])});
  h.push(panel('On the ladder',(champRow.length||candRows.length)?table(['Model','Status',...(oneHill!=null?[]:['Hill']),'Gate','Next step',fullHead,['Δ vs champion','num']],[...champRow,...candRows]):empty('No models yet','Register one with <code>arx model add &lt;name&gt;</code>'),{meta:(champ?`paired against ${mlink(champ)}`:'')+(oneHill?` · every candidate climbs ${hillCell(oneHill)}`:''),cls:'section ms-ladder" data-grp="ladder'}));
 
- h.push(panel('Rejected',rej.length?table(['Model','Why it was rejected','Parent',fullHead,['Δ pts vs champion','num']],rej.map(([k,m])=>{const f=full(k);
+ h.push(panel('Rejected',rej.length?table(['Model','Why it was rejected','Parent',fullHead,['Δ vs champion','num']],rej.map(([k,m])=>{const f=full(k);
   return row(k,m,[`<td>${nameCell(k,m,false)}</td>`,`<td class="ms-why">${m.reason?esc(m.reason):'<span class="dash">No reason recorded</span>'}</td>`,`<td>${parentCell(k,m.parent)}</td>`,`<td class="num">${f.v}</td>`,`<td class="num">${f.d}</td>`])})):empty('Nothing rejected','<code>arx reject &lt;name&gt; --reason "…"</code> keeps a failed candidate in the ledger'),{meta:rej.length?plural(rej.length,'model'):'',cls:'section" data-grp="rejected'}));
 
  h.push(panel('Planned or archived',other.length?table(['Model','Status','Parent','Note'],other.map(([k,m])=>row(k,m,[`<td>${nameCell(k,m,false)}</td>`,`<td>${st(m.status)}</td>`,`<td>${parentCell(k,m.parent)}</td>`,`<td class="ms-why sub">${esc(m.reason||firstLine(m.change||''))||DASH}</td>`]))):empty('None','<code>arx model add &lt;name&gt; --status planned</code> records an idea before it runs'),{meta:other.length?plural(other.length,'model'):'',cls:'section" data-grp="other'}));
