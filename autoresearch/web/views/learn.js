@@ -70,14 +70,17 @@ function vizCI(v){
  ${row(v.wins,'var(--positive)',100,'fixed')}${row(v.losses,'var(--negative)',118,'broken')}</svg>`;
 }
 const LW=()=>Math.round(Math.max(300,Math.min(560,(document.querySelector('.lrn .stage')?.clientWidth||innerWidth)-48)));
+// bars: a 0/1 row reads as a count ("166 of 185") and its length is the share; a continuous row reads in its unit
 function vizBars(v){
  const rows=v.rows.filter(r=>r.v!=null);if(!rows.length)return '';
- const W=560,rh=28,H=rows.length*rh+22,Lx=200,R=W-50,vals=rows.map(r=>r.v).concat(v.ref!=null?[v.ref]:[]);
- const b=Math.max(1,...vals),a=Math.max(0,Math.floor(Math.min(...vals)*10-1)/10),x=q=>Lx+(Math.max(a,q)-a)/(b-a)*(R-Lx);
+ const W=LW(),rh=30,H=rows.length*rh+22,Lx=Math.round(W*.38),R=W-(W<420?70:96),cont=rows.some(r=>r.unit!=null);
+ const f=r=>r.v,vals=rows.map(f).concat(v.ref!=null?[v.ref]:[]);
+ const b=cont?Math.max(...vals)*1.05||1:1,a=cont?0:Math.max(0,Math.floor(Math.min(...vals)*10-1)/10),x=q=>Lx+(Math.max(a,q)-a)/(b-a)*(R-Lx);
+ const lab=r=>{const tag=r.tag?' · '+r.tag:'',max=Math.max(8,Math.floor((Lx-12)/6.2)-tag.length);return (r.label.length>max?r.label.slice(0,max-1)+'…':r.label)+tag};
+ const val=r=>r.unit!=null?(grp(r.v)+' '+r.unit).trim():r.n?`${Math.round(r.v*r.n).toLocaleString()} of ${r.n.toLocaleString()}`:pct(r.v);
  let s='';rows.forEach((r,i)=>{const y=i*rh+6,c=r.hl===1?'var(--negative)':r.hl===2?'var(--positive)':r.hl===3?'var(--text)':'var(--control)';
-  s+=`<text x="${Lx-8}" y="${y+14}" text-anchor="end" ${r.hl?'class="strong"':''}>${esc(r.label.length>30?r.label.slice(0,29)+'…':r.label)}</text><rect x="${Lx}" y="${y+2}" width="${Math.max(1,x(r.v)-Lx)}" height="16" rx="2" fill="${c}" ${r.hl===3?'opacity=".25"':''}/><text x="${x(r.v)+6}" y="${y+14}" class="mono strong">${(100*r.v).toFixed(1)}</text>`});
+  s+=`<text x="${Lx-8}" y="${y+14}" text-anchor="end" ${r.hl?'class="strong"':''}><title>${esc(r.label+(r.tag?' · '+r.tag:''))}</title>${esc(lab(r))}</text><rect x="${Lx}" y="${y+2}" width="${Math.max(1,x(f(r))-Lx)}" height="16" rx="2" fill="${c}" ${r.hl===3?'opacity=".25"':''}/><text x="${x(f(r))+6}" y="${y+14}" class="mono strong">${val(r)}</text>`});
  if(v.ref!=null)s+=`<line x1="${x(v.ref)}" x2="${x(v.ref)}" y1="2" y2="${H-18}" stroke="var(--text)" stroke-dasharray="3 3"/>`;
- for(let k=0;k<=4;k++){const q=a+(b-a)*k/4;s+=`<text x="${x(q)}" y="${H-4}" text-anchor="middle">${Math.round(q*100)}</text>`}
  return `<svg class="lv" viewBox="0 0 ${W} ${H}" role="img" aria-label="scores">${s}</svg>`;
 }
 function vizGoal(v){

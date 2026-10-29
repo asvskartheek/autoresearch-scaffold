@@ -347,40 +347,65 @@ def _card_rejected_batch(p: Project, models: list[str]) -> dict | None:
     best = max(ms, key=lambda m: vals[m] * _sign(p))
     champ = p.champion()
     ref = _score(p, champ, sl) if champ else None
-    rows = [dict(label=_title(p, m), v=vals[m], hl=2 if m == best else 0) for m in ms]
+    rows = [dict(label=_title(p, m), tag="", v=vals[m], hl=2 if m == best else 0) for m in ms]
     if ref is not None:
-        rows.append(dict(label=_title(p, champ) + " (champion)", v=ref, hl=3))
+        rows.append(dict(label=_title(p, champ), tag="champion", v=ref, hl=3))
     return dict(id="batch|" + sl + "|" + ",".join(ms), type="choice", opts=[_title(p, m) for m in ms], truth=_title(p, best),
                 label=f"{len(ms)} rejected", tone="neg", t=max(_f((p.latest_eval(m, sl) or {}).get("ended")) for m in ms),
                 q=f"Which of these scored highest on {_short(sl)}?", ctx=f"n = {p.slices()[sl]['n']:,}",
                 ev=sl, why=f"All {len(ms)} were rejected; the best reached {sv(p, sl, vals[best])}.", w=65,
-                viz=dict(kind="bars", rows=rows, ref=ref))
+                viz=_bars(p, sl, rows, ref))
 
 
-def _card_hill(p: Project, name: str, model: str) -> dict | None:
+def _bars(p: Project, sl: str, rows: list[dict], ref: float | None = None) -> dict:
+    """A bar chart of scores. Each row: label (a model label), tag ("champion", "on <control>"), v, and its slice's
+    n (0/1, shown as a count) or unit (continuous, shown in the unit; a "minus" metric flipped to the plain amount)."""
+    for r in rows:
+        rs = r.pop("sl", None) or sl
+        if _cont(p, rs):
+            r |= dict(unit=_unit(p, rs), v=-r["v"] if _neg(p, rs) else r["v"])
+        else:
+            r["n"] = _slc(p, rs).get("n")
+    if ref is not None and _cont(p, sl) and _neg(p, sl):
+        ref = -ref
+    return dict(kind="bars", rows=rows, ref=ref)
+
+
+def _card_hill(p: Project, name: str, model: str, counts: str = None) -> dict | None:
+    """A new hill: how many of the target slice does the champion get right? (`hill|name|model|n`, a count; the
+    older `hill|name|model` cards asked for a percentage and keep doing so, so old predictions still resolve.)"""
     h = p.hills().get(name)
     if not h or not h.get("target") or not model:
         return None
     sl, n = h["target"], (p.slices().get(h["target"]) or {}).get("n", 0)
+    if _cont(p, sl) or not n:
+        return None  # a continuous target has no answer-free axis for a guess
     v = _score(p, model, sl)
     found = h.get("found_in")
     fv = _score(p, found, sl) if found and found != model else None
-    rows = [dict(label=_title(p, model), v=v, hl=2)] if v is not None else []
+    rows = [dict(label=_title(p, model), tag="champion" if model == p.champion() else "", v=v, hl=2)] if v is not None else []
     if fv is not None:
-        rows.append(dict(label=_title(p, found) + " (found in)", v=fv, hl=0))
+        rows.append(dict(label=_title(p, found), tag="found in", v=fv, hl=0))
     if h.get("control") and v is not None:
         cv = _score(p, model, h["control"])
         if cv is not None:
-            rows.append(dict(label=f"{_title(p, model)} on {_short(h['control'])}", v=cv, hl=0))
+            rows.append(dict(label=_title(p, model), tag=f"on {_short(h['control'])}", v=cv, hl=0, sl=h["control"]))
     sym = h.get("symptom") or h.get("title") or name
     ran = v is not None
-    return dict(id=f"hill|{name}|{model}", type="number", unit="%", min=0, max=100, step=0.5, start=50,
-                tol=_band(n, v if ran else 0.5), truth=round(100 * v, 2) if ran else None,
+    band = _band(n, v if ran else 0.5)
+    if counts:
+        num = dict(id=f"hill|{name}|{model}|n", unit="", int=True, min=0, max=n, step=1, start=n // 2,
+                   tol=max(1, round(band * n / 100)), truth=round(v * n) if ran else None,
+                   q=f"How many of {n:,} does {_title(p, model)} get right on {_short(sl)}?")
+    else:
+        num = dict(id=f"hill|{name}|{model}", unit="%", min=0, max=100, step=0.5, start=50, tol=band,
+                   truth=round(100 * v, 1) if ran else None, q=f"{_title(p, model)} on {_short(sl)}: its score?")
+    return dict(type="number", **num,
                 label="New hill" if ran else "Hill · no run yet", tone="acc" if ran else "warn", t=h.get("created"),
-                q=f"{_title(p, model)} on {_short(sl)}: its score?", ctx=_first(sym, 160), ev=sl,
+                ctx=f"n = {n:,} · {_first(sym, 140)}", ev=sl,
                 why=(f"{h['share']['count']} of {h['share']['of']} {h['share'].get('of_what') or 'errors'}." if isinstance(h.get("share"), dict) and h["share"].get("count") is not None
                      else _first(h.get("problem"), 200)) if ran else "Logged. Scored when the run lands.",
-                w=60, viz=dict(kind="bars", rows=rows, ref=None) if ran else None)
+                w=60, viz=_bars(p, sl, rows) if ran else None)
 
 
 def _card_run(p: Project, model: str, base: str, sl: str, task: dict | None = None) -> dict | None:
@@ -474,7 +499,7 @@ def cards(p: Project, since: float = 0) -> list[dict]:
                 break
     for name, h in p.hills().items():
         if _f(h.get("created")) > since or (h.get("status") == "open" and champ and not p.slice_evals(champ, h.get("target"))):
-            add(_card_hill(p, name, champ))
+            add(_card_hill(p, name, champ, "n"))
     for qid, q in (_read(p.dir / "questions.json", {}) or {}).items():
         if isinstance(q, dict) and _f(q.get("answered") or q.get("updated") or q.get("created")) > since:
             add(_card_question(p, qid))

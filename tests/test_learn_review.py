@@ -69,6 +69,16 @@ class Review(unittest.TestCase):
         self.assertEqual(r["prediction"]["conf"], 0.1)
         self.assertEqual(r["card"]["cmin"], 0.05)
 
+    def test_hill_card_asks_for_a_count_with_n(self):
+        self.p.open_hill("h1", "Hill one", "target", symptom="Something goes wrong")
+        c = next(c for c in learn.cards(self.p) if c["id"].startswith("hill|"))
+        self.assertEqual(c["id"], "hill|h1|base|n")
+        self.assertEqual((c["truth"], c["max"], c["unit"]), (12, 20, ""))
+        self.assertIn("n = 20", c["ctx"])
+        row = c["viz"]["rows"][0]
+        self.assertEqual((row["tag"], row["n"]), ("champion", 20))
+        self.assertEqual(learn.card(self.p, "hill|h1|base")["unit"], "%")  # older predictions keep their card
+
 
 if __name__ == "__main__":
     unittest.main()
