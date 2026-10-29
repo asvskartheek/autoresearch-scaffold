@@ -76,7 +76,7 @@ function kpiStrip(t,d){
   if(live)items.push(['Progress',pr.total?`${pr.done.toLocaleString()}<small>of ${pr.total.toLocaleString()}</small>`:DASH,pr.total?(100*pr.done/pr.total).toFixed(0)+'%':'']);
   if(sm.cost!=null)items.push(['Cost per example',money(sm.cost),sm.cost_total!=null?money(sm.cost_total)+' in all':'']);
   const lat=sm.latency_p50??t.last?.latency_s;
-  if(lat!=null)items.push(['Latency, median',secs(lat),sm.latency_p95!=null?'95th percentile '+secs(sm.latency_p95):live?'latest example':'']);
+  if(lat!=null)items.push(['Latency, median',secs(lat),sm.latency_p95!=null?'95th percentile '+secs(sm.latency_p95):live?'latest':'']);
   if(!live)items.push(['Errors',`<span class="${sm.errors?'neg':''}">${sm.errors??DASH}</span>`,sm.missing?`${sm.missing} examples missing`:'none missing']);
  }else{
   if(pr.total)items.push(['Progress',`${pr.done.toLocaleString()}<small>of ${pr.total.toLocaleString()}</small>`,(100*pr.done/pr.total).toFixed(0)+'%']);
@@ -85,7 +85,7 @@ function kpiStrip(t,d){
   if(!items.length)return '';
  }
  if(t.status==='running')items.push(['Finishes',t.eta?`<span class="${t.health?.state==='over'?'warn':''}">in ${wbSpan(t.eta.eta_s)}</span>`:DASH,t.eta?`at ${wbClock(t.eta.finish_at)}`:'no rate yet']);
- const B=wbBudget(t);items.push([live?'Elapsed':'Took',`<span class="${bc}">${(B?wbSpanB:wbSpan)((t.ended||now())-t.created)}</span>`,B?`of a ${wbSpanB(B)} budget`:'']);
+ const B=wbBudget(t);if(!live||B)items.push([live?'Elapsed':'Took',`<span class="${bc}">${(B?wbSpanB:wbSpan)((t.ended||now())-t.created)}</span>`,B?`of a ${wbSpanB(B)} budget`:'']);
  return `<div class="section">${kpis(items.slice(0,6))}</div>`;
 }
 
