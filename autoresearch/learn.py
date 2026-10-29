@@ -1,10 +1,11 @@
 """The Brief: "since you last looked" as predict-then-reveal cards built from the ledger, predictions and calibration,
-and understanding telemetry. See features.py for the plug-in contracts.
+and understanding telemetry. See features.py for the plug-in contracts. The 101 course (course.py) teaches the ideas
+the cards lean on; each card names them in `needs`.
 
 Routes (relative to the project: `/api/...` on its own server, `/p/<key>/api/...` on a shared dashboard)
 
   GET  /api/brief?since=<unix s>&viewer=<name>
-       {now, since, cards: [card], concepts: [concept], calibration, understanding, open: [prediction]}
+       {now, since, cards: [card], course: {lessons, memory, due}, calibration, understanding, open: [prediction]}
        A card's answer (`reveal`) is only sent once this viewer has predicted it.
   POST /api/predictions  {viewer, card, guess, conf}
        guess: an option label (choice cards) or a number (number cards); conf: chance..1 (sure it is right / in the
@@ -41,7 +42,6 @@ from . import features
 from .core import Project, _append, _jsonl, _read, paired
 
 MAX_CARDS = 14
-MAX_HILL_CONCEPTS = 5
 
 
 # ---------------------------------------------------------------- small helpers
@@ -189,6 +189,8 @@ def _ci_viz(r: dict, p: Project = None, sl: str = None, bar: float = None) -> di
                unit=_unit(p, sl) if k != 100 else "pts", better=-1 if k < 0 else 1)
     if bar:
         out["bar"] = k * bar
+    if k == 100:  # (fixed - broken) / n only when each side ran once on 0/1 scores; else the delta is a mean of runs
+        out["exact"] = abs((r["wins"] - r["losses"]) / r["n"] - r["delta"]) <= 5e-5 if r.get("n") else False
     return out
 
 
@@ -266,7 +268,7 @@ def _card_goal(p: Project, name: str) -> dict | None:
         v = _score(p, m, g["slice"]) if m else None
         if v is not None:
             traj.append(dict(label=_title(p, m), v=round(v * N), champ=m == g["model"]))
-    lo = max(0, int(N * max(0.0, g["target"] - 0.3)) // 10 * 10)
+    lo = 0  # a floor near the target would give the target (and on a "keep" goal, the answer) away
     left = need - have
     why = (f"{left:,} more to reach {need:,}." if left > 0 else f"{-left:,} past the target of {need:,}." if left else f"Exactly at the target of {need:,}.")
     vb = g.get("vs_baseline")
@@ -344,7 +346,27 @@ def _card_rejected(p: Project, model: str) -> dict | None:
     return _delta_card(f"rej|{model}", r, p, sl, _sign(p), label="Rejected", tone="neg", t=dec.get("t"),
                        q=f"{_title(p, model)}: paired change against {_title(p, base)} on {_short(sl)}?",
                        ctx=f"n = {r['n']:,}", ev=(p.latest_eval(model, sl) or {}).get("id", model),
-                       why=_first(dec.get("reason") or m.get("reason"), 200) or "Rejected.", w=70)
+                       why=_rej_why(p, r, sl, dec.get("reason") or m.get("reason")), w=70)
+
+
+def _counts(p: Project, r: dict, sl: str) -> str:
+    """The pair in words: "fixed / broken" when they give the delta, "better on / worse on" when scores are means."""
+    exact = not _cont(p, sl) and abs((r["wins"] - r["losses"]) / r["n"] - r["delta"]) <= 5e-5
+    a, b = ("fixed", "broke") if exact else ("was better on", "worse on")
+    return f"It {a} {r['wins']:,} and {b} {r['losses']:,} of {r['n']:,}"
+
+
+def _rej_why(p: Project, r: dict, sl: str, reason) -> str:
+    """Why a candidate was rejected: its own result against the bar it missed, then the ledger's reason when that
+    reads as a sentence (a squashed or path-laden note teaches nothing)."""
+    lo, hi = sorted((r["lo"], r["hi"]))
+    side = ("the whole 90% interval is below zero" if hi < 0 else "the whole 90% interval is above zero, yet another check failed"
+            if lo > 0 else "the 90% interval crosses zero, so no gain is shown")  # deltas come signed: above zero is better
+    out = f"{_counts(p, r, sl)} on {_short(sl)}: {side}."
+    txt = re.sub(r"(?:/[\w.\-]+){2,}\S*", "", _first(reason, 160)).strip(" ;:,")
+    if txt and txt.count(" ") >= 3:
+        out += f" Ledger: {txt.rstrip('.')}."
+    return out
 
 
 def _card_rejected_batch(p: Project, models: list[str]) -> dict | None:
@@ -459,8 +481,9 @@ def _card_question(p: Project, qid: str) -> dict | None:
         truth = "Better" if r["lo"] > 0 else "Worse" if r["hi"] < 0 else "Can't tell yet"
         return dict(id=f"q|{qid}", type="choice", opts=["Better", "Worse", "Can't tell yet"], truth=truth,
                     label="Answered", tone="acc", t=q.get("answered") or q.get("updated") or q.get("created"),
-                    q=f"{q.get('title') or qid}: {_title(p, ev['model'])} against {_title(p, base)} on {_short(sl)}?",
-                    ctx=f"n = {r['n']:,}", ev=(p.latest_eval(ev["model"], sl) or {}).get("id", sl),
+                    q=f"{_title(p, ev['model'])} against {_title(p, base)} on {_short(sl)}: better, worse or can't tell yet?",
+                    ctx=f"From the question “{_first(q.get('title') or qid, 90)}” · n = {r['n']:,}",
+                    ev=(p.latest_eval(ev["model"], sl) or {}).get("id", sl),
                     why=_first(q.get("claim"), 200) or truth, w=75, viz=(vz := _ci_viz(r, p, sl)), axis=_room(r, vz, _sign(p)))
     return None
 
@@ -483,10 +506,21 @@ def cards(p: Project, since: float = 0) -> list[dict]:
     answered questions, and runs still going (open predictions). Most important first, at most MAX_CARDS."""
     out, seen = [], set()
 
+    facts: set = set()
+
     def add(c):
-        if c and c["id"] not in seen:
-            seen.add(c["id"])
-            out.append(c)
+        if not c or c["id"] in seen:
+            return
+        v = c.get("viz") or {}
+        # one card per fact: the same pair (same counts and delta) or the same goal count asked twice is one card
+        fact = (v.get("kind"), v.get("n"), v.get("wins"), v.get("losses"), round(v.get("delta") or 0, 6)) if v.get("kind") == "ci" \
+            else ("goal", v.get("N"), v.get("have")) if v.get("kind") == "goal" else None
+        if fact and fact in facts:
+            return
+        if fact:
+            facts.add(fact)
+        seen.add(c["id"])
+        out.append(c)
 
     decs = [d for d in _decisions(p) if _f(d.get("t")) > since]
     champ, models = p.champion(), p.models()
@@ -593,7 +627,9 @@ def predict(p: Project, body: dict) -> tuple[int, dict]:
     rec = dict(t=_now(), viewer=viewer, card=c["id"], q=c["q"], guess=guess, conf=round(conf, 3),
                truth=c.get("truth"), hit=_hit(c, guess))
     _append(p.dir / "predictions.jsonl", rec)
-    return 200, dict(prediction=rec, card=public(c, rec))
+    from .teach import step_for
+    st = step_for(p, c, viewer)
+    return 200, dict(prediction=rec, card=public(c, rec) | (dict(step=st) if st else {}))
 
 
 def calibration(preds: list[dict]) -> dict:
@@ -662,71 +698,6 @@ def understanding(p: Project, viewer: str | None = None, doc: str | None = None)
     return dict(viewer=viewer, total_ms=sum(d["ms"] for d in out.values()), docs=out, missed=missed)
 
 
-# ---------------------------------------------------------------- concepts: the project's own vocabulary
-
-def concepts(p: Project) -> list[dict]:
-    """Concept cards with checks, built from the ledger: paired delta, the gate ladder, an interval that crosses zero,
-    and one per hill from its symptom and example. Each check: {q, o: [options], a: right option}."""
-    out, cfg, champ = [], p.config, p.champion()
-    promo = next((c for c in (_card_promote(p, d["model"]) for d in reversed(_decisions(p)) if d.get("kind") == "promote") if c), None)
-    ref = (promo or {}).get("viz")
-    if ref and ref.get("n"):
-        w, l, n = ref["wins"], ref["losses"], ref["n"]
-        o = [f"{100 * (w - l) / n:+.1f} pts", f"{100 * w / n:+.1f} pts", f"{100 * (w + l) / n:+.1f} pts"]
-        qs = [dict(q=f"{w} fixed, {l} broken, n = {n:,}. Paired delta?", o=o, a=o[0])] if len(set(o)) == 3 else []
-        qs.append(dict(q="Two models score the same on one slice. Can their paired delta be non-zero?", o=["Yes", "No"], a="No"))
-        out.append(dict(id="paired", t="Paired delta", viz=dict(kind="paired", wins=w, losses=l, n=n), qs=qs))
-    ladder = [r.get("rung") for r in cfg.get("ladder", []) if r.get("rung")]
-    if len(ladder) >= 2:
-        qs = []
-        if len(ladder) >= 3:
-            o = [ladder[1], ladder[-1], ladder[2] if len(ladder) > 3 else ladder[0]]
-            qs.append(dict(q=f"A candidate passes {ladder[0]}. What runs next?", o=list(dict.fromkeys(o)), a=ladder[1]))
-        better = [r["rung"] for r in cfg["ladder"][1:] if any(c.get("rule") == "better" for c in r.get("checks", []))]
-        soft = [r["rung"] for r in cfg["ladder"][1:] if all(c.get("rule") != "better" for c in r.get("checks", []))]
-        if better and soft:
-            qs.append(dict(q='Which rung needs "better", not just "not worse"?', o=[better[-1], *soft[:2]], a=better[-1]))
-        qs.append(dict(q="A candidate fails a rung. Do later rungs run?", o=["No", "Yes"], a="No"))
-        out.append(dict(id="ladder", t="The gate ladder", viz=dict(kind="ladder", rungs=ladder), qs=qs))
-    noisy, rows = None, []
-    for m, g in ((m, _gate(p, m)) for m, v in p.models().items() if v.get("status") == "candidate"):
-        for r in g.get("rungs", []):
-            for c in r.get("checks", []):
-                if c.get("delta") is not None:
-                    rows.append([c["delta"], c["lo"], c["hi"]])
-                    if c.get("noisy") and noisy is None:
-                        noisy = c
-    qs = []
-    if noisy:
-        sl = noisy.get("slice")
-        qs.append(dict(q=f"{sd(p, sl, noisy['delta'])}, 90% interval [{sd(p, sl, noisy['lo'])}, {sd(p, sl, noisy['hi'])}]. Is the gain shown?",
-                       o=["Not yet", "Yes"], a="Not yet"))
-    qs.append(dict(q="What narrows a paired interval most?", o=["More examples", "Re-running the same greedy eval"], a="More examples"))
-    # with no candidate checks in the ledger the tile is a schematic, and it says so
-    out.append(dict(id="ci", t="Interval crosses zero", viz=dict(kind="ci-mini", rows=rows[:3] or [[0.016, -0.005, 0.037]], example=not rows), qs=qs))
-    order = {"open": 0, "climbed": 1}
-    hills = sorted(p.hills().items(), key=lambda kv: (order.get(kv[1].get("status"), 2), -_f((kv[1].get("share") or {}).get("count") if isinstance(kv[1].get("share"), dict) else 0)))
-    for name, h in hills:
-        if sum(c["id"].startswith("hill:") for c in out) >= MAX_HILL_CONCEPTS:
-            break
-        ex = next((e for e in (h.get("examples") or []) if isinstance(e, dict) and e.get("right") and e.get("wrong")), None)
-        qs = []
-        if ex:
-            qs.append(dict(q=f"{str(ex.get('input') or h.get('symptom')).rstrip(' ?.:')}. Which is right?", o=[str(ex["right"]), str(ex["wrong"])], a=str(ex["right"])))
-        v = _score(p, champ, h["target"]) if champ and h.get("target") else None
-        if v is not None:
-            vals = [v, v * 1.25, v * 0.75] if _cont(p, h["target"]) else [v, min(1.0, v + 0.09), max(0.0, v - 0.09)]
-            o = [sv(p, h["target"], x) for x in vals]
-            if len(set(o)) == 3:
-                qs.append(dict(q=f"The champion on {_short(h['target'])}?", o=o, a=o[0]))
-        if not qs:
-            continue
-        out.append(dict(id=f"hill:{name}", t=_first(h.get("title") or name, 40).split(" [")[0], hill=name,
-                        viz=dict(kind="hill", symptom=_first(h.get("symptom"), 90), share=h.get("share") if isinstance(h.get("share"), dict) else None,
-                                 status=h.get("status")), qs=qs))
-    return out
-
-
 # ---------------------------------------------------------------- routes and CLI
 
 def _why_empty(p: Project) -> str | None:
@@ -745,7 +716,7 @@ def aliases(viewer: str) -> set:
 
 
 def brief(p: Project, since: float = 0, viewer: str = "anon") -> dict:
-    from . import teach
+    from . import course, teach
     p._gates = {}
     with p.snapshot():
         cs = cards(p, since)
@@ -755,7 +726,7 @@ def brief(p: Project, since: float = 0, viewer: str = "anon") -> dict:
         # a predicted card that has since dropped out of the window still shows when it is open
         extra = [card(p, r["card"]) for r in preds if r.get("truth") is None and not r.get("resolved") and r["card"] not in {c["id"] for c in cs}]
         cs += [c for c in extra if c]
-        pub = [public(c, mine.get(c["id"])) for c in cs]
+        pub = [public(c, mine.get(c["id"])) | dict(needs=course.needs(c["id"])) for c in cs]
         prof = teach.attach(p, cs, pub, viewer, al)
         cal = calibration(preds)
         # "right" counts every answered card, predictions and the other methods alike; Brier is predictions only
@@ -763,7 +734,7 @@ def brief(p: Project, since: float = 0, viewer: str = "anon") -> dict:
         cal |= dict(all_n=cal["n"] + len(done), all_hits=cal["hits"] + sum(bool(r["hit"]) for r in done))
         return dict(now=_now(), since=since, viewer=viewer, cards=pub,
                     empty=None if cs else _why_empty(p),
-                    concepts=concepts(p), calibration=cal,
+                    course=course.summary(p, viewer, al), calibration=cal,
                     understanding=understanding(p, viewer),
                     open=[r for r in preds if r.get("hit") is None],
                     teach=dict(profile=prof, labels=teach.LABEL))
@@ -819,3 +790,6 @@ def _cli(sp):
     s.add_argument("--since", help="unix seconds, or 12h / 2d / 1w ago (default: all)")
     s.add_argument("--viewer", default="anon", help="whose predictions to count")
     s.set_defaults(fn=cmd_brief)
+
+
+from . import course as _course  # noqa: E402,F401  (registers /api/course with the Brief)

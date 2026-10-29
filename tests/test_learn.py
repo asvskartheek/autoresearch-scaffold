@@ -59,9 +59,27 @@ class Brief(unittest.TestCase):
             self.assertNotIn("truth", c)
         gate = next(c for c in b["cards"] if c["id"].startswith("gate|"))
         self.assertEqual(sorted(gate["opts"]), ["Fail", "Pass"])
-        self.assertTrue(any(c["id"] == "ladder" for c in b["concepts"]))
-        hill = next(c for c in b["concepts"] if c["id"] == "hill:h1")
-        self.assertEqual(hill["qs"][0]["a"], "4")
+        self.assertEqual(gate["needs"], ["candidate", "gate", "rung"])  # the lessons a catch-up shows first
+        self.assertIn("paired-delta", {x["id"] for x in b["course"]["lessons"]})
+        self.assertEqual(b["course"]["due"], [])
+
+    def test_one_card_per_fact(self):
+        """Two goals on one slice ask the same count: one card. The goal axis starts at 0, never near the target."""
+        self.p.open_goal("keep", "Keep them", "full", 0.7)
+        ids = [c["id"] for c in learn.cards(self.p) if c["id"].startswith("goal|")]
+        self.assertEqual(len(ids), 1)
+        self.assertEqual(learn.card(self.p, "goal|keep")["min"], 0)
+
+    def test_rejected_why_reads_and_counts_match(self):
+        self.p.add_model("bad", parent="base", hill="h1")
+        run(self.p, "bad", [1] * 6 + [0] * 14, "ds/target")
+        self.p.set_model_status("bad", "rejected", "Failedfrozenpairedgate")
+        c = learn.card(self.p, "rej|bad")
+        self.assertTrue(c["why"].startswith("It fixed 0 and broke 6 of 20 on target"), c["why"])
+        self.assertNotIn("Failedfrozen", c["why"])
+        self.assertTrue(c["viz"]["exact"])
+        pooled = learn._ci_viz(dict(delta=-0.03, lo=-0.05, hi=0.0, wins=11, losses=13, n=185))
+        self.assertFalse(pooled["exact"])  # 11 and 13 do not give −3 pts: the page must not say fixed/broken
 
     def test_since_filters(self):
         self.assertNotIn("gate", self.ids(time.time() + 10))
@@ -128,6 +146,7 @@ class Brief(unittest.TestCase):
         from autoresearch import features
         self.assertTrue(any(pre == "/api/brief" for pre, _ in features.GET))
         self.assertTrue(any(pre == "/api/understanding" for pre, _ in features.POST))
+        self.assertTrue(any(pre == "/api/course" for pre, _ in features.GET))
 
 
 if __name__ == "__main__":
