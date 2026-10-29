@@ -79,3 +79,15 @@ class Reasons(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LiveDetail(unittest.TestCase):
+    def test_eval_takes_its_subtask_progress_and_marks_next_running(self):
+        ts = [dict(id="ev", kind="eval", status="running", model="v2", slice="ds/u", progress=dict(done=0, total=10)),
+              dict(id="live", kind="experiment", status="running", parent="ev", progress=dict(done=7, total=10))]
+        server.lift_progress(ts)
+        self.assertEqual(ts[0]["progress"]["done"], 7); self.assertEqual(ts[1]["detail_of"], "ev")
+        gates = {"v2": dict(next=[dict(model="v2", slice="ds/a"), dict(model="base", slice="ds/a")])}
+        out = server.running_next(gates, ts, {"ds/a": dict(ids=[1, 2]), "ds/u": dict(ids=[1, 2, 3])})
+        self.assertEqual([n.get("running") for n in out["v2"]["next"]], ["ev", None])
+        self.assertNotIn("running", gates["v2"]["next"][0])  # the memoised gate is untouched

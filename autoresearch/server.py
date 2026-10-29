@@ -214,6 +214,8 @@ def _state(p: Project) -> dict:
     gates = _memo("gates", p, fp, lambda: _gates(p, models))
     gl = _memo("goals", p, fp, lambda: goals(p))
     infer_parents(tasks)
+    lift_progress(tasks)
+    gates = running_next(gates, tasks, p.slices())
     win = window(tasks, {g["task"] for g in gl.values() if g.get("task")})
     return dict(config=p.config, now=time.time(), champion=champ, datasets=p.datasets(), slices=slices,
                 hills=p.hills(), models={k: _model_row(m) for k, m in models.items()}, papers=papers.papers(p), gates=gates,
@@ -221,6 +223,52 @@ def _state(p: Project) -> dict:
                 goals=gl,
                 baseline=p.baseline_plan(champ) if champ else None,
                 decisions=_tail(p.dir / "decisions.jsonl", 50))
+
+
+LIVE = ("running", "stalled")
+
+
+def lift_progress(tasks: list[dict]) -> None:
+    """An eval whose harness counts in a sub-task (e.g. "live: ..." rolling numbers) shows that count as its own; the
+    sub-task is marked `detail_of` the eval so lists show the job once."""
+    kids: dict = {}
+    for t in tasks:
+        if t.get("parent") and (t.get("progress") or {}).get("total"):
+            kids.setdefault(t["parent"], []).append(t)
+    for t in tasks:
+        if t.get("kind") != "eval" or t["id"] not in kids:
+            continue
+        own = t.get("progress") or {}
+        for k in kids[t["id"]]:
+            kp = k["progress"]
+            if (not own.get("total") or kp.get("total") == own.get("total")) and (kp.get("done") or 0) > (own.get("done") or 0):
+                t["progress"], t["progress_from"] = dict(kp), k["id"]
+                own = t["progress"]
+            k["detail_of"] = t["id"]
+
+
+def running_next(gates: dict, tasks: list[dict], slices: dict | None = None) -> dict:
+    """Each gate's next run that is already running carries `running` (its task id), so no view says "not run yet"
+    while it runs: the same model on that slice, or on a slice holding all of its examples (a harness that runs one
+    union pass and records each slice from it). The memoised gates are copied, never changed."""
+    live = [t for t in tasks if t.get("kind") == "eval" and t.get("status") in LIVE and t.get("model")]
+    if not live:
+        return gates
+    ids = lambda sl: set((slices or {}).get(sl, {}).get("ids") or [])
+
+    def runner(n):
+        for t in live:
+            if t["model"] == n.get("model") and (t.get("slice") == n.get("slice") or ids(n.get("slice")) and ids(n.get("slice")) <= ids(t.get("slice"))):
+                return t["id"]
+        return None
+    out = {}
+    for name, g in gates.items():
+        nx = (g or {}).get("next") if isinstance(g, dict) else None
+        run = [runner(n) for n in nx] if nx else []
+        if any(run):
+            g = dict(g, next=[dict(n, running=r) if r else n for n, r in zip(nx, run)])
+        out[name] = g
+    return out
 
 
 def goals(p: Project) -> dict:
