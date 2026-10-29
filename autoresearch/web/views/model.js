@@ -19,7 +19,8 @@ const diff=(d,k)=>d==null?'—':esc(sd(k,d));
 // a paired CI low to high, read in the direction the numbers are shown (negated slices flip it)
 const ciText=(c,k)=>{const [x,y]=negSlice(k)?[c.hi,c.lo]:[c.lo,c.hi];return `${diff(x,k).replace(/ \S+$/,'')} to ${diff(y,k)}`};
 // a delta in words: "5.2 pts below" on 0/1 slices, "1,071 ms faster than" / "7.6 MB more than" on continuous ones
-const vsWords=(k,d)=>{const t=diff(Math.abs(d),k).replace(/^[+−]/,'');if(!isCont(k))return `${t} ${d<0?'below':'above'}`;const x=negSlice(k)?-d:d,time=/^(ms|s|secs?|seconds?|min)$/i.test(unitOf(k));return `${t} ${time?(x<0?'faster':'slower'):(x<0?'less':'more')} than`};
+// a delta that rounds to zero reads "level with"
+const vsWords=(k,d)=>{const t=diff(Math.abs(d),k).replace(/^[+−]/,'');if(!d||/^0(\.0+)?(\s|$)/.test(t))return 'level with';if(!isCont(k))return `${t} ${d<0?'below':'above'}`;const x=negSlice(k)?-d:d,time=/^(ms|s|secs?|seconds?|min)$/i.test(unitOf(k));return `${t} ${time?(x<0?'faster':'slower'):(x<0?'less':'more')} than`};
 
 // the verdict in one or two plain sentences: ready, blocked (where and by how much), or what to run next
 function verdict(name,m,g){
