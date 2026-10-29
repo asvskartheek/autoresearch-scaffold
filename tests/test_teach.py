@@ -157,6 +157,13 @@ class Teach(unittest.TestCase):
         skip = self.post(method="spot", skip=True)[1]
         self.assertNotEqual(skip["method"], "spot")
 
+    def test_steps_up_once_a_method_is_easy(self):
+        prof = teach.profile([], [dict(t=i, hit=True) for i in range(5)])  # predict: 5 of the last 5 right
+        base = teach.profile([], [dict(t=i, hit=True) for i in range(3)])
+        for m in ("sketch", "spot", "prototype", "code"):
+            self.assertGreater(teach.score(prof, m), teach.score(base, m), m)
+        self.assertNotEqual(teach.choose(prof, self.ci, "ann"), "predict")
+
     def test_another_way_ends_when_nothing_is_left(self):
         g = self.gate["id"]  # predict and sketch only
         d = self.post(card=g, method="sketch", skip=True)[1]

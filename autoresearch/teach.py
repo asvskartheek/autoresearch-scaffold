@@ -30,7 +30,8 @@ from . import features
 from .core import Project, _append, _jsonl
 
 METHODS = ("predict", "sketch", "spot", "prototype", "code", "explain")
-HARDER = {m: i for i, m in enumerate(METHODS)}  # predict is the easiest to finish, explain the hardest
+HARDER = {m: i for i, m in enumerate(METHODS)}  # predict is the easiest to finish, explain the hardest: once one is
+# easy for a person (5 of the last 5 right) the harder ones get a lift (score)
 # before a person has tried a method: the hands-on, visual ones first (people asked for less text), explain last
 PRIOR = dict(predict=0.30, sketch=0.42, spot=0.40, prototype=0.42, code=0.36, explain=0.22)
 TEXT = {"explain"}  # the one method that is writing, not doing
@@ -379,6 +380,10 @@ def profile(rows: list[dict], preds: list[dict]) -> dict:
     return dict(methods=out, recent=recent)
 
 
+def _easy(prof: dict) -> list[str]:
+    return [m for m, s in prof["methods"].items() if len(s["last"]) == 5 and all(s["last"])]
+
+
 def score(prof: dict, m: str) -> float:
     s = prof["methods"][m]
     works = (s["hits"] + 1) / (s["n"] + 2) * (s["n"] + 1) / (s["n"] + s["skips"] + 1)  # right, and finished not skipped
@@ -386,6 +391,8 @@ def score(prof: dict, m: str) -> float:
         works += PRIOR[m]  # try what they have not tried
     if len(s["last"]) == 5 and all(s["last"]):
         works *= 0.6  # easy for them now: step up
+    elif any(HARDER[m] > HARDER[e] for e in _easy(prof)):
+        works *= 1.25  # ... to a harder method than the one that became easy
     if prof["recent"].count(m) == 2:
         works *= 0.3  # never three in a row
     if m in TEXT:

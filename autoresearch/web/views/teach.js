@@ -4,7 +4,8 @@
 // card with its reveal. "Another way" skips to the next method that fits the card; the side panel shows how each
 // method has gone for this person.
 const TEACH=(()=>{
-const ST={};const st=c=>ST[c.id]||(ST[c.id]={t0:performance.now()});
+// per person and card: a name change in the same tab starts from a blank card
+const ST={};const sk=c=>(viewer()||'anon')+'|'+c.id,st=c=>ST[sk(c)]||(ST[sk(c)]={t0:performance.now()});
 const NAMES={predict:'Predict',sketch:'Sketch',spot:'Spot the error',prototype:'Prototype',code:'Code',explain:'Explain back'};
 const ICO={predict:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>',sketch:'<path d="M4 18c3-6 6 2 9-4s4-6 7-8"/>',
  spot:'<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',prototype:'<path d="M4 12h16"/><circle cx="9" cy="12" r="3"/>',
@@ -100,22 +101,22 @@ function spotBody(c,s){
 }
 
 // ---------- prototype: drag n, the interval narrows as 1/√n
-function protoSVG(t,n,mark){
+function protoSVG(t,n,label){
  const W=LW(),H=96,Lx=16,R=W-16,half=(t.hi-t.lo)/2*Math.sqrt(t.n/n),lo=t.delta-half,hi=t.delta+half;
  const ext=Math.max(Math.abs(t.lo),Math.abs(t.hi),Math.abs(t.delta)*2,2)*1.15,x=q=>Lx+(q+ext)/(2*ext)*(R-Lx),clear=lo>0||hi<0;
  const col=clear?(t.delta>0?'var(--positive)':'var(--negative)'):'var(--muted)';
  let s=`<line x1="${x(0)}" x2="${x(0)}" y1="20" y2="70" stroke="var(--text)" stroke-width="1.5"/>`;
  s+=`<line x1="${x(Math.max(-ext,lo))}" x2="${x(Math.min(ext,hi))}" y1="46" y2="46" stroke="${col}" stroke-width="10" stroke-linecap="round" opacity=".4" style="transition:all .12s"/><circle cx="${x(t.delta)}" cy="46" r="6" fill="${col}"/>`;
  s+=`<text x="${Lx}" y="14" class="mono strong">n = ${Math.round(n).toLocaleString()}</text><text x="${R}" y="14" text-anchor="end" class="mono" style="fill:${col}">[${amt('pts',lo)}, ${amt('pts',hi)}]</text>`;
- if(mark)s+=`<text x="${Lx}" y="90" class="mono">measured at n = ${t.n.toLocaleString()}</text>`;
+ if(label)s+=`<text x="${Lx}" y="90" class="mono">${esc(label)}</text>`;
  return `<svg class="lv" id="tproto" viewBox="0 0 ${W} ${H}">${s}</svg>`;
 }
 const pLo=t=>Math.max(4,t.n/20),pHi=t=>t.n*60,toN=(t,f)=>Math.exp(Math.log(pLo(t))+f*(Math.log(pHi(t))-Math.log(pLo(t)))),toF=(t,n)=>(Math.log(n)-Math.log(pLo(t)))/(Math.log(pHi(t))-Math.log(pLo(t)));
 function protoBody(c,s){
  const t=c.task||s.tk,need=c.reveal?.show?.need;if(!t)return '';
  if(s.n==null)s.n=t.n;
- return `<div id="tpw">${protoSVG(t,s.n,true)}</div><input type="range" class="t-range" id="tpn" min="0" max="1000" value="${Math.round(1000*toF(t,s.n))}" ${c.pred?'disabled':''} aria-label="n">
-  ${need?`<div class="t-need">${protoSVG(t,need,false)}</div>`:''}`;
+ return `<div id="tpw">${protoSVG(t,s.n,`measured at n = ${t.n.toLocaleString()}`)}</div><input type="range" class="t-range" id="tpn" min="0" max="1000" value="${Math.round(1000*toF(t,s.n))}" ${c.pred?'disabled':''} aria-label="n">
+  ${need?`<div class="t-need">${protoSVG(t,need,`needed: n = ${need.toLocaleString()}`)}</div>`:''}`;
 }
 
 // ---------- code: one line, evaluated live on the card's own numbers
@@ -170,7 +171,7 @@ async function submit(c){
 }
 async function skip(c){
  try{const r=await fetch('api/teach',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({viewer:viewer()||'anon',card:c.id,method:c.method,skip:true,ms:Math.round(performance.now()-st(c).t0)})});
-  const d=await r.json();if(!r.ok)throw new Error(d.error||r.status);delete ST[c.id];
+  const d=await r.json();if(!r.ok)throw new Error(d.error||r.status);delete ST[sk(c)];
   L.b.cards[L.cur]={...c,method:d.method,task:d.task||undefined,others:d.others};render(true);
  }catch(e){alert('Could not switch: '+(e.message||e))}
 }
@@ -188,13 +189,14 @@ document.addEventListener('click',e=>{
 document.addEventListener('pointerdown',e=>{if(route().r!=='learn'||!e.target.closest)return;const c=L.b?.cards[L.cur];if(c&&c.method==='sketch')dragSketch(e,c)});
 document.addEventListener('input',e=>{
  if(route().r!=='learn')return;const c=L.b?.cards[L.cur];if(!c||c.pred)return;const s=st(c);
- if(e.target.id==='tpn'){const t=c.task||s.tk;s.n=toN(t,e.target.value/1000);$('#tpw').innerHTML=protoSVG(t,s.n,true)}
+ if(e.target.id==='tpn'){const t=c.task||s.tk;s.n=toN(t,e.target.value/1000);$('#tpw').innerHTML=protoSVG(t,s.n,`measured at n = ${t.n.toLocaleString()}`)}
  else if(e.target.id==='tcode'){s.code=e.target.value;const v=codeVal(c.task||s.tk,s.code),cm=$('#main .t-code .c');if(cm)cm.textContent='// '+(v==null?'= ?':'= '+(+v.toFixed(2))+' pts');const go=$('#main [data-t=go]');if(go)go.disabled=v==null}
  else if(e.target.id==='tex'){s.ex=e.target.value;const go=$('#main [data-t=go]');if(go)go.disabled=s.ex.trim().length<=8}
 });
 document.addEventListener('keydown',e=>{
  if(route().r!=='learn'||!L.b||e.metaKey||e.ctrlKey||e.altKey)return;const c=L.b.cards[L.cur];if(!c||c.pred)return;
- const tg=e.target;if(tg&&/^(TEXTAREA|INPUT|SELECT)$/.test(tg.tagName))return;
+ const tg=e.target;if(tg&&tg.id==='tcode'&&e.key==='Enter'){e.preventDefault();if(codeVal(c.task||st(c).tk,st(c).code)!=null)submit(c);return}
+ if(tg&&/^(TEXTAREA|INPUT|SELECT)$/.test(tg.tagName))return;
  if(c.method==='sketch'&&(c.task||st(c).tk)){if(/^Arrow/.test(e.key)&&keySketch(e,c))e.preventDefault();
   else if((e.key==='+'||e.key==='='||e.key==='-')&&(c.task||st(c).tk).kind==='ci'){zoom(c,e.key==='-'?-1:1);e.preventDefault()}return}
  if(c.method!=='spot')return;const n=+e.key,k=(c.task||st(c).tk)?.parts;if(k&&n>=1&&n<=k.length){st(c).pick=k[n-1];render(true);e.preventDefault()}

@@ -56,12 +56,12 @@ addEventListener('pagehide',()=>leaveCard({beacon:true}));
 // an axis step near span/k on the 1-2-5 ladder
 const nstep=(span,k)=>{const raw=span/k,mag=10**Math.floor(Math.log10(raw||1));return [1,2,5,10].map(m=>m*mag).find(m=>m>=raw)};
 // a signed amount in a viz's unit: "+5.2 pts" (0/1 slice) or "−1,071 ms" (continuous); 0/1 values come in points
-const lamt=(u,x)=>(x>0?'+':x<0?'−':'')+(u==='pts'?(+Math.abs(x).toFixed(2)).toString():grp(Math.abs(x)))+(u?' '+(u==='pts'&&Math.abs(x)===1?'pt':u):'');
+const lamt=(u,x)=>(x=u==='pts'&&+Math.abs(x).toFixed(2)===0?0:x,(x>0?'+':x<0?'−':''))+(u==='pts'?(+Math.abs(x).toFixed(2)).toString():grp(Math.abs(x)))+(u?' '+(u==='pts'&&Math.abs(x)===1?'pt':u):'');
 function vizCI(v){
  const u=v.unit==null?'pts':v.unit,k=v.unit==null?100:1;  // older payloads carry fractions
  const d=k*v.delta,lo=k*v.lo,hi=k*v.hi,bar=v.bar!=null?k*v.bar:null,W=LW(),H=136,Lx=16,R=W-16;
- const ext=Math.max(Math.abs(lo),Math.abs(hi),Math.abs(bar||0)),pad=u==='pts'?1:ext*.12||1;
- const a=Math.min(u==='pts'?-2:-pad,lo-pad,bar??0),b=Math.max(u==='pts'?2:pad,hi+pad,bar??0),x=q=>Lx+(q-a)/(b-a)*(R-Lx),stp=nstep(b-a,W<420?5:9);
+ const ext=Math.max(Math.abs(lo),Math.abs(hi),Math.abs(d),Math.abs(bar||0)),pad=u==='pts'?1:ext*.12||1;  // the delta too: a spot example may put it outside its interval
+ const a=Math.min(u==='pts'?-2:-pad,lo-pad,d-pad,bar??0),b=Math.max(u==='pts'?2:pad,hi+pad,d+pad,bar??0),x=q=>Lx+(q-a)/(b-a)*(R-Lx),stp=nstep(b-a,W<420?5:9);
  let t='';for(let q=Math.ceil(a/stp)*stp;q<=b+1e-9;q+=stp){const qq=+q.toPrecision(6);t+=`<line x1="${x(qq)}" x2="${x(qq)}" y1="26" y2="62" stroke="var(--grid)"/><text x="${x(qq)}" y="78" text-anchor="middle">${qq>0?'+':qq<0?'−':''}${grp(Math.abs(qq))}</text>`}
  const good=v.better<0?hi<0:lo>0,bad=v.better<0?lo>0:hi<0,col=good?'var(--positive)':bad?'var(--negative)':'var(--muted)',cap=Math.floor((R-Lx-90)/7);
  const sq=(n,c,y)=>Array.from({length:Math.min(n,cap)},(_,i)=>`<rect x="${Lx+i*7}" y="${y}" width="5" height="9" rx="1" fill="${c}"/>`).join('');
