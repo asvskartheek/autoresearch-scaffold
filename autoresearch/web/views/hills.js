@@ -28,6 +28,14 @@ function hFig(r,U,sl){
  const x=flip(sl,U)?-r.score:r.score,u=uOf(sl,U);
  return `<b>${esc(grp(x))}</b><span class="of">${u?'&nbsp;'+esc(u):' mean'}</span>`;
 }
+// a 0/1 figure pooled over repeated runs (the per-example means the paired Δ uses): "28.5 / 30", so the count and the
+// Δ beside it agree; a whole count falls back to the latest run's figure
+function pFig(r,U,sl,M,m){
+ const v=M&&binary(M,sl)?Object.values(M.runs?.[m]||{}).filter(x=>x!=null):[];
+ const t=v.reduce((a,b)=>a+b,0);
+ if(!v.length||Math.abs(t-Math.round(t))<1e-6)return hFig(r,U,sl);
+ return `<span title="Mean over repeated runs, per example"><b>${+t.toFixed(1)}</b><span class="of">&nbsp;/&nbsp;${v.length}</span></span>`;
+}
 // a continuous score against the champion's on one example: 1 better, -1 worse, 0 level (within 10%)
 const cmpC=(v,c)=>Math.abs(v-c)<=Math.max(1e-9,.1*Math.abs(c))?0:better(v,c)?1:-1;
 const hShare=x=>x.share&&x.share.of?x.share.count/x.share.of:null;
@@ -238,10 +246,10 @@ function hAttempts(x,runs,U){
   const run=(r,f)=>r?.task?`<a class="hrun" href="#task/${enc(r.task)}" onclick="event.stopPropagation()" title="Open this run">${f}</a>`:f;
   return `<tr class="click${mod.status==='rejected'?' rej':''}" onclick="location.hash='#model/${enc(o.m)}'"><td class="hm"><div class="two"><a href="#model/${enc(o.m)}" title="${esc(o.m)}"><b>${mn(o.m)}</b></a>${mod.change?`<span class="sub ell" title="${esc(mod.change)}">${esc(mod.change)}</span>`:''}${mod.status==='rejected'&&mod.reason?`<span class="sub ell hrej" title="${esc(mod.reason)}">${esc(firstLine(mod.reason))}</span>`:''}</div></td>
    <td class="htg">${tag}</td>
-   <td class="num fig">${run(o.r,hFig(o.r,U,sl))}</td><td class="hbar">${isRate(o.r,sl)?meter(o.r.score,{mark:!me&&now&&isRate(now.r,sl)?now.r.score:null,cls:me?'muted':''}):''}</td>
+   <td class="num fig">${run(o.r,pFig(o.r,U,sl,T,o.m))}</td><td class="hbar">${isRate(o.r,sl)?meter(o.r.score,{mark:!me&&now&&isRate(now.r,sl)?now.r.score:null,cls:me?'muted':''}):''}</td>
    ${now?`<td class="num fig hdl">${me?DASH:(p=>p?pairCell(p,x.target):hDelta(o.r,now.r,U,sl))(hPaired(o.m,x.target,T?.runs?.[o.m],cr))}</td>`:''}
    ${cr?`<td class="num fig hfl">${fl?`<span class="${fl.f?'pos':'faint'}">+${fl.f}</span><span class="faint"> / </span><span class="${fl.k?'neg':'faint'}">−${fl.k}</span>`:DASH}</td>`:''}
-   ${ctl?`<td class="num fig">${o.c?run(o.c,hFig(o.c,false,ctl)):'<span class="faint">not run</span>'}</td>${now?`<td class="num fig hdc">${me||!o.c?DASH:(p=>p?pairCell(p,x.control):hDelta(o.c,now.c,false,ctl))(hPaired(o.m,x.control,D?.control?.runs?.[o.m],D?.control?.runs?.[ch]))}</td>`:''}`:''}</tr>`});
+   ${ctl?`<td class="num fig">${o.c?run(o.c,pFig(o.c,false,ctl,D?.control,o.m)):'<span class="faint">not run</span>'}</td>${now?`<td class="num fig hdc">${me||!o.c?DASH:(p=>p?pairCell(p,x.control):hDelta(o.c,now.c,false,ctl))(hPaired(o.m,x.control,D?.control?.runs?.[o.m],D?.control?.runs?.[ch]))}</td>`:''}`:''}</tr>`});
  const head=[['Model'],[''],[isRate(runs[0].r,sl)?'Solved':isTime(sl,U)?'Mean time':'Mean','num'],['']];
  if(now)head.push(['<span title="Paired change against the champion on the same dev examples, with its 90% interval">Δ vs champion</span>','num hdl']);
  if(cr)head.push(bin?['<span title="Examples the champion got wrong and this got right / right and this got wrong">Fixed / broke</span>','num hfl']
