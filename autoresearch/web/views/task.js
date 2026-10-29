@@ -134,7 +134,7 @@ function curves(t,d){
  let cur=S.tkMetric[t.id];if(!all.includes(cur))cur=all[0];
  const flip=k=>T&&isScoreKey(k);
  const ser=k=>runs.map(r=>({id:r.id,name:r.name,color:r.color,smooth:!ev&&!/running_score/.test(k),pts:r.rows.filter(m=>typeof m[k]==='number').map(m=>[m.step,flip(k)?-m[k]:m[k],m.t])}));
- const total=t.progress?.total,dom=isLive(t)&&total&&g.x==='step'?[0,total]:null;
+ const dom=null;  // x fits the data; the progress bar shows how far along it is
  const base=d.vs_champion?.base??null;
  const spec=(k,mode,h)=>({group:grp,mode,h,xLabel:ev?'examples':'step',yLabel:mode==='full'?nm(k):null,yfmt:flip(k)?'s':yfOf(k),t0:t.created,domain:dom,series:ser(k),
   ref:k==='running_score'&&base!=null?{y:flip(k)?-base:base,label:'champion'}:null});

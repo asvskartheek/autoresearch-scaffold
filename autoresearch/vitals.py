@@ -159,7 +159,7 @@ def _metric(rows, key, total, pid="m"):
     pts = _series(rows, key)
     if len(pts) < 2:
         return None
-    return dict(id=pid, key=key, title=key, fmt="num", value=pts[-1][1], domain=[0, total] if total else None,
+    return dict(id=pid, key=key, title=key, fmt="num", value=pts[-1][1],
                 series=[dict(name=key, pts=thin(pts, 240))], smooth=True)
 
 
@@ -202,7 +202,7 @@ def _eval_panels(p, t, st, ml, total):
         champ = st.get("champion")
         ref = ((st.get("leaderboard") or {}).get(t.get("slice")) or {}).get(champ) if champ and champ != t.get("model") else None
         main = dict(id="main", title="Score so far", fmt="pct" if binary else "num", value=pts[-1][1], n=pts[-1][0],
-                    domain=[0, total] if total else None, ymin=0 if binary else None, ymax=1 if binary else None,
+                    ymin=0 if binary else None, ymax=1 if binary else None,
                     series=[dict(name="Score", pts=thin(pts, 240))], band=thin(band, 240) if band else None, smooth=False,
                     ref=dict(y=ref["score"], label="champion") if ref and _num(ref.get("score")) else None)
     out = [main, _eta_panel(t.get("eta"))]
@@ -231,7 +231,7 @@ def _eval_panels(p, t, st, ml, total):
                 band.append([n, d - Z * se, d + Z * se])
             if line:
                 pair = dict(id="pair", title="Against the champion", fmt="signed", value=line[-1][1], won=won, lost=lost,
-                            domain=[0, total] if total else None, zero=True, smooth=False, ci=band[-1][1:],
+                            zero=True, smooth=False, ci=band[-1][1:],
                             series=[dict(name="Won minus lost", pts=thin(line, 240))], band=thin(band, 240))
     lat = [float(r["latency_s"]) for r in rows if _num(r.get("latency_s"))]
     latp = None
@@ -243,7 +243,7 @@ def _eval_panels(p, t, st, ml, total):
             roll95.append([i, w[min(len(w) - 1, int(len(w) * .95))]])
         s = sorted(lat)
         latp = dict(id="lat", title="Latency", fmt="s", value=s[len(s) // 2], p95=s[min(len(s) - 1, int(len(s) * .95))],
-                    domain=[0, total] if total else None, ymin=0, smooth=False,
+                    ymin=0, smooth=False,
                     series=[dict(name="Median", pts=roll50), dict(name="95th percentile", pts=roll95, faint=True)])
     gpu = _gpu(p.metrics(t["id"]), t["created"])
     out += [pair or latp, gpu or (latp if pair else None)]
