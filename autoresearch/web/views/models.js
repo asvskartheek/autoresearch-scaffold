@@ -39,6 +39,7 @@ function full(k){
  const g=L.gates[k],p=g&&!g.error&&g.champion===L.champion?(g.rungs||[]).flatMap(r=>r.checks).find(x=>x.slice===sl&&x.delta!=null):null;
  if(p){const noisy=p.lo<0&&0<p.hi,[x,y]=negSlice(sl)?[p.hi,p.lo]:[p.lo,p.hi];
   return {v,d:`<div class="ms-pd"><span class="${noisy?'sub':p.delta>0?'pos':p.delta<0?'neg':'sub'}">${diff(p.delta,sl)}</span>${noisy?pill('Noisy','noisy'):''}</div><div class="sub ms-ci" title="90% interval of the paired difference, n ${p.n}">${diff(x,sl).replace(/ \S+$/,'')} to ${diff(y,sl)}</div>`}}
+ if(boardHarnessMismatch(f,c))return {v,d:'<span class="faint">Different harness</span>'};
  return {v,d:f&&c?`<span class="${f.score===c.score?'sub':better(f.score,c.score)?'pos':'neg'}" title="Difference of the two full-set scores, not paired per example">${diff(f.score-c.score,sl)}</span><div class="faint ms-ci">unpaired</div>`:DASH};
 }
 // a model reads by its title; the id (what every command takes) sits under it in mono, with its phase

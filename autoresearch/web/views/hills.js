@@ -64,6 +64,7 @@ function hPair(x,runs){
 // signed count / value change vs a reference, coloured good or bad; time reads as seconds faster (−) or slower (+)
 function hDelta(r,base,U,sl){
  if(!r||!base)return DASH;
+ if(boardHarnessMismatch(r,base))return '<span class="faint">Different harness</span>';
  if(isRate(r,sl)&&isRate(base,sl)){const k=solved(r)-solved(base);return k===0?'<span class="faint">0</span>':`<span class="${better(k,0)?'pos':'neg'}">${k>0?'+':'−'}${Math.abs(k)}</span>`}
  const d=r.score-base.score;if(Math.abs(d)<1e-9)return '<span class="faint">0</span>';
  return `<span class="${better(d,0)?'pos':'neg'}">${cDelta(d,sl,U)}</span>`;
@@ -72,6 +73,7 @@ function hDelta(r,base,U,sl){
 // else the same computation (mean per-example difference, 2000 seeded resamples) on the hill's per-example rows
 const PAIR={};
 function hPaired(m,slice,a,b){
+ if(boardHarnessMismatch(S.state.leaderboard[slice]?.[m],S.state.leaderboard[slice]?.[S.state.champion]))return null;
  const g=S.state.gates?.[m],c=g&&!g.error&&g.champion===S.state.champion?g.rungs.flatMap(r=>r.checks).find(c=>c.slice===slice&&c.delta!=null):null;
  if(c)return {delta:c.delta,lo:c.lo,hi:c.hi,n:c.n};
  return pairedRows(m+'\u0000'+slice,a,b);
@@ -186,6 +188,7 @@ function hFinding(x,runs,D,U){
  if(!sub)return now?`No attempt yet. The champion ${say(now.r)} on the dev set.`:'No attempt yet.';
  const m=`<b>${mn(sub.m)}</b>`;
  if(!ref)return `${m} ${say(sub.r)} on the dev set; the champion has no run to compare.`;
+ if(boardHarnessMismatch(sub.r,ref.r))return `${m} ${say(sub.r)} on the dev set. Different harness from ${refName}.`;
  let s;
  const bin=binary(D?.target,sl),fl=D?hFlips(D.target.runs[sub.m],D.target.runs[ref.m],bin):null;
  if(fl&&bin)s=`${m} fixes ${fl.f} of ${sub.r.n} dev examples and breaks ${fl.k}, against ${refName}`;
@@ -195,6 +198,7 @@ function hFinding(x,runs,D,U){
  if(fl&&!bin)s+=`; ${isTime(sl,U)?'faster':'better'} on ${fl.f} of ${sub.r.n} examples, ${isTime(sl,U)?'slower':'worse'} on ${fl.k}`;
  if(x.control){
   if(!sub.c||!ref.c)s+='. Control not run';
+  else if(boardHarnessMismatch(sub.c,ref.c))s+='. Control uses a different harness';
   else if(isRate(sub.c,ctl)&&isRate(ref.c,ctl)){const k=solved(sub.c)-solved(ref.c);s+=k===0?`. Control level, ${solved(sub.c)} of ${sub.c.n}`:`. Control ${k>0?'+':'−'}${Math.abs(k)}, ${solved(sub.c)} of ${sub.c.n}`}
   else{const d=sub.c.score-ref.c.score;s+=`. Control ${cAmt(sub.c.score,ctl)} against ${cAmt(ref.c.score,ctl)}, ${Math.abs(d)<1e-9?'level':cWords(d,ctl)}`}
  }
@@ -245,12 +249,12 @@ function hAttempts(x,runs,U){
  const body=about?`<div class="habout">${about}</div>`:'';
  if(!runs.length)return panel('Attempts on the dev set',body+empty('No runs on this dev set yet',''),{meta,right:`<span class="hright">${right}</span>`,cls:'hdev'});
  const rows=runs.map(o=>{
-  const me=o.m===ch,fl=!me&&cr&&T.runs[o.m]?hFlips(T.runs[o.m],cr,bin):null,mod=L.models[o.m]||{};
+  const me=o.m===ch,fl=!me&&!boardHarnessMismatch(o.r,now?.r)&&cr&&T.runs[o.m]?hFlips(T.runs[o.m],cr,bin):null,mod=L.models[o.m]||{};
   const tag=me?pill('champion','champion'):o.m===x.climbed_by?pill('climbed it','climbed'):mod.status==='rejected'?`<span class="htag" title="${esc(mod.reason||'')}">rejected</span>`:'';
   const run=(r,f)=>r?.task?`<a class="hrun" href="#task/${enc(r.task)}" onclick="event.stopPropagation()" title="Open this run">${f}</a>`:f;
   return `<tr class="click${mod.status==='rejected'?' rej':''}" onclick="location.hash='#model/${enc(o.m)}'"><td class="hm"><div class="two"><a href="#model/${enc(o.m)}" title="${esc(o.m)}"><b>${mn(o.m)}</b></a>${mod.change?`<span class="sub ell" title="${esc(mod.change)}">${esc(mod.change)}</span>`:''}${mod.status==='rejected'&&mod.reason?`<span class="sub ell hrej" title="${esc(mod.reason)}">${esc(firstLine(mod.reason))}</span>`:''}</div></td>
    <td class="htg">${tag}</td>
-   <td class="num fig">${run(o.r,pFig(o.r,U,sl,T,o.m))}</td><td class="hbar">${isRate(o.r,sl)?meter(o.r.score,{mark:!me&&now&&isRate(now.r,sl)?now.r.score:null,cls:me?'muted':''}):''}</td>
+   <td class="num fig">${run(o.r,pFig(o.r,U,sl,T,o.m))}</td><td class="hbar">${isRate(o.r,sl)?meter(o.r.score,{mark:!me&&now&&!boardHarnessMismatch(o.r,now.r)&&isRate(now.r,sl)?now.r.score:null,cls:me?'muted':''}):''}</td>
    ${now?`<td class="num fig hdl">${me?DASH:(p=>p?pairCell(p,x.target):hDelta(o.r,now.r,U,sl))(hPaired(o.m,x.target,T?.runs?.[o.m],cr))}</td>`:''}
    ${cr?`<td class="num fig hfl">${fl?`<span class="${fl.f?'pos':'faint'}">+${fl.f}</span><span class="faint"> / </span><span class="${fl.k?'neg':'faint'}">−${fl.k}</span>`:DASH}</td>`:''}
    ${ctl?`<td class="num fig">${o.c?run(o.c,pFig(o.c,false,ctl,D?.control,o.m)):'<span class="faint">not run</span>'}</td>${now?`<td class="num fig hdc">${me||!o.c?DASH:(p=>p?pairCell(p,x.control):hDelta(o.c,now.c,false,ctl))(hPaired(o.m,x.control,D?.control?.runs?.[o.m],D?.control?.runs?.[ch]))}</td>`:''}`:''}</tr>`});
@@ -282,7 +286,7 @@ function hMatrix(title,M,runs,U,isCtl){
  const val=v=>cTxt(v,sl,U);
  const cls=(m,id)=>{
   const v=M.runs[m][id];if(v==null)return ['na','not run'];
-  const c=cr?.[id];
+  const c=boardHarnessMismatch(S.state.leaderboard[M.slice]?.[m],S.state.leaderboard[M.slice]?.[ch])?null:cr?.[id];
   if(bin){const ok=v>=.5;if(m!==ch&&c!=null&&ok!==(c>=.5))return ok?['fx','fixed']:['bk','broke'];return ok?['s1','solved']:['s0','wrong']}
   if(m===ch||c==null)return ['s1',val(v)];
   const k=cmpC(v,c);
