@@ -27,6 +27,7 @@ function verdict(name,m,g){
  if(m.status==='rejected')return {text:`Rejected. ${m.reason?reasonHTML(m.reason):'No reason was recorded.'}`,cls:'neg'};
  if(!g)return {text:m.status==='planned'?`Planned, not on the ladder yet. Register it as a candidate with <code>arx model add ${esc(name)}</code> when it is ready to run.`:`${esc(m.status[0].toUpperCase()+m.status.slice(1))} model, kept for the record and not on the ladder.${m.reason?' '+reasonHTML(m.reason):''}`};
  if(g.error)return {text:`The gate could not be read: ${esc(g.error)}`,cls:'neg'};
+ if(!g.champion&&!S.state.champion)return {text:`No champion yet, so there is nothing to pair this model against. Make a baseline champion first, then re-check the ladder.`,nochamp:true};
  const passed=g.rungs.filter(r=>r.status==='pass').map(r=>esc(r.rung));
  const noisy=g.rungs.flatMap(r=>r.checks.filter(c=>c.state==='pass'&&c.noisy).map(c=>esc(short(c.slice))));
  const tail=noisy.length?` The pass on ${list(noisy)} is within noise (its 90% interval crosses zero), so treat it as a lead, not a result.`:'';
@@ -101,6 +102,9 @@ function promotion(name,m){
   {meta:meta+' · recomputed from the hill’s rows',cls:'section flush md-gp'});
 }
 
+// with no champion: promote the newest earlier baseline kept on record, else register one
+const champCmd=name=>{const b=Object.entries(S.state.models).filter(([k,o])=>k!==name&&(o.status==='historical'||o.status==='retired')).sort((a,b)=>(b[1].created||0)-(a[1].created||0))[0];
+ return b?`arx promote ${b[0]} --force`:'arx model add <baseline> --champion'};
 const nextRow=(lead,c)=>`<div class="md-next"><span class="md-lead">${lead}</span>${cmd(c)}</div>`;
 // the next runs: one row per run still to start, with its command; runs already in progress are one row per task,
 // the slices it covers and its live progress instead of a command
@@ -141,10 +145,11 @@ VIEWS.model=(name)=>{
  if(onLadder){
   const body=v.ready?nextRow('Every rung passed',`arx promote ${name}`)
    :nx.length?nxRows(name,nx)+nextRow('Then re-check the ladder',`arx gate ${name}`)
+   :v.nochamp?nextRow('Make a baseline champion',champCmd(name))+nextRow('Then re-check the ladder',`arx gate ${name}`)
    :v.failed?nextRow('Record the failure',`arx reject ${name} --reason "failed ${g.rungs.find(r=>r.status==='fail').rung}"`)
    :empty('Nothing to run',`<code>arx gate ${esc(name)}</code> re-reads the ladder`);
-  h.push(panel(v.ready?'Promote':v.failed?'Close it out':'Next runs',body,{meta:nx.length?plural(nx.length,'run')+' before the next rung opens'+(nx.some(runTask)?` · ${nx.filter(runTask).length} running`:''):'',cls:'section md-np'}));
-  h.push(panel('Gate',gateTable(name,g),{meta:`paired against ${mlink(g.champion||'')} on the same examples`,cls:'section flush md-gp'}));
+  h.push(panel(v.ready?'Promote':v.failed?'Close it out':v.nochamp?'Next':'Next runs',body,{meta:nx.length?plural(nx.length,'run')+' before the next rung opens'+(nx.some(runTask)?` · ${nx.filter(runTask).length} running`:''):'',cls:'section md-np'}));
+  h.push(panel('Gate',gateTable(name,g),{meta:g.champion?`paired against ${mlink(g.champion)} on the same examples`:'no champion to pair against yet',cls:'section flush md-gp'}));
  }else if(m.status==='champion'&&g&&!g.error){
   h.push(promotion(name,m));
   h.push(panel('Ladder slices',table(['Rung','Slice',['n','num'],['Score','num']],g.rungs.flatMap(r=>r.checks.map((c,i)=>{const s=L.leaderboard[c.slice]?.[name],n=s?.n??L.slices[c.slice]?.n;
