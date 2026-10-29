@@ -101,7 +101,7 @@ function keySketch(e,c){
 function spotBody(c,s){
  const t=c.task||s.tk,v=t.viz,ans=c.reveal?.show?.wrong,u=v.unit||'pts';
  const opts=[['counts',`${v.wins.toLocaleString()} fixed · ${v.losses.toLocaleString()} broken`],['delta','Δ '+amt(u,v.delta)],['interval',`[${amt(u,v.lo)}, ${amt(u,v.hi)}]`]];
- return vizCI(v)+`<div class="opts t-spot" style="--n:3">${opts.filter(([k])=>(t.parts||[]).includes(k)).map(([k,l],i)=>`<button class="opt${s.pick===k?' on':''}${ans?k===ans?' truth':s.pick===k?' wrong':'':''}" data-t="pick" data-v="${k}" ${c.pred?'disabled':''}><kbd>${i+1}</kbd>${esc(l)}</button>`).join('')}</div>`;
+ return vizCI(v)+`<div class="opts t-spot" style="--n:3">${opts.filter(([k])=>(t.parts||[]).includes(k)).map(([k,l],i)=>`<button class="opt${s.pick===k?' on':''}${ans?k===ans?' truth':s.pick===k?' wrong':'':''}" data-t="pick" data-v="${k}" ${c.pred?'disabled':''}><kbd aria-hidden="true">${i+1}</kbd><span class="opt-label">${esc(l)}</span></button>`).join('')}</div>`;
 }
 
 // ---------- prototype: drag n, the interval narrows as 1/√n

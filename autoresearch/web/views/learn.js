@@ -126,7 +126,7 @@ function cardHTML(c){
   const opts=shuf(c.id,c.opts);
   body=`<div class="opts ${opts.length>2?'many':''}" style="--n:${opts.length}">${opts.map((o,i)=>{
    let cl=u.choice===o?' on':'';if(p&&truth!=null){if(o===truth)cl+=' truth';else if(u.choice===o)cl+=' wrong'}
-   return `<button class="opt${cl}" data-l="pick" data-v="${esc(o)}" ${p?'disabled':''}><kbd>${i+1}</kbd>${esc(o)}</button>`}).join('')}</div>`;
+   return `<button class="opt${cl}" data-l="pick" data-v="${esc(o)}" ${p?'disabled':''}><kbd aria-hidden="true">${i+1}</kbd><span class="opt-label">${esc(o)}</span></button>`}).join('')}</div>`;
  }else body=numberLine(c,u.guess,p?truth:null);
  body+=`<div class="conf"><label for="lcf">${c.type==='number'?'Sure it lands in the band':'Sure'}</label><input type="range" id="lcf" min="${Math.round(100*(c.cmin??.5))}" max="100" step="5" value="${u.conf}" ${p?'disabled':''}><output id="lcfo">${u.conf}%</output></div>`;
  let reveal='';
