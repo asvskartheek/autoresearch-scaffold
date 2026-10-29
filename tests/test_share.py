@@ -61,6 +61,21 @@ class Remote(unittest.TestCase):
         self.assertEqual(self.req(f"/p/{self.ka}/api/comments", row, cookie=self.tok, origin="http://evil.example")[0], 403)
         self.assertEqual(self.req(f"/p/{self.ka}/api/comments", row, cookie=self.tok, origin=f"http://192.168.7.9:{self.port}")[0], 200)
 
+    def test_redirect_and_redact(self):
+        code, _, hd = self.req(f"/p/{self.ka}/?k={self.tok}&c=x%0d%0aX-Injected:%20yes")
+        self.assertEqual(code, 302); self.assertNotIn("X-Injected", hd); self.assertNotIn("\r", hd["Location"])
+        self.assertEqual(self.req(f"/p/{self.ka}/?k=bad%0d%0aX:1")[0], 403)
+        self.assertEqual(share.redact("run /Users/me/proj/scratch/gate.json now"), "run …/scratch/gate.json now")
+        body = self.req(f"/p/{self.ka}/api/state", cookie=self.tok)[1].decode()
+        self.assertNotIn(str(self.a.root), body)
+
+    def test_guest_cannot_rename(self):
+        from autoresearch import people
+        people.remember("p-0000aaaa", "Owner", self.ka)
+        row = dict(id="p-0000aaaa", name="Pwned", route="overview")
+        self.req(f"/p/{self.ka}/api/people", row, cookie=self.tok, origin=f"http://192.168.7.9:{self.port}")
+        self.assertEqual(people.roster()["p-0000aaaa"]["name"], "Owner")
+
     def test_link(self):
         u = share.link(self.ka, 8890, "thread:cm-1234", self.tok)
         self.assertIn(f"/p/{self.ka}/?k={self.tok}&c=cm-1234", u)
