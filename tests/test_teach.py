@@ -250,3 +250,14 @@ class Narration(unittest.TestCase):
         self.assertNotEqual(fig["delta"], 0)
         self.assertLess(fig["lo"], 0)
         self.assertGreater(fig["delta"] - (fig["hi"] - fig["lo"]) / 2 / (20 ** .5), 0)
+
+    def test_historical_promotion_has_explicit_provenance(self):
+        from unittest.mock import patch
+        p = ledger()
+        p.add_model("base", status="champion")
+        p.add_model("winner", parent="base")
+        check = dict(slice="ds/full", delta=.05, lo=.01, hi=.1, wins=3, losses=1, n=40)
+        with patch("autoresearch.learn._decisions", return_value=[dict(kind="promote", model="winner", replaced="base", t=1, gate={"rungs": [{"checks": [check]}]})]):
+            card = learn._card_promote(p, "winner")
+        self.assertIn("Frozen promotion evidence", card["ctx"])
+        self.assertEqual(card["viz"]["delta"], 5)

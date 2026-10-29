@@ -32,7 +32,7 @@ function axis(a,b,x,y,u){const s=tick(a,b,innerWidth<480?4:7);let g='';for(let q
  g+=`<line x1="${x(v)}" x2="${x(v)}" y1="${y-26}" y2="${y}" stroke="var(--grid)"/><text x="${x(v)}" y="${y+14}" text-anchor="middle">${v>0?'+':v<0?'−':''}${grp(Math.abs(v))}</text>`}
  return g+`<line x1="${x(0)}" x2="${x(0)}" y1="${y-32}" y2="${y+2}" stroke="var(--text)" stroke-width="1.5"/><text x="${x(0)}" y="${y-36}" text-anchor="middle" class="strong">0</text>`}
 const svg=(w,h,s,lab)=>`<svg class="crs-svg" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(lab||'')}">${s}</svg>`;
-const ex=f=>f.example?'<span class="crs-ex">example</span>':'';
+const ex=f=>f.example?'<span class="crs-ex">example</span>':f.provenance?`<span class="crs-ex">${esc(f.provenance)}</span>`:'';
 
 // ---------- figures: each draws from the lesson's own numbers and its widget state; inputs carry data-w="<id>:<key>"
 const FIG={
@@ -59,7 +59,7 @@ const FIG={
   const e=Math.max(Math.abs(f.lo),Math.abs(f.hi),Math.abs(f.delta)*2)*1.1,x=q=>L0+(Math.max(-e,Math.min(e,q))+e)/(2*e)*(R-L0),col=clear?(f.delta>0?'var(--positive)':'var(--negative)'):'var(--muted)';
   const lg=Math.log,a=Math.max(4,f.n/20),b=f.n*20,pos=(lg(n)-lg(a))/(lg(b)-lg(a));
   return `${ex(f)}<div class="crs-big">${clear?'Clears zero':'Crosses zero'}<span> at n = ${Math.round(n).toLocaleString()}</span></div>`+svg(w,72,axis(-e,e,x,58,f.unit)+`<line x1="${x(lo)}" x2="${x(hi)}" y1="40" y2="40" stroke="${col}" stroke-width="10" stroke-linecap="round" opacity=".45"/><circle cx="${x(f.delta)}" cy="40" r="6" fill="${col}"/>`,'interval')+
-   `<p class="crs-cap">Projection at fixed effect · original n = ${f.n.toLocaleString()}</p><p class="crs-cap mono">${amt(f.unit,f.delta)} [${amt(f.unit,lo)}, ${amt(f.unit,hi)}]</p><label class="crs-rg"><span>n</span><input type="range" data-w="${id}:nf" min="0" max="1000" value="${Math.round(1000*pos)}"><output>${Math.round(a).toLocaleString()} – ${Math.round(b).toLocaleString()}</output></label>`},
+   `<p class="crs-cap">${f.example?'Illustrative interval':'Measured interval'+(f.source_slice?' · '+esc(f.source_slice):'')} at n = ${f.n.toLocaleString()}: [${amt(f.unit,f.lo)}, ${amt(f.unit,f.hi)}]. Projection at fixed effect:</p><p class="crs-cap mono">${amt(f.unit,f.delta)} [${amt(f.unit,lo)}, ${amt(f.unit,hi)}]</p><label class="crs-rg"><span>n</span><input type="range" data-w="${id}:nf" min="0" max="1000" value="${Math.round(1000*pos)}"><output>${Math.round(a).toLocaleString()} – ${Math.round(b).toLocaleString()}</output></label>`},
  gate(f,s,id){const d=s.d??f.delta,e=Math.max(Math.abs(f.bar)*3,Math.abs(f.delta)*1.6,f.unit==='pts'?2:1),w=CW(),L0=14,R=w-14,x=q=>L0+(q+e)/(2*e)*(R-L0);
   const sign=f.better||1,ok=f.rule==='better'?sign*d>sign*f.bar:sign*d>=sign*f.bar,word=sign<0?(f.rule==='better'?'below':'at or below'):(f.rule==='better'?'above':'at or above');
   return `${ex(f)}<div class="crs-big ${ok?'pos':'neg'}">${ok?'Pass':'Fail'}<span> Δ ${amt(f.unit,d)} is ${ok?word:(sign<0?'above':'below')} the bar ${amt(f.unit,f.bar)}</span></div>`+

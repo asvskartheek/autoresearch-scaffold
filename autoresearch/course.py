@@ -252,7 +252,7 @@ def lesson_paired(p, L, learn):
         w, l, n, ex = 12, 5, 200, True
     right = f"{100 * (w - l) / n:+.2f} pts"
     return dict(say="Pair each example: fixed if the new model gets it and the champion did not, broken the other way. Δ = (fixed − broken) / n.",
-                fig=dict(kind="paired", fixed=w, broken=l, n=n, example=ex),
+                fig=dict(kind="paired", fixed=w, broken=l, n=n, example=ex, provenance="Frozen promotion evidence" if not ex else ""),
                 checks=[_check(f"{w} fixed, {l} broken, n = {n:,}. Δ?", [right, f"{100 * w / n:+.2f} pts", f"{100 * (w + l) / n:+.2f} pts"], right,
                                "Broken examples cancel fixed ones: (fixed − broken) / n."),
                         _check("Two models score the same on one slice. Can their paired Δ be non-zero?", ["No", "Yes"], "No",
@@ -268,7 +268,7 @@ def _ci_of(p, learn, c):
 def lesson_interval(p, L, learn):
     noisy = next((c for c in L["checks"] if c.get("noisy") and c.get("lo") is not None and abs(c.get("delta") or 0) > 1e-9), None)
     src = _ci_of(p, learn, noisy) if noisy else None
-    fig = dict(kind="interval", **(src or dict(delta=1.6, lo=-0.5, hi=3.7, n=185, unit="pts")), example=src is None)
+    fig = dict(kind="interval", **(src or dict(delta=1.6, lo=-0.5, hi=3.7, n=185, unit="pts")), example=src is None, source_slice=noisy.get("slice", "") if noisy else "")
     crosses = fig["lo"] <= 0 <= fig["hi"]
     ans = "Not yet: it crosses zero" if crosses else "Yes: it clears zero"
     return dict(say="An interval crossing zero does not establish a direction. This projection holds the effect fixed and narrows uncertainty as 1/√n; it is not a new measurement. If the effect is zero, more examples alone cannot make it clear zero.",

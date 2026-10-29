@@ -253,7 +253,7 @@ def _card_promote(p: Project, model: str, t: float = None) -> dict | None:
         why += " The 90% interval still touches zero."
     return _delta_card(f"promote|{model}", c, p, c["slice"], _sign(p), label="Promoted", tone="acc", t=dec.get("t"),
                        q=f"{_title(p, model)} replaced {_title(p, old) if old else 'the champion'}. Paired change on {_short(c['slice'])}?",
-                       ctx=f"n = {c['n']:,}", ev=c.get("cand_task") or model, why=why, w=100)
+                       ctx=f"Frozen promotion evidence · {_short(c['slice'])}, n = {c['n']:,}", ev=c.get("cand_task") or model, why=why, w=100)
 
 
 def _card_goal(p: Project, name: str) -> dict | None:
