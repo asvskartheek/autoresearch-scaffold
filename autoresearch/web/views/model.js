@@ -27,10 +27,45 @@ const ciText=(c,k)=>{const [x,y]=negSlice(k)?[c.hi,c.lo]:[c.lo,c.hi];return `${d
 // a delta that rounds to zero reads "level with"
 const vsWords=(k,d)=>{const t=diff(Math.abs(d),k).replace(/^[+−]/,'');if(!d||/^0(\.0+)?(\s|$)/.test(t))return 'level with';if(!isCont(k))return `${t} ${d<0?'below':'above'}`;const x=negSlice(k)?-d:d,time=/^(ms|s|secs?|seconds?|min)$/i.test(unitOf(k));return `${t} ${time?(x<0?'faster':'slower'):(x<0?'less':'more')} than`};
 
+// a rejected model has no live gate: walk the ladder again from its own runs against the champion now, so the page
+// shows which check failed, by how much and against what rule. Each check is the paired statistic /api/task gives an
+// eval (its rows against the champion's pooled rows), the same one the gate uses.
+const refSlices=(ref,m)=>{const L=S.state,H=L.hills||{},h=H[m.hill];
+ if(ref==='@hill.target')return h?.target?[h.target]:[];
+ if(ref==='@hill.control')return h?.control?[h.control]:[];
+ if(ref==='@hills.climbed')return Object.entries(H).filter(([k,x])=>x.status==='climbed'&&k!==m.hill&&x.target).map(([,x])=>x.target);
+ const full=`${L.config.primary_dataset}/${ref}`;return L.slices[ref]?[ref]:L.slices[full]?[full]:[]};
+function rewalk(name,m){
+ const L=S.state,ch=L.champion,lb=L.leaderboard||{};if(!ch||!(L.config.ladder||[]).length)return null;
+ const C=S.mdRej?.name===name&&S.mdRej.ch===ch?S.mdRej:(S.mdRej={name,ch,vs:{},want:new Set()});
+ let wait=false;
+ const rungs=L.config.ladder.map(r=>{
+  const checks=(r.checks||[]).filter(c=>!c.manual).flatMap(k=>refSlices(k.slice,m).map(sl=>{
+   const c={slice:sl,rule:k.rule,threshold:k.rule==='better'?(k.margin||0):-(k.tolerance||0),n:L.slices[sl]?.n};
+   const own=lb[sl]?.[name],base=lb[sl]?.[ch];
+   if(!own)return {...c,state:'need_run'};
+   if(!base)return {...c,state:'need_baseline'};
+   const vs=C.vs[own.task];
+   if(vs===undefined){wait=true;if(!C.want.has(own.task)){C.want.add(own.task);
+    fetch('api/task/'+enc(own.task),{cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{C.vs[own.task]=d?.vs_champion||null;render()}).catch(()=>{C.vs[own.task]=null;render()})}
+    return {...c,state:'need_run'}}
+   if(!vs||vs.delta==null)return {...c,state:'need_baseline'};
+   const ok=k.rule==='better'?vs.delta>c.threshold:vs.delta>=c.threshold;
+   return {...c,...vs,state:ok?'pass':'fail',noisy:vs.lo<0&&0<vs.hi,cand_task:own.task,base_task:vs.task,base_runs:vs.runs,
+    cand_runs:L.tasks.filter(t=>t.kind==='eval'&&t.model===name&&t.slice===sl&&t.status==='done').length||1}}));
+  const st=new Set(checks.map(c=>c.state));
+  return {rung:r.rung,checks,status:!checks.length?'locked':st.has('fail')?'fail':[...st].every(x=>x==='pass')?'pass':'locked'}});
+ return {champion:ch,rungs,next:[],wait};
+}
 // the verdict in one or two plain sentences: ready, blocked (where and by how much), or what to run next
 function verdict(name,m,g){
  if(m.status==='champion')return {text:`This is the champion${m.promoted?`, promoted ${stamp(m.promoted)}`:''}. Every candidate is paired against it on the same examples.`};
- if(m.status==='rejected')return {text:`Rejected. ${m.reason?reasonHTML(m.reason):'No reason was recorded.'}`,cls:'neg'};
+ if(m.status==='rejected'){
+  // the figure below carries the evidence; the line names the check that failed, by how much, against what rule
+  const w=rewalk(name,m),fr=w?.rungs.find(r=>r.status==='fail'),c=fr?.checks.find(c=>c.state==='fail');
+  if(c)return {text:`Rejected: fails the ${esc(fr.rung)} rung on ${esc(short(c.slice))}, ${score(c.cand,c.slice,c.n)} against the champion’s ${score(c.base,c.slice,c.n)}, ${vsWords(c.slice,c.delta)} where the rule is “${(r=>r[0].toLowerCase()+r.slice(1))(rule(c))}”.`,cls:'neg',rej:w};
+  return {text:w?.wait?'Rejected.':w&&w.rungs.some(r=>r.status==='pass')?'Rejected by hand: no check it ran fails against the champion now.':'Rejected.',cls:'neg',rej:w};
+ }
  if(!g)return {text:m.status==='planned'?`Planned, not on the ladder yet. Register it as a candidate with <code>arx model add ${esc(name)}</code> when it is ready to run.`:`${esc(m.status[0].toUpperCase()+m.status.slice(1))} model, kept for the record and not on the ladder.${m.reason?' '+reasonHTML(m.reason):''}`};
  if(g.error)return {text:`The gate could not be read: ${esc(g.error)}`,cls:'neg'};
  if(!g.champion&&!S.state.champion)return {text:`No champion yet, so there is nothing to pair this model against. Make a baseline champion first, then re-check the ladder.`,nochamp:true};
@@ -140,11 +175,12 @@ VIEWS.model=(name)=>{
  const meta=[st(m.status,m.status[0].toUpperCase()+m.status.slice(1))+(m.phase?' '+pill(m.phase):''),titled||label(name)!==name?`<span class="md-idc"><span class="mono md-id">${esc(name)}</span>${copyBtn(name)}</span>`:'',m.parent&&m.parent!==name?`<span title="The model this one was built from">built on ${mlink(m.parent)}${L.models[m.parent]?.status==='champion'?' (champion)':''}</span>`:'',
   m.hill?`<span>hill <a class="ln" href="#hill/${enc(m.hill)}">${esc(hill?.title||m.hill)}</a></span>`:'',m.created?`<span>registered ${stamp(m.created)}</span>`:'',
   f?`<span>${f.task?`<a href="#task/${enc(f.task)}">${score(f.score,fullKey,f.n)}</a>`:score(f.score,fullKey,f.n)} on ${esc(short(fullKey))}, n ${f.n.toLocaleString()}</span>`:''].filter(Boolean).join('<span class="sep">·</span>');
- const lad=g&&!g.error&&!v.viz?ladder(g):'';  // a candidate's ladder already leads the page
+ const lad=v.rej?ladder(v.rej):g&&!g.error&&!v.viz?ladder(g):'';  // a candidate's ladder already leads the page
  h.push(`<section class="card md-obj"><div class="md-top"><div class="md-meta">${meta}</div>${lad?`<div class="md-lad">${lad}</div>`:''}</div>
   <dl class="md-dl">
    <div><dt>Expected change</dt><dd>${m.change?reasonHTML(m.change):'<span class="dash">Not declared. State what this should move before running it, with <code>arx model add '+esc(name)+' --change "…"</code>.</span>'}</dd></div>
    ${m.reason&&m.status!=="rejected"&&g?`<div><dt>Note</dt><dd>${reasonHTML(m.reason)}</dd></div>`:""}
+   ${m.reason&&m.status==="rejected"?`<div><dt>Why, as recorded</dt><dd>${reasonHTML(m.reason)}</dd></div>`:""}
    ${m.links&&Object.keys(m.links).length?`<div><dt>Links</dt><dd class="md-links">${extLinks(m.links)}</dd></div>`:''}
   </dl></section>`);
 
@@ -161,6 +197,8 @@ VIEWS.model=(name)=>{
   h.push(panel('Ladder slices',table(['Rung','Slice',['n','num'],['Score','num']],g.rungs.flatMap(r=>r.checks.map((c,i)=>{const s=L.leaderboard[c.slice]?.[name],n=s?.n??L.slices[c.slice]?.n;
    return `<tr><td>${i?'':esc(r.rung)}</td><td><a class="mono md-sl ln" href="#slices/${enc(c.slice)}">${slw(c.slice)}</a></td><td class="num">${n!=null?n.toLocaleString():DASH}</td><td class="num">${s?(s.task?`<a href="#task/${enc(s.task)}">${score(s.score,c.slice,s.n)}</a>`:score(s.score,c.slice,s.n)):DASH}</td></tr>`}))),{meta:'the scores candidates are paired against',cls:'section'}));
  }
+
+ if(v.rej)h.push(panel('Gate, walked again',v.rej.wait&&!v.rej.rungs.some(r=>r.checks.some(c=>c.delta!=null))?'<div class="sub">Reading its runs…</div>':gateTable(name,v.rej),{meta:`its runs paired against ${mlink(v.rej.champion)}, the champion now, on the same examples`,cls:'section flush md-gp'}));
 
  const tasks=L.tasks.filter(t=>t.model===name&&!t.detail_of).sort((a,b)=>(isLive(b)-isLive(a))||(b.updated-a.updated));
  h.push(panel('Tasks',tasks.length?`<div class="md-tasks">${tasks.slice(0,30).map(t=>kidRow([t,0])).join('')}</div>${tasks.length>30?`<a class="more" href="#archive">${tasks.length-30} more in the archive</a>`:''}`:empty('No tasks for this model',`Evals recorded with <code>arx eval record --model ${esc(name)}</code> show here`),{meta:tasks.length?plural(tasks.length,'task'):'',cls:'section'}));
