@@ -35,35 +35,39 @@ button{font:inherit;color:inherit}
 
 .top{display:flex;align-items:center;gap:14px;height:48px;padding:0 16px;flex-wrap:nowrap;min-width:0}
 .top b{font-weight:600}
-.top .crumb{color:var(--muted);font-size:13px;white-space:nowrap}
 .dist{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:13px;white-space:nowrap}
 .dist .n{font-weight:600;font-size:15px}
 .dist svg{display:block}
 .sheet{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sheet);margin:0 8px 8px;min-height:calc(100vh - 56px);
- display:grid;grid-template-columns:minmax(320px,1fr) minmax(0,1.15fr);overflow:hidden}
-.col{min-width:0;padding:20px 24px}
+ display:grid;grid-template-columns:minmax(300px,1fr) minmax(0,1.15fr);overflow:hidden}
+.col{min-width:0;padding:16px 20px}
 .col.tree{border-right:1px solid var(--border)}
-.bar{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
-.bar h2{font-size:16px;font-weight:600;margin:0}
-.legend{display:flex;gap:12px;color:var(--muted);font-size:12px;margin-left:auto;flex-wrap:wrap}
-.legend span{display:inline-flex;align-items:center;gap:5px}
-.need{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
-.chip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:var(--radius-chip);
- background:var(--pill-warning-bg);color:var(--pill-warning-ink);font-size:12.5px;font-weight:500;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.chip:hover{filter:brightness(.97)}
-.chip svg{flex:none}.chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.bar{display:flex;align-items:center;gap:6px;margin-bottom:8px;position:relative}
+.ib{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 8px;border-radius:var(--radius-chip);font-size:12.5px;font-weight:600}
+.ib:hover{background:var(--raised)}
+.ib.need{background:var(--pill-warning-bg);color:var(--pill-warning-ink)}
+.ib.key{color:var(--faint);margin-left:auto;padding:0 6px}
+.pop{position:absolute;z-index:15;top:30px;left:0;display:none;flex-direction:column;gap:2px;background:var(--surface);border-radius:var(--radius-card);box-shadow:var(--pop);padding:6px;min-width:220px;max-width:calc(100vw - 48px)}
+.pop.on{display:flex}
+.pop button{all:unset;cursor:pointer;display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--radius-control);font-size:13px}
+.pop button:hover{background:var(--raised)}
+#tip{position:fixed;z-index:30;pointer-events:none;display:none;background:var(--primary);color:var(--on-primary);font-size:12.5px;line-height:1.4;padding:6px 9px;border-radius:var(--radius-control);max-width:300px;white-space:pre-line}
+#tip.on{display:block}
+#tip .lg{display:grid;grid-template-columns:auto auto;gap:4px 8px;align-items:center}
+#tip svg{display:block}
 
 /* outline */
 ul.t{list-style:none;margin:0;padding:0}
 ul.t ul.t{margin-left:11px;padding-left:12px;border-left:1px solid var(--rule)}
-.row{display:flex;align-items:flex-start;gap:6px;padding:5px 6px;border-radius:var(--radius-control);cursor:pointer;min-width:0}
+.row{display:flex;align-items:flex-start;gap:6px;padding:4px 6px;border-radius:var(--radius-control);cursor:pointer;min-width:0}
 .row:hover{background:var(--raised)}
 .row.on{background:var(--active)}
+.row:focus-visible{outline-offset:-2px}
 .row .car{all:unset;width:14px;height:20px;display:grid;place-items:center;color:var(--faint);flex:none;cursor:pointer}
 .row .car svg{transition:transform .15s}
 .row.closed .car svg{transform:rotate(-90deg)}
 .row .car.none{visibility:hidden}
-.row .sh{flex:none;height:20px;display:grid;place-items:center}
+.sh{flex:none;height:20px;display:grid;place-items:center}
 .row .tx{min-width:0;flex:1}
 .row .q{display:block;overflow-wrap:anywhere}
 .row .cl{display:block;font-size:12.5px;color:var(--muted);margin-top:1px;overflow-wrap:anywhere}
@@ -71,7 +75,6 @@ ul.t ul.t{margin-left:11px;padding-left:12px;border-left:1px solid var(--rule)}
 .row .ct{flex:none;font-size:12px;color:var(--faint);padding-top:1px}
 .row.fresh{animation:fl 1.2s ease}
 @keyframes fl{0%{background:var(--hl)}100%{background:transparent}}
-.you{display:inline-block;font-size:11px;font-weight:600;color:var(--pill-warning-ink);background:var(--pill-warning-bg);border-radius:3px;padding:0 5px;margin-left:6px;vertical-align:1px}
 .spin{animation:sp 1s linear infinite;transform-origin:center}
 @keyframes sp{to{transform:rotate(360deg)}}
 
@@ -81,21 +84,33 @@ ul.t ul.t{margin-left:11px;padding-left:12px;border-left:1px solid var(--rule)}
 .fq{display:flex;gap:10px;align-items:flex-start}
 .fq h1{font-size:22px;line-height:1.25;font-weight:600;letter-spacing:-.01em;margin:0;overflow-wrap:anywhere}
 .fq .sh{padding-top:5px}
-.claim{margin:12px 0 0;font-size:15px;padding:10px 12px;border-radius:var(--radius-card);background:var(--raised);border-left:3px solid var(--control)}
+.claim{margin:12px 0 0;font-size:15px;padding:8px 12px;border-radius:var(--radius-card);background:var(--raised);border-left:3px solid var(--control)}
 .claim.answered{border-left-color:var(--positive)}
 .claim.dead{border-left-color:var(--negative)}
 .claim.agent{border-left-color:var(--accent);color:var(--muted)}
 .claim.human{border-left-color:var(--amber)}
-.sec{margin-top:22px}
-.sec h3{font-size:13px;font-weight:600;color:var(--muted);margin:0 0 8px}
-table.ev{width:100%;border-collapse:collapse;font-size:13px}
-table.ev td{padding:7px 8px 7px 0;border-top:1px solid var(--rule);vertical-align:middle}
-table.ev td.m{overflow-wrap:anywhere;min-width:0}
-table.ev td.num{white-space:nowrap;text-align:right}
-table.ev .sl{color:var(--faint);font-size:12px}
-table.ev td.ci{width:100px}
-table.ev td.m .mono{white-space:nowrap}
-.pos{color:var(--positive)}.neg{color:var(--negative)}.neu{color:var(--muted)}
+.claim .pb{height:3px;border-radius:2px;background:var(--rule);margin-top:8px;overflow:hidden}
+.claim .pb i{display:block;height:100%;background:var(--accent);transition:width .4s}
+.quote{margin:12px 0 0;font-size:13.5px;color:var(--muted)}
+.quote mark{background:var(--hl);color:inherit;border-radius:2px}
+
+/* evidence: one lane per run */
+.ev{margin-top:18px;display:flex;flex-direction:column;gap:2px}
+.lr{display:grid;grid-template-columns:52px minmax(0,1fr) 84px;gap:10px;align-items:center;min-height:22px;padding:2px 4px;border-radius:var(--radius-chip);cursor:default}
+.lr:hover{background:var(--raised)}
+.lr .tag{font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lane{position:relative;height:16px}
+.lane .z{position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--control)}
+.lane .ci{position:absolute;top:6.5px;height:3px;border-radius:2px;opacity:.45}
+.lane .d{position:absolute;top:4px;width:8px;height:8px;border-radius:50%;margin-left:-4px}
+.lane .trk{position:absolute;left:0;right:0;top:6px;height:4px;border-radius:2px;background:var(--rule)}
+.lane .fill{position:absolute;left:0;top:6px;height:4px;border-radius:2px;background:var(--muted)}
+.sq{display:flex;flex-wrap:wrap;gap:2px;align-content:center}
+.sq i{width:5px;height:5px;border-radius:1px}
+.sq i.f{background:var(--positive)}.sq i.b{background:var(--negative)}
+.ax{display:flex;justify-content:space-between;font-size:10.5px;color:var(--faint)}
+.lr.axis{cursor:default}.lr.axis:hover{background:none}
+
 .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
 .btn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:var(--radius-control);border:1px solid var(--control);
  background:var(--surface);font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap}
@@ -103,55 +118,53 @@ table.ev td.m .mono{white-space:nowrap}
 .btn.primary{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
 .btn.primary:hover{opacity:.9}
 .btn.warn{background:var(--pill-warning-bg);color:var(--pill-warning-ink);border-color:transparent}
+.btn.on{background:var(--active)}
 .in{height:32px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface);color:var(--text);padding:0 10px;font:inherit;font-size:13px;flex:1;min-width:0}
 .branchf{display:none;gap:8px;margin-top:10px}
 .branchf.on{display:flex}
-.kids{display:flex;flex-direction:column;gap:2px}
-.kid{all:unset;cursor:pointer;display:flex;gap:8px;align-items:flex-start;padding:5px 6px;border-radius:var(--radius-control)}
+.kids{display:flex;flex-direction:column;gap:2px;margin-top:18px;padding-top:12px;border-top:1px solid var(--rule)}
+.kid{all:unset;cursor:pointer;display:flex;gap:8px;align-items:flex-start;padding:4px 6px;border-radius:var(--radius-control)}
 .kid:hover{background:var(--raised)}
-.kid .cl{color:var(--muted);font-size:12.5px}
 
 /* reading pane */
-.read{margin-top:26px;border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden}
-.read .rh{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--raised);border-bottom:1px solid var(--border);font-size:13px;font-weight:600}
-.read .rh span{color:var(--faint);font-weight:400;margin-left:auto;font-size:12px}
+.read{margin-top:12px;border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden}
 .read .body{max-height:260px;overflow:auto;padding:4px 14px 10px}
 .note{padding:10px 0;border-bottom:1px solid var(--rule)}
 .note:last-child{border-bottom:0}
-.note .meta{font-size:12px;color:var(--faint);margin-bottom:3px;display:flex;gap:8px}
+.note .meta{font-size:12px;margin-bottom:3px}
 .note .meta a{cursor:pointer;color:var(--accent)}
 .note p{margin:0;line-height:1.55}
-.note mark{background:var(--hl);color:inherit;border-radius:2px}
 .ask{position:absolute;z-index:20;display:none;background:var(--surface);border-radius:var(--radius-card);box-shadow:var(--pop);padding:8px;gap:6px;width:min(360px,calc(100vw - 32px))}
 .ask.on{display:flex}
 
 @media (max-width:820px){
  .sheet{grid-template-columns:1fr}
- .col{padding:16px}
+ .col{padding:14px 16px}
  .col.tree{border-right:0;border-bottom:1px solid var(--border)}
- .top .crumb{display:none}
- table.ev td.ci{width:70px}
  ul.t ul.t{margin-left:6px;padding-left:8px}
  .fq h1{font-size:19px}
+ .lr{grid-template-columns:46px minmax(0,1fr) 64px;gap:8px}
 }
 </style>
 </head>
 <body>
 <header class="top">
- <b>gsm8k-ft</b><span class="crumb">Questions</span>
+ <b>gsm8k-ft</b>
  <div class="dist" id="dist"></div>
 </header>
 <div class="sheet">
  <section class="col tree">
-  <div class="bar"><h2>Questions</h2>
-   <div class="legend" id="legend"></div>
+  <div class="bar">
+   <button class="ib need" id="needb" aria-label="Needs you"></button>
+   <div class="pop" id="needpop"></div>
+   <button class="ib key" id="key" aria-label="Key"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="7" cy="4.3" r=".9" fill="currentColor"/><path d="M7 6.5V10.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
   </div>
-  <div class="need" id="need"></div>
   <ul class="t" id="tree"></ul>
  </section>
  <section class="col" id="panel"></section>
 </div>
 <div class="ask" id="ask"><input class="in" id="askin"><button class="btn primary" id="askgo">Ask</button></div>
+<div id="tip" role="tooltip"></div>
 
 <script>
 /* data-proto: the ledger has no "questions" yet. The tree below is DERIVED from gsm8k-ft-state.json:
@@ -160,52 +173,52 @@ table.ev td.m .mono{white-space:nowrap}
    state.gates, state.goals.vs_baseline or the decision/analysis note text where the gate object is absent.
    Rows with `c`/`bc` literal counts are copied from analysis notes (vLLM same-engine baselines not in the leaderboard). */
 const FULL='gsm8k-test/full',DEV='gsm8k-test/dev-percent-base-v1',CTL='gsm8k-test/control-ordinary-v1';
-const SPEC={id:'root',q:'Can a 4B Qwen reach 96% on GSM8K?',st:'open',
+const SPEC={id:'root',q:'Can 4B Qwen reach 96%?',st:'open',
  ev:[{m:'@champ',b:'qwen3-4b-rl-fresh-v1',s:FULL,goal:1}],
  kids:[
- {id:'harness',q:'Can we trust the archived baseline?',st:'answered',claim:'No. A fresh audited harness scores 1,155; archived numbers drift by parser.',
+ {id:'harness',q:'Is the archived baseline trustworthy?',st:'answered',claim:'No. Fresh harness: 1,155. Archived drifts by parser.',
   ev:[{m:'qwen3-4b-rl-archived',b:'qwen3-4b-rl-fresh-v1',s:FULL},{lbl:'archived parser replay',c:1154,bc:1151,n:1319,s:FULL,bl:'stored'}]},
- {id:'pct',hill:'percent-base',q:'Why do percentage problems fail?',st:'answered',claim:'The % is applied to the wrong base, or an increase is read as the final value.',
+ {id:'pct',hill:'percent-base',q:'Why do percentages fail?',st:'answered',claim:'Wrong base, or an increase read as the final value.',
   ev:[{share:'percent-base'},{m:'qwen3-4b-rl-fresh-v1',s:DEV}],
   kids:[
-   {id:'sft',q:'Does SFT on percentage examples fix it?',st:'dead',claim:'No. One epoch of LoRA SFT lost 4 problems on target.',ev:[{m:'percent-sft-v1',b:'qwen3-4b-rl-fresh-v1',s:DEV}]},
-   {id:'struct',q:'Does a base/equation/check prompt prefix help?',st:'dead',claim:'No. The prefix cost 17 target problems.',ev:[{m:'percent-structured-v1',b:'qwen3-4b-rl-fresh-v1',s:DEV}]},
-   {id:'rlvr',q:'Does correctness-only RL (GRPO) help?',st:'dead',claim:'No. Two GRPO runs, both CIs cross zero; full slice slightly worse.',
+   {id:'sft',q:'Does percentage SFT fix it?',st:'dead',claim:'No. Lost 4 on target.',ev:[{m:'percent-sft-v1',b:'qwen3-4b-rl-fresh-v1',s:DEV}]},
+   {id:'struct',q:'Does a structured prefix help?',st:'dead',claim:'No. Cost 17 on target.',ev:[{m:'percent-structured-v1',b:'qwen3-4b-rl-fresh-v1',s:DEV}]},
+   {id:'rlvr',q:'Does GRPO help?',st:'dead',claim:'No. Both CIs cross zero.',
     ev:[{m:'percent-rlvr-v1',b:'qwen3-4b-rl-fresh-v1',s:FULL,ci:[-.76,.45],wl:[10,12]},{m:'percent-rlvr-v2',b:'qwen3-4b-rl-fresh-v1',s:DEV,ci:[-.54,2.70],wl:[3,1]}]},
-   {id:'vote',q:'Does 5-answer voting on % questions help?',st:'dead',claim:'Inconclusive at 4.9× the tokens. Stopped.',ev:[{m:'percent-vote5-v1',b:'qwen3-4b-rl-fresh-v1',s:DEV,ci:[-.54,3.78],wl:[5,2]}]},
-   {id:'adapter',q:'Is the RL adapter hurting the base model?',st:'answered',claim:'Partly. The raw base gains 7 on target, and its misses are truncations.',
+   {id:'vote',q:'Does 5-answer voting help?',st:'dead',claim:'Inconclusive at 4.9× tokens.',ev:[{m:'percent-vote5-v1',b:'qwen3-4b-rl-fresh-v1',s:DEV,ci:[-.54,3.78],wl:[5,2]}]},
+   {id:'adapter',q:'Is the RL adapter hurting?',st:'answered',claim:'Partly. Raw base +7; its misses are truncations.',
     ev:[{m:'percent-base-ablation-v1',b:'qwen3-4b-rl-fresh-v1',s:DEV},{m:'percent-base-ablation-v1',b:'qwen3-4b-rl-fresh-v1',s:CTL}],
     kids:[
-     {id:'len',q:'Is the gap output length?',st:'answered',claim:'Yes. Raw base at 1,024 tokens: +69 on full. Promoted.',
+     {id:'len',q:'Is it output length?',st:'answered',claim:'Yes. 1,024 tokens: +69 on full. Promoted.',
       ev:[{m:'percent-base-1024-v1',b:'qwen3-4b-rl-fresh-v1',s:FULL,goal:1},{m:'percent-base-1024-v1',b:'qwen3-4b-rl-fresh-v1',s:DEV}],
       kids:[
-       {id:'l2048',q:'Do 2,048 tokens help further?',st:'open',claim:'Lead. Control gains; target CI crosses zero.',
+       {id:'l2048',q:'Do 2,048 tokens help?',st:'open',claim:'Lead. Control up; target CI crosses zero.',
         ev:[{m:'percent-base-2048-v1',gate:'dev',s:DEV},{m:'percent-base-2048-v1',gate:'dev',s:CTL}]},
-       {id:'think',q:'Is the gap thinking length?',st:'dead',claim:'No. 8,192 thinking tokens lost 6 target problems at 7× latency.',
+       {id:'think',q:'Is it thinking length?',st:'dead',claim:'No. −6 on target at 7× latency.',
         ev:[{m:'thinking4b-8192-v1',c:161,bc:167,n:185,s:DEV,bl:'raw 1024, same engine'}],
-        kids:[{id:'thinkok',q:'Does a separate Thinking checkpoint count as "Qwen3 4B"?',st:'open',human:1,
-          claim:'Only you can say. Same 4.02B parameters, different checkpoint.',choices:['Counts','Does not count']}]},
-       {id:'parse',q:'Are the remaining misses cap hits and parse failures?',st:'agent',live:{m:'raw-numeric4096-v1',n:185},
-        claim:'Running: numeric final line + 4,096 tokens.',
+        kids:[{id:'thinkok',q:'Does a Thinking checkpoint count?',st:'open',human:1,
+          claim:'Same 4.02B parameters, different checkpoint.',choices:['Counts','Does not count']}]},
+       {id:'parse',q:'Are misses caps and parses?',st:'agent',live:{m:'raw-numeric4096-v1',n:185},
+        claim:'Running: numeric final line, 4,096 tokens.',
         ev:[{lbl:'full audit: wrong',c:95,n:1319,s:FULL,raw:1},{lbl:'cap hits among wrong',c:29,n:95,s:FULL,raw:1},{lbl:'missing parses',c:13,n:1319,s:FULL,raw:1}],
-        kids:[{id:'boxed',q:'Should a boxed answer that matches the reference count?',st:'open',human:1,
-          claim:'Scorer policy. 8 of 24 wrong target outputs box the right number.',choices:['Keep frozen scorer','Accept boxed']}]}
+        kids:[{id:'boxed',q:'Should boxed answers count?',st:'open',human:1,
+          claim:'8 of 24 wrong outputs box the right number.',choices:['Keep frozen scorer','Accept boxed']}]}
       ]}
     ]}
   ]},
- {id:'fresh',q:'Does fine-tuning the raw base help?',st:'open',claim:'One lead, two dead ends.',
+ {id:'fresh',q:'Does tuning the raw base help?',st:'open',claim:'One lead, two dead ends.',
   kids:[
-   {id:'sft5',q:'Does SFT at lr 5e-6 help?',st:'open',claim:'Lead. +10 / −1 on target; CI touches zero.',ev:[{m:'raw-sft-lr5e6-v1',gate:'dev',s:DEV},{m:'raw-sft-lr5e6-v1',gate:'dev',s:CTL}]},
-   {id:'sft2',q:'Does a higher lr (2e-5) help?',st:'dead',claim:'No. Lost 41 target problems.',ev:[{m:'raw-sft-lr2e5-v1',b:'@champ',s:DEV},{m:'raw-sft-lr2e5-v1',b:'@champ',s:CTL}]},
-   {id:'rft',q:'Does training on its own correct traces help?',st:'dead',claim:'No. Same score as the champion.',ev:[{m:'raw-rft-vllm-greedy-v1',b:'@champ',s:DEV}]},
-   {id:'rlfresh',q:'Does RL from a fresh base beat SFT?',st:'open',human:1,claim:'Not run. Needs your call on GPU time.',choices:['Run it','Not now']}
+   {id:'sft5',q:'Does SFT at 5e-6 help?',st:'open',claim:'Lead. +10 / −1; CI touches zero.',ev:[{m:'raw-sft-lr5e6-v1',gate:'dev',s:DEV},{m:'raw-sft-lr5e6-v1',gate:'dev',s:CTL}]},
+   {id:'sft2',q:'Does lr 2e-5 help?',st:'dead',claim:'No. Lost 41 on target.',ev:[{m:'raw-sft-lr2e5-v1',b:'@champ',s:DEV},{m:'raw-sft-lr2e5-v1',b:'@champ',s:CTL}]},
+   {id:'rft',q:'Does self-trace training help?',st:'dead',claim:'No. Ties the champion.',ev:[{m:'raw-rft-vllm-greedy-v1',b:'@champ',s:DEV}]},
+   {id:'rlfresh',q:'Does fresh-base RL beat SFT?',st:'open',human:1,claim:'Not run. Your call on GPU time.',choices:['Run it','Not now']}
   ]},
- {id:'infer',q:'Do inference-time tricks close the gap?',st:'dead',claim:'No. Voting, verification and programs all failed the paired gate.',
+ {id:'infer',q:'Do inference tricks close it?',st:'dead',claim:'No. Voting, verifying and programs all fail.',
   ev:[{m:'raw-vllm-vote5-v1',c:168,bc:167,n:185,s:DEV,bl:'raw 1024, same engine'},{m:'raw-vllm-verify-v1',c:167,bc:167,n:185,s:DEV,ci:[-2.70,2.70],wl:[5,5],bl:'raw 1024, same engine'},
       {m:'raw-vllm-program-v1',c:160,bc:166,n:185,s:DEV,wl:[6,12],bl:'raw 1024, same engine'},{m:'fresh-sft-vllm-vote5-v1',s:DEV,b:'@champ'}]},
- {id:'time',hill:'time-rate',q:'Do time and rate problems still fail?',st:'open',claim:'Unknown for the champion. Only archived runs exist.',
+ {id:'time',hill:'time-rate',q:'Do time/rate problems fail?',st:'open',claim:'Unknown for the champion.',
   ev:[{share:'time-rate'},{m:'qwen3-4b-rl-archived',s:'gsm8k-test/dev-time-rate-v1'}]},
- {id:'group',hill:'group-count',q:'Do group and multiplicity problems still fail?',st:'open',claim:'Unknown for the champion. Only archived runs exist.',
+ {id:'group',hill:'group-count',q:'Do group-count problems fail?',st:'open',claim:'Unknown for the champion.',
   ev:[{share:'group-count'},{m:'qwen3-4b-rl-archived',s:'gsm8k-test/dev-group-count-v1'}]}
  ]};
 
@@ -218,19 +231,24 @@ const NOTES=[
  {id:'decision percent-vote5-v1',node:'vote',t:'Inconclusive under the predeclared evidence rule: target 153/185 vs 150, +1.62 pts, 90% paired CI −0.54 to +3.78. 5 fixes and 2 regressions at roughly 4.9× output tokens. Stop widening.'}
 ];
 
-let S,byId={},closed=new Set(),focus='root',lb,seq=0;
+let S,byId={},closed=new Set(),focus='root',lb,seq=0,readOpen=false;
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmt=n=>n.toLocaleString('en-US');
+const sgn=v=>(v>0?'+':v<0?'−':'')+Math.abs(v).toFixed(1);
 
-function shape(st,human,sz=14){
+function shape(st,human,sz=14,prog){
  const c=sz/2,r=sz/2-1.5;
- if(st==='agent')return `<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}"><circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--rule)" stroke-width="2"/><path class="spin" d="M${c} ${c-r}A${r} ${r} 0 0 1 ${c+r} ${c}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/></svg>`;
+ if(st==='agent'){
+  if(prog!=null){const L=2*Math.PI*r;return `<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}"><circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--control)" stroke-width="2"/><circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="${(prog*L).toFixed(2)} ${L.toFixed(2)}" transform="rotate(-90 ${c} ${c})"/></svg>`}
+  return `<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}"><circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--rule)" stroke-width="2"/><path class="spin" d="M${c} ${c-r}A${r} ${r} 0 0 1 ${c+r} ${c}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/></svg>`}
  if(human&&st==='open')return `<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}"><path d="M${c} 1L${sz-1} ${c}L${c} ${sz-1}L1 ${c}Z" fill="var(--amber)"/></svg>`;
  if(st==='answered')return `<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}"><circle cx="${c}" cy="${c}" r="${r}" fill="var(--positive)"/></svg>`;
  if(st==='dead')return `<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}"><rect x="2" y="2" width="${sz-4}" height="${sz-4}" rx="1.5" fill="none" stroke="var(--negative)" stroke-width="1.6"/><path d="M5 5L${sz-5} ${sz-5}M${sz-5} 5L5 ${sz-5}" stroke="var(--negative)" stroke-width="1.6"/></svg>`;
  return `<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}"><circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--accent)" stroke-width="1.8"/></svg>`;
 }
+const prog=n=>n.live?(n.live.done||0)/n.live.n:null;
+const nshape=(n,sz)=>shape(n.st,n.human,sz,n.st==='agent'?prog(n):null);
 
 function index(n,p){n.parent=p;n.kids=n.kids||[];n.ev=n.ev||[];byId[n.id]=n;n.kids.forEach(k=>index(k,n))}
 function count(n){let a=0;n.kids.forEach(k=>{a+=1+count(k)});return a}
@@ -238,7 +256,7 @@ function count(n){let a=0;n.kids.forEach(k=>{a+=1+count(k)});return a}
 /* resolve one evidence row against the real ledger */
 function evRow(e){
  const champ=S.champion,m=e.m==='@champ'?champ:e.m,b=e.b==='@champ'?champ:e.b;
- if(e.share){const h=S.hills[e.share];return {lbl:'share of archived errors',s:'archived errors',c:h.share.count,n:h.share.of,raw:1}}
+ if(e.share){const h=S.hills[e.share];return {m:'share of archived errors',s:'errors',c:h.share.count,n:h.share.of,raw:1}}
  const sl=e.s,L=lb[sl]||{};
  let n=e.n,c=e.c,bc=e.bc,ci=e.ci,wl=e.wl,bl=e.bl;
  if(e.gate){const g=S.gates[m];const ch=g&&g.rungs.flatMap(r=>r.checks).find(x=>x.slice===sl&&'delta'in x);
@@ -246,73 +264,83 @@ function evRow(e){
  if(e.goal){const v=S.goals['gsm8k-96'].vs_baseline;n=v.n;c=Math.round(v.cand*n);bc=Math.round(v.base*n);ci=[v.lo*100,v.hi*100];wl=[v.wins,v.losses]}
  if(c==null&&L[m]){n=L[m].n;c=Math.round(L[m].score*n)}
  if(bc==null&&b&&L[b]){bc=Math.round(L[b].score*(n||L[b].n))}
- return {m:e.lbl||m,b:bl||b,s:sl,n,c,bc,ci,wl,raw:e.raw,task:L[m]&&L[m].task}
+ const r={m:e.lbl||m,b:bl||b,s:sl,n,c,bc,ci,wl,raw:e.raw||bc==null};
+ r.d=r.raw?null:(c-bc)/n*100;
+ return r
 }
-function ciSvg(r){
- if(r.bc==null||r.raw)return '';
- const d=(r.c-r.bc)/r.n*100,W=140,R=8,x=v=>W/2+Math.max(-R,Math.min(R,v))/R*(W/2-4);
- const col=r.ci?(r.ci[0]>0?'var(--positive)':r.ci[1]<0?'var(--negative)':'var(--muted)'):(d>0?'var(--positive)':d<0?'var(--negative)':'var(--muted)');
- return `<svg width="100%" height="16" viewBox="0 0 ${W} 16" preserveAspectRatio="none"><line x1="${W/2}" y1="1" x2="${W/2}" y2="15" stroke="var(--control)"/>`+
-  (r.ci?`<line x1="${x(r.ci[0])}" y1="8" x2="${x(r.ci[1])}" y2="8" stroke="${col}" stroke-width="3" stroke-linecap="round" opacity=".45"/>`:'')+
-  `<circle cx="${x(d)}" cy="8" r="3.5" fill="${col}"/></svg>`
+const tagOf=s=>/control/.test(s)?'control':/\/full$/.test(s)?'full':s==='errors'?'errors':/dev-/.test(s)?'target':String(s).split('/').pop();
+function colOf(r){const d=r.d;return r.ci?(r.ci[0]>0?'var(--positive)':r.ci[1]<0?'var(--negative)':'var(--muted)'):(d>0?'var(--positive)':d<0?'var(--negative)':'var(--muted)')}
+function tipOf(r){
+ const head=`${r.m}\n${r.s} · n ${fmt(r.n)}`;
+ if(r.raw)return `${head}\n${fmt(r.c)} of ${fmt(r.n)}`;
+ return `${head}\n${fmt(r.c)} vs ${fmt(r.bc)}${r.b?' ('+r.b+')':''}\n${sgn(r.d)} pts`+
+  (r.ci?` · 90% CI ${sgn(r.ci[0])} to ${sgn(r.ci[1])}`:'')+(r.wl?`\n${r.wl[0]} fixed · ${r.wl[1]} broke`:'')
 }
-function evTable(n){
+function squares(wl){
+ if(!wl)return '';
+ const u=Math.max(1,Math.ceil((wl[0]+wl[1])/28));
+ return '<i class="f"></i>'.repeat(Math.ceil(wl[0]/u))+'<i class="b"></i>'.repeat(Math.ceil(wl[1]/u))
+}
+function evViz(n){
  if(!n.ev.length)return '';
- const rows=n.ev.map(evRow).map(r=>{
-  const short=String(r.s).split('/').pop();
-  if(r.raw)return `<tr><td class="m">${esc(r.m)}<div class="sl">${esc(short)}</div></td><td class="num" colspan="3"><b>${fmt(r.c)}</b> <span class="neu">of ${fmt(r.n)}</span></td></tr>`;
-  const d=r.bc!=null?(r.c-r.bc)/r.n*100:null,cls=d==null?'neu':(r.ci?(r.ci[0]>0?'pos':r.ci[1]<0?'neg':'neu'):(d>0?'pos':d<0?'neg':'neu'));
-  return `<tr><td class="m"><span class="mono">${esc(r.m)}</span><div class="sl">${esc(short)} · n ${fmt(r.n)}${r.b?' · vs '+esc(r.b):''}</div></td>`+
-   `<td class="num"><b>${fmt(r.c)}</b>${r.bc!=null?` <span class="neu">vs ${fmt(r.bc)}</span>`:''}</td>`+
-   `<td class="num ${cls}">${d==null?'':(d>0?'+':'')+d.toFixed(1)+' pts'}${r.ci?`<div class="sl">${r.ci[0].toFixed(1)} to ${r.ci[1]>0?'+':''}${r.ci[1].toFixed(1)}</div>`:''}${r.wl?`<div class="sl">${r.wl[0]} fixed / ${r.wl[1]} broke</div>`:''}</td>`+
-   `<td class="ci">${ciSvg(r)}</td></tr>`}).join('');
- return `<div class="sec"><h3>Evidence</h3><table class="ev">${rows}</table></div>`
+ const rs=n.ev.map(evRow),dl=rs.filter(r=>!r.raw);
+ const R=Math.max(3,Math.ceil(Math.max(0,...dl.flatMap(r=>[Math.abs(r.d),...(r.ci||[]).map(Math.abs)]))*1.1));
+ const x=v=>50+Math.max(-R,Math.min(R,v))/R*48;
+ const rows=rs.map(r=>{
+  let lane;
+  if(r.raw)lane=`<div class="trk"></div><div class="fill" style="width:${(r.c/r.n*100).toFixed(1)}%"></div>`;
+  else{const col=colOf(r);
+   lane=`<div class="z"></div>`+(r.ci?`<div class="ci" style="left:${x(r.ci[0])}%;width:${x(r.ci[1])-x(r.ci[0])}%;background:${col}"></div>`:'')+
+    `<div class="d" style="left:${x(r.d)}%;background:${col}"></div>`}
+  return `<div class="lr" tabindex="0" data-tip="${esc(tipOf(r))}"><span class="tag">${tagOf(r.s)}</span><div class="lane">${lane}</div><div class="sq">${squares(r.wl)}</div></div>`}).join('');
+ const axis=dl.length?`<div class="lr axis"><span></span><div class="ax"><span>−${R}</span><span>0</span><span>+${R}</span></div><span></span></div>`:'';
+ return `<div class="ev">${rows}${axis}</div>`
 }
 
 function rowHtml(n){
- const has=n.kids.length,cl=closed.has(n.id);
- return `<li><div class="row ${n.id===focus?'on':''} ${cl?'closed':''} ${n.st==='dead'?'dead':''} ${n.fresh?'fresh':''}" data-id="${n.id}">`+
-  `<button class="car ${has?'':'none'}" data-car="${n.id}" aria-label="toggle"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 3.5L5 6.5L8 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>`+
-  `<span class="sh">${shape(n.st,n.human)}</span><span class="tx"><span class="q">${esc(n.q)}${n.human&&n.st==='open'?'<span class="you">you</span>':''}</span>`+
-  (n.claim||n.st==='agent'?`<span class="cl">${esc(n.st==='agent'?agentLine(n):n.claim)}</span>`:'')+
+ const has=n.kids.length,cl=closed.has(n.id),on=n.id===focus,line=n.claim;
+ return `<li><div class="row ${on?'on':''} ${cl?'closed':''} ${n.st==='dead'?'dead':''} ${n.fresh?'fresh':''}" data-id="${n.id}" tabindex="0"${line&&!on?` data-tip="${esc(line)}"`:''}>`+
+  `<button class="car ${has?'':'none'}" data-car="${n.id}" aria-label="toggle" tabindex="-1"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 3.5L5 6.5L8 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>`+
+  `<span class="sh">${nshape(n)}</span><span class="tx"><span class="q">${esc(n.q)}</span>`+
+  (on&&line?`<span class="cl">${esc(line)}</span>`:'')+
   `</span>${has&&cl?`<span class="ct">${count(n)}</span>`:''}</div>`+
   (has&&!cl?`<ul class="t">${n.kids.map(rowHtml).join('')}</ul>`:'')+`</li>`
 }
-function agentLine(n){return n.live?`${n.live.m} · ${n.live.done||0}/${n.live.n}`:'agent investigating'}
 
 function renderTree(){
+ hideTip();
  $('#tree').innerHTML=rowHtml(SPEC);
  Object.values(byId).forEach(n=>n.fresh=0);
  const hs=Object.values(byId).filter(n=>n.human&&n.st==='open');
- $('#need').innerHTML=hs.map(n=>`<button class="chip" data-go="${n.id}">${shape('open',1,10)}<span>${esc(n.q)}</span></button>`).join('');
+ $('#needb').style.display=hs.length?'':'none';
+ $('#needb').innerHTML=`${shape('open',1,10)}${hs.length}`;
+ $('#needpop').innerHTML=hs.map(n=>`<button data-go="${n.id}">${shape('open',1,10)}<span>${esc(n.q)}</span></button>`).join('');
+ if(!hs.length)$('#needpop').classList.remove('on');
 }
 function pathOf(n){const p=[];for(let x=n.parent;x;x=x.parent)p.unshift(x);return p}
 
 function renderPanel(){
+ hideTip();
  const n=byId[focus],st=n.human&&n.st==='open'?'human':n.st;
- const label={open:'Open',answered:'Answered',dead:'Dead end',agent:'Agent investigating',human:'Needs you'}[st];
- let h=`<div class="path">${pathOf(n).map(p=>`<a data-go="${p.id}">${esc(p.q.length>34?p.q.slice(0,32)+'…':p.q)}</a><span>/</span>`).join('')}</div>`+
-  `<div class="fq"><span class="sh">${shape(n.st,n.human,18)}</span><h1>${esc(n.q)}</h1></div>`;
- if(n.claim||n.st==='agent')h+=`<div class="claim ${st}"><span class="sl" style="font-size:12px;color:var(--faint);display:block">${label}</span>${esc(n.st==='agent'&&!n.claim?'…':n.claim)}${n.st==='agent'&&n.live?` <span class="mono neu">${n.live.done||0}/${n.live.n}</span>`:''}</div>`;
- if(n.quote)h+=`<div class="sec"><h3>Asked from</h3><div class="note"><p><mark>${esc(n.quote)}</mark></p></div></div>`;
- if(n.id==='root')h+=goalLine();
- h+=evTable(n);
+ let h=`<div class="path">${pathOf(n).map(p=>`<a data-go="${p.id}">${esc(p.q)}</a><span>/</span>`).join('')}</div>`+
+  `<div class="fq"><span class="sh">${nshape(n,18)}</span><h1>${esc(n.q)}</h1></div>`;
+ if(n.claim||n.st==='agent'){
+  const p=n.st==='agent'?prog(n):null;
+  h+=`<div class="claim ${st}">${esc(n.claim||'…')}${p!=null?`<div class="pb" data-tip="${n.live.m}\n${n.live.done||0} of ${n.live.n}"><i id="pbi" style="width:${(p*100).toFixed(1)}%"></i></div>`:''}</div>`}
+ if(n.quote)h+=`<div class="quote"><mark>${esc(n.quote)}</mark></div>`;
+ h+=evViz(n);
  if(n.human&&n.st==='open')h+=`<div class="acts">${n.choices.map((c,i)=>`<button class="btn ${i?'':'warn'}" data-pick="${i}">${esc(c)}</button>`).join('')}</div>`;
- if(n.kids.length)h+=`<div class="sec"><h3>Sub-questions</h3><div class="kids">${n.kids.map(k=>`<button class="kid" data-go="${k.id}"><span class="sh" style="padding-top:3px">${shape(k.st,k.human)}</span><span><span>${esc(k.q)}</span>${k.claim&&k.st!=='open'?`<div class="cl">${esc(k.claim)}</div>`:''}</span></button>`).join('')}</div></div>`;
- h+=`<div class="acts"><button class="btn primary" id="branch">Branch</button></div><div class="branchf" id="bf"><input class="in" id="bin" placeholder="New question"><button class="btn primary" id="bgo">Ask</button></div>`;
- h+=readPane(n);
+ if(n.kids.length)h+=`<div class="kids">${n.kids.map(k=>`<button class="kid" data-go="${k.id}"${k.claim?` data-tip="${esc(k.claim)}"`:''}><span class="sh">${nshape(k)}</span><span>${esc(k.q)}</span></button>`).join('')}</div>`;
+ h+=`<div class="acts"><button class="btn primary" id="branch">Branch</button><button class="btn ${readOpen?'on':''}" id="readb" aria-expanded="${readOpen}">Read</button></div><div class="branchf" id="bf"><input class="in" id="bin" aria-label="Question"><button class="btn primary" id="bgo">Ask</button></div>`;
+ if(readOpen)h+=readPane(n);
  $('#panel').innerHTML=h;
-}
-function goalLine(){
- const g=S.goals['gsm8k-96'],need=Math.ceil(g.target*g.n),have=Math.round(g.value*g.n);
- return `<div class="sec"><h3>Distance</h3><div style="font-size:15px"><b>${need-have}</b> more problems of ${fmt(g.n)}</div></div>`
 }
 function readPane(n){
  /* notes closest to the focus first: its own, then its subtree's, then the rest */
  const sub=new Set();(function w(x){sub.add(x.id);x.kids.forEach(w)})(n);
  const ns=[...NOTES].sort((a,b)=>(sub.has(b.node)-sub.has(a.node)));
- return `<div class="read"><div class="rh">Reading<span>select text to ask</span></div><div class="body" id="rbody">`+
-  ns.map(x=>`<div class="note" data-node="${x.node}"><div class="meta"><span class="mono">${esc(x.id)}</span><a data-go="${x.node}">${esc(byId[x.node].q.slice(0,40))}${byId[x.node].q.length>40?'…':''}</a></div><p>${esc(x.t)}</p></div>`).join('')+`</div></div>`
+ return `<div class="read"><div class="body" id="rbody">`+
+  ns.map(x=>`<div class="note" data-node="${x.node}"><div class="meta"><a data-go="${x.node}" title="${esc(x.id)}">${esc(byId[x.node].q)}</a></div><p>${esc(x.t)}</p></div>`).join('')+`</div></div>`
 }
 
 function render(){renderTree();renderPanel()}
@@ -324,15 +352,38 @@ function addChild(pid,q,quote){
  const n={id,q,st:'agent',ev:[],kids:[],parent:p,fresh:1,quote};
  p.kids.push(n);byId[id]=n;closed.delete(pid);
  focus=id;render();showPanel();
- setTimeout(()=>{n.st='answered';n.claim='Placeholder answer. The agent\'s claim and its runs land here.';n.fresh=1;render()},6000);
+ setTimeout(()=>{n.st='answered';n.claim='Answer lands here.';n.fresh=1;render()},6000);
 }
+
+/* tooltip: claims in the tree, exact numbers in evidence, the key */
+const tip=$('#tip');
+function showTip(el){
+ const html=el.id==='key'?legendHtml():null,t=html||el.dataset.tip;if(!t)return;
+ html?tip.innerHTML=html:tip.textContent=t;
+ tip.classList.add('on');
+ const rc=el.getBoundingClientRect(),w=tip.offsetWidth,hh=tip.offsetHeight;
+ let top=rc.bottom+6;if(top+hh>innerHeight-8)top=rc.top-hh-6;
+ tip.style.left=Math.max(8,Math.min(innerWidth-w-8,rc.left+(el.classList.contains('row')?28:0)))+'px';
+ tip.style.top=top+'px';
+}
+function hideTip(){tip.classList.remove('on')}
+function legendHtml(){return `<div class="lg">${[['open','Open'],['answered','Answered'],['dead','Dead end'],['agent','Agent'],['human','You']]
+  .map(([s,l])=>`${shape(s==='human'?'open':s,s==='human',12)}<span>${l}</span>`).join('')}</div>`}
+const tipEl=e=>e.target.closest&&e.target.closest('[data-tip],#key');
+document.addEventListener('mouseover',e=>{const el=tipEl(e);el?showTip(el):hideTip()});
+document.addEventListener('focusin',e=>{const el=tipEl(e);el?showTip(el):hideTip()});
+document.addEventListener('focusout',hideTip);
+addEventListener('scroll',hideTip,true);
 
 document.addEventListener('click',e=>{
  const car=e.target.closest('[data-car]');
  if(car){const id=car.dataset.car;closed.has(id)?closed.delete(id):closed.add(id);renderTree();return}
+ if(e.target.closest('#needb')){$('#needpop').classList.toggle('on');return}
+ $('#needpop').classList.remove('on');
  const g=e.target.closest('[data-go]');if(g){go(g.dataset.go);return}
  const r=e.target.closest('.row');if(r){go(r.dataset.id);return}
  if(e.target.id==='branch'){$('#bf').classList.add('on');$('#bin').focus();return}
+ if(e.target.id==='readb'){readOpen=!readOpen;renderPanel();return}
  if(e.target.id==='bgo'){const v=$('#bin').value.trim();if(v)addChild(focus,v);return}
  const pk=e.target.closest('[data-pick]');
  if(pk){const n=byId[focus];n.st='answered';n.claim='You: '+n.choices[+pk.dataset.pick]+'.';n.fresh=1;render();return}
@@ -342,7 +393,8 @@ document.addEventListener('click',e=>{
 document.addEventListener('keydown',e=>{
  if(e.key==='Enter'&&e.target.id==='bin')$('#bgo').click();
  if(e.key==='Enter'&&e.target.id==='askin')submitAsk();
- if(e.key==='Escape')$('#ask').classList.remove('on');
+ if((e.key==='Enter'||e.key===' ')&&e.target.classList&&e.target.classList.contains('row')){e.preventDefault();const id=e.target.dataset.id;go(id);const el=document.querySelector(`.row[data-id="${id}"]`);el&&el.focus({preventScroll:true})}
+ if(e.key==='Escape'){$('#ask').classList.remove('on');$('#needpop').classList.remove('on');hideTip()}
 });
 
 /* select text in the reading pane -> Ask */
@@ -377,16 +429,14 @@ function header(){
   `<polyline points="${pts.map((v,i)=>x(i)+','+y(v)).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="1.6"/>`+
   `<circle cx="${x(pts.length-1)}" cy="${y(pts.at(-1))}" r="2.5" fill="var(--accent)"/></svg>`+
   `<span><span class="n">${need-have}</span> more of ${fmt(g.n)}</span>`;
- $('#legend').innerHTML=[['open','Open'],['answered','Answered'],['dead','Dead end'],['agent','Agent'],['human','You']]
-  .map(([s,l])=>`<span>${shape(s==='human'?'open':s,s==='human',12)}${l}</span>`).join('');
 }
 
 /* simulated live: the running candidate ticks through its 185 target questions (shape of a real eval task's progress) */
 setInterval(()=>{
  const n=byId.parse;if(!n||n.st!=='agent')return;
  n.live.done=Math.min(n.live.n,(n.live.done||0)+1+Math.floor(Math.random()*3));
- document.querySelectorAll('.row[data-id="parse"] .cl').forEach(el=>el.textContent=agentLine(n));
- if(focus==='parse'){const m=document.querySelector('.claim .mono');if(m)m.textContent=`${n.live.done}/${n.live.n}`}
+ document.querySelectorAll('.row[data-id="parse"] .sh,.kid[data-go="parse"] .sh').forEach(el=>el.innerHTML=nshape(n));
+ if(focus==='parse'){const b=$('#pbi');if(b){b.style.width=(prog(n)*100).toFixed(1)+'%';b.parentElement.dataset.tip=`${n.live.m}\n${n.live.done} of ${n.live.n}`}}
  if(n.live.done>=n.live.n)n.live.done=0;
 },900);
 

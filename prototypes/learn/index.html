@@ -58,8 +58,9 @@ h2{font-size:16px;font-weight:600;margin:0}
 .opt:hover{background:var(--raised)}
 .opt kbd{font:500 11px var(--mono);color:var(--faint);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:none}
 .opt.on{border-color:var(--text);background:var(--raised);box-shadow:inset 0 0 0 1px var(--text)}
-.opt.truth{border-color:var(--positive);box-shadow:inset 0 0 0 1px var(--positive)}
-.opt.wrong{border-color:var(--negative);box-shadow:inset 0 0 0 1px var(--negative)}
+.opt.truth{border-color:var(--positive);box-shadow:inset 0 0 0 1px var(--positive);background:var(--pill-positive-bg,#dcfae5)}
+.opt.wrong{border-color:var(--negative);box-shadow:inset 0 0 0 1px var(--negative);background:var(--pill-negative-bg,#ffedea)}
+.verdict{font-weight:600;font-size:15px}.verdict.ok{color:var(--positive)}.verdict.no{color:var(--negative)}
 .opt[disabled]{cursor:default}
 .conf{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .conf label{font-size:13px;color:var(--muted);flex:none}
@@ -464,10 +465,12 @@ let dlgState=null;
 function openConcept(id){const c=CONCEPTS.find(x=>x.id===id);const r=S.concepts[id]||[];let qi=r.findIndex(v=>v==null);if(qi<0)qi=r.length<c.qs.length?r.length:0;dlgState={c,qi,ans:null};drawDlg();$('#dlg').showModal()}
 function drawDlg(){
  const {c,qi,ans}=dlgState,q=c.qs[qi];
+ // shuffle each question's options once, so the answer is not always in the same slot
+ if(!q._shuf){const t=q.o[q.a],o=q.o.slice();for(let i=o.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[o[i],o[j]]=[o[j],o[i]]}q.o=o;q.a=o.indexOf(t);q._shuf=1}
  $('#dlg').innerHTML=`<button class="ghost x" id="dx">Close</button><h2>${esc(c.t)}</h2><div class="cv">${c.viz}</div>
   <div class="cq"><p>${esc(q.q)}</p><div class="opts">${q.o.map((o,i)=>{let cl='';if(ans!=null){if(i===q.a)cl=' truth';else if(i===ans)cl=' wrong'}
    return `<button class="opt${cl}" data-i="${i}" ${ans!=null?'disabled':''}><kbd>${i+1}</kbd>${esc(o)}</button>`}).join('')}</div>
-  <div class="actions"><span class="res">${qi+1} of ${c.qs.length}</span>${ans!=null?`<button class="go" id="dn">${qi<c.qs.length-1?'Next':'Done'} <kbd>space</kbd></button>`:''}</div></div>`;
+  <div class="actions">${ans!=null?(ans===q.a?'<span class="verdict ok">✓ Right</span>':`<span class="verdict no">✗ Wrong · ${esc(q.o[q.a])}</span>`):''}<span class="res">${qi+1} of ${c.qs.length}</span>${ans!=null?`<button class="go" id="dn">${qi<c.qs.length-1?'Next':'Done'} <kbd>space</kbd></button>`:''}</div></div>`;
  $('#dx').onclick=()=>$('#dlg').close();
  document.querySelectorAll('#dlg .opt').forEach(b=>b.onclick=()=>answerConcept(+b.dataset.i));
  $('#dn')&&($('#dn').onclick=advConcept);

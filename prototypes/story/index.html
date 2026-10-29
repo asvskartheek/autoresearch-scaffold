@@ -106,6 +106,8 @@ svg .ev{text-decoration:none;cursor:pointer}
 #meter .dots{display:flex;gap:3px}#meter .dots i{width:8px;height:8px;border-radius:50%;background:var(--control)}
 #meter .dots i.ok{background:var(--positive)}#meter .dots i.no{background:var(--negative)}#meter .dots i.skip{background:var(--warning)}
 #meter .dots i.cur{box-shadow:0 0 0 2px var(--accent)}
+#m-p{width:24px;height:24px;border-radius:12px;border:1px solid var(--control);background:var(--raised);color:var(--text);font:600 10px var(--mono);cursor:pointer;padding:0}
+#meter.paused{border-color:var(--warning)}#meter.paused #m-t{color:var(--warning)}
 .sum .row{display:grid;grid-template-columns:minmax(0,1fr) 70px 70px 60px;gap:10px;padding:7px 0;border-bottom:1px solid var(--rule);font-size:14px;align-items:center}
 .sum .row.h{font:600 11px var(--mono);color:var(--faint);text-transform:uppercase;letter-spacing:.05em}
 .sum .row>:not(:first-child){text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
@@ -115,10 +117,15 @@ svg .ev{text-decoration:none;cursor:pointer}
 @media (max-width:640px){main{padding:56px 12px 100px}.step{padding:16px}#meter{left:12px;right:12px;justify-content:space-between;gap:8px}.readnum{font-size:32px}
  .sum .row{grid-template-columns:minmax(0,1fr) 54px 54px 44px}}
 </style></head><body>
-<div id="meter"><span>⏱ <b id="m-t">0:00</b></span><span>checks <b id="m-c">0 / 0</b></span><div class="dots" id="m-d"></div></div>
+<div id="meter"><button id="m-p" title="Pause timer (P)" aria-label="Pause timer">❚❚</button><span>⏱ <b id="m-t">0:00</b></span><span>checks <b id="m-c">0 / 0</b></span><div class="dots" id="m-d"></div></div>
 <main id="main"><div id="load">loading ledger</div></main>
 <div id="pop" role="dialog"></div>
 <script>
+let PAUSED = false;
+function togglePause(){PAUSED=!PAUSED;const b=document.getElementById("m-p");b.textContent=PAUSED?"▶":"❚❚";b.title=PAUSED?"Resume timer (P)":"Pause timer (P)";document.getElementById("meter").classList.toggle("paused",PAUSED)}
+addEventListener("DOMContentLoaded",()=>{document.getElementById("m-p").onclick=togglePause});
+addEventListener("keydown",e=>{if((e.key==="p"||e.key==="P")&&!/INPUT|TEXTAREA/.test(e.target.tagName)&&!e.metaKey&&!e.ctrlKey)togglePause()});
+
 "use strict";
 const fmt = n => Number(n).toLocaleString("en-US");
 const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -502,7 +509,7 @@ function track() {
   let last = Date.now(), lastInput = Date.now();
   ["pointerdown", "pointermove", "keydown", "scroll", "wheel", "touchstart"].forEach(ev => addEventListener(ev, () => (lastInput = Date.now()), { passive: true }));
   setInterval(() => { const t = Date.now(), dt = Math.min(t - last, 2000); last = t;
-    if (document.visibilityState === "visible" && t - lastInput < 90000 && curStep && !LOG.done) { LOG.active += dt; if (curStep !== "summary") stepLog(curStep).ms += dt; save(); }
+    if (!PAUSED && document.visibilityState === "visible" && t - lastInput < 90000 && curStep && !LOG.done) { LOG.active += dt; if (curStep !== "summary") stepLog(curStep).ms += dt; save(); }
     if (curStep === "summary" && !LOG.done && CHECKS.every(id => LOG.checks[id])) { LOG.done = LOG.active; save(); summary(); }
     $("#m-t").textContent = mmss(LOG.done || LOG.active); }, 500);
   summary();
