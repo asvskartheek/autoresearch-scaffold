@@ -339,14 +339,18 @@ const nextPanel=function(g){
  if(!g.met&&!g.slice_changed){
   const cands=Object.entries(L.models).filter(([m,o])=>hs.includes(o.hill)&&m!==ch&&(o.status==='candidate'||o.status==='planned'))
    .map(([m,o])=>({m,o,next:L.gates?.[m]?.next||[]})).filter(c=>c.next.length).sort((a,b)=>(b.o.created||0)-(a.o.created||0));
-  for(const c of cands.slice(0,3))items.push([`${mLink(c.m)} on ${hLink(c.o.hill)} needs ${c.next.map(n=>`<span class="mono">${esc(short(n.slice))}</span>`).join(', ')}.`,`arx gate ${c.m}`]);
+  // a next run already in progress: what it covers and its live chip, in place of a command
+  const ms=a=>a.map(n=>`<span class="mono">${esc(short(n.slice))}</span>`).join(', ');
+  for(const c of cands.slice(0,3)){const run=c.next.find(runTask),rest=c.next.filter(n=>!runTask(n));
+   items.push(run?[`${mLink(c.m)} on ${hLink(c.o.hill)} is running on <span class="mono">${esc(short(runTask(run).slice||run.slice))}</span>${rest.length?`, then needs ${ms(rest)}`:''}.`,null,runChip(run)]
+    :[`${mLink(c.m)} on ${hLink(c.o.hill)} needs ${ms(c.next)}.`,`arx gate ${c.m}`]);}
   if(!cands.length){const oh=goalHills(g).find(([,s])=>s==='open');
    if(oh)items.push([`No candidate is climbing ${hLink(oh[0])}. Register one from the champion.`,`arx model add <name> --parent ${ch||'<champion>'} --hill ${oh[0]} --change "…"`]);
    else items.push([`No open hill serves this goal. Find the next failure mode and open one.`,`arx hill open <name> --goal ${g.name} --title "…" --target <dev slice>`]);}
  }
  if(!goalPaper(g.name))items.push([`No paper yet. Start the public paper from the worked example.`,`arx paper new --goal ${g.name}`]);
  items.push([`Check it from a shell.`,`arx goal status ${g.name}`]);
- return panel('Next',`<ul class="gl-next">${items.map(([t,c])=>`<li><p>${t}</p>${cmd(c)}</li>`).join('')}</ul>`,{cls:'gl-nx'});
+ return panel('Next',`<ul class="gl-next">${items.map(([t,c,chip])=>`<li><p>${t}</p>${chip||cmd(c)}</li>`).join('')}</ul>`,{cls:'gl-nx'});
 }
 // ---------- the record of an achieved or abandoned goal
 const record=function(g){
