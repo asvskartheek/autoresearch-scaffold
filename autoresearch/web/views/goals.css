@@ -210,6 +210,6 @@ select.gi-in{border-color:var(--control);margin:0;max-width:100%}
 /* a hill's share on the goal page: the count, and under it what the count is of */
 .gl-sh .two{align-items:flex-end}
 .gl-sh .sub{max-width:240px;text-align:right}
-@media (max-width:600px){.gl-sh .sub{max-width:130px}}
+@media (max-width:600px){.gl-sh .sub{max-width:120px;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3}}
 /* the map's target tick on a goal drawn on its own scale (the same encoding as the goal page) */
 .gm-bar b{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--text)}
