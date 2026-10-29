@@ -46,5 +46,29 @@ class AgentState(unittest.TestCase):
         self.assertEqual(comments._get(p, "/api/comments", {})[1]["answer_agent"]["running"], False)
 
 
+class Describe(unittest.TestCase):
+    def test_arrow_names_the_tip(self):
+        a = dict(route="goals", text="1,224", what="span.tick", ctx="GSM8K 96%", rx=0.43, ry=0.5,
+                 shape=dict(tool="arrow", mode="tip"), **{"from": "43 more"})
+        text = "\n".join(comments.describe_anchor(a))
+        for want in ('an arrow pointing at "1,224"', "span.tick", "43% across", 'starts at: "43 more"', 'Inside: "GSM8K 96%"'):
+            self.assertIn(want, text)
+
+    def test_box_and_highlight(self):
+        box = comments.describe_anchor(dict(text="Candidates 3", what="div.kpi", shape=dict(tool="box", fit=True)))
+        self.assertIn('Drawn: a box around "Candidates 3" (a div.kpi element)', box)
+        hl = comments.describe_anchor(dict(text="x", quote="43 more", shape=dict(tool="highlight", mode="text")))
+        self.assertIn('Drawn: a highlight over the text "43 more"', hl)
+
+    def test_old_anchor_article(self):
+        old = comments.describe_anchor(dict(text="card", shape=dict(tool="arrow", bw=10, bh=3)))
+        self.assertIn("Drawn: an arrow (10 x 3 px) on that element", old)
+
+    def test_new_anchor_keys_kept(self):
+        p = project()
+        ev = comments._post(p, "/api/comments", dict(kind="comment", body="?", anchor=dict(route="goals", qn=1, what="b", ctx="c", **{"from": "f"})))[1]
+        self.assertEqual({k: ev["anchor"][k] for k in ("qn", "what", "ctx", "from")}, dict(qn=1, what="b", ctx="c", **{"from": "f"}))
+
+
 if __name__ == "__main__":
     unittest.main()

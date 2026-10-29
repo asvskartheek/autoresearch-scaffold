@@ -132,7 +132,7 @@ def _get(p, path, q):
     return 200, dict(threads=ts, answer_agent=answer.agent_state(p))
 
 
-ANCHOR_KEYS = ("route", "key", "rel", "sel", "text", "quote", "rx", "ry", "px", "py", "vw", "shape")
+ANCHOR_KEYS = ("route", "key", "rel", "sel", "text", "quote", "qn", "what", "ctx", "from", "rx", "ry", "px", "py", "vw", "shape")
 
 
 @features.post("/api/comments")
@@ -184,15 +184,41 @@ def _rules(p: Project) -> str:
             "a delta whose interval spans 0 is noisy.")
 
 
+def _where(rx, ry) -> str:
+    try:
+        x, y = float(rx), float(ry)
+    except (TypeError, ValueError):
+        return ""
+    return f" ({x * 100:.0f}% across, {y * 100:.0f}% down that element)"
+
+
 def describe_anchor(a: dict) -> list[str]:
+    """What the comment points at, in words an agent can act on: the element under an arrow's tip or inside a box,
+    the highlighted text, and the card it sits in."""
     out = [f"View: #{a.get('route') or 'overview'} (the dashboard route; e.g. #model/v3 is model v3's page)"]
-    if a.get("text"):
-        out.append(f"Element: \"{a['text']}\"")
-    if a.get("quote"):
-        out.append(f"Selected text: \"{a['quote']}\"")
-    s = a.get("shape")
-    if isinstance(s, dict) and s.get("tool"):
-        out.append(f"Drawn: a {s['tool']} ({s.get('bw', '?')} x {s.get('bh', '?')} px) on that element")
+    s = a.get("shape") if isinstance(a.get("shape"), dict) else {}
+    tool, text, what = s.get("tool"), a.get("text"), a.get("what")
+    if what and text == what.split(".")[0]:
+        text = None  # an element with no text of its own (a bar, a tick): its tag and the card it sits in say more
+    el = f"\"{text}\"" + (f" (a {what} element)" if what else "") if text else (f"a {what} element" if what else "the page")
+    if tool == "arrow" and s.get("mode") == "tip":
+        out.append(f"Drawn: an arrow pointing at {el}{_where(a.get('rx'), a.get('ry'))}")
+        if a.get("from"):
+            out.append(f"The arrow starts at: \"{a['from']}\"")
+    elif tool == "highlight" and a.get("quote"):
+        out.append(f"Drawn: a highlight over the text \"{a['quote']}\"")
+    elif tool in ("box", "pen") and (s.get("fit") or what):
+        out.append(f"Drawn: {'a box around' if tool == 'box' else 'a pen mark on'} {el}")
+    else:
+        if text:
+            out.append(f"Element: {el}")
+        if a.get("quote"):
+            out.append(f"Selected text: \"{a['quote']}\"")
+        if tool:
+            art = "an" if tool[0] in "aeiou" else "a"
+            out.append(f"Drawn: {art} {tool} ({s.get('bw', '?')} x {s.get('bh', '?')} px) on that element")
+    if a.get("ctx"):
+        out.append(f"Inside: \"{a['ctx']}\"")
     return out
 
 
