@@ -188,8 +188,10 @@ const spark=(y,color,h)=>XC.spark(y,color,h);
 // task bits shared by workbench, task and model views
 function kidRow([k,depth]){
  const pr=k.progress||{},sc=k.summary?.score??k.last?.running_score;
- const v=isLive(k)?[pr.total?`${pr.done.toLocaleString()} of ${pr.total.toLocaleString()}`:'',sc!=null?pct(sc):'',k.eta?left(k.eta.eta_s)+' left':''].filter(Boolean).join(' · ')
-  :k.kind==='eval'&&sc!=null?`${pct(sc)} · n ${(k.summary?.n??pr.done).toLocaleString()}`:({done:'Done',completed:'Done',failed:'Failed',budget:'Out of time'})[k.status]||k.status;
+ // scores in the slice's units: "41 of 50" on a 0/1 slice, "387 ms · n 12" on a continuous one
+ const n=k.summary?.n??pr.done,scv=sc==null?'':isCont(k.slice)?sv(k.slice,sc)+(n?' · n '+n.toLocaleString():''):sv(k.slice,sc,n||undefined);
+ const v=isLive(k)?[pr.total?`${pr.done.toLocaleString()} of ${pr.total.toLocaleString()}`:'',isCont(k.slice)?(sc!=null?sv(k.slice,sc):''):(sc!=null&&pr.done?sv(k.slice,sc,pr.done)+' right':''),k.eta?left(k.eta.eta_s)+' left':''].filter(Boolean).join(' · ')
+  :k.kind==='eval'&&sc!=null?scv:({done:'Done',completed:'Done',failed:'Failed',budget:'Out of time'})[k.status]||k.status;
  return `<a class="kid" href="#task/${enc(k.id)}" style="padding-left:${8+depth*16}px"><span class="sd ${k.status}"></span><span class="nm">${esc(k.title)}</span><span class="vl">${esc(v)}</span></a>`;
 }
 const noteLine=n=>n?`<div class="note ${n.level}"><span class="msg" title="${esc(n.text??n.msg)}">${esc(n.text??n.msg)}</span><span class="when">${ago(n.t)}</span></div>`:'';
