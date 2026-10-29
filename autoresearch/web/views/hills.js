@@ -249,7 +249,7 @@ function hMatrix(title,M,runs,U,isCtl){
  const rows=ms.map(m=>{
   const r=M.runs[m],me=m===ch,vals=ids.map(id=>r[id]).filter(v=>v!=null);
   const tot=bin?`<b>${vals.filter(v=>v>=.5).length}</b><span class="of">&nbsp;/&nbsp;${ids.length}</span>`:vals.length?`<b>${U?hNum(Math.abs(vals.reduce((a,b)=>a+b,0)/vals.length)):hNum(vals.reduce((a,b)=>a+b,0)/vals.length)}</b>${U?'<span class="of">&nbsp;s</span>':`<span class="of">${unitOf(sl)}</span>`}`:DASH;
-  return `<div class="hmx-row${me?' champ':''}"><a class="hmx-m" href="#model/${enc(m)}" title="${esc(m)}">${mn(m)}</a><div class="hmx-cells">${ids.map(id=>{const [c,l]=cls(m,id);return `<i class="c ${c}${id===sel?' sel':''}" data-id="${esc(id)}" title="${mn(m)}: ${esc(l)}"></i>`}).join('')}</div><span class="hmx-t fig">${tot}</span></div>`;
+  return `<div class="hmx-row${me?' champ':''}"><a class="hmx-m" href="#model/${enc(m)}" title="${esc(m)}">${mn(m)}</a><div class="hmx-cells">${ids.map(id=>{const [c,l]=cls(m,id);return `<i class="c ${c}${id===sel?' sel':''}" data-id="${esc(id)}" title="${mnt(m)}: ${esc(l)}"></i>`}).join('')}</div><span class="hmx-t fig">${tot}</span></div>`;
  }).join('');
  const detail=sel?hCellDetail(M,ms,sel,cls,bin,U):`<p class="hmx-hint">Hardest examples on the left. Click a column to see one example across every model.</p>`;
  return panel(title,`<div class="hmx" data-slice="${esc(M.slice)}" onclick="hillCell(event)" style="--cols:${ids.length}">${rows}</div>${detail}`,

@@ -87,6 +87,14 @@ def pending(p) -> list[dict]:
     return [i for i in inbox(p) if i.get("status") == "queued"]
 
 
+def model_label(p, name: str | None) -> str:
+    """How a model reads to a person: its title, else a long `a+b+c+d+e` id cut to its last two changes (`…+d+e`)."""
+    t = ((p.models().get(name) or {}).get("title") if name else None) or name or ""
+    if t == name and t.count("+") >= 3:
+        t = "…+" + "+".join(t.split("+")[-2:])
+    return t
+
+
 def agent_cmd() -> list[str]:
     """The headless agent each inbox item gets. Override with ARX_AGENT_CMD, e.g. "claude -p --model claude-sonnet-5-5"."""
     return (os.environ.get("ARX_AGENT_CMD") or "claude -p --permission-mode acceptEdits").split()

@@ -64,7 +64,7 @@ def _short(slice_name: str) -> str:
 
 
 def _title(p: Project, model: str) -> str:
-    t = str(((p.models().get(model) or {}).get("title")) or model or "")
+    t = str(features.model_label(p, model))
     t = t.split(" — ")[0].strip()
     return t if len(t) <= 60 else t[:59].rstrip() + "…"
 

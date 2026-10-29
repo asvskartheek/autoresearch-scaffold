@@ -60,6 +60,18 @@ gate ladder and KPIs. `.research/` is the ledger; the dashboard (`arx serve`) re
   hills with `--goal <goal>`. `arx goal status` before reporting progress; `arx goal achieve` only when it passes.
 - A goal is not a task. Its evidence comes from the ledger, never from a number typed by hand.
 
+## Questions, people and understanding
+- Every model gets a human title of a few words (`arx model <name> --title "Attach the drawing"`). A `+`-chained id
+  is not a name a person can read.
+- Discovery work is a question, not a hill: `arx q add "<6 words>" --parent <id>`, then `arx q answer <id> "<claim>"
+  --evidence model:slice` or `arx q dead <id> "<why>"`. Mark what only a person can decide with `--needs-human`.
+- People comment on any dashboard view; `arx answer` (started by `arx up`) gives each comment its own agent. When you
+  are that agent, answer in the thread with `arx comment reply`, show rather than tell (a small inline SVG beats a
+  paragraph), and change nothing.
+- The person must understand the project as fast as agents change it. Prefer a figure, a widget or a worked example to
+  prose. `/reference/<model>` is the complete paper; an explainer (a paper with `kind: explainer`) uses
+  `/explain-kit.js` so it can measure how fast they understood.
+
 ## Papers
 - One public paper per goal (`/papers/<goal>`, `arx paper new --goal <goal>`): a labelled draft while the goal is
   open, the final result when it is achieved, the negative result if it is abandoned.

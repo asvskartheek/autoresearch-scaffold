@@ -74,7 +74,9 @@ const MARK='<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><
 const ROUTES=[['overview','Overview'],['learn','Brief'],['workbench','Workbench'],['goals','Goals'],['questions','Questions'],['models','Models'],['hills','Hills'],['papers','Papers'],['slices','Slices'],['archive','Archive']];
 // the project this page serves: /p/<key>/ for a registered project, the server's own at /
 const PKEY=(location.pathname.match(/^\/p\/([^/]+)/)||[])[1]&&decodeURIComponent(location.pathname.split('/')[2]);
-const mn=k=>esc(S.state?.models?.[k]?.title||k||'—');  // a model reads by its title; the id stays in the URL
+// a model reads by its title; an untitled a+b+c+d id reads as its last two changes (…+c+d); the id stays in the URL
+const mnt=k=>{const t=S.state?.models?.[k]?.title;if(t)return esc(t);const s=String(k||'—');return esc(s.split('+').length>3?'…+'+s.split('+').slice(-2).join('+'):s)};  // plain text, for attributes
+const mn=k=>{const t=S.state?.models?.[k]?.title;if(t)return esc(t);const s=String(k||'—');return s.split('+').length>3?`<span title="${esc(s)}">…+${esc(s.split('+').slice(-2).join('+'))}</span>`:esc(s)};
 const paperOf=key=>{const ps=S.state.papers||{};return ps[key]||Object.values(ps).find(p=>p.hill===key)};
 const paperUrl=p=>'papers/'+enc(p.name);  // relative, so /p/<key>/ serves another project's papers
 const goalPaper=g=>Object.values(S.state.papers||{}).find(p=>p.goal===g);

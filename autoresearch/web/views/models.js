@@ -84,7 +84,7 @@ VIEWS.models=()=>{
   else if(cands.length)finding+=`${plural(cands.length,'candidate')} registered; none has passed a rung yet.`;
   else finding+=`No candidates are climbing.`;
  }
- const acts=promotable.length?cmd('arx promote '+promotable[0][0]):lead?`<a class="btn" href="#model/${enc(lead[0])}" title="${mn(lead[0])}">Open closest candidate</a>`:'';
+ const acts=promotable.length?cmd('arx promote '+promotable[0][0]):lead?`<a class="btn" href="#model/${enc(lead[0])}" title="${mnt(lead[0])}">Open closest candidate</a>`:'';
  const h=[page({title:'Models',crumbs:[['Models','#models']],finding,acts})];
  h.push(kpis([
   ['Champion',cf?score(cf.score,L.slices[fullKey]):DASH,champ?`<a class="ms-kn" href="#model/${enc(champ)}" title="${esc(champ)}">${mn(champ)}</a>${cf?` · ${esc(short(fullKey))}, n ${cf.n.toLocaleString()}`:''}`:'No champion yet'],

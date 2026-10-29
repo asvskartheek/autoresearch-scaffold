@@ -77,7 +77,7 @@ VIEWS.slices=(arg)=>{
     <td class="sl-hl sl-hide-m">${hill}</td>
     <td class="num sl-runs sl-hide-s">${nr?`<button class="sl-go" onclick="slBoard(${esc(JSON.stringify(s.name))})" title="Open on the leaderboard">${plural(nr,'model')}</button>`:'<span class="faint">None</span>'}</td>
     ${anyPin?`<td class="num sl-hide-s">${s.url?`<a class="ln" href="${esc(s.url)}" target="_blank" rel="noopener">Hugging Face ${ICON.ext}</a>`:'<span class="faint">ID hash</span>'}</td>`:''}</tr>`});
-  const head=[sh('Slice','name',''),['Kind','sl-hide-s sl-kind'],sh('n','n','num sl-n'),[st.champion?`<span title="${mn(st.champion)} · ${esc(st.champion)}">Champion</span>`:'Champion','num sl-ch'],['ID hash','sl-hide-s sl-hash'],['Hill','sl-hide-m sl-hl'],sh('Runs','runs','num sl-runs sl-hide-s'),...(anyPin?[['Stored','num sl-hide-s']]:[])];
+  const head=[sh('Slice','name',''),['Kind','sl-hide-s sl-kind'],sh('n','n','num sl-n'),[st.champion?`<span title="${mnt(st.champion)} · ${esc(st.champion)}">Champion</span>`:'Champion','num sl-ch'],['ID hash','sl-hide-s sl-hash'],['Hill','sl-hide-m sl-hl'],sh('Runs','runs','num sl-runs sl-hide-s'),...(anyPin?[['Stored','num sl-hide-s']]:[])];
   const more=capped?`<button class="btn sl-more" onclick="S.slOpen[${esc(JSON.stringify(d))}]=${open?'false':'true'};render()">${open?'Show fewer':`Show all ${sl.length} slices`}</button>`:'';
   const title=x.title&&x.title!==d?esc(x.title):'';
   return panel(`<span class="mono">${esc(d)}</span>`,sl.length?table(head,rows)+more:empty('No slices in this dataset',`<p>Freeze one from a list of IDs.</p>${cmd(`arx slice add ${d}/<name> --ids-file ids.txt`)}`),
