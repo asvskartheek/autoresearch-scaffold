@@ -342,20 +342,55 @@ def lesson_gate(p, L, learn):
 
 
 def _ladder(p):
-    return [dict(rung=r.get("rung"), checks=[dict(slice=c.get("slice"), rule=c.get("rule"),
-                                                  bar=-(c.get("tolerance") or 0) if c.get("rule") == "not_worse" else (c.get("margin") or 0))
-                                             for c in r.get("checks", [])]) for r in p.config.get("ladder", []) if r.get("rung")]
+    """Resolve scope before turning a stored tolerance into a display quantity."""
+    from . import learn
+    models = p.models()
+    chosen = next((name for name, model in models.items() if model.get("status") == "candidate"), p.champion())
+    model = models.get(chosen) or {}
+    if not model.get("hill") and len(p.hills()) == 1:
+        model = dict(model, hill=next(iter(p.hills())))
+    out = []
+    for rung in p.config.get("ladder", []):
+        if not rung.get("rung"):
+            continue
+        checks = []
+        for check in rung.get("checks", []):
+            ref, rule = check.get("slice") or "manual", "manual" if check.get("manual") else check.get("rule") or "manual"
+            raw = -(check.get("tolerance") or 0) if rule == "not_worse" else check.get("margin") or 0
+            try:
+                scopes = p._resolve(ref, model) if not check.get("manual") else []
+            except (KeyError, ValueError, SystemExit):
+                scopes = []
+            if not scopes and ref == "@hills.climbed":
+                continue  # no applicable regression scope; this is not an unmeasured required check
+            if not scopes:
+                checks.append(dict(slice=ref, rule=rule, bar=raw, display_bar=None, unit=None, better=None, resolved=False))
+                continue
+            for scope in scopes:
+                if learn._cont(p, scope):
+                    factor = -1 if learn._neg(p, scope) else 1
+                    unit = learn._unit(p, scope)
+                else:
+                    factor, unit = 100, "pts"
+                checks.append(dict(slice=scope, source_ref=ref, rule=rule, bar=raw,
+                                   display_bar=factor * raw, unit=unit, better=-1 if factor < 0 else 1, resolved=True))
+        out.append(dict(rung=rung["rung"], checks=checks, model=learn._title(p, chosen) if chosen else None))
+    return out
 
 
 def lesson_rung(p, L, learn):
     lad = _ladder(p)
-    r = max(lad, key=lambda r: len(r["checks"]), default=None) or dict(rung="dev", checks=[dict(slice="@hill.target", rule="better", bar=0),
-                                                                                          dict(slice="@hill.control", rule="not_worse", bar=-0.02)])
+    r = max(lad, key=lambda r: len(r["checks"]), default=None)
+    if not r or not r["checks"]:
+        return dict(say="No applicable rung checks are configured yet. Define the measurement scopes and rules before claiming that a candidate passed.",
+                    fig=dict(kind="list", rows=[]), checks=[_check("Can an empty check list establish that a proposed change is safe?",
+                         ["No; required measurements and rules must be declared", "Yes; no check failed"],
+                         "No; required measurements and rules must be declared", "An absence of checks is not evidence of a successful change.")])
     k = len(r["checks"])
-    cs = [_check(f"A rung has {k} checks and one fails. Does the rung pass?", ["No", "Yes"], "No",
-                 "Every check on a rung must pass.")]
-    return dict(say="A rung is a set of checks run together. It passes only when every check passes.",
-                fig=dict(kind="rung", rung=r["rung"], checks=r["checks"]), checks=cs)
+    cs = [_check(f"A rung has {k} required checks and one fails. Does the rung pass?", ["No", "Yes"], "No",
+                 "Every required check on a rung must pass.")]
+    return dict(say="These checks belong to the displayed candidate's evaluation scope; changing the switches below is a hypothetical exercise, not a new result.",
+                fig=dict(kind="rung", rung=r["rung"], checks=r["checks"], model=r.get("model")), checks=cs)
 
 
 def lesson_ladder(p, L, learn):
@@ -444,15 +479,28 @@ def lesson_project_champion(p, L, learn):
         sc = learn._score(p, m, L["full"]) if L["full"] else None
         chain.append(dict(label=learn._title(p, m), status=v.get("status") or "", detail=learn._first(v.get("change"), 160),
                           score=learn.sv(p, L["full"], sc) if sc is not None else ""))
+        policy = v.get("serving_policy") or {}
+        settings = []
+        if policy.get("adapter_mode"):
+            settings.append(dict(label="Adapter", value=str(policy["adapter_mode"]).replace("_", " ").capitalize()))
+        if isinstance(policy.get("max_new_tokens"), int) and policy["max_new_tokens"] > 0:
+            settings.append(dict(label="Output budget", value=f"{policy['max_new_tokens']:,} tokens"))
+        if isinstance(policy.get("do_sample"), bool):
+            settings.append(dict(label="Decoding", value="Sampling" if policy["do_sample"] else "Greedy"))
+        if settings:
+            chain[-1]["settings"] = settings
         m = v.get("parent")
-    hill = p.hills().get((L["models"].get(champ) or {}).get("hill")) or {}
-    if hill.get("examples"):
-        chain[0].update(examples=hill["examples"], example_provenance="Illustrative hill examples, not per-example evaluation evidence")
     parent = L["models"].get(champ, {}).get("parent")
     comparator = learn._title(p, parent) if parent else "the registered baseline"
     cs = [_check(f"To test whether {chain[0]['label']} improved on {comparator}, which comparison is valid?",
                  ["Both systems on the same frozen examples with a compatible harness", "Their highest scores from any available runs", "The new system's targeted score against the old full-set score"],
                  "Both systems on the same frozen examples with a compatible harness", "Model identity alone does not make runs comparable; scope and evaluation setup must match.")]
+    if chain[0].get("settings"):
+        cs = [_check("If this combined serving setup improves performance, how would you test which setting caused the gain?",
+                     ["Vary one setting while holding the others, evaluation cases and harness fixed",
+                      "Attribute the whole gain to the larger output budget", "Attribute the whole gain to the adapter setting"],
+                     "Vary one setting while holding the others, evaluation cases and harness fixed",
+                     "The combined result does not isolate a component's contribution. A controlled comparison is needed before attributing the gain.")]
     return dict(say=f"{chain[0]['label']} is the registered champion. Its recorded changes and lineage explain what was tried; matched measurements establish what improved.",
                 fig=dict(kind="list", rows=chain, lineage=True), checks=cs)
 

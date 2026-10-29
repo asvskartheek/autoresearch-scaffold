@@ -100,6 +100,46 @@ class CourseSemantics(unittest.TestCase):
         lesson=course.lesson_project_hills(p,{},learn)
         self.assertNotIn('illustrated error',lesson['checks'][0]['q'])
 
+    def test_duplicate_model_titles_keep_recorded_qualifiers_and_budgets(self):
+        p=CapturedProject('gsm8k')
+        self.assertEqual(learn._title(p,'qwen3-4b-rl-archived'),'Qwen3-4B RL — archived baseline')
+        self.assertEqual(learn._title(p,'qwen3-4b-rl-fresh-v1'),'Qwen3-4B RL — fresh audited harness')
+        for model,budget in [('thinking4b-numeric8192-v1','8,192'),('thinking4b-numeric32768-v1','32,768')]:
+            title=learn._title(p,model)
+            self.assertIn(budget+' output tokens',title)
+            self.assertNotIn(model,title)
+
+    def test_rung_continuous_tolerance_is_not_scaled_to_percentage_points(self):
+        from tests.test_goal_units import ledger
+        p=ledger();p.add_dataset('mem',list(range(4)))
+        p.add_slice('cold/n4',list(range(4)),scale='continuous',unit='ms',metric='minus ms')
+        p.add_slice('mem/n4',list(range(4)),scale='continuous',unit='MB',metric='minus MB')
+        p.open_hill('h','Cold start','cold/n4',control='mem/n4')
+        p.add_model('base',status='champion');p.add_model('candidate',parent='base',hill='h')
+        config=p.config;config['ladder']=[{'rung':'dev','checks':[{'slice':'@hill.target','rule':'better'}, {'slice':'@hill.control','rule':'not_worse','tolerance':.05}]}]
+        (p.root/'research.json').write_text(json.dumps(config))
+        lesson=course.lesson_rung(p,{},learn)
+        check=next(c for c in lesson['fig']['checks'] if c['source_ref']=='@hill.control')
+        self.assertEqual((check['slice'],check['unit'],check['display_bar'],check['better']),('mem/n4','MB',.05,-1))
+
+    def test_unresolved_symbolic_rung_has_no_invented_numeric_unit(self):
+        from tests.test_learn import ledger
+        p=ledger();p.add_model('base',status='champion')
+        config=p.config;config['ladder']=[{'rung':'dev','checks':[{'slice':'@hill.control','rule':'not_worse','tolerance':.05}]}]
+        (p.root/'research.json').write_text(json.dumps(config))
+        check=course.lesson_rung(p,{},learn)['fig']['checks'][0]
+        self.assertFalse(check['resolved']);self.assertIsNone(check['unit']);self.assertIsNone(check['display_bar'])
+
+    def test_champion_settings_are_recorded_not_inferred_from_hill_examples(self):
+        p=CapturedProject('gsm8k')
+        data={'champ':p.champion(),'models':p.models(),'full':None}
+        lesson=course.lesson_project_champion(p,data,learn)
+        row=lesson['fig']['rows'][0]
+        self.assertEqual(row['settings'],[{'label':'Adapter','value':'Disabled'},{'label':'Output budget','value':'1,024 tokens'},{'label':'Decoding','value':'Greedy'}])
+        self.assertNotIn('examples',row)
+        self.assertTrue(all('settings' not in r for r in lesson['fig']['rows'][1:]))
+        self.assertIn('holding the others',lesson['checks'][0]['a'])
+
     def test_continuous_interval_preserves_improvement_direction(self):
         class Display:
             @staticmethod

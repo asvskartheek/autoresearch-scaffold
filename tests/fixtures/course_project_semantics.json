@@ -264,7 +264,12 @@
         "title": "Raw pinned base with 1024 output tokens",
         "parent": "qwen3-4b-rl-fresh-v1",
         "hill": "percent-base",
-        "status": "champion"
+        "status": "champion",
+        "serving_policy": {
+          "adapter_mode": "disabled",
+          "max_new_tokens": 1024,
+          "do_sample": false
+        }
       },
       "percent-rlvr-v2": {
         "title": "percent-rlvr-v2",
@@ -336,13 +341,15 @@
         "title": "Thinking4B universal numeric final line",
         "parent": "percent-base-1024-v1",
         "hill": "percent-base",
-        "status": "candidate"
+        "status": "candidate",
+        "change": "Distinct official Qwen3-4B-Thinking-2507 pinned768f209d9ea81521153ed38c47d515654e938aea (4,022,468,096 parameters), native question plus fixed universal standalone numeric final-line instruction, sampled32768 T.6/p.95/k20/minp0 perquestionseed. Raw Instructgreedy1024 fresh baseline, samevLLM0.11 BF16 context40960. No strippingthinking or goldworker. Preregistered32768 output budget following official32k recommendation; context40960; per-call1200sec, global2h bound. Positive target/fullCI and all gates, noauto promotion; not an SFT improvement."
       },
       "thinking4b-numeric8192-v1": {
         "title": "Thinking4B universal numeric final line",
         "parent": "percent-base-1024-v1",
         "hill": "percent-base",
-        "status": "candidate"
+        "status": "candidate",
+        "change": "Distinct official Qwen3-4B-Thinking-2507 pinned768f209d9ea81521153ed38c47d515654e938aea (4,022,468,096 parameters), native question plus fixed universal standalone numeric final-line instruction, sampled8192 T.6/p.95/k20/minp0 perquestionseed. Raw Instructgreedy1024 fresh baseline, samevLLM0.11 BF16 context16384. No strippingthinking or goldworker. Cost-bound cap below official32k recommendation. Positive target/fullCI and all gates, noauto promotion; not an SFT improvement."
       },
       "raw-numeric4096-v1": {
         "title": "Raw Instruct4B numeric final line plus4096 tokens",
