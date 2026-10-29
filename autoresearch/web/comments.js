@@ -33,10 +33,16 @@ function boxed(el){const s=el.ownerDocument.defaultView.getComputedStyle(el);
  return !clear||s.backgroundImage!=='none'||parseFloat(s.borderTopWidth)+parseFloat(s.borderLeftWidth)+parseFloat(s.borderBottomWidth)>0&&s.borderTopStyle+s.borderLeftStyle+s.borderBottomStyle!=='nonenonenone'||s.boxShadow!=='none'}
 const area=r=>r.width*r.height;
 const same=(a,b)=>Math.abs(a.left-b.left)<1.5&&Math.abs(a.top-b.top)<1.5&&Math.abs(a.right-b.right)<1.5&&Math.abs(a.bottom-b.bottom)<1.5;
-// is el something a person would point at? (a wrapper, a bare inline span or a chart's background rect is not)
+// out of sight: transparent or hidden itself or under a parent that is (a Copy button that shows only on hover)
+function unseen(el){const w=el.ownerDocument.defaultView;for(let a=el,i=0;a&&a.nodeType===1&&i<8;a=a.parentElement,i++){const s=w.getComputedStyle(a);
+  if(s.opacity==='0'||s.visibility==='hidden')return true}return false}
+// is el something a person would point at? (a wrapper, a bare inline span, an icon or a chart's background rect is not)
 function meaningful(el){
  if(!el||el.nodeType!==1)return false;const t=el.localName,r=el.getBoundingClientRect();if(r.width<1&&r.height<1)return false;
- if(isSvg(el)){if(t==='svg')return true;
+ if(unseen(el))return false;
+ if(isSvg(el)){const svg=t==='svg'?el:el.ownerSVGElement;
+  if(svg){const q=svg.getBoundingClientRect();if(q.width<=28&&q.height<=28)return false}  // an icon: the button, link or tile it sits in is the pick
+  if(t==='svg')return true;
   if(SVGK.test(t)){if(t==='tspan')return false;const svg=el.ownerSVGElement;if(t==='rect'&&svg){const sr=svg.getBoundingClientRect();if(area(r)>.8*area(sr))return false}  // a chart's background
    return true}
   return t==='g'&&!!(el.querySelector(':scope>title')||el.getAttribute('aria-label')||[...el.attributes].some(a=>a.name.startsWith('data-')))}
