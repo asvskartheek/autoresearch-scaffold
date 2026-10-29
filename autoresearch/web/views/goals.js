@@ -317,7 +317,11 @@ const chart=function(g){
   runs.some(r=>r.model!==champ&&r.model!==g.baseline)?sw('<circle cx="7" cy="5" r="3.5" fill="var(--faint)"/>','other runs'):'',
   sw('<path d="M0 6H5V3H14" fill="none" stroke="var(--chart-1)" stroke-opacity=".55" stroke-width="1.5"/>','best so far')].join('');
  const since=g.created?runs.filter(r=>r.ended>=g.created):runs;
- const note=g.status==='open'&&g.created?(since.length?`${plural(since.length,'run')} since the goal opened ${ago(g.created)}${since.some(r=>s*(r.summary[k]-(g.value??-Infinity))>0)?'; one beat the champion and waits on the gate':''}.`:`No run on this slice since the goal opened ${ago(g.created)}.`):'';
+ // a run above the champion is news only with its model's standing: rejected, failed a rung, ready, or still on the gate
+ const top=since.filter(r=>r.model!==champ&&s*(r.summary[k]-(g.value??-Infinity))>0).sort((a,b)=>s*(b.summary[k]-a.summary[k]))[0];
+ const standing=m=>{const o=S.state.models[m]||{},gt=S.state.gates?.[m],f=gt?.rungs?.find(r=>r.status==='fail');
+  return o.status==='rejected'?'<span class="neg">was rejected</span>':o.status!=='candidate'?`is ${esc(o.status||'not on the ladder')}`:f?`<span class="neg">failed the ${esc(f.rung)} rung</span>`:gt?.promotable?'<span class="pos">is ready to promote</span>':'waits on the gate'};
+ const note=g.status==='open'&&g.created?(since.length?`${plural(since.length,'run')} since the goal opened ${ago(g.created)}${top?`; the best, ${mLink(top.model)} at ${gu(g,top.summary[k])}${ofP(g)}, ${standing(top.model)}`:''}.`:`No run on this slice since the goal opened ${ago(g.created)}.`):'';
  return panel(`Runs on ${esc(g.slice)}`,`<div class="gl-chart"><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(`${runs.length} runs on ${g.slice} over time against the target`)}">${o}</svg></div>${note?`<p class="gl-note">${note}</p>`:''}`,{meta,right:`<span class="gl-lgs">${legend}</span>`,cls:'gl-runs'});
 }
 
