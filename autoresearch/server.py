@@ -436,6 +436,29 @@ LOCAL = ("127.0.0.1", "localhost", "::1")
 HUMAN_KINDS = ("comment", "reply", "resolve", "reopen", "edit", "delete", "seen")
 
 
+LEARNING_WRITES = ("/api/course", "/api/teach", "/api/predictions", "/api/understanding")
+
+
+def guest_learning_allowed(path: str, body) -> bool:
+    """A shared token identifies an access group, not an individual guest. Guest browser IDs remain
+    self-asserted within that group, but cannot claim a local person's ID or legacy name-based history."""
+    if not path.startswith(LEARNING_WRITES):
+        return True
+    if not isinstance(body, dict):
+        return False
+    rows = body.get("events") if path.startswith("/api/understanding") and "events" in body else [body]
+    if not isinstance(rows, list):
+        return False
+    roster = people.roster()
+    for row in rows:
+        viewer = row.get("viewer") if isinstance(row, dict) else None
+        if not isinstance(viewer, str) or not people.ID.fullmatch(viewer):
+            return False
+        if viewer in roster and not roster[viewer].get("remote"):
+            return False
+    return True
+
+
 def human_event(p: Project, name: str, kind: str, d: dict) -> dict | None:
     """One event from the reader. People never post as the agent; ids they point at must exist in that paper."""
     by, author = people.who(d)
@@ -656,6 +679,8 @@ def serve(port: int = 8890, root=None):
                     if not 0 <= n <= 1_000_000:
                         return self._send(413, b'{"error":"too large"}', "application/json")
                     d = json.loads(self.rfile.read(n) or b"{}")
+                    if self._remote and not guest_learning_allowed(path, d):
+                        return self._send(403, b'{"error":"use your guest learner ID"}', "application/json")
                     if isinstance(d, dict):  # a feature may treat someone on another machine differently (people.py)
                         d["_remote"] = self._remote
                     features.REQUEST.remote = self._remote

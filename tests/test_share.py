@@ -127,6 +127,54 @@ class Remote(unittest.TestCase):
         self.assertTrue(pending[0].get("guest"))
         self.assertEqual(papers.threads(papers.thread(self.a, "ownership"))[0]["messages"][0]["body"], "Keep this")
 
+    def test_guest_learning_cannot_write_owner_history(self):
+        from autoresearch import course, learn, people, teach
+        from autoresearch.core import Task
+        p = ledger("learning-guests")
+        key = projects.register(p.root)
+        token = share.token_for(key, create=True)
+        self.addCleanup(share.revoke, key)
+        owner, guest = "p-3333cafe", "p-4444cafe"
+        people.remember(owner, "Local learner", key)
+        people.remember(guest, "Remote learner", key, remote=True)
+        p.add_model("base", status="champion")
+        p.open_hill("hard", "Hard", "ds/full")
+        p.add_model("cand", parent="base", hill="hard")
+        for model, scores in (("base", [1, 0, 0, 0]), ("cand", [1, 1, 1, 0])):
+            t = Task(p, "eval", model, model=model, slice="ds/full")
+            for i, score in enumerate(scores):
+                t.add_row(dict(id=str(i), score=score))
+            t.finish()
+        p.set_model_status("cand", "rejected", "Development result alone is insufficient.")
+        card = next(c for c in learn.cards(p) if c["type"] == "number" and c.get("truth") is not None and "explain" in teach.methods_for(c))
+        cases = {
+            "course": dict(item="goal", hit=True),
+            "predictions": dict(card=card["id"], guess=card["truth"], conf=0.8),
+            "teach": dict(card=card["id"], method="explain", answer="The candidate improves on this slice."),
+            "understanding": dict(kind="active", doc="brief", ms=100),
+        }
+        origin = f"http://192.168.7.9:{self.port}"
+        for route, payload in cases.items():
+            for viewer in (owner, "Local learner", "anon", None):
+                code, _, _ = self.req(f"/p/{key}/api/{route}", dict(payload, viewer=viewer), cookie=token, origin=origin)
+                self.assertEqual(code, 403, (route, viewer))
+            code, body, _ = self.req(f"/p/{key}/api/{route}", dict(payload, viewer=guest), cookie=token, origin=origin)
+            self.assertEqual(code, 200, (route, body))
+        for viewer in (owner, "Local learner"):
+            self.assertEqual(course.rows(p, viewer), [])
+            self.assertEqual(learn.predictions(p, viewer), [])
+            self.assertEqual(teach.attempts(p, viewer), [])
+        self.assertTrue(course.rows(p, guest))
+        self.assertTrue(learn.predictions(p, guest))
+        self.assertTrue(teach.attempts(p, guest))
+        self.assertEqual(learn.understanding(p, guest)["docs"]["brief"]["ms"], 100)
+        self.assertEqual(learn.understanding(p, owner)["docs"], {})
+        # Telemetry accepts batches: a guest must not hide an owner's write behind their own outer ID.
+        code, _, _ = self.req(f"/p/{key}/api/understanding", dict(viewer=guest, events=[
+            dict(viewer=guest, kind="active", doc="brief", ms=100),
+            dict(viewer=owner, kind="active", doc="brief", ms=100)]), cookie=token, origin=origin)
+        self.assertEqual(code, 403)
+
     def test_guest_cannot_rename(self):
         from autoresearch import people
         people.remember("p-0000aaaa", "Owner", self.ka)
