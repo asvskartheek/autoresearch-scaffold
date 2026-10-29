@@ -11,6 +11,8 @@ const runCmd=n=>`arx eval record --model ${n.model} --slice ${n.slice} --rows <r
 const mag=(k,t)=>esc(sd(k,Math.abs(t)).replace(/^[+−]/,''));
 const rule=c=>c.rule==='better'?(c.threshold?`Better by more than ${mag(c.slice,c.threshold)}`:'Better than champion'):c.rule==='not_worse'?(c.threshold?`Worse by at most ${mag(c.slice,c.threshold)}`:'No worse than champion'):c.rule==='manual'?'Signed off by hand':esc(c.rule);
 const list=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a.at(-1);
+// a slice name that may break only after its / and - parts on a phone, never mid-word
+const slw=k=>esc(short(k)).replace(/([\/-])/g,'$1<wbr>');
 const mlink=k=>`<a href="#model/${enc(k)}" title="${esc(k)}">${mn(k)}</a>`;
 // figures in the slice's own units (core sv/sd): a count of n on 0/1 slices, "387 ms" on continuous ones, never a %
 const bin=k=>!isCont(k);
@@ -61,7 +63,7 @@ function gateTable(name,g,base='Champion'){
    const pooled=c.cand_runs>1||c.base_runs>1?` · runs ${c.cand_runs??1} / ${c.base_runs??1}`:'';
    const go=c.cand_task?`onclick="if(!event.target.closest('a,button'))location.hash='task/${enc(c.cand_task)}'"`:'';
    rows.push(`<tr class="${c.cand_task?'click':''} ${i===r.checks.length-1?'':'md-in'}" ${go}>${i?'':head}
-    <td class="${i?"md-c1":""}"><div class="two"><a class="mono md-sl ln" href="#slices/${enc(c.slice)}">${esc(short(c.slice))}</a><span class="sub" ${pooled?'title="Complete runs pooled per example: this model / champion"':''}>${n!=null?'n '+n.toLocaleString():'n —'}${pooled}${bin(c.slice)?'':' · mean'}</span></div></td>
+    <td class="${i?"md-c1":""}"><div class="two"><a class="mono md-sl ln" href="#slices/${enc(c.slice)}">${slw(c.slice)}</a><span class="sub" ${pooled?'title="Complete runs pooled per example: this model / champion"':''}>${n!=null?'n '+n.toLocaleString():'n —'}${pooled}${bin(c.slice)?'':' · mean'}</span></div></td>
     <td class="sub md-rule md-hm">${rule(c)}</td>
     <td class="num md-hs">${ran?(c.cand_task?`<a href="#task/${enc(c.cand_task)}">${score(c.cand,c.slice,c.n)}</a>`:score(c.cand,c.slice,c.n)):DASH}</td>
     <td class="num md-hs">${ran?(c.base_task?`<a href="#task/${enc(c.base_task)}">${score(c.base,c.slice,c.n)}</a>`:score(c.base,c.slice,c.n)):DASH}</td>
@@ -95,7 +97,7 @@ function promotion(name,m){
  const rows=['target','control'].map(role=>{const R=D?.[role];if(!R)return '';
   const p=pairedRows?.(name+'\u0000'+was+'\u0000'+R.slice,R.runs[name],R.runs[was]);
   const k=R.slice,noisy=p&&p.lo<0&&0<p.hi;
-  return `<tr><td><div class="two"><a class="mono md-sl ln" href="#slices/${enc(k)}">${esc(short(k))}</a><span class="sub">${role==='target'?'hill target':'control'}${p?' · n '+p.n.toLocaleString():''}</span></div></td>
+  return `<tr><td><div class="two"><a class="mono md-sl ln" href="#slices/${enc(k)}">${slw(k)}</a><span class="sub">${role==='target'?'hill target':'control'}${p?' · n '+p.n.toLocaleString():''}</span></div></td>
    <td class="num">${p?score(p.cand,k,p.n):DASH}</td><td class="num">${p?score(p.base,k,p.n):DASH}</td>
    <td class="num"><span class="${!p||noisy?'sub':p.delta>0?'pos':p.delta<0?'neg':'sub'}">${p?diff(p.delta,k):DASH}</span></td>
    <td class="md-ci">${p?(bin(k)?ciBar(p):'')+`<div class="sub md-cil">${ciText(p,k)}</div>`:'<span class="sub">no paired rows</span>'}</td>
@@ -157,7 +159,7 @@ VIEWS.model=(name)=>{
  }else if(m.status==='champion'&&g&&!g.error){
   h.push(promotion(name,m));
   h.push(panel('Ladder slices',table(['Rung','Slice',['n','num'],['Score','num']],g.rungs.flatMap(r=>r.checks.map((c,i)=>{const s=L.leaderboard[c.slice]?.[name],n=s?.n??L.slices[c.slice]?.n;
-   return `<tr><td>${i?'':esc(r.rung)}</td><td><a class="mono md-sl ln" href="#slices/${enc(c.slice)}">${esc(short(c.slice))}</a></td><td class="num">${n!=null?n.toLocaleString():DASH}</td><td class="num">${s?(s.task?`<a href="#task/${enc(s.task)}">${score(s.score,c.slice,s.n)}</a>`:score(s.score,c.slice,s.n)):DASH}</td></tr>`}))),{meta:'the scores candidates are paired against',cls:'section'}));
+   return `<tr><td>${i?'':esc(r.rung)}</td><td><a class="mono md-sl ln" href="#slices/${enc(c.slice)}">${slw(c.slice)}</a></td><td class="num">${n!=null?n.toLocaleString():DASH}</td><td class="num">${s?(s.task?`<a href="#task/${enc(s.task)}">${score(s.score,c.slice,s.n)}</a>`:score(s.score,c.slice,s.n)):DASH}</td></tr>`}))),{meta:'the scores candidates are paired against',cls:'section'}));
  }
 
  const tasks=L.tasks.filter(t=>t.model===name&&!t.detail_of).sort((a,b)=>(isLive(b)-isLive(a))||(b.updated-a.updated));

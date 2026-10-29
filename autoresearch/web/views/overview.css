@@ -124,7 +124,7 @@ th.ov-rank,td.ov-rank{width:20px;padding-right:4px}
  .ov-nx .ell{padding-left:4px;max-width:96px}
  .ov-pickl{width:100%}.ov-pickl .ov-sel{flex:1}
  .ov-gh{flex-wrap:wrap;gap:2px 12px}.ov-gt{white-space:normal;flex-basis:100%}
- .ov-spark{width:84px}
+ .ov-spark{display:none}
 }
 /* a candidate whose name another row shares: the part of its id that tells them apart, never cut */
 .ov-nmr{display:flex;align-items:baseline;gap:6px;min-width:0}
