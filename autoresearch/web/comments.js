@@ -68,9 +68,17 @@ function text(el,max=90){
  const svgT=x=>x.querySelector?.(':scope>title')?.textContent;
  let s=isSvg(el)&&el.localName!=='text'&&el.localName!=='svg'?svgT(el)||(el.parentElement&&el.parentElement.localName==='g'?svgT(el.parentElement):''):'';
  s=s||(el.localName==='svg'?'':textOf(el,max))||el.getAttribute('aria-label')||el.getAttribute('title')||el.getAttribute('alt')||'';
+ if(!s&&el.localName!=='svg')s=over(el);  // a bar with its label drawn on top of it ("Champion · 1224")
  if(!s)for(const a of el.attributes)if(/^data-(label|name|title|id|key|v|value)$/.test(a.name)&&a.value){s=a.value;break}
  if(!s&&el.localName==='svg')s=svgT(el)||el.getAttribute('aria-label')||textOf(el,max);
  return String(s).replace(/\s+/g,' ').trim().slice(0,max)}
+// the words drawn over an element that has none (text nodes near it whose middle falls inside its box)
+function over(el){const r=el.getBoundingClientRect(),d=el.ownerDocument,rg=d.createRange();if(r.width<2||r.height<2)return '';
+ for(let a=el.parentElement,i=0;a&&i<3&&a.localName!=='body';a=a.parentElement,i++){const w=d.createTreeWalker(a,NodeFilter.SHOW_TEXT),out=[];let t,n=0;
+  while((t=w.nextNode())&&n++<300){if(!t.nodeValue.trim())continue;rg.selectNodeContents(t);const q=rg.getBoundingClientRect(),cx=q.left+q.width/2,cy=q.top+q.height/2;
+   if(q.width&&cx>=r.left&&cx<=r.right&&cy>=r.top&&cy<=r.bottom)out.push(t.nodeValue.trim())}
+  if(out.length)return out.join(' ')}
+ return ''}
 // the path from one element down to another: tag:nth-of-type steps (SVG tags too)
 function path(from,el){const parts=[];
  while(el&&el!==from){let i=1,s=el;while((s=s.previousElementSibling))if(s.localName===el.localName)i++;
@@ -235,7 +243,7 @@ tools.querySelectorAll('button').forEach(b=>b.onclick=()=>setTool(b.dataset.tool
 setTool('pick');
 // a picked element: its stable key (anchorFor), what it is, its own words and the card around it
 function pickEl(el){const r=el.getBoundingClientRect(),k=ARXPICK.kind(el),t=ARXPICK.text(el);
- const a={...anchorFor(el),what:k,text:t||k,ctx:ctxOf(el,t),rx:0,ry:0,px:r1(r.left+scrollX),py:r1(r.top+scrollY)};
+ const a={...anchorFor(el),what:k,text:t||k,ctx:(t?'':ARXPICK.around(el,80))||ctxOf(el,t),rx:0,ry:0,px:r1(r.left+scrollX),py:r1(r.top+scrollY)};
  setMode(false);compose(a,Math.min(r.right,innerWidth-20),Math.max(r.top,8))}
 $c('.cm-lst').onclick=()=>{list.classList.toggle('on');drawList()};
 const KEYS={p:'pick',b:'box',a:'arrow',d:'pen',h:'highlight'};
