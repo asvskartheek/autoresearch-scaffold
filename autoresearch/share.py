@@ -202,15 +202,32 @@ def snapshot_data(p, key: str | None = None, tasks: int = 40) -> dict:
         except Exception:
             pass
     data["api/projects"] = [dict(key=key or "", name=(st.get("config") or {}).get("name") or "", root="")]
-    data["api/people"] = dict(people={}, here=[])
+    try:  # this project's people (names on comments and "Seen" faces); nobody is "here" in a file
+        from . import people
+        data["api/people"] = dict(people={k: dict(name=v.get("name")) for k, v in people.members(p).items()}, here=[])
+    except Exception:
+        data["api/people"] = dict(people={}, here=[])
     return scrub(json.loads(json.dumps(data, default=str)))
 
 
 SHIM = r"""(()=>{const S=window.ARX_SNAP;const _f=window.fetch;
 const key=u=>{const m=String(u).match(/api\/[^?#]*/);return m?decodeURIComponent(m[0]):null};
-window.fetch=async(u,o)=>{const k=key(u);if(o&&o.method&&o.method!=='GET')return new Response('{"error":"read-only snapshot"}',{status:403});
- if(k&&k in S.data)return new Response(JSON.stringify(S.data[k]),{status:200,headers:{'Content-Type':'application/json'}});
+const ok=b=>new Response(JSON.stringify(b),{status:200,headers:{'Content-Type':'application/json'}});
+// a short line at the foot of the page: what this file cannot show
+const note=t=>{let n=document.querySelector('.arx-note');if(!n){n=document.createElement('div');n.className='arx-note';n.setAttribute('role','status');document.body.append(n)}
+ n.textContent=t;n.classList.add('on');clearTimeout(n._t);n._t=setTimeout(()=>n.classList.remove('on'),3500)};
+window.ARX_NOTE=note;
+// writes the page makes on its own (presence, reading time, "seen") are answered quietly; a "seen" marks the thread read here
+const quiet=(k,o)=>{if(k==='api/people')return ok(S.data['api/people']);if(k==='api/understanding')return ok({ok:true});
+ if(k==='api/comments'){let b={};try{b=JSON.parse(o.body||'{}')}catch(_){}if(b.kind!=='seen')return null;
+  const t=((S.data['api/comments']||{}).threads||[]).find(x=>x.id===b.parent);if(t&&b.by)t.seen={...(t.seen||{}),[b.by]:t.last_t};return ok({ok:true})}
+ return null};
+window.fetch=async(u,o)=>{const k=key(u);if(o&&o.method&&o.method!=='GET'){const q=k&&quiet(k,o);
+  return q||new Response('{"error":"read-only snapshot"}',{status:403})}
+ if(k&&k in S.data)return ok(S.data[k]);
  if(k)return new Response('{"error":"not in this snapshot"}',{status:404});return _f(u,o)};
+const _b=navigator.sendBeacon&&navigator.sendBeacon.bind(navigator);
+try{navigator.sendBeacon=(u,d)=>key(u)?true:_b(u,d)}catch(_){}
 addEventListener('keydown',e=>{const t=e.composedPath()[0]||{};if(/INPUT|TEXTAREA|SELECT/.test(t.tagName)||t.isContentEditable)return;
  if(!e.metaKey&&!e.ctrlKey&&!e.altKey&&e.key.toLowerCase()==='c')e.stopImmediatePropagation()},true);
 // papers open as embedded pages
@@ -218,10 +235,14 @@ document.addEventListener('click',e=>{const a=e.target.closest&&e.target.closest
  const m=a.getAttribute('href').match(/papers\/([^/?#]+)/);if(!m||!S.papers[decodeURIComponent(m[1])])return;e.preventDefault();
  const w=window.open(URL.createObjectURL(new Blob([S.papers[decodeURIComponent(m[1])]],{type:'text/html'})),'_blank');},true);
 addEventListener('DOMContentLoaded',()=>{const b=document.createElement('div');b.className='arx-snap';
- b.textContent='Snapshot · '+new Date(S.taken*1000).toLocaleString();document.body.append(b)});})();"""
+ b.textContent='Snapshot · '+new Date(S.taken*1000).toLocaleString();document.body.append(b);
+ const c=new URLSearchParams(location.search).get('c'),ts=(S.data['api/comments']||{}).threads||[];
+ if(c&&!ts.some(t=>t.id===c))setTimeout(()=>note('That comment is not in this snapshot'),800)});})();"""
 
 SNAP_CSS = """.arx-snap{position:fixed;left:12px;bottom:12px;z-index:50;padding:4px 10px;border-radius:999px;font-size:12px;
 background:var(--surface,#fff);color:var(--muted,#666);box-shadow:0 0 0 1px var(--border,#ddd)}
+.arx-note{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:3000;padding:8px 14px;border-radius:8px;font-size:13px;
+background:var(--text,#222);color:var(--surface,#fff);opacity:0;pointer-events:none;transition:opacity .2s}.arx-note.on{opacity:1}
 .cm-fab .cm-mode,.cm-chip,.top .live,.top [aria-label=Share]{display:none!important}
 .cm-pop textarea,.cm-pop .cm-name,.cm-pop .rs,.cm-pop .go,.cm-me .cm-name,.cm-list .cm-it:not([data-id]),
 .gi,.q-form,.q-acts [data-qact]:not([data-qact=read]),.q-askf,

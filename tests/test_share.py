@@ -108,6 +108,17 @@ class Export(unittest.TestCase):
         self.assertIn("…/scratch/gate.json", html)
         self.assertNotIn("<!--", html.split("window.ARX_SNAP=", 1)[1].split(";</script>", 1)[0])
 
+    def test_snapshot_quiet_writes_and_people(self):
+        from autoresearch import people
+        p = ledger("eps")
+        k = projects.register(p.root)
+        people.remember("p-0000bbbb", "Ann", k)
+        snap = share.snapshot_data(p, k)
+        self.assertEqual(snap["api/people"]["people"]["p-0000bbbb"]["name"], "Ann")
+        self.assertEqual(snap["api/people"]["here"], [])
+        for k in ("api/people", "api/understanding", "kind!=='seen'", "sendBeacon", "not in this snapshot"):
+            self.assertIn(k, share.SHIM)
+
 
 if __name__ == "__main__":
     unittest.main()
