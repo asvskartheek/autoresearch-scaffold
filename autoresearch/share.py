@@ -118,7 +118,7 @@ def lan_ip() -> str:
         s.close()
 
 
-PATH_RX = re.compile(r"(?<![\w.])(?:/(?:Users|home|private|tmp|var|Volumes)/[^\s\"'<>]*)")
+PATH_RX = re.compile(r"(?<![\w.])(?:/(?:Users|home|private|tmp|var|Volumes|workspace|root|opt|mnt|srv|data)/[^\"'<>\n]*?)(?=[\"'<>\n]|\s(?!\S*/)|$)")
 
 
 def redact(text: str) -> str:
