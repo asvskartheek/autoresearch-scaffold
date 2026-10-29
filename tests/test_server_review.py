@@ -93,3 +93,19 @@ class LiveDetail(unittest.TestCase):
         out = server.running_next(gates, ts, {"ds/a": dict(ids=[1, 2]), "ds/u": dict(ids=[1, 2, 3])})
         self.assertEqual([n.get("running") for n in out["v2"]["next"]], ["ev", None])
         self.assertNotIn("running", gates["v2"]["next"][0])  # the memoised gate is untouched
+
+
+class TaskIds(unittest.TestCase):
+    def test_same_second_ids_never_collide(self):
+        p = ledger()
+        import autoresearch.core as core
+        real = core.uuid.uuid4
+        seq = iter(["aaaa" + "0" * 28, "aaaa" + "0" * 28, "bbbb" + "0" * 28])
+        core.uuid.uuid4 = lambda: type("U", (), {"hex": next(seq)})()
+        try:
+            a = Task(p, "experiment", "a"); a.finish()
+            b = Task(p, "experiment", "b"); b.finish()
+        finally:
+            core.uuid.uuid4 = real
+        self.assertNotEqual(a.id, b.id)
+        self.assertEqual(Task(p, "experiment", "x", tid=a.id).meta["title"], "a")

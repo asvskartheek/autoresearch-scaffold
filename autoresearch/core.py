@@ -698,7 +698,7 @@ class Task:
                  slice: str = None, agent: str = None, total: int = None, links: dict = None, config: dict = None,
                  tid: str = None, parent: str = None, budget_s: float = None):
         self.p = project
-        self.id = tid or f"{time.strftime('%m%d-%H%M%S')}-{kind}-{uuid.uuid4().hex[:4]}"
+        self.id = tid or self._claim(project, kind)
         self.dir = project.task_dir(self.id)
         self._lock = threading.Lock()
         self._step = 0
@@ -723,6 +723,19 @@ class Task:
                 pass
         else:
             self.meta = _read(self.dir / "task.json")
+
+    @staticmethod
+    def _claim(project: Project, kind: str) -> str:
+        """A fresh id, its directory made atomically: two tasks started in the same second never share one."""
+        while True:
+            tid = f"{time.strftime('%m%d-%H%M%S')}-{kind}-{uuid.uuid4().hex[:4]}"
+            d = project.task_dir(tid)
+            d.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                d.mkdir()
+                return tid
+            except FileExistsError:
+                continue
 
     def _flush(self):
         self.meta["updated"] = self.meta["heartbeat"] = now()
