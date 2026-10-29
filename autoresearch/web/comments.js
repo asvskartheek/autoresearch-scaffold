@@ -14,7 +14,7 @@ const host=document.createElement('div');host.id='arx-comments';host.className='
 const TOOLS=[['pin','Pin','P'],['box','Box','B'],['arrow','Arrow','A'],['pen','Pen','D'],['highlight','Highlight','H']];
 host.innerHTML=`<svg class="cm-shapes" xmlns="http://www.w3.org/2000/svg"></svg><div class="cm-hl"></div><div class="cm-layer"></div><div class="cm-pins"></div><div class="cm-pops"></div>
 <div class="cm-list"></div><div class="cm-chip"><button class="cm-btn on cmt">Comment</button><button class="cm-btn ask">Ask</button></div>
-<div class="cm-fab"><div class="cm-tools">${TOOLS.map(([k,n,key])=>`<button data-tool="${k}" data-key-own="${key}" title="${n} (${key})">${n}<b>${key}</b></button>`).join('')}</div><button class="cm-btn cm-lst" title="Comments" aria-label="Comment list">0</button><button class="cm-btn cm-mode" data-key-own="c">Comment<b>C</b></button></div>`;
+<div class="cm-fab"><div class="cm-tools">${TOOLS.map(([k,n,key])=>`<button data-tool="${k}" title="${n} (${key})">${n}<b>${key}</b></button>`).join('')}</div><button class="cm-btn cm-lst" title="Comments">0</button><button class="cm-btn cm-mode">Comment<b>C</b></button></div>`;
 const $c=s=>host.querySelector(s),hl=$c('.cm-hl'),pinsEl=$c('.cm-pins'),pops=$c('.cm-pops'),list=$c('.cm-list'),chip=$c('.cm-chip'),layer=$c('.cm-layer'),shapesEl=$c('.cm-shapes'),tools=$c('.cm-tools');
 const h=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let mode=false,tool='pin',all=[],open=null,hot=null,draw=null,pending=null,agentOn=true;
@@ -91,7 +91,7 @@ const isPage=el=>!el||el===document.documentElement||el===document.body||el.id==
 
 /* ---------- mode, tools, keys */
 function setTool(t){tool=t;tools.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.tool===t));if(t!=='pin')hl.style.display='none'}
-function setMode(on){mode=on;document.documentElement.classList.toggle('arx-cm-mode',on);$c('.cm-mode').classList.toggle('on',on);tools.classList.toggle('on',on);layer.classList.toggle('on',on);
+function setMode(on){mode=on;$c('.cm-mode').classList.toggle('on',on);tools.classList.toggle('on',on);layer.classList.toggle('on',on);
  if(!on){hl.style.display='none';cancelDraw()}}
 $c('.cm-mode').onclick=()=>setMode(!mode);
 tools.querySelectorAll('button').forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
@@ -100,7 +100,7 @@ $c('.cm-lst').onclick=()=>{list.classList.toggle('on');drawList()};
 const KEYS={p:'pin',b:'box',a:'arrow',d:'pen',h:'highlight'};
 addEventListener('keydown',e=>{const t=e.composedPath()[0]||{};if(/INPUT|TEXTAREA|SELECT/.test(t.tagName)||t.isContentEditable)return;
  if(e.metaKey||e.ctrlKey||e.altKey)return;const k=e.key.toLowerCase();
- if(k==='c'){e.preventDefault();e.stopPropagation();setMode(!mode);return}
+ if(k==='c'&&!window.ARXK){e.preventDefault();e.stopPropagation();setMode(!mode);return}  // with keys.js, C is its (rebindable) comment key
  if(mode&&KEYS[k]){e.preventDefault();e.stopPropagation();setTool(KEYS[k]);return}  // only in comment mode: views keep their keys
  if(e.key==='Escape'&&(mode||open||pops.firstChild)){if(draw){cancelDraw();return}setMode(false);closePop()}},true);
 
@@ -373,6 +373,16 @@ async function load(){try{const r=await fetch(API,{cache:'no-store'});if(!r.ok)r
  const p=pops.firstChild,reopen=open&&p&&!p.dataset.busy&&!p.contains(document.activeElement);drawPins();drawList();if(reopen)thread(open)}catch(e){}}
 document.body.append(host);
 addEventListener('scroll',drawPins,{passive:true,capture:true});addEventListener('resize',drawPins);
+// for keys.js: comment on an element, step through this view's threads, reply in or resolve the open one (or the one
+// anchored on the focused element)
+const threadFor=el=>el&&mine().find(t=>{if(t.resolved)return false;const a=anchorEl(t);return a&&(el.contains(a)||a.contains(el))});
+const target2=el=>open&&all.find(t=>t.id===open)||threadFor(el);
+window.ARXC={
+ comment(el){if(!el){setMode(!mode);return}const r=el.getBoundingClientRect();compose(anchorFor(el),Math.max(8,r.left),r.bottom+6)},
+ step(d){const ts=mine().filter(t=>!t.resolved);if(!ts.length)return false;const i=ts.findIndex(t=>t.id===open);thread(ts[((i<0?(d>0?-1:0):i)+d+ts.length)%ts.length].id);return true},
+ reply(el){const c=target2(el);if(!c)return false;if(open!==c.id)thread(c.id);const ta=pops.querySelector('textarea');ta&&focusLater(ta);return true},
+ resolve(el){const c=target2(el);if(!c||c.resolved)return false;post({kind:'resolve',parent:c.id,author:me()||'you'}).then(()=>{if(open===c.id)closePop()});return true},
+ open:()=>open,has:el=>!!target2(el),count:()=>mine().filter(t=>!t.resolved).length,mode:()=>mode};
 addEventListener('hashchange',()=>{closePop();setMode(false);chip.style.display='none';setTimeout(()=>{drawPins();drawList()},0)});
 (S.afterRender=S.afterRender||[]).push(()=>{drawnFor=location.hash;drawPins()});
 setInterval(()=>{if(!draw&&mine().length)drawPins()},1000);setInterval(()=>{if(!document.hidden)load()},4000);
