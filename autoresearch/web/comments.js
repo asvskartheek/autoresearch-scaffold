@@ -552,7 +552,9 @@ const klass=c=>c.resolved?'res':working(c)?'wait':c.messages.some(m=>m.agent)&&!
 let drawnFor=null;const ready=()=>drawnFor===location.hash;
 function drawPins(){if(draw)return;const ts=ready()?mine():[],openN=mine().filter(t=>!t.resolved).length;
  $c('.cm-lst').textContent=openN?openN+' open':mine().length?mine().length+' resolved':all.length+' elsewhere';$c('.cm-lst').classList.toggle('none',!mine().length&&!all.length);
- pinsEl.innerHTML=ts.map((c,i)=>{const xy=pos(c);if(!xy)return '';const [x,y]=xy;
+ const taken=[];  // two pins on one spot (a goal's track and its fill) sit side by side, never one under the other
+ pinsEl.innerHTML=ts.map((c,i)=>{const xy=pos(c);if(!xy)return '';let [x,y]=xy;
+  for(let k=0;k<8&&taken.some(([u,v])=>Math.abs(u-x)<20&&Math.abs(v-y)<20);k++)x+=x>innerWidth/2?-24:24;taken.push([x,y]);
   return `<div class="cm-pin ${klass(c)}${x<28?' r':''}${c.id===hot?' hot':''}" data-id="${c.id}" style="left:${x}px;top:${y}px" title="${h(c.messages[0].body.slice(0,200))}">${i+1}</div>`}).join('');
  const live=shapesEl.querySelector('.live');
  shapesEl.innerHTML=ts.map(c=>shapeSvg(c.anchor||{},klass(c),c.id)).join('')+(pending&&(pending.shape||pending.quote||picked(pending))?shapeSvg(pending,'draft',''):'');if(live)shapesEl.append(live);
