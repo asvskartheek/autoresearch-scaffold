@@ -201,7 +201,8 @@ def _events_from(key: str, name: str, r: dict, ctx: dict) -> list[tuple[dict, li
         ev = dict(t=t, person=who, kind="skip" if r.get("skip") else "attempt", ref=r.get("card"), method=r.get("method"),
                   hit=None if r.get("skip") else _hit(r.get("hit")), err=_num(r.get("err")), ms=_num(r.get("ms")),
                   answer=None if got is None else json.dumps(dict(got=got)))
-        return [(ev, card_concepts(key, r.get("card")))]
+        extra = ["paired"] if r.get("method") == "code" else []  # writing the line is the paired delta itself
+        return [(ev, card_concepts(key, r.get("card")) + extra)]
     if name == "understanding.jsonl":
         who = person(r.get("viewer"), roster)
         if not who:
