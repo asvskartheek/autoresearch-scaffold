@@ -95,16 +95,16 @@ function qEvidence(n){
 
 // ---------- goal distance in units, with the champion succession as a sparkline
 function qDistance(gk){
+ // the numbers come as text in the goal's units (questions.py _goal_text): "43 more of 1,319", "458 ms to go"
  const g=QS.data.goals?.[gk];if(!g||g.value==null)return '';
- let txt;
- if(g.kpi==='score'&&g.n){const need=Math.ceil(g.target*g.n-1e-9),have=Math.round(g.value*g.n);txt=g.met?`met · ${qFmt(have)} of ${qFmt(g.n)}`:`<b>${qFmt(need-have)}</b> more of ${qFmt(g.n)}`}
- else txt=g.met?'met':`<b>${num(Math.abs(g.gap))}</b> to go`;
+ const gap=String(g.gap_txt||''),m=gap.match(/^([\d,.]+)\s*(.*)$/);
+ const txt=g.met?`met · ${esc(g.value_txt||'')}`:m?`<b>${esc(m[1])}</b> ${esc(m[2])}`:esc(gap);
  const ps=g.points.map(p=>p[1]);let svg='';
  if(ps.length>1){
   const W=90,H=22,all=[...ps,g.target],lo=Math.min(...all),hi=Math.max(...all),r=hi-lo||1;
   const X=i=>3+i/(ps.length-1)*(W-6),Y=v=>H-3-(v-lo)/r*(H-6);
   svg=`<svg width="${W}" height="${H}" aria-hidden="true"><line x1="0" x2="${W}" y1="${Y(g.target)}" y2="${Y(g.target)}" stroke="var(--chart-3)" stroke-dasharray="2 2"/><polyline points="${ps.map((v,i)=>X(i)+','+Y(v)).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="1.6"/><circle cx="${X(ps.length-1)}" cy="${Y(ps.at(-1))}" r="2.5" fill="var(--accent)"/></svg>`}
- const tip=g.points.map(p=>`${p[0]}: ${g.kpi==='score'&&g.n?qFmt(Math.round(p[1]*g.n))+' of '+qFmt(g.n):num(p[1])}`).join('\n')+`\ntarget ${g.kpi==='score'?pct(g.target):num(g.target)} on ${g.slice}`;
+ const tip=g.points.map(p=>p[2]||p[0]).join('\n')+`\ntarget ${g.target_txt||num(g.target)} on ${g.slice}`;
  return `<a class="q-dist" href="#goal/${enc(gk)}" data-qtip="${esc(tip)}">${svg}<span>${txt}</span></a>`;
 }
 

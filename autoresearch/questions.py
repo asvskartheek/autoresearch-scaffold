@@ -351,7 +351,7 @@ def _tree(p, full: bool) -> dict:
         tasks = {}
         for n in nodes.values():
             if n.get("goal") and not n.get("claim"):
-                n["claim"] = _goal_claim(ctx["goal_status"].get(n["goal"]) or {})
+                n["claim"] = _goal_claim(p, ctx["goal_status"].get(n["goal"]) or {})
             n["ev"] = [r for r in (resolve(p, e, n, ctx) for e in n.get("evidence") or []) if r]
             it = items.get(n["id"])
             if it and n.get("status") == "agent":
@@ -369,14 +369,62 @@ def _tree(p, full: bool) -> dict:
                     champion=ctx["champion"], needs_human=sum(1 for n in nodes.values() if _waiting(n)), now=time.time())
 
 
-def _goal_claim(g) -> str | None:
+def _grp(x: float) -> str:
+    """Like core.js grp(): whole numbers with commas from 100 up, else 3 significant figures."""
+    return f"{round(x):,}" if abs(x) >= 100 else f"{float(f'{x:.3g}'):,g}"
+
+
+def _goal_units(p, g) -> dict:
+    """How a goal's numbers read: counts "c of n" on a 0/1 slice, else an amount in the slice's or KPI's unit.
+    Metrics that start "minus ..." are stored negated (higher is better); they read as the positive amount."""
+    sl = (p.slices().get(g.get("slice") or "") or {}) if g.get("slice") else {}
+    kpi, hib = g.get("kpi", "score"), g.get("higher_is_better", True)
+    if kpi == "score" and sl.get("scale") != "continuous":
+        return dict(count=True, n=g.get("n") or sl.get("n"), neg=False, unit="", lower=not hib)
+    metric = str(sl.get("metric") or "")
+    neg = kpi == "score" and bool(re.match(r"\s*minus\b", metric, re.I))
+    unit = sl.get("unit") if kpi == "score" else None
+    if not unit:
+        unit = ("s" if kpi.startswith("latency") else "tok/s" if re.search(r"tokens?_?(per_second|/\s*s)", kpi + " " + metric, re.I)
+                else "")
+    return dict(count=False, n=None, neg=neg, unit=unit or "", lower=(not hib) != neg)
+
+
+def _amt(u, v) -> str:
+    if v is None:
+        return "—"
+    if u["count"] and u["n"]:
+        return f"{round(v * u['n']):,} of {u['n']:,}"
+    if u["count"]:
+        return f"{100 * v:.1f}%"
+    return f"{_grp(-v if u['neg'] else v)} {u['unit']}".strip()
+
+
+def _goal_text(p, g) -> dict:
+    """value, target, gap and each point as text in units; the claim and the header distance both read these."""
+    u = _goal_units(p, g)
+    out = dict(value_txt=_amt(u, g.get("value")))
+    t = g.get("target")
+    if t is not None:
+        if u["count"] and u["n"]:
+            need = -(-round(t * u["n"] * 1e6) // 10**6)
+            out["target_txt"] = f"{need:,} of {u['n']:,} ({f'{100 * t:.1f}'.rstrip('0').rstrip('.')}%)"
+            if g.get("value") is not None:
+                out["gap_txt"] = f"{max(0, need - round(g['value'] * u['n'])):,} more of {u['n']:,}"
+        else:
+            out["target_txt"] = ("at most " if u["lower"] else "at least ") + _amt(u, t)
+            if g.get("gap") is not None and g["gap"] > 0:
+                out["gap_txt"] = f"{_grp(abs(g['gap']))} {u['unit']}".strip() + " to go"
+    return out | dict(units=u)
+
+
+def _goal_claim(p, g) -> str | None:
     if g.get("value") is None:
         return "No complete champion run on the goal slice yet." if g else None
-    if g.get("kpi", "score") == "score" and g.get("n"):
-        n, have, need = g["n"], round(g["value"] * g["n"]), -(-round(g["target"] * g["n"] * 1e6) // 10**6)
-        return f"{g.get('model')}: {have:,} of {n:,}; target {need:,}."
-    op = ">=" if g.get("higher_is_better", True) else "<="
-    return f"{g.get('model')}: {g['kpi']} {g['value']:.3g}; target {op} {g['target']:g}."
+    tx = _goal_text(p, g)
+    who = features.model_label(p, g.get("model"))
+    met = " Met." if g.get("met") else ""
+    return f"{who}: {tx['value_txt']}; target {tx.get('target_txt', '—')}.{met}"
 
 
 def _waiting(n) -> bool:
@@ -399,9 +447,13 @@ def _trajectories(p, ctx) -> dict:
             ev = next((t for t in reversed(_evals(p)) if t.get("model") == m and t.get("slice") == sl), None)
             v = (ev.get("summary") or {}).get(kpi) if ev else None
             if v is not None:
-                pts.append([m, v])
+                pts.append([m, v, features.model_label(p, m)])
+        tx = _goal_text(p, g)
+        u = tx.pop("units")
+        for pt in pts:
+            pt[2] = f"{pt[2]}: {_amt(u, pt[1])}"
         out[k] = {kk: g.get(kk) for kk in ("title", "status", "slice", "n", "kpi", "target", "value", "model",
-                                            "higher_is_better", "gap", "met")} | dict(points=pts)
+                                            "higher_is_better", "gap", "met")} | tx | dict(points=pts)
     return out
 
 
