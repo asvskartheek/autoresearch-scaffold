@@ -110,13 +110,15 @@ function card(t){
  ${ps.length?`<div class="wb-vit ${lay} wb-in">${ps.map((p,i)=>pn(t,p,i===0)).join('')}</div>`:''}</article>`;
 }
 const row=t=>`<article class="wb-job short ${t.status==='stalled'?'stalled':''}">${head(t,true)}${t.status==='stalled'?`<div class="wb-fix wb-in">${cmd(wbFixCmd(t))}</div>`:''}</article>`;
-// finished leaf jobs, newest first: what just landed
+// finished leaf jobs, newest first: what just landed. An eval is one job even when its harness logs a sub-card
+// (e.g. "live: …" rolling numbers): the eval shows, its sub-card does not.
 function strip(skip=new Set()){
- const done=S.state.tasks.filter(t=>!isLive(t)&&t.ended&&!skip.has(t.id)&&!S.state.tasks.some(k=>k.parent===t.id)).sort((a,b)=>b.ended-a.ended).slice(0,6);
+ const evalKid=t=>t.parent&&byId(t.parent)?.kind==='eval';
+ const done=S.state.tasks.filter(t=>!isLive(t)&&t.ended&&!skip.has(t.id)&&!evalKid(t)&&(t.kind==='eval'||!S.state.tasks.some(k=>k.parent===t.id))).sort((a,b)=>b.ended-a.ended).slice(0,6);
  if(!done.length)return '';
  return `<div class="wb-strip">${done.map(t=>{const ok=t.status==='done'||t.status==='completed',sm=t.summary||{};
   const res=t.kind==='eval'&&sm.score!=null?(S.state.slices[t.slice]?.scale==='continuous'?fmtv(sm.score):`${n0(sm.score*(sm.n||0))} of ${n0(sm.n||0)}`):span(t.ended-t.created);
-  return `<a class="wb-chip" href="#task/${enc(t.id)}" title="${esc(t.title)}"><span class="${ok?'pos':'neg'}">${ok?'✓':'✕'}</span><span class="nm">${t.kind==='eval'&&t.model?mn(t.model):esc(t.title)}</span><span class="res">${esc(res)}</span><span class="at">${ago(t.ended)}</span></a>`}).join('')}</div>`;
+  return `<a class="wb-chip" href="#task/${enc(t.id)}" title="${esc(t.title)}"><span class="${ok?'pos':'neg'}">${ok?'✓':'✕'}</span><span class="nm">${t.kind==='eval'&&t.model?mn(t.model)+(t.slice?` <span class="mono sub">${esc(short(t.slice))}</span>`:''):esc(t.title)}</span><span class="res">${esc(res)}</span><span class="at">${ago(t.ended)}</span></a>`}).join('')}</div>`;
 }
 
 // recent failures nobody has opened yet: a red row with the error, until opened or a day old
