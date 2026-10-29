@@ -44,3 +44,18 @@ a.ms-nm:not(.mono){display:block;white-space:normal;max-width:240px;line-height:
 .ms-pd{display:inline-flex;align-items:center;gap:6px;justify-content:flex-end}
 .ms-pd .pill{font-size:11px}
 .ms-ci{font-size:11px;line-height:1.2;white-space:nowrap}
+@media (max-width:1100px){#ms-root .ms-hm{display:none}}
+@media (max-width:640px){
+ #ms-root .ms-hs{display:none}
+ #ms-root td,#ms-root th{white-space:normal}
+ a.ms-nm:not(.mono),.ms-ladder .ms-line,.ms-ladder .ms-ch{max-width:180px}
+ .ms-ch{max-width:180px}
+ .ms-why{min-width:140px}
+ .ms-ladder td:first-child{min-width:110px}
+ #ms-root .ms-id{white-space:normal;min-width:0}
+ #ms-root .ms-kid,#ms-root a.ms-nm{overflow-wrap:anywhere;min-width:0}
+ #ms-root .ms-line .copy{display:none}
+ #ms-root td,#ms-root th{padding-left:6px;padding-right:6px}
+ #ms-root .tbl th{white-space:normal}
+ #ms-root .ms-why,#ms-root .ms-ch{overflow-wrap:anywhere;min-width:0}
+}

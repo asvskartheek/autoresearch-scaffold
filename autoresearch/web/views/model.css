@@ -42,3 +42,15 @@
 .md-idc{display:inline-flex;min-width:0;max-width:100%}
 .md-idc{align-items:center;gap:2px}
 .md-id{font-size:12.5px;color:var(--text);overflow-wrap:anywhere;min-width:0}
+/* the result column never clips: its pills wrap, and the flush card keeps a right gutter */
+.md-gate td.md-res{white-space:normal;min-width:96px}
+.md-gate td.md-res .row{flex-wrap:wrap;gap:4px}
+.card.flush .md-gate th:last-child,.card.flush .md-gate td:last-child{padding-right:var(--card-pad)}
+@media (max-width:1100px){.md-gate .md-hm,.md-gate .md-hw{display:none}.md-ci{min-width:110px}}
+@media (max-width:640px){.md-gate .md-hs{display:none}.md-gate .md-ci .ci{display:none}.md-ci{min-width:0}.md-gate td{white-space:normal}.md-gate td,.md-gate th{padding-left:6px;padding-right:6px}.md-gate td.md-res{min-width:0}.md-gate .md-sl{overflow-wrap:anywhere}}
+/* the gate sizes to its card, not the window: with a sidebar open the card is narrower than the viewport */
+.md-gp{container-type:inline-size}
+.md-gate td.md-rule{white-space:normal;min-width:110px;max-width:150px}
+@container (max-width:1060px){.md-gate .md-hw{display:none}}
+@container (max-width:900px){.md-gate .md-hm{display:none}}
+@container (max-width:700px){.md-gate .md-hs{display:none}.md-gate .md-ci .ci{display:none}}

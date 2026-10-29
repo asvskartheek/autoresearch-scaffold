@@ -51,16 +51,16 @@ function gateTable(name,g,base='Champion'){
    const go=c.cand_task?`onclick="if(!event.target.closest('a,button'))location.hash='task/${enc(c.cand_task)}'"`:'';
    rows.push(`<tr class="${c.cand_task?'click':''} ${i===r.checks.length-1?'':'md-in'}" ${go}>${i?'':head}
     <td class="${i?"md-c1":""}"><div class="two"><a class="mono md-sl ln" href="#slices/${enc(c.slice)}">${esc(short(c.slice))}</a><span class="sub" ${pooled?'title="Complete runs pooled per example: this model / champion"':''}>${n!=null?'n '+n.toLocaleString():'n —'}${pooled}${bin(c.slice)?'':' · mean'}</span></div></td>
-    <td class="sub md-rule">${rule(c)}</td>
-    <td class="num">${ran?(c.cand_task?`<a href="#task/${enc(c.cand_task)}">${score(c.cand,c.slice,c.n)}</a>`:score(c.cand,c.slice,c.n)):DASH}</td>
-    <td class="num">${ran?(c.base_task?`<a href="#task/${enc(c.base_task)}">${score(c.base,c.slice,c.n)}</a>`:score(c.base,c.slice,c.n)):DASH}</td>
+    <td class="sub md-rule md-hm">${rule(c)}</td>
+    <td class="num md-hs">${ran?(c.cand_task?`<a href="#task/${enc(c.cand_task)}">${score(c.cand,c.slice,c.n)}</a>`:score(c.cand,c.slice,c.n)):DASH}</td>
+    <td class="num md-hs">${ran?(c.base_task?`<a href="#task/${enc(c.base_task)}">${score(c.base,c.slice,c.n)}</a>`:score(c.base,c.slice,c.n)):DASH}</td>
     <td class="num"><span class="${!ran?'':c.delta>0?'pos':c.delta<0?'neg':'sub'}">${ran?diff(c.delta,c.slice):DASH}</span></td>
     <td class="md-ci">${ran?(bin(c.slice)?ciBar(c):'')+`<div class="sub md-cil">${ciText(c,c.slice)}</div>`:DASH}</td>
-    <td class="num">${c.wins!=null?`<span class="pos">${c.wins}</span> / <span class="${c.losses?'neg':''}">${c.losses}</span>`:DASH}</td>
-    <td><span class="row">${statePill(c.state)}${c.noisy?pill('Noisy','noisy'):''}</span></td></tr>`);
+    <td class="num md-hw">${c.wins!=null?`<span class="pos">${c.wins}</span> / <span class="${c.losses?'neg':''}">${c.losses}</span>`:DASH}</td>
+    <td class="md-res"><span class="row">${statePill(c.state)}${c.noisy?pill('Noisy','noisy'):''}</span></td></tr>`);
   });
  }
- return `<div class="tbl md-gate"><table><thead><tr><th>Rung</th><th>Slice</th><th>Rule</th><th class="num">This model</th><th class="num">${base}</th><th class="num">Δ</th><th>90% CI</th><th class="num">Wins / losses</th><th>Result</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+ return `<div class="tbl md-gate"><table><thead><tr><th>Rung</th><th>Slice</th><th class="md-hm">Rule</th><th class="num md-hs">This model</th><th class="num md-hs">${base}</th><th class="num">Δ</th><th>90% CI</th><th class="num md-hw">Wins / losses</th><th class="md-res">Result</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
 }
 
 // a champion's promotion evidence: the gate it passed, stored on the promote decision; for older promotions, the
