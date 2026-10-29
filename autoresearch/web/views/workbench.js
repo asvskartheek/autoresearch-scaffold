@@ -91,7 +91,7 @@ function pn(t,p,lead){
   big=f==='pct'?`${n0(p.value*n)} of ${n0(n)}<small>${pct(p.value)}${b?` · 90% CI ${(100*b[1]).toFixed(1)}–${(100*b[2]).toFixed(1)}`:''}</small>`:`${val(f,p.value)}<small>over ${n0(n)}</small>`}
  else{lb=wbMetric(p.key||p.title);const v=sm?smoothLast(pts,w):p.value;big=`${val(f,v)}${sm&&pts.length?`<small>raw ${val(f,p.value)}</small>`:''}`;sub=pts.length?`step ${n0(pts.at(-1)[0])}`:''}
  const ch=XC.box(`wb-${t.id}-${p.id}`,{group:grp,mode:'mini',h:lead?150:52,yfmt:p.yfmt||f,xfmt:p.x==='clock'?'clock':p.x==='time'?'time':'num',
-  domain:p.domain||null,ymin:p.ymin,ymax:p.ymax,zero:p.zero,band:p.band,ref:p.ref,smooth:sm,logOk:false,
+  domain:p.domain||null,ymin:p.ymin,ymax:p.ymax,yfix:p.yfix,zero:p.zero,band:p.band,ref:p.ref,smooth:sm,logOk:false,
   series:(p.series||[]).map((s,i)=>({name:s.name,pts:s.pts,faint:s.faint,color:p.id==='gpu'||p.id==='sec'?'var(--chart-2)':s.faint?'var(--chart-3)':'var(--chart-1)'}))});
  return `<div class="wb-pn ${lead?'lead':''}"><div class="wb-lb"><span>${esc(lb)}</span><span>${esc(sub)}</span></div><div class="wb-big">${big}</div>${ch}${extra}</div>`;
 }

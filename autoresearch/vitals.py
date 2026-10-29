@@ -125,7 +125,7 @@ def _gpu(rows, t0):
         return None
     last = sy[-1]
     sy = [m for m in sy if m["t"] >= last["t"] - 1800]
-    return dict(id="gpu", title="GPU", fmt="pct100", value=last["gpu_util"], x="time", ymin=0, ymax=100,
+    return dict(id="gpu", title="GPU", fmt="pct100", value=last["gpu_util"], x="time", ymin=0, ymax=100, yfix=True,
                 mem=[last.get("gpu_mem_gb"), last.get("gpu_mem_total_gb")], gpus=last.get("gpus"),
                 series=[dict(name="GPU utilisation", pts=thin([[m["t"] - t0, m["gpu_util"]] for m in sy]))])
 

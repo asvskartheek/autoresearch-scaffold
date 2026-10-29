@@ -3,7 +3,7 @@
 // A view returns HTML strings, so a chart is a placeholder: XC.box(id, spec) registers the spec and returns
 // <div data-xc=id>; after each render XC.mount() draws into it, keeping the chart (zoom, hover) across the 4 s poll.
 //   spec: {group, series:[{id,name,color,pts:[[x,y,t?]],faint,smooth}], h, mode:'full'|'compact'|'mini', xLabel, yLabel,
-//          domain:[x0,x1], ymin, ymax, ref:{y,label}, band:[[x,lo,hi]], zero, yfmt:'num'|'pct'|'pct100'|'s'|'signed'|'pts'|'int'|'dmin',
+//          domain:[x0,x1], ymin, ymax, yfix (the axis is exactly ymin..ymax, e.g. 0-100%), ref:{y,label}, band:[[x,lo,hi]], zero, yfmt:'num'|'pct'|'pct100'|'s'|'signed'|'pts'|'gb'|'int'|'dmin',
 //          xfmt:'num'|'time'|'clock', t0, logOk}
 //   Group state (shared by every chart with the same group: synced crosshair, zoom, smoothing, log-y, hidden series):
 //   XC.g(name, defaults) -> {w, log, x:'step'|'time', zoom, pin, hidden:Set, hl}
@@ -33,7 +33,7 @@ const hms=t=>new Date(t*1000).toLocaleTimeString('en-GB',{hour:'2-digit',minute:
 // a value in a spec's own terms; `step` is the tick step (null for a read-out)
 function yv(f,v,step){if(v==null||!isFinite(v))return '–';
  switch(f){case 'pct':return step!=null?fmt(100*v,step*100)+'%':(100*v).toFixed(1)+'%';case 'pct100':return Math.round(v)+'%';
-  case 's':return fmt(v,step)+' s';case 'signed':return sgn(v);
+  case 's':return fmt(v,step)+' s';case 'signed':return sgn(v);case 'gb':return fmt(v,step)+' GB';
   case 'pts':{const x=100*v,a=Math.abs(x),sg=x>1e-9?'+':x<-1e-9?'−':'';return sg+(step!=null?fmt(a,step*100):a.toFixed(1))+(step!=null?'':' pts')}case 'int':return Math.round(v).toLocaleString();
   case 'dmin':{const a=Math.abs(v),sg=v>1e-9?'+':v<-1e-9?'−':'±';return a<2?sg+Math.round(a*60)+' s':sg+(a<10?a.toFixed(1):Math.round(a))+' min'}default:return fmt(v,step)}}
 // x read-outs: steps, minutes since start, or a clock time
@@ -108,7 +108,7 @@ class Chart{
   if(lo==null||!isFinite(lo)){lo=0;hi=1}
   let yt;
   if(log){lo=Math.pow(10,Math.floor(Math.log10(lo)*4)/4);hi=Math.pow(10,Math.ceil(Math.log10(hi)*4)/4);if(hi<=lo)hi=lo*10;yt=logTicks(lo,hi);this.ystep=null}
-  else{[lo,hi]=niceDomain(lo,hi,compact?3:5);if(s.ymin!=null)lo=Math.max(lo,s.ymin);if(s.ymax!=null)hi=Math.min(hi,s.ymax);if(hi<=lo)hi=lo+1;
+  else{[lo,hi]=niceDomain(lo,hi,compact?3:5);if(s.ymin!=null)lo=s.yfix?s.ymin:Math.max(lo,s.ymin);if(s.ymax!=null)hi=s.yfix?s.ymax:Math.min(hi,s.ymax);if(hi<=lo)hi=lo+1;
    const t=linTicks(lo,hi,mini?1:compact?3:5);yt=mini?[lo,hi]:t.ticks;this.ystep=t.step}
   const X=this.X=x=>L+(x-x0)/(x1-x0)*(W-L-R);this.inv=px=>x0+(px-L)/(W-L-R)*(x1-x0);
   const Y=this.Y=log?y=>T+(1-(Math.log10(y)-Math.log10(lo))/(Math.log10(hi)-Math.log10(lo)))*(H-T-B):y=>T+(1-(y-lo)/(hi-lo))*(H-T-B);

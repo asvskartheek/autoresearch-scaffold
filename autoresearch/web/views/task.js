@@ -156,11 +156,11 @@ function curves(t,d){
  if(more.length)h+=`<details class="tk-moredet"><summary>${plural(more.length,'more metric')}</summary><div class="tk-multi">${more.map(sm).join('')}</div></details>`;
  if(flat.length)h+=`<p class="tk-flat"><span>Flat</span>${flat.map(k=>`<span>${esc(nm(k))} <b>${lastOf(k)}</b></span>`).join('')}</p>`;
  if(sys.length){const tot=sys.at(-1).gpu_mem_total_gb;
-  const sp=(k,f,ref)=>({group:grp,mode:'compact',h:120,xLabel:ev?'examples':'step',yfmt:f,t0:t.created,domain:dom,ymin:0,ymax:k==='gpu_util'?100:null,logOk:false,ref,
+  const sp=(k,f,ref)=>({group:grp,mode:'compact',h:120,xLabel:ev?'examples':'step',yfmt:f,t0:t.created,domain:dom,ymin:0,ymax:k==='gpu_util'?100:tot||null,yfix:k==='gpu_util'||!!tot,logOk:false,ref,
    series:[{id:t.id,name:k==='gpu_util'?'GPU utilisation':'GPU memory',color:'var(--chart-2)',smooth:false,pts:sys.filter(m=>typeof m[k]==='number').map(m=>[m.step,m[k],m.t])}]});
   h+=`<div class="tk-multi tk-sys">
    <div class="tk-sm"><div class="tk-smh"><span>GPU utilisation</span><b>${Math.round(sys.at(-1).gpu_util)}%</b></div>${XC.box(`tk-${t.id}-gpu`,sp('gpu_util','pct100'))}</div>
-   ${typeof sys.at(-1).gpu_mem_gb==='number'?`<div class="tk-sm"><div class="tk-smh"><span>GPU memory</span><b>${sys.at(-1).gpu_mem_gb.toFixed(1)}${tot?` of ${tot.toFixed(0)}`:''} GB</b></div>${XC.box(`tk-${t.id}-gmem`,sp('gpu_mem_gb','num',tot?{y:tot,label:'total'}:null))}</div>`:''}</div>`}
+   ${typeof sys.at(-1).gpu_mem_gb==='number'?`<div class="tk-sm"><div class="tk-smh"><span>GPU memory</span><b>${sys.at(-1).gpu_mem_gb.toFixed(1)}${tot?` of ${tot.toFixed(0)}`:''} GB</b></div>${XC.box(`tk-${t.id}-gmem`,sp('gpu_mem_gb','gb',null))}</div>`:''}</div>`}
  return h+`</div>`;
 }
 // the finish estimate over the run: each point is where the rate over the last 5 minutes put the finish
