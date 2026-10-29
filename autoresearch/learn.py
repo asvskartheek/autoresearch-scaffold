@@ -68,7 +68,9 @@ def _short(slice_name: str) -> str:
 def _title(p: Project, model: str) -> str:
     t = str(features.model_label(p, model))
     t = t.split(" — ")[0].strip()
-    return t if len(t) <= 60 else t[:59].rstrip() + "…"
+    label = t if len(t) <= 60 else t[:59].rstrip() + "…"
+    duplicates = [m for m in p.models() if str(features.model_label(p, m)).split(" — ")[0].strip() == t]
+    return f"{label} · {model}" if len(duplicates) > 1 else label
 
 
 def _gate(p: Project, model: str) -> dict:
@@ -729,8 +731,8 @@ def brief(p: Project, since: float = 0, viewer: str = "anon") -> dict:
         pub = [public(c, mine.get(c["id"])) | dict(needs=course.needs(c["id"])) for c in cs]
         prof = teach.attach(p, cs, pub, viewer, al)
         cal = calibration(preds)
-        # "right" counts every answered card, predictions and the other methods alike; Brier is predictions only
-        done = [r for r in teach.attempts(p, viewer, al) if not r.get("skip") and r.get("hit") is not None]
+        # Objective right counts exclude explain self-reports; Brier is predictions only.
+        done = [r for r in teach.attempts(p, viewer, al) if not r.get("skip") and r.get("hit") is not None and r.get("method") != "explain"]
         cal |= dict(all_n=cal["n"] + len(done), all_hits=cal["hits"] + sum(bool(r["hit"]) for r in done))
         return dict(now=_now(), since=since, viewer=viewer, cards=pub,
                     empty=None if cs else _why_empty(p),

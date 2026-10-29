@@ -266,12 +266,12 @@ def _ci_of(p, learn, c):
 
 
 def lesson_interval(p, L, learn):
-    noisy = next((c for c in L["checks"] if c.get("noisy") and c.get("lo") is not None), None)
-    src = _ci_of(p, learn, noisy) if noisy else _ci_of(p, learn, L["promo"]["viz"]) if L["promo"] else None
+    noisy = next((c for c in L["checks"] if c.get("noisy") and c.get("lo") is not None and abs(c.get("delta") or 0) > 1e-9), None)
+    src = _ci_of(p, learn, noisy) if noisy else None
     fig = dict(kind="interval", **(src or dict(delta=1.6, lo=-0.5, hi=3.7, n=185, unit="pts")), example=src is None)
     crosses = fig["lo"] <= 0 <= fig["hi"]
     ans = "Not yet: it crosses zero" if crosses else "Yes: it clears zero"
-    return dict(say="The 90% interval is where the true Δ probably is. Crossing zero means it could be noise; more examples narrow it.",
+    return dict(say="An interval crossing zero does not establish a direction. This projection holds the effect fixed and narrows uncertainty as 1/√n; it is not a new measurement. If the effect is zero, more examples alone cannot make it clear zero.",
                 fig=fig,
                 checks=[_check(f"Δ {_amt(fig['unit'], fig['delta'])}, 90% interval {_amt(fig['unit'], fig['lo'])} to {_amt(fig['unit'], fig['hi'])}. Is the change shown?",
                                ["Yes: it clears zero", "Not yet: it crosses zero"], ans,

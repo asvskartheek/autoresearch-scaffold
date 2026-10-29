@@ -118,9 +118,9 @@ function protoSVG(t,n,label){
 const pLo=t=>Math.max(4,t.n/20),pHi=t=>Math.max(t.n*60,t.n*((t.hi-t.lo)/2/Math.max(Math.abs(t.delta),1e-12))**2*2),toN=(t,f)=>Math.exp(Math.log(pLo(t))+f*(Math.log(pHi(t))-Math.log(pLo(t)))),toF=(t,n)=>(Math.log(n)-Math.log(pLo(t)))/(Math.log(pHi(t))-Math.log(pLo(t)));
 function protoBody(c,s){
  const t=c.task||s.tk,need=c.reveal?.show?.need;if(!t)return '';
- if(s.n==null)s.n=t.n;
- return `<div id="tpw">${protoSVG(t,s.n,`measured at n = ${t.n.toLocaleString()}`)}</div><input type="range" class="t-range" id="tpn" min="0" max="1000" value="${Math.round(1000*toF(t,s.n))}" ${c.pred?'disabled':''} aria-label="n">
-  ${need?`<div class="t-need">${protoSVG(t,need,`needed: n = ${need.toLocaleString()}`)}</div>`:''}`;
+ if(s.n==null)s.n=c.reveal?.show?.got??t.n;
+ return `<div id="tpw">${protoSVG(t,s.n,`projection from measured n = ${t.n.toLocaleString()}`)}</div><input type="range" class="t-range" id="tpn" min="0" max="1000" value="${Math.round(1000*toF(t,s.n))}" ${c.pred?'disabled':''} aria-label="n">
+  ${need?`<div class="t-need">${protoSVG(t,need,`projected threshold: n ≈ ${need.toLocaleString()}`)}</div>`:''}`;
 }
 
 // ---------- code: one line, evaluated live on the card's own numbers
@@ -150,18 +150,18 @@ function strip(c){const ms=c.methods||[];return `<div class="t-strip">${ms.map(m
 
 const ready=c=>{const s=st(c),t=c.task||s.tk;return c.method==='sketch'?!!(s.sk?.moved||s.sbm):c.method==='spot'?s.pick!=null:c.method==='code'?!!t&&codeVal(t,s.code)!=null:c.method==='explain'?(s.ex||'').trim().length>8:c.method==='ndrag'?s.n!=null:false};
 const answerOf=c=>{const s=st(c);return c.method==='sketch'?(s.sk?{...s.sk}:{rows:s.sb}):c.method==='spot'?s.pick:c.method==='ndrag'?Math.round(s.n):c.method==='code'?s.code:s.ex};
-const stepCard=c=>c.step?{id:c.id+'::step',method:c.step.method,task:c.step.task,pred:c.step.done?{hit:c.step.hit}:null,reveal:c.step.done?{show:c.step.show}:null}:null;
+const stepCard=c=>c.step&&typeof c.step==='object'&&c.step.task&&c.step.method?{id:c.id+'::step',method:c.step.method,task:c.step.task,pred:c.step.done?{hit:c.step.hit}:null,reveal:c.step.done?{show:c.step.show}:null}:null;
 function after(c){
- if(c.selfcheck){const s=st(c);s.self=s.self||{};return `<section class="t-after"><h3>Check your explanation</h3>${c.selfcheck.map((x,i)=>`<label class="t-self"><input type="checkbox" data-t-self="${i}" ${s.self[i]?'checked':''}>I explained ${esc(x)}</label>`).join('')}<button class="btn" data-t="self">Save self-check</button></section>`}
+ if(c.selfcheck){const s=st(c);s.self=s.self||{};return `<section class="t-after"><h3>Check your explanation</h3>${c.selfcheck.map((x,i)=>`<label class="t-self"><input type="checkbox" data-t-self="${i}" ${s.self[i]?'checked':''}>${esc(x)}</label>`).join('')}<button class="btn" data-t="self">Save self-check</button></section>`}
  const q=stepCard(c);if(!q)return '';const s=st(q),ss=c.step;
  const title=q.method==='code'?'Write the line for this result':q.method==='spot'?'Spot the error in this result':`Drag n ${q.task.dir==='down'?'down until the interval touches zero':'up until the interval clears zero'}`;
- const content=body(q),verdict=ss.done?`<div class="verdict"><span class="vd ${ss.hit?'ok':'no'}">${ss.hit?'✓ Step correct':'✗ Try the explanation below'}</span></div>${ss.show?.why?`<p>${esc(ss.show.why)}</p>`:''}`:'';
+ const content=body(q),verdict=ss.done?`<div class="verdict"><span class="vd ${ss.hit?'ok':'no'}">${ss.hit?'✓ Step correct':ss.show?.why?'✗ Try the explanation below':'✗ Not quite'}</span></div>${ss.show?.why?`<p>${esc(ss.show.why)}</p>`:''}`:'';
  return `<section class="t-after" data-step="${esc(c.id)}"><h3>${title}</h3>${content}${verdict}${ss.done?'':`<div class="actions"><button class="btn" data-t="step" ${ready(q)?'':'disabled'}>Check step</button><button class="btn" data-t="step-skip">Skip step</button></div>`}</section>`;
 }
 function card(c){
  const s=st(c),p=c.pred,rv=c.reveal,n=L.b.cards.length,i=L.cur;
  const content=body(c);let reveal='';
- if(p&&rv){const verdict=p.hit==null?'Awaiting your self-check':p.hit?'✓ Right':'✗ Not quite';
+ if(p&&rv){const verdict=p.hit==null?'Awaiting your self-check':c.method==='explain'?(p.hit?'Self-checked: matches result':'Self-checked: needs revision'):p.hit?'✓ Right':'✗ Not quite';
   reveal=`<div class="reveal"><div class="verdict"><span class="vd ${p.hit==null?'open':p.hit?'ok':'no'}">${verdict}</span>${rv.truth!=null?`<b>${c.type==='choice'?esc(rv.truth):lfmt(c,rv.truth)}</b>`:''}</div>${c.method==='sketch'&&content?'':viz(rv.viz)}<p class="why">${esc(rv.why||'')}</p></div>${after(c)}`}
  return `<div class="kind">${pill(c.label,c.tone)}<span>${i+1} of ${n}</span>${strip(c)}</div><p class="q">${esc(c.q)}</p>${c.ctx?`<p class="ctx">${esc(c.ctx)}</p>`:''}${c.adapt?`<p class="ctx">${esc(c.adapt)}</p>`:''}${content}${reveal}
  <div class="actions">${p?`<button class="btn primary" data-l="next">${i===n-1?'Finish':'Next'} <kbd>space</kbd></button>`:`<button class="btn primary" data-t="go" ${ready(c)?'':'disabled'}>Check <kbd>space</kbd></button>${(c.others??0)>0?'<button class="btn" data-t="skip">Another way</button>':''}`}${i>0?'<button class="btn" data-l="prev">Back</button>':''}</div>`;
@@ -182,7 +182,7 @@ const eventCard=(e,c)=>e.target.closest('.t-after[data-step]')?stepCard(c):c;
 // how each method has gone for this person: tries, right, skipped
 function profile(){
  const pr=L.b?.teach?.profile;if(!pr)return '';const ms=Object.entries(pr.methods);const top=Math.max(1,...ms.map(([,s])=>s.n+s.skips));
- return `<div class="t-prof">${ms.map(([m,s])=>`<div class="t-pr" title="${esc(NAMES[m])}: ${s.hits} right of ${s.n}${s.skips?', '+s.skips+' skipped':''}">${ico(m)}<span>${esc(NAMES[m]||m)}</span><span class="t-bar"><i class="ok" style="width:${100*s.hits/top}%"></i><i class="no" style="width:${100*(s.n-s.hits)/top}%"></i><i class="sk" style="width:${100*s.skips/top}%"></i></span><span class="mono">${s.n?s.hits+'/'+s.n:'–'}</span></div>`).join('')}</div>`;
+ return `<div class="t-prof">${ms.map(([m,s])=>`<div class="t-pr" title="${esc(NAMES[m])}: ${s.hits} ${m==='explain'?'self-checked':'right'} of ${s.n}${s.skips?', '+s.skips+' skipped':''}">${ico(m)}<span>${esc(NAMES[m]||m)}${m==='explain'?' · self-report':''}</span><span class="t-bar"><i class="ok" style="width:${100*s.hits/top}%"></i><i class="no" style="width:${100*(s.n-s.hits)/top}%"></i><i class="sk" style="width:${100*s.skips/top}%"></i></span><span class="mono">${s.n?s.hits+'/'+s.n:'–'}</span></div>`).join('')}</div>`;
 }
 
 document.addEventListener('click',e=>{
@@ -192,7 +192,7 @@ document.addEventListener('click',e=>{
 document.addEventListener('pointerdown',e=>{if(route().r!=='learn'||!e.target.closest)return;const c=L.b?.cards[L.cur];if(c&&c.method==='sketch')dragSketch(e,c)});
 document.addEventListener('input',e=>{
  if(route().r!=='learn')return;const raw=L.b?.cards[L.cur];if(!raw)return;if(e.target.dataset.tSelf!=null){st(raw).self=st(raw).self||{};st(raw).self[e.target.dataset.tSelf]=e.target.checked;return}const c=eventCard(e,raw);if(!c||c.pred)return;const s=st(c);
- if(e.target.id==='tpn'){const t=c.task||s.tk;s.n=toN(t,e.target.value/1000);$('#tpw').innerHTML=protoSVG(t,s.n,`measured at n = ${t.n.toLocaleString()}`)}
+ if(e.target.id==='tpn'){const t=c.task||s.tk;s.n=toN(t,e.target.value/1000);$('#tpw').innerHTML=protoSVG(t,s.n,`projection from measured n = ${t.n.toLocaleString()}`)}
  else if(e.target.id==='tcode'){s.code=e.target.value;const v=codeVal(c.task||s.tk,s.code),cm=$('#main .t-code .c');if(cm)cm.textContent='// '+(v==null?'= ?':'= '+(+v.toFixed(2))+' pts');const go=$('#main [data-t=step]')||$('#main [data-t=go]');if(go)go.disabled=v==null}
  else if(e.target.id==='tex'){s.ex=e.target.value;const go=$('#main [data-t=step]')||$('#main [data-t=go]');if(go)go.disabled=s.ex.trim().length<=8}
 });

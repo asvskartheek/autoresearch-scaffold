@@ -279,14 +279,14 @@ const TERMS={
  ladder:{w:'ladder',d:'Rungs from small to full: a cheap check first, the whole set last.',g:TG(`${[['dev',8,10],['50',36,14],['100',64,20],['full',92,26]].map(([l,x,w])=>`<rect x="${x}" y="${34-w}" width="20" height="${w}" rx="2" ${TA} opacity=".85"/><text x="${x}" y="42" font-size="8" fill="var(--muted)">${l}</text>`).join('')}`)},
  brief:{w:'Brief',d:'Cards that catch you up on what changed, by doing, not reading.',g:TG(`<rect x="34" y="12" width="52" height="30" rx="4" fill="var(--surface)" stroke="var(--muted)"/><rect x="30" y="8" width="52" height="30" rx="4" fill="var(--surface)" stroke="var(--muted)"/><rect x="26" y="4" width="52" height="30" rx="4" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/><path d="M34 22h22M34 27h14" stroke="var(--accent)" stroke-width="2"/>`)},
 };
-const term=(id,label)=>{const x=TERMS[id];if(!x)return esc(label??id);return `<span class="term" data-term="${id}" tabindex="0">${esc(label??x.w)}</span>`};
+const term=(id,label)=>{const x=TERMS[id];if(!x)return esc(label??id);return `<span class="term" data-term="${id}" tabindex="0" role="button" aria-label="${esc(label??x.w)} lesson">${esc(label??x.w)}</span>`};
 {
  let pop=null,cur=null,hideT=0,showT=0;
  const touch=matchMedia('(hover:none)').matches;
- const hide=()=>{clearTimeout(showT);if(pop){pop.remove();pop=null;cur=null}};
+ const hide=()=>{clearTimeout(showT);if(pop){cur?.removeAttribute('aria-describedby');pop.remove();pop=null;cur=null}};
  const show=el=>{
   clearTimeout(hideT);if(cur===el)return;hide();const x=TERMS[el.dataset.term];if(!x)return;
-  cur=el;pop=document.createElement('div');pop.className='term-pop';pop.setAttribute('role','tooltip');
+  cur=el;pop=document.createElement('div');pop.className='term-pop';pop.setAttribute('role','tooltip');pop.id='arx-term-definition';el.setAttribute('aria-describedby',pop.id);
   pop.innerHTML=`${x.g}<b>${esc(x.w[0].toUpperCase()+x.w.slice(1))}</b><span>${esc(x.d)}</span><a href="#course/${enc(el.dataset.term)}">Lesson ${CHEVR}</a>`;
   pop.addEventListener('mouseenter',()=>clearTimeout(hideT));pop.addEventListener('mouseleave',()=>{hideT=setTimeout(hide,200)});
   pop.addEventListener('click',e=>{if(e.target.closest('a'))hide()});
@@ -306,6 +306,6 @@ const term=(id,label)=>{const x=TERMS[id];if(!x)return esc(label??id);return `<s
   if(inLink&&(!touch||cur===el)){hide();return}  // a link's own click
   e.preventDefault();e.stopPropagation();cur===el?hide():show(el);
  },true);
- addEventListener('keydown',e=>{if(e.key==='Escape'&&pop){hide()}});
+ addEventListener('keydown',e=>{if(e.key==='Escape'&&pop){hide();return}const el=e.target.closest?.('.term');if(el&&(e.key==='Enter'||e.key===' ')){e.preventDefault();location.hash='#course/'+enc(el.dataset.term);hide()}else if(el&&e.key==='Tab'&&!e.shiftKey&&pop){e.preventDefault();pop.querySelector('a')?.focus()}});
  addEventListener('hashchange',hide);addEventListener('scroll',()=>{if(pop&&!touch)hide()},{passive:true});
 }

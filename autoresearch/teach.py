@@ -40,6 +40,15 @@ HARDER = dict(predict=0, sketch=1, explain=2, spot=0, ndrag=1, code=2)  # within
 PRIOR = dict(predict=0.52, sketch=0.56, explain=0.40, code=0.50, ndrag=0.55, spot=0.52)  # hands-on first, writing last
 LABEL = dict(predict="Predict", sketch="Sketch", explain="Say it", code="Write the line", ndrag="Drag n", spot="Spot the error")
 IDEAS = ("which way", "real or noise")
+NDRAG_WHY = "This is a projection, not a new measurement. Holding the effect fixed, interval width scales as 1/√n: four times as many independent examples halves the width. The threshold is approximate; a new sample can also change the effect."
+
+
+def selfcheck(c: dict) -> list[str]:
+    v = c.get("viz") or {}
+    d, lo, hi = v.get("delta", 0), v.get("lo", 0), v.get("hi", 0)
+    direction = "no measured change" if d == 0 else "an improvement" if d * (v.get("better") or 1) > 0 else "a degradation"
+    uncertainty = "the interval crosses zero, so the direction is uncertain" if lo <= 0 <= hi else "the interval clears zero"
+    return [f"My explanation agrees with {direction} in the result.", f"My explanation says {uncertainty}."]
 
 
 def _h(*xs) -> int:
@@ -237,7 +246,7 @@ def grade(c: dict, method: str, ans) -> dict:
             hit = abs((got[i] * n if n and c.get("int") else got[i] * (100 if c.get("unit") == "%" else 1)) - c["truth"]) <= (c.get("tol") or 0) + 1e-9
         return dict(hit=hit, err=round(err, 3), show={})
     if method == "explain":
-        return dict(hit=None, err=None, show=dict(selfcheck=list(IDEAS)))
+        return dict(hit=None, err=None, show=dict(selfcheck=selfcheck(c)))
     return dict(hit=None, err=None, show={})
 
 
@@ -250,7 +259,7 @@ def grade_step(c: dict, m: str, ans) -> dict:
         if n is None or not math.isfinite(need):
             return dict(hit=False, err=None, show=dict(need=None))
         err = abs(math.log(max(n, 1) / max(need, 1)))
-        return dict(hit=err <= math.log(1.35), err=round(err, 3), show=dict(need=round(need), got=round(n)))
+        return dict(hit=err <= math.log(1.35), err=round(err, 3), show=dict(need=round(need), got=round(n), why=NDRAG_WHY))
     if m == "spot":
         _, wrong, why = _spot(c)
         return dict(hit=str(ans) == wrong, err=None, show=dict(wrong=wrong, why=why, got=str(ans)[:20]))
@@ -403,7 +412,10 @@ def _step_pub(full: dict, rows: list[dict], prof: dict, viewer: str, deck: dict)
         return None
     done = next((r for r in rows if r.get("card") == full["id"] and _phase(r) == "step" and not r.get("skip")), None)
     if done:
-        return dict(method=done["method"], done=True, hit=done.get("hit"), show=done.get("show") or {}, task=step_task(full, done["method"]) if done["method"] in ms else {})
+        show = dict(done.get("show") or {})
+        if done["method"] == "ndrag":
+            show.setdefault("why", NDRAG_WHY)
+        return dict(method=done["method"], done=True, hit=done.get("hit"), show=show, task=step_task(full, done["method"]) if done["method"] in ms else {})
     avoid = {r.get("method") for r in rows if r.get("card") == full["id"] and _phase(r) == "step" and r.get("skip")}
     if not set(ms) - avoid:
         return None  # every step was passed over: the card is done
@@ -434,7 +446,7 @@ def attach(p: Project, cards_full: list[dict], public_cards: list[dict], viewer:
             pub["pred"] = dict(method=a["method"], hit=a.get("hit"), t=a.get("t"), guess=None, conf=None)
             pub["reveal"] = reveal(full, a.get("show"))
             if a["method"] == "explain" and full["id"] not in selfed:
-                pub["selfcheck"] = list(IDEAS)
+                pub["selfcheck"] = selfcheck(full)
         ms = methods_for(full)
         if a or pub.get("pred"):
             m, why = (a["method"] if a else "predict"), None
@@ -527,7 +539,7 @@ def answer(p: Project, body: dict) -> tuple[int, dict]:
     pub = public(c) | dict(method=rec["method"], pred=dict(method=rec["method"], hit=rec["hit"], t=rec["t"], guess=None, conf=None),
                            reveal=reveal(c, rec.get("show")))
     if rec["method"] == "explain" and rec.get("hit") is None:
-        pub["selfcheck"] = list(IDEAS)
+        pub["selfcheck"] = selfcheck(c)
     else:
         st = step_for(p, c, viewer)
         if st:

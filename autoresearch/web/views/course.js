@@ -59,7 +59,7 @@ const FIG={
   const e=Math.max(Math.abs(f.lo),Math.abs(f.hi),Math.abs(f.delta)*2)*1.1,x=q=>L0+(Math.max(-e,Math.min(e,q))+e)/(2*e)*(R-L0),col=clear?(f.delta>0?'var(--positive)':'var(--negative)'):'var(--muted)';
   const lg=Math.log,a=Math.max(4,f.n/20),b=f.n*20,pos=(lg(n)-lg(a))/(lg(b)-lg(a));
   return `${ex(f)}<div class="crs-big">${clear?'Clears zero':'Crosses zero'}<span> at n = ${Math.round(n).toLocaleString()}</span></div>`+svg(w,72,axis(-e,e,x,58,f.unit)+`<line x1="${x(lo)}" x2="${x(hi)}" y1="40" y2="40" stroke="${col}" stroke-width="10" stroke-linecap="round" opacity=".45"/><circle cx="${x(f.delta)}" cy="40" r="6" fill="${col}"/>`,'interval')+
-   `<p class="crs-cap mono">${amt(f.unit,f.delta)} [${amt(f.unit,lo)}, ${amt(f.unit,hi)}]</p><label class="crs-rg"><span>n</span><input type="range" data-w="${id}:nf" min="0" max="1000" value="${Math.round(1000*pos)}"><output>${Math.round(a).toLocaleString()} – ${Math.round(b).toLocaleString()}</output></label>`},
+   `<p class="crs-cap">Projection at fixed effect · original n = ${f.n.toLocaleString()}</p><p class="crs-cap mono">${amt(f.unit,f.delta)} [${amt(f.unit,lo)}, ${amt(f.unit,hi)}]</p><label class="crs-rg"><span>n</span><input type="range" data-w="${id}:nf" min="0" max="1000" value="${Math.round(1000*pos)}"><output>${Math.round(a).toLocaleString()} – ${Math.round(b).toLocaleString()}</output></label>`},
  gate(f,s,id){const d=s.d??f.delta,e=Math.max(Math.abs(f.bar)*3,Math.abs(f.delta)*1.6,f.unit==='pts'?2:1),w=CW(),L0=14,R=w-14,x=q=>L0+(q+e)/(2*e)*(R-L0);
   const sign=f.better||1,ok=f.rule==='better'?sign*d>sign*f.bar:sign*d>=sign*f.bar,word=sign<0?(f.rule==='better'?'below':'at or below'):(f.rule==='better'?'above':'at or above');
   return `${ex(f)}<div class="crs-big ${ok?'pos':'neg'}">${ok?'Pass':'Fail'}<span> Δ ${amt(f.unit,d)} is ${ok?word:(sign<0?'above':'below')} the bar ${amt(f.unit,f.bar)}</span></div>`+
@@ -105,6 +105,7 @@ async function answer(key,i){const [id,how]=key.split('|'),x=lesson(id);if(!x||C
  if(ok){C.ans[key]=o[i];C.err=null}else C.err='Could not save your answer. Try again.';render(true)}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-cq]');if(!b)return;answer(b.dataset.cq,+b.dataset.i)});
 
+document.addEventListener('click',e=>{const b=e.target.closest('[data-study-check]');if(b){W(b.dataset.studyCheck).checking=true;render(true)}});
 // ---------- pages
 const due=()=>(C.d?.due||[]).filter(id=>lesson(id));
 const nextOf=id=>{const ids=C.d.lessons.map(x=>x.id),i=ids.indexOf(id);return ids[i+1]};
@@ -122,8 +123,8 @@ function lessonHTML(id,how){
  const nx=how==='review'?(dd[0]?'#course/review':'#course'):nextOf(id)?'#course/'+enc(nextOf(id)):'#course';
  const st=state(id),m=mem(id);
  const head=page({title:x.t,crumbs:[['101','#course'],[x.t]],acts:`<span class="crs-st ${st}">${st==='new'?'new':esc(when(m))}</span>`});
- // a review asks first (the memory test), then shows the figure; a lesson shows the figure first
- const body=how==='review'&&!done?checkHTML(x,how,key):`${fig(x)}<p class="crs-say">${esc(x.say)}</p>${checkHTML(x,how,key)}`;
+ // Study and recall are separate: hide the worked figure until the learner commits an answer.
+ const body=done?`${fig(x)}<p class="crs-say">${esc(x.say)}</p>${checkHTML(x,how,key)}`:how==='review'||W(id).checking?checkHTML(x,how,key):`${fig(x)}<p class="crs-say">${esc(x.say)}</p><button class="btn primary" data-study-check="${esc(id)}">Check from memory</button>`;
  return head+`<div class="crs crs-one">${body}${C.err?`<p role="alert">${esc(C.err)}</p>`:''}<div class="actions">${done?`<a class="btn primary" href="${nx}" data-next data-how="${how}">${how==='review'?(dd[0]?'Next review':'Done'):'Next'} <kbd>space</kbd></a>`:''}<a class="btn" href="#course">All lessons</a></div></div>`}
 VIEWS.course=arg=>{
  ensure();
@@ -142,7 +143,7 @@ document.addEventListener('keydown',e=>{
  if((e.key===' '||e.key==='Enter')&&!(t&&t.tagName==='BUTTON')){const a=document.querySelector('#main [data-next]')||(!route().arg&&document.querySelector('#main .acts .btn.primary'));if(a){a.click();e.preventDefault()}}
 });
 // a small version for the Brief: the figure, the sentence and one check, recorded as a primer
-function primer(id){const x=lesson(id);if(!x)return '';return `${fig(x)}<p class="crs-say">${esc(x.say)}</p>${checkHTML(x,'primer',id+'|primer')}`}
+function primer(id){const x=lesson(id);if(!x)return '';const key=id+'|primer';return C.ans[key]!=null?`${fig(x)}<p class="crs-say">${esc(x.say)}</p>${checkHTML(x,'primer',key)}`:W(id).checking?checkHTML(x,'primer',key):`${fig(x)}<p class="crs-say">${esc(x.say)}</p><button class="btn primary" data-study-check="${esc(id)}">Check from memory</button>`}
 const primed=id=>C.ans[id+'|primer']!=null;
 return {ensure,lesson,state,mem,primer,primed,answer,record,data:()=>C.d};
 })();

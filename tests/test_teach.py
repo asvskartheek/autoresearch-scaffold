@@ -151,7 +151,7 @@ class Teach(unittest.TestCase):
     def test_explain_is_checked_by_the_person_against_the_reveal(self):
         code, d = self.post(method="explain", answer="It got worse, but it could be noise.")
         self.assertEqual(code, 200)
-        self.assertIsNone(d["attempt"]["hit"]); self.assertEqual(d["card"]["selfcheck"], list(teach.IDEAS))
+        self.assertIsNone(d["attempt"]["hit"]); self.assertEqual(d["card"]["selfcheck"], teach.selfcheck(self.ci))
         self.assertNotIn("could be noise", json.dumps(teach.attempts(self.p, "ann")))  # the sentence is not kept
         self.assertEqual(teach.answer(self.p, {"viewer": "ann", "card": self.ci["id"], "method": "explain", "self": [True]})[0], 400)
         code, d = teach.answer(self.p, {"viewer": "ann", "card": self.ci["id"], "method": "explain", "self": [True, False]})
@@ -161,6 +161,7 @@ class Teach(unittest.TestCase):
         b = learn.brief(self.p, 0, "ann")
         c = next(x for x in b["cards"] if x["id"] == self.ci["id"])
         self.assertNotIn("selfcheck", c); self.assertFalse(c["pred"]["hit"])
+        self.assertEqual(b["calibration"]["all_n"], b["calibration"]["n"])  # self-report is not tested correctness
         # writing is never preferred over doing at equal results
         p0 = teach.profile([], [])
         self.assertLess(teach.score(p0, "explain")[0], teach.score(p0, "sketch")[0])
@@ -225,3 +226,27 @@ class Teach(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Narration(unittest.TestCase):
+    def test_drag_n_explains_projection(self):
+        c = {"viz": {"delta": 2, "lo": -1, "hi": 5, "n": 100}}
+        result = teach.grade_step(c, "ndrag", 4)
+        self.assertFalse(result["hit"])
+        self.assertIn("not a new measurement", result["show"]["why"])
+        self.assertIn("independent examples", result["show"]["why"])
+
+    def test_duplicate_learning_titles_keep_identity(self):
+        p = ledger()
+        p.add_model("adapter-512", title="Qwen3-4B RL")
+        p.add_model("adapter-1024", title="Qwen3-4B RL")
+        self.assertNotEqual(learn._title(p, "adapter-512"), learn._title(p, "adapter-1024"))
+
+    def test_interval_demo_can_clear_zero(self):
+        from autoresearch import course
+        data = course.lesson_interval(None, {"checks": [{"noisy": True, "delta": 0, "lo": -.03, "hi": .03, "n": 100}]}, learn)
+        fig = data["fig"]
+        self.assertTrue(fig["example"])
+        self.assertNotEqual(fig["delta"], 0)
+        self.assertLess(fig["lo"], 0)
+        self.assertGreater(fig["delta"] - (fig["hi"] - fig["lo"]) / 2 / (20 ** .5), 0)

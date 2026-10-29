@@ -240,7 +240,7 @@ document.addEventListener('pointerdown',e=>{
 });
 document.addEventListener('keydown',e=>{
  if(route().r!=='learn'||!L.b||e.defaultPrevented||e.metaKey||e.ctrlKey||e.altKey)return;
- if(L.primer){const n=+e.key;if(n>=1&&n<=9){COURSE.answer(L.primer+'|primer',n-1);e.preventDefault()}return}
+ if(L.primer){const n=+e.key;if(document.querySelector('#main .crs-check')&&n>=1&&n<=9){COURSE.answer(L.primer+'|primer',n-1);e.preventDefault()}return}
  const tg=e.target;if(tg&&(tg.isContentEditable||/^(TEXTAREA|SELECT)$/.test(tg.tagName)||tg.tagName==='INPUT'&&(tg.type!=='range'||/^Arrow|^(Home|End|PageUp|PageDown)$/.test(e.key))))return;  // the slider keeps its own arrow keys
  if(e.key==='['){go(L.cur-1);e.preventDefault();return}
  if(e.key===']'){go(L.cur+1);e.preventDefault();return}
