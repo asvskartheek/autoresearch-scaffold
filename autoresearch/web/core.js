@@ -71,6 +71,7 @@ const I=(d,s=16)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="non
 const ICON={
  share:I('<circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="M8.2 10.8l7.6-4M8.2 13.2l7.6 4"/>'),
  download:I('<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>'),
+ start:I('<path d="M5 20.5V4M5 4.5h11.5l-2.5 4 2.5 4H5"/>'),
  overview:I('<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>'),
  workbench:I('<path d="M4 12h3l2-6 4 12 2-6h5"/>'),
  models:I('<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M8.3 7l7.5 4M8.3 17l7.5-4"/>'),
@@ -91,8 +92,8 @@ const ICON={
  copy:I('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',13)};
 // the product's mark: a ladder (two rails, three rungs) in the accent
 const MARK='<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="6" fill="var(--accent)"/><path d="M8 18.5V5.5M16 18.5V5.5M8 15h8M8 11.5h8M8 8h8" stroke="var(--surface)" stroke-width="1.8" stroke-linecap="round"/></svg>';
-const routeLabel=r=>({task:'Task',hill:'Hill',model:'Model',goal:'Goal'})[r]||(ROUTES.find(([k])=>k===r)||ROUTES[0])[1];
-const ROUTES=[['overview','Overview'],['learn','Brief'],['workbench','Workbench'],['goals','Goals'],['questions','Questions'],['models','Models'],['hills','Hills'],['papers','Papers'],['slices','Slices'],['archive','Archive']];
+const routeLabel=r=>({task:'Task',hill:'Hill',model:'Model',goal:'Goal'})[r]||(ROUTES.find(([k])=>k===r)||ROUTES.find(([k])=>k==='overview'))[1];
+const ROUTES=[['start','Start'],['overview','Overview'],['learn','Brief'],['workbench','Workbench'],['goals','Goals'],['questions','Questions'],['models','Models'],['hills','Hills'],['papers','Papers'],['slices','Slices'],['archive','Archive']];
 // the project this page serves: /p/<key>/ for a registered project, the server's own at /
 const PKEY=(location.pathname.match(/^\/p\/([^/]+)/)||[])[1]&&decodeURIComponent(location.pathname.split('/')[2]);
 // a model reads by its title; an untitled a+b+c+d id reads as its last two changes (…+c+d); the id stays in the URL
@@ -117,7 +118,7 @@ function renderNav(){
   if(n||a)return `<span class="count hot" title="${[a&&plural(a,'question')+' waiting on you',n&&plural(n,'comment')+' waiting'].filter(Boolean).join(', ')}">${n+a}</span>`;
   if(q.stalled&&!q.running)return `<span class="count bad" title="${plural(q.stalled,'job')} stalled">${q.stalled}</span>`;
   return q.running?`<span class="count" title="${plural(q.running,'job')} running${q.stalled?', '+q.stalled+' stalled':''}">${q.running}</span>`:''};
- setHTML($('#nav'),`<a class="brand" href="#overview">${MARK}<span>arx<span class="proj">${esc(st?.config?.name||'')}</span></span></a>`+
+ setHTML($('#nav'),`<a class="brand" href="#start">${MARK}<span>arx<span class="proj">${esc(st?.config?.name||'')}</span></span></a>`+
   ROUTES.map(([k,l])=>`<a class="nav ${navOn===k?'on':''}" href="#${k}" ${navOn===k?'aria-current="page"':''}>${ICON[k]}${l}${counts[k]?`<span class="count ${(k==='workbench'&&stalled)?'bad':hot[k]?'hot':''}" title="${tip[k](counts[k])}">${counts[k]}</span>`:''}</a>`).join('')+
   (S.projects.length>1?`<div class="grp">Projects</div>`+S.projects.map(q=>{const on=q.key===PKEY||(!PKEY&&q.default);return `<a class="nav proj ${on?'on':''}" href="/p/${enc(q.key)}/${keep?'#'+keep:''}" title="${esc(q.name)} · ${esc(q.root)}" ${on?'aria-current="true"':''}><span class="pdot ${q.error?'bad':q.running?'run':q.stalled?'bad':''}"></span><span class="ell">${esc(q.name)}</span>${pq(q)}</a>`}).join(''):'')+
   (st?`<div class="foot"><b title="${esc(st.champion||'')}">${st.champion?mn(st.champion):'No champion yet'}</b><span>${st.champion?'champion · ':''}${plural(Object.keys(st.models).length,'model')}</span></div>`:''));
