@@ -100,7 +100,7 @@ css.textContent=`:root{--px-bg:var(--surface,var(--page,Canvas));--px-fg:var(--t
  background:color-mix(in srgb,var(--pc) 18%,var(--px-bg));color:var(--pc);box-shadow:0 0 0 2px var(--px-bg)}
 .px-face.sm{width:18px;height:18px;font-size:8.5px}
 .px-face.on{box-shadow:0 0 0 2px var(--px-bg),0 0 0 3.5px var(--pc)}
-.px-here{display:inline-flex;align-items:center}.px-here .px-face+.px-face{margin-left:-6px}
+.px-here{display:inline-flex;align-items:center}
 .px-pick{position:fixed;z-index:2147483600;display:flex;flex-direction:column;min-width:180px;max-width:calc(100vw - 16px);padding:4px;border-radius:10px;background:var(--px-bg);color:var(--px-fg);box-shadow:0 8px 28px rgba(0,0,0,.28),0 0 0 1px var(--px-line)}
 .px-pick button{all:unset;display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;font:13px var(--sans,system-ui)}
 .px-pick button:hover,.px-pick button.on{background:var(--px-hi)}
