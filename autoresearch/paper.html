@@ -802,8 +802,9 @@ function menu(btn, tid, mid, mine, t) {
   closeMenu();
   const m = h("div", "menu"); m.id = "menu";
   const items = [["Copy link to comment", async () => { if (await copyText((await paperLink("#c-" + tid)).url)) toast("Link copied"); }]];
-  if (mine) items.unshift(["Edit", () => editMsg(tid, mid)], ["Delete", async () => { if (confirm("Delete this comment?")) { await api("delete", { target: mid }); refresh(); } }, "danger"]);
-  for (const [label, fn, cls] of items) { const b = h("button", cls || "", esc(label)); b.onclick = e => { e.stopPropagation(); closeMenu(); fn(); }; m.appendChild(b); }
+  if (mine) items.unshift(["Edit", () => editMsg(tid, mid)], ["Delete", async () => { await api("delete", { target: mid }); refresh(); }, "danger", "Delete for good?"]);
+  for (const [label, fn, cls, sure] of items) { const b = h("button", cls || "", esc(label));
+    b.onclick = e => { e.stopPropagation(); if (sure && !b.dataset.sure) { b.dataset.sure = 1; b.textContent = sure; return; } closeMenu(); fn(); }; m.appendChild(b); }
   document.body.appendChild(m);
   const r = btn.getBoundingClientRect(); m.style.top = scrollY + r.bottom + 4 + "px"; m.style.left = Math.max(8, Math.min(r.right - 170, innerWidth - 178)) + "px";
   setTimeout(() => addEventListener("click", closeMenu, { once: true }));
