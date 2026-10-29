@@ -4,7 +4,7 @@
 <style data-keep>
 :root{--ground:#f2f5f8;--surface:#fff;--raised:#f5f7f9;--active:#e4e9ee;--border:#e3e7eb;--rule:#eef1f4;--control:#cdd3d9;
  --text:#131416;--muted:#5b6168;--faint:#6f767d;--accent:#1b6c80;--accent-soft:#e3f0f3;--primary:#16181a;--on-primary:#fff;
- --positive:#1e7b4f;--negative:#c4242a;--warning:#92400e;--chart-1:#1b6c80;--chart-2:#2f70bb;--chart-3:#a86f0c;--grid:#e9edf0;
+ --positive:#1e7b4f;--negative:#c4242a;--warning:#92400e;--chart-1:#1b6c80;--chart-2:#2f70bb;--chart-3:#a86f0c;--chart-4:#7650b8;--grid:#e9edf0;
  --pill-positive-bg:#dcfae5;--pill-negative-bg:#ffedea;--pill-warning-bg:#fff5db;--pill-neutral-bg:#ebeef1;
  --cell-rr:#cfd6dc;--cell-ww:#6f767d;
  --radius-card:8px;--radius-control:6px;--radius-chip:4px;
@@ -12,13 +12,13 @@
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
  --ground:#0c0f12;--surface:#13171b;--raised:#1a1f24;--active:#232a31;--border:#232a30;--rule:#1c2227;--control:#3a434b;
  --text:#eef1f3;--muted:#a3abb3;--faint:#8c959d;--accent:#5cb8cc;--accent-soft:#163038;--primary:#eef1f3;--on-primary:#0c0f12;
- --positive:#4cc38a;--negative:#f07575;--warning:#e3a84f;--chart-1:#5cb8cc;--chart-2:#6aa1e6;--chart-3:#d9a441;--grid:#222930;
+ --positive:#4cc38a;--negative:#f07575;--warning:#e3a84f;--chart-1:#5cb8cc;--chart-2:#6aa1e6;--chart-3:#d9a441;--chart-4:#a68be6;--grid:#222930;
  --pill-positive-bg:#14291e;--pill-negative-bg:#2e1a1d;--pill-warning-bg:#2b2215;--pill-neutral-bg:#222930;
  --cell-rr:#2c343b;--cell-ww:#8c959d;color-scheme:dark}}
 :root[data-theme="dark"]{
  --ground:#0c0f12;--surface:#13171b;--raised:#1a1f24;--active:#232a31;--border:#232a30;--rule:#1c2227;--control:#3a434b;
  --text:#eef1f3;--muted:#a3abb3;--faint:#8c959d;--accent:#5cb8cc;--accent-soft:#163038;--primary:#eef1f3;--on-primary:#0c0f12;
- --positive:#4cc38a;--negative:#f07575;--warning:#e3a84f;--chart-1:#5cb8cc;--chart-2:#6aa1e6;--chart-3:#d9a441;--grid:#222930;
+ --positive:#4cc38a;--negative:#f07575;--warning:#e3a84f;--chart-1:#5cb8cc;--chart-2:#6aa1e6;--chart-3:#d9a441;--chart-4:#a68be6;--grid:#222930;
  --pill-positive-bg:#14291e;--pill-negative-bg:#2e1a1d;--pill-warning-bg:#2b2215;--pill-neutral-bg:#222930;
  --cell-rr:#2c343b;--cell-ww:#8c959d;color-scheme:dark}
 *{box-sizing:border-box}
@@ -238,6 +238,18 @@ td svg.strip{width:160px;height:18px;display:block}
 .trk .ttxt{position:absolute;left:4px;top:50%;transform:translateY(-50%);font:11px var(--mono);color:var(--faint);white-space:nowrap}
 .c-pos{--c:var(--positive)}.c-neg{--c:var(--negative)}.c-mut{--c:var(--control)}.c-acc{--c:var(--accent)}.c-warn{--c:var(--warning)}.c-text{--c:var(--text)}.c-trk{--c:var(--pill-neutral-bg)}.c-faint{--c:var(--faint)}
 .goal.dim{opacity:.6}
+.cov{display:grid;gap:12px}
+.dsh{font-size:13px;margin-bottom:5px;min-width:0}
+.dsh .ev.dsn{border-bottom:1px dotted var(--faint);font-family:var(--mono)}
+.lane{display:flex;flex-wrap:wrap;gap:3px;margin-top:3px}
+.lane .ev.cseg{min-width:46px;height:26px;display:flex;align-items:center;gap:6px;padding:0 7px;border-radius:4px;border:1px solid var(--c);font:12px var(--mono);overflow:hidden;white-space:nowrap;text-align:left}
+.lane .ev.cseg:only-child{flex:1 1 auto}
+.lane .cseg .sn{overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}.lane .cseg .sv{opacity:.85;flex:none}.lane .cseg span[title]{flex:none}
+.lane .cseg.run{background:var(--c);color:var(--on-primary)}
+.lane .cseg.norun,.leg i.hatch{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--c,var(--faint)) 28%,transparent) 0 4px,transparent 4px 8px);border:1px dashed var(--c,var(--faint));color:var(--muted)}
+.lane .cseg.off{--c:var(--faint)}
+.lane .ev.cseg:hover,.lane .ev.cseg.open{outline:2px solid var(--accent);outline-offset:1px}
+.k-full{--c:var(--chart-1)}.k-random{--c:var(--chart-2)}.k-control{--c:var(--chart-3)}.k-dev{--c:var(--chart-4)}.k-synthetic,.k-other{--c:var(--faint)}
 .more-btn{border:1px solid var(--control);background:var(--surface);border-radius:var(--radius-control);padding:4px 10px;font-size:12.5px;margin-top:8px}
 </style></head><body data-keep>
 <div id="app" data-keep><div id="load">loading ledger…</div></div>
@@ -304,6 +316,7 @@ const tLine = () => `<i class="tline"></i>`;
 
 /* ---------------- evidence registry ---------------- */
 const EV = {}; let evN = 0;
+function evb(inner, o, cls = "", style = "") { const k = "e" + (++evN); EV[k] = o; return `<button class="ev ${cls}" data-ev="${k}"${style ? ` style="${style}"` : ""}>${inner}</button>`; }
 function ev(v, o) { const k = "e" + (++evN); EV[k] = { v, ...o }; return `<button class="ev" data-ev="${k}">${esc(v)}</button>`; }
 const runIds = r => [...(r.run_ids || [r.task]), ...(r.base ? r.base.run_ids || [r.base.task] : [])];
 const evRes = (r, label, note) => ({ label: label || `${mnt(CH)} on ${r.slice}`, slice: r.slice, hash: r.hash, n: r.n, runs: runIds(r), src: `${r.runs} complete run${r.runs === 1 ? "" : "s"} pooled per id` + (r.base ? `, ${mnt(PV)}: ${r.base.runs}` : ""), note });
@@ -431,17 +444,39 @@ section("system", () => {
 
 /* ================= 03 data ================= */
 section("data", () => {
-  const roles = {}; R.forEach(r => roles[r.slice] = r.roles);
-  const need = D.baseline.need.map(s => ({ slice: s, missing: true }));
-  const rows = [...R, ...need];
-  const full = ds => Math.max(1, ...R.filter(r => r.slice.split("/")[0] === ds).map(r => r.n), D.datasets[ds]?.size || 0);
-  const dsl = Object.entries(D.datasets);
-  return `${dsl.length ? `<dl class="f" style="margin-bottom:14px">${dsl.map(([k, d]) => `<dt>${esc(k)}</dt><dd>${esc(d.title || k)} · ${N0(d.size)} examples${d.description ? ` <span class="muted">· ${esc(d.description)}</span>` : ""}${d.url ? ` · <a href="${esc(d.url)}" target="_blank" rel="noopener">source</a>` : ""}</dd>`).join("")}</dl>` : ""}
-  <div class="tw"><table><thead><tr><th>slice</th><th>kind</th><th class="n">n</th><th>size</th><th>hash</th><th>role</th><th>what it measures</th></tr></thead><tbody>
-  ${rows.map(r => r.missing ? `<tr class="na"><td class="id">${esc(r.slice)}</td><td colspan="5">not run by ${mn(CH)}</td><td>${esc((D.unknown.find(u => u.kind === "not_run" && u.slice === r.slice)?.roles || []).join(", "))}</td></tr>` :
-    `<tr id="slice-${esc(r.slice.replace(/[^\w-]/g, "_"))}"><td class="id">${esc(r.slice)}</td><td>${esc(r.kind || "—")}</td><td class="n">${ev(N0(r.n), { label: r.slice, slice: r.slice, hash: r.hash, n: r.n, src: ".research/slices.json › " + r.slice, note: r.scale + (r.unit ? " · " + r.unit : "") })}</td>
-    <td><div class="szw"><div class="sz" style="width:${Math.min(100, r.n / full(r.slice.split("/")[0]) * 100)}%"></div></div></td><td class="id">${esc(r.hash || "—")}</td><td>${esc((r.roles || []).join(", ") || "—")}</td><td>${esc(r.description || "")}${r.metric ? `<div class="faint" style="font-size:12px">${esc(r.metric)}</div>` : ""}</td></tr>`).join("")}
-  </tbody></table></div>`;
+  // one row per dataset: its full slice on top, the other slices as segments sized by n and coloured by kind; solid if
+  // this model ran it, hatched if not; slices it has not run fold into one count per dataset (Not known lists them)
+  const ds = sl => String(sl).split("/")[0], KINDS = ["full", "random", "control", "dev", "synthetic"];
+  const run = R.map(r => ({ ...r, ran: true })), not = D.baseline.need.map(sl => ({ slice: sl, ran: false, ...(D.baseline.meta?.[sl] || {}) }));
+  const all = [...run, ...not], names = [...new Set([...Object.keys(D.datasets), ...all.map(x => ds(x.slice))])];
+  const P = D.project.primary_dataset, ranIn = k => run.some(r => ds(r.slice) === k);
+  names.sort((a, b) => (b === P) - (a === P) || ranIn(b) - ranIn(a) || a.localeCompare(b));
+  const glyph = x => { const ro = x.roles || [], t = ro.filter(r => / target$/.test(r)).length, c = ro.filter(r => / control$/.test(r)).length;
+    return `${t ? `<span title="hill target">◎${t > 1 ? t : ""}</span>` : ""}${c ? `<span title="hill control">◇${c > 1 ? c : ""}</span>` : ""}`; };
+  const kc = k => "k-" + (KINDS.includes(k) ? k : "other");
+  const pop = x => ({ v: x.ran ? (isBin(x) && x.score != null ? sc(x.score, x) : `n ${N0(x.n)}`) : "not run", label: x.slice, slice: x.slice, hash: x.hash, n: x.n,
+    runs: x.ran ? runIds(x) : [], src: ".research/slices.json › " + x.slice,
+    extra: [["kind", x.kind], ["roles", (x.roles || []).join(", ")], ["metric", x.metric], ["measures", x.description], ["this model", x.ran ? `${x.runs} run${x.runs === 1 ? "" : "s"}` : "no run"]] });
+  const seg = (x, full) => evb(`<span class="sn">${esc(full ? short(x.slice) || x.slice : String(x.slice).split("/").slice(1).join("/") || x.slice)}</span><span class="sv">${N0(x.n)}</span>${glyph(x)}`, pop(x),
+    `cseg ${kc(x.kind)} ${x.ran ? "run" : "norun"}`, full ? "" : `flex:${Math.max(1, x.n || 1)} 1 0`);
+  const idle = names.filter(k => !ranIn(k));
+  const idleRow = idle.length ? `<div class="dsr"><div class="dsh"><b>${idle.length} more dataset${idle.length === 1 ? "" : "s"}</b> <span class="faint">· none run by ${mn(CH)}</span></div><div class="lane">${idle.map(k => {
+    const d = D.datasets[k] || {}, mine = all.filter(x => ds(x.slice) === k);
+    return evb(`<span class="sn">${esc(k)}</span><span class="sv">${d.size != null ? N0(d.size) : ""}</span>${mine.length > 1 ? `<span class="sv">· ${mine.length} slices</span>` : ""}`,
+      { v: d.title || k, label: "dataset " + k, n: d.size, src: ".research/datasets.json › " + k, extra: [["about", d.description], ["source", d.url], ...mine.map(x => [x.kind || "slice", `${x.slice} · n ${N0(x.n)} · not run${x.roles?.length ? " · " + x.roles.join(", ") : ""}`])] },
+      "cseg k-full norun", `flex:${Math.max(1, Math.sqrt(d.size || 1))} 1 0`); }).join("")}</div></div>` : "";
+  const rows = names.filter(ranIn).map(k => {
+    const d = D.datasets[k] || {}, mine = all.filter(x => ds(x.slice) === k), fulls = mine.filter(x => x.kind === "full"), rest = mine.filter(x => x.kind !== "full");
+    const shown = rest.filter(x => x.ran).sort((a, b) => KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind) || (b.n || 0) - (a.n || 0)), off = rest.filter(x => !x.ran);
+    const offSeg = off.length ? evb(`<span class="sn">${off.length} not run</span>`, { v: `${off.length} not run`, label: `${k}: slices ${mnt(CH)} has no run on`, src: "baseline plan",
+      extra: off.slice(0, 30).map(x => [x.kind || "slice", `${x.slice} · n ${N0(x.n)}${x.roles?.length ? " · " + x.roles.join(", ") : ""}`]).concat(off.length > 30 ? [["more", `${off.length - 30} more`]] : []) }, "cseg k-other norun off", "flex:0 0 auto") : "";
+    const info = { v: d.title || k, label: "dataset " + k, n: d.size, src: ".research/datasets.json › " + k, extra: [["about", d.description], ["source", d.url]] };
+    return `<div class="dsr"><div class="dsh">${evb(`<b>${esc(k)}</b>`, info, "dsn")}${d.title && d.title !== k ? ` <span class="muted">${esc(d.title)}</span>` : ""} <span class="faint">· ${d.size != null ? N0(d.size) + " examples" : "size not recorded"}</span>${d.url ? ` · <a href="${esc(d.url)}" target="_blank" rel="noopener">source</a>` : ""}</div>
+      ${fulls.length ? `<div class="lane">${fulls.map(x => seg(x, true)).join("")}</div>` : ""}
+      ${shown.length || offSeg ? `<div class="lane">${shown.map(x => seg(x)).join("")}${offSeg}</div>` : fulls.length ? "" : '<div class="faint" style="font-size:12.5px">no slices</div>'}</div>`;
+  }).join("");
+  const kinds = KINDS.filter(k => all.some(x => x.kind === k));
+  return `<div class="cov">${rows}${idleRow}</div><div class="leg">${kinds.map(k => `<span><i class="${kc(k)}" style="background:var(--c)"></i>${k}</span>`).join("")}<span><i style="background:var(--muted)"></i>ran</span><span><i class="hatch"></i>not run</span><span>◎ hill target · ◇ hill control</span><span>click a segment for its hash, metric and runs</span></div>`;
 });
 
 /* ================= 04 results ================= */
@@ -686,7 +721,7 @@ const pop = $("#pop"); let popFor = null;
 function openPop(anchor, e) {
   if (!e) return;
   $$(".ev.open").forEach(x => x.classList.remove("open")); anchor.classList?.add("open"); popFor = anchor;
-  const rows = [["slice", e.slice], ["hash", e.hash], ["n", e.n != null ? N0(e.n) : null], ["source", e.src], ["detail", e.note]].filter(r => r[1] != null && r[1] !== "");
+  const rows = [["slice", e.slice], ["hash", e.hash], ["n", e.n != null ? N0(e.n) : null], ["source", e.src], ["detail", e.note], ...(e.extra || [])].filter(r => r[1] != null && r[1] !== "");
   const runs = [...new Set((e.runs || []).filter(Boolean))];
   pop.innerHTML = `<button class="x" aria-label="Close">×</button><div class="pv">${esc(e.v)}</div><div class="pl">${esc(e.label || "")}</div>
   <dl class="f">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}${runs.length ? `<dt>runs · ${runs.length}</dt><dd style="max-height:9.5em;overflow:auto">${runs.map(id => SNAP ? `<div>${esc(id)}</div>` : `<div><a href="${BASE}/#task/${enc(id)}" target="_top">${esc(id)}</a></div>`).join("")}</dd>` : ""}</dl>

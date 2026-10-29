@@ -513,7 +513,10 @@ def _build(p, model, vs):
         main=main, goals=goal_list, results=results, lineage=lineage, children=children, ladder=ladder,
         gallery=gallery, unknown=uniq, decisions=decisions, runs=runs, spec=spec,
         base_spec=_flat({k: v for k, v in models[base].items() if k not in CORE_FIELDS}) if base in models else [],
-        baseline=dict(have=list(plan["have"]), need=plan["need"]),
+        baseline=dict(have=list(plan["have"]), need=plan["need"],
+                      meta={sl: dict(kind=ix.slices[sl].get("kind"), n=ix.slices[sl].get("n"), hash=ix.slices[sl].get("hash"),
+                                     metric=ix.slices[sl].get("metric"), description=_txt(ix.slices[sl].get("description")),
+                                     roles=plan["roles"].get(sl, [])) for sl in plan["need"] if sl in ix.slices}),
         models=[dict(name=k, status=m.get("status"), title=_txt(m.get("title"))) for k, m in models.items()],
         labels={k: features.model_label(p, k) for k in models},
         datasets={k: dict(title=v.get("title"), size=v.get("size"), url=v.get("url"), description=_txt(v.get("description")))
