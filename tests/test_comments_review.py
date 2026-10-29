@@ -56,7 +56,7 @@ class Describe(unittest.TestCase):
 
     def test_box_and_highlight(self):
         box = comments.describe_anchor(dict(text="Candidates 3", what="div.kpi", shape=dict(tool="box", fit=True)))
-        self.assertIn('Drawn: a box around "Candidates 3" (a div.kpi element)', box)
+        self.assertIn('Drawn: a box around "Candidates 3" (element div.kpi)', box)
         hl = comments.describe_anchor(dict(text="x", quote="43 more", shape=dict(tool="highlight", mode="text")))
         self.assertIn('Drawn: a highlight over the text "43 more"', hl)
 

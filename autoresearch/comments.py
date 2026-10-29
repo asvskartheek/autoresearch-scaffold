@@ -200,7 +200,7 @@ def describe_anchor(a: dict) -> list[str]:
     tool, text, what = s.get("tool"), a.get("text"), a.get("what")
     if what and text == what.split(".")[0]:
         text = None  # an element with no text of its own (a bar, a tick): its tag and the card it sits in say more
-    el = f"\"{text}\"" + (f" (a {what} element)" if what else "") if text else (f"a {what} element" if what else "the page")
+    el = f"\"{text}\"" + (f" (element {what})" if what else "") if text else (f"element {what}" if what else "the page")
     if tool == "arrow" and s.get("mode") == "tip":
         out.append(f"Drawn: an arrow pointing at {el}{_where(a.get('rx'), a.get('ry'))}")
         if a.get("from"):
