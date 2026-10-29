@@ -128,7 +128,8 @@ def _get(p, path, q):
     ts = with_agent(p, threads(events(p)))
     if q.get("route"):
         ts = [t for t in ts if t["route"] == q["route"]]
-    return 200, dict(threads=ts)
+    from . import answer  # answer imports this module
+    return 200, dict(threads=ts, answer_agent=answer.agent_state(p))
 
 
 ANCHOR_KEYS = ("route", "key", "rel", "sel", "text", "quote", "rx", "ry", "px", "py", "vw", "shape")

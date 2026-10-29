@@ -36,5 +36,15 @@ class AgentCmd(unittest.TestCase):
         self.assertFalse(Path(made[0]).exists())
 
 
+class AgentState(unittest.TestCase):
+    def test_no_daemon(self):
+        p = project()
+        st = {}
+        answer._state(p, st)
+        self.assertEqual(st["answer_agent"], dict(running=False, pid=None))
+        self.assertIn(answer._state, features.STATE)
+        self.assertEqual(comments._get(p, "/api/comments", {})[1]["answer_agent"]["running"], False)
+
+
 if __name__ == "__main__":
     unittest.main()

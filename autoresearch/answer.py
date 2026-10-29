@@ -224,6 +224,24 @@ def running_pid(p: Project) -> int | None:
     return pid if _alive(pid) else None
 
 
+_SEEN: dict[str, tuple[float, int | None]] = {}  # project root -> (checked at, pid): the dashboard polls every 4 s
+
+
+def agent_state(p: Project) -> dict:
+    """Whether `arx answer` runs for this project: {running, pid}. Cached for 3 s so polling never forks `ps` per call."""
+    k = str(p.root)
+    at, pid = _SEEN.get(k, (0.0, None))
+    if time.time() - at > 3:
+        pid = running_pid(p)
+        _SEEN[k] = (time.time(), pid)
+    return dict(running=bool(pid), pid=pid)
+
+
+@features.STATE.append
+def _state(p, st):
+    st["answer_agent"] = agent_state(p)
+
+
 def recover(p: Project) -> None:
     """Items left `running` by a daemon that died: their agent is gone. Say so in the thread and close the card."""
     for i in features.inbox(p):
