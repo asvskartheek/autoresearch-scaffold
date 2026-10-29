@@ -6,6 +6,9 @@
   reply    a message in a thread (parent = thread id); `agent: true` for the agent, `error: true` when it failed
   resolve / reopen   on a thread (parent)
   edit / delete      on one message (target)
+  seen               a person read the thread as it stood (parent, by = person id; see people.py)
+
+Every event a person makes carries `author` (their name then) and `by` (their person id, people.py).
 
 `route` is the view's location.hash without '#', so a comment stays on its view. `key` names a stable element
 (an id, a data-* attribute, or the card holding one entity link such as #task/<id>); `rel` is the path from it.
@@ -22,10 +25,10 @@ import secrets
 import sys
 from pathlib import Path
 
-from . import features
+from . import features, people
 from .core import Project, _jsonl, now
 
-KINDS = ("comment", "reply", "resolve", "reopen", "edit", "delete")
+KINDS = ("comment", "reply", "resolve", "reopen", "edit", "delete", "seen")
 MAX_BODY = 20_000
 
 
@@ -60,16 +63,19 @@ def threads(log: list[dict]) -> list[dict]:
     for e in log:
         k, t = e.get("kind"), e.get("t") or 0
         if k == "comment":
-            m = dict(id=e["id"], t=t, author=e.get("author") or "you", body=str(e.get("body") or ""), agent=False)
-            out[e["id"]] = dict(id=e["id"], t=t, anchor=e.get("anchor") or {}, resolved=False, messages=[m])
+            m = dict(id=e["id"], t=t, author=e.get("author") or "you", body=str(e.get("body") or ""), agent=False, by=e.get("by"), mentions=e.get("mentions") or [])
+            out[e["id"]] = dict(id=e["id"], t=t, anchor=e.get("anchor") or {}, resolved=False, messages=[m], seen={})
             msgs[e["id"]] = m; owner[e["id"]] = e["id"]
         elif k == "reply" and e.get("parent") in out:
             m = dict(id=e["id"], t=t, author=e.get("author") or ("agent" if e.get("agent") else "you"),
-                     body=str(e.get("body") or ""), agent=bool(e.get("agent")), error=bool(e.get("error")))
+                     body=str(e.get("body") or ""), agent=bool(e.get("agent")), error=bool(e.get("error")), by=e.get("by"), mentions=e.get("mentions") or [])
             out[e["parent"]]["messages"].append(m)
             msgs[e["id"]] = m; owner[e["id"]] = e["parent"]
         elif k in ("resolve", "reopen") and e.get("parent") in out:
             out[e["parent"]]["resolved"] = k == "resolve"
+            out[e["parent"]]["resolved_by"] = e.get("author") if k == "resolve" else None
+        elif k == "seen" and e.get("parent") in out and e.get("by"):
+            out[e["parent"]]["seen"][e["by"]] = t
         elif k == "edit" and e.get("target") in msgs:
             msgs[e["target"]].update(body=str(e.get("body") or ""), edited=t)
         elif k == "delete" and e.get("target") in msgs:
@@ -83,8 +89,21 @@ def threads(log: list[dict]) -> list[dict]:
         th["route"] = (th["anchor"] or {}).get("route") or "overview"
         th["waiting"] = not last["agent"] and not th["resolved"]
         th["last"] = last["id"]
+        th["last_t"] = last["t"]
+        th["people"] = sorted({m["by"] for m in th["messages"] if m.get("by")})
+        th["mentions"] = sorted({x for m in th["messages"] for x in m.get("mentions") or []})
+        # a message that names people and not @agent is people talking: the agent does not owe an answer
+        th["waiting"] = th["waiting"] and not for_people(last)
         res.append(th)
     return res
+
+
+def for_people(m: dict) -> bool:
+    """A person's message addressed to other people (it @mentions someone and not @agent)."""
+    return bool(m.get("mentions")) and not m.get("agent") and not AGENT_AT.search(str(m.get("body") or ""))
+
+
+AGENT_AT = re.compile(r"(^|[\s(])@(agent|claude|arx)\b", re.I)
 
 
 def find(p: Project, tid: str) -> dict:
@@ -140,6 +159,7 @@ def _post(p, path, d):
     if not isinstance(d, dict) or d.get("kind") not in KINDS:
         return 400, dict(error="bad request")
     k, author = d["kind"], str(d.get("author") or "you")[:60]
+    by = str(d.get("by") or "") if people.ID.match(str(d.get("by") or "")) else None
     body = str(d.get("body") or "")[:MAX_BODY]
     if k == "comment":
         if not body.strip():
@@ -147,8 +167,9 @@ def _post(p, path, d):
         a = d.get("anchor") if isinstance(d.get("anchor"), dict) else {}
         anchor = {x: a[x] for x in ANCHOR_KEYS if x in a}
         anchor["route"] = str(anchor.get("route") or "overview").lstrip("#")[:300]
-        ev = post(p, "comment", author=author, body=body, anchor=anchor)
-        features.enqueue(p, "comment", dict(thread=ev["id"], message=ev["id"]), ref=ev["id"])
+        ev = post(p, "comment", author=author, by=by, body=body, anchor=anchor, mentions=people.mentioned(body) or None)
+        if not for_people(ev):
+            features.enqueue(p, "comment", dict(thread=ev["id"], message=ev["id"]), ref=ev["id"])
         return 200, ev
     try:
         th = find(p, str(d.get("parent") or ""))
@@ -159,12 +180,15 @@ def _post(p, path, d):
     if k == "reply":
         if not body.strip():
             return 400, dict(error="empty reply")
-        ev = post(p, "reply", parent=th["id"], body=body, author=author, agent=False)
-        features.enqueue(p, "comment", dict(thread=th["id"], message=ev["id"]), ref=th["id"])
+        ev = post(p, "reply", parent=th["id"], body=body, author=author, by=by, agent=False, mentions=people.mentioned(body) or None)
+        if not for_people(ev):
+            features.enqueue(p, "comment", dict(thread=th["id"], message=ev["id"]), ref=th["id"])
         return 200, ev
     if k in ("resolve", "reopen"):
-        return 200, post(p, k, parent=th["id"], author=author)
-    return 200, post(p, k, target=str(d.get("target") or ""), body=body or None, author=author)
+        return 200, post(p, k, parent=th["id"], author=author, by=by)
+    if k == "seen":
+        return (200, post(p, k, parent=th["id"], by=by)) if by else (400, dict(error="seen needs by"))
+    return 200, post(p, k, target=str(d.get("target") or ""), body=body or None, author=author, by=by)
 
 
 @features.STATE.append
