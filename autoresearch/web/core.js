@@ -137,18 +137,43 @@ function renderTop(){
  <button class="iconbtn" aria-label="Share" title="Share this view" onclick="shareMenu(this)">${ICON.share}</button><button class="iconbtn" aria-label="Theme: ${THEMES[t]}. Switch to ${THEMES[next]}" title="Theme: ${THEMES[t]} (click for ${THEMES[next]})" onclick="toggleTheme()">${t==='light'?ICON.sun:t==='dark'?ICON.moon:ICON.auto}</button></div>`);
 }
 // Share: a link to this view (it works on another machine once `arx share on` ran) and a one-file snapshot that opens
-// on this same view (?view=<hash>, read by share.py)
+// on this same view (?view=<hash>, read by share.py). The popover stays on screen at any width, takes focus, keeps Tab
+// inside it and gives focus back to the button on Escape or close; the snapshot shows its progress while it builds
 async function shareMenu(btn){
- document.querySelector('.sh-pop')?.remove();
+ if(document.querySelector('.sh-pop')){closeShare();return}
  let d={};try{d=await (await fetch('api/share',{cache:'no-store'})).json()}catch(e){}
  const here=location.hash||'#overview',url=(d.link||location.origin+location.pathname)+here;
- const pop=document.createElement('div');pop.className='sh-pop';
+ const pop=document.createElement('div');pop.className='sh-pop';pop.setAttribute('role','dialog');pop.setAttribute('aria-label','Share');
  pop.innerHTML=`<div class="sh-row"><span class="sh-l">${d.link?'Anyone on your network with this link':'Only this machine'}</span></div>
   <div class="sh-url"><code>${esc(url)}</code>${copyBtn(url)}</div>
   ${d.link?'':`<div class="sh-row sub"><code>arx share on</code>${copyBtn('arx share on')}<span>for others</span></div>`}
-  <a class="btn sh-dl" href="api/export?view=${enc(here.slice(1))}" download>${ICON.download}Snapshot</a>`;
- document.body.append(pop);const r=btn.getBoundingClientRect();pop.style.top=r.bottom+6+'px';pop.style.right=Math.max(8,innerWidth-r.right)+'px';
- setTimeout(()=>addEventListener('click',function off(e){if(!pop.contains(e.target)){pop.remove();removeEventListener('click',off)}}),0);
+  <div class="sh-row"><a class="btn sh-dl" href="api/export?view=${enc(here.slice(1))}" download onclick="return snapshot(event,this)">${ICON.download}Snapshot</a><span class="sh-st" aria-live="polite"></span></div>`;
+ pop._btn=btn;document.body.append(pop);
+ const r=btn.getBoundingClientRect(),w=pop.offsetWidth;
+ pop.style.top=r.bottom+6+'px';pop.style.left=Math.max(8,Math.min(r.right-w,innerWidth-w-8))+'px';
+ pop.querySelector('button,a')?.focus();
+ pop.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){e.stopPropagation();closeShare();return}
+  if(e.key!=='Tab')return;const f=[...pop.querySelectorAll('button,a[href]')];if(!f.length)return;
+  const i=f.indexOf(document.activeElement);e.preventDefault();f[(i+(e.shiftKey?-1:1)+f.length)%f.length].focus()});
+ setTimeout(()=>addEventListener('click',pop._off=e=>{if(!pop.contains(e.target))closeShare(false)}),0);
+}
+function closeShare(refocus=true){const p=document.querySelector('.sh-pop');if(!p)return;removeEventListener('click',p._off);p.remove();if(refocus)p._btn?.focus?.()}
+// the export takes seconds on a big ledger: fetch it here so the popover can say so, then hand the file to the browser
+async function snapshot(e,a){
+ if(!window.fetch||!window.URL?.createObjectURL)return true;e.preventDefault();
+ if(a.dataset.busy)return false;a.dataset.busy=1;
+ const stx=a.parentNode.querySelector('.sh-st'),t0=Date.now(),say=t=>{if(stx)stx.textContent=t};
+ const tick=setInterval(()=>say(`Building… ${Math.round((Date.now()-t0)/1000)} s`),500);say('Building…');
+ try{
+  const r=await fetch(a.getAttribute('href'),{cache:'no-store'});if(!r.ok)throw new Error(r.status);
+  const b=await r.blob(),name=(/filename="?([^";]+)"?/.exec(r.headers.get('content-disposition')||'')||[])[1]||'arx-snapshot.html';
+  const u=URL.createObjectURL(b),l=document.createElement('a');l.href=u;l.download=name;document.body.append(l);l.click();l.remove();
+  setTimeout(()=>URL.revokeObjectURL(u),60000);
+  say(`Saved ${name} · ${(b.size/1048576).toFixed(1)} MB`);
+ }catch(err){say('The snapshot failed. Try again.')}
+ finally{clearInterval(tick);delete a.dataset.busy}
+ return false;
 }
 // who else has this project open: their faces, ringed when they are on this same view. Faces overlap (each sits in its
 // own link, so the overlap is set here) and cap at 3 on a phone, 5 wider, then "+N", so they never squeeze the crumbs
