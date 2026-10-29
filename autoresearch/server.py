@@ -444,6 +444,10 @@ def human_event(p: Project, name: str, kind: str, d: dict) -> dict | None:
         anchor = {k: str(a[k])[:600] for k in ("block", "quote", "prefix", "suffix") if a and a.get(k)} or None
         if anchor and isinstance(a.get("shape"), dict):  # a drawn comment: the shape, relative to its block (paper.html)
             anchor["shape"] = clean_shape(a["shape"])
+        if anchor and isinstance(a.get("pick"), dict):  # a picked element (paper.html): its kind, words, path in the block, box
+            pk = a["pick"]
+            anchor["pick"] = {k: str(pk[k])[:600] for k in ("kind", "text", "path", "ctx") if pk.get(k)}
+            anchor["pick"].update({k: round(float(pk[k]), 1) for k in ("x", "y", "w", "h", "bw") if isinstance(pk.get(k), (int, float))})
         return papers.post(p, name, "comment", body=body, anchor=anchor, mentions=people.mentioned(body, people.members(p)) or None, **who) if body and anchor else None
     ref = str(d.get("parent" if kind in ("reply", "resolve", "reopen", "seen") else "target") or "")
     if ref not in ids or (kind in ("reply", "edit") and not body):
