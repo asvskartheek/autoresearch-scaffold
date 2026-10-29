@@ -221,9 +221,14 @@ const host=document.createElement('div');host.id='arx-comments';host.className='
 // the toolbar in comment mode: Pick (the main path), then the drawing tools for a region rather than an element
 const DRAW=[['box','Box','B'],['arrow','Arrow','A'],['pen','Pen','D'],['highlight','Highlight','H']];
 host.innerHTML=`<svg class="cm-shapes" xmlns="http://www.w3.org/2000/svg"></svg><div class="cm-layer"></div><div class="cm-pins"></div><div class="cm-pops"></div>
-<div class="cm-list"></div><div class="cm-chip"><button class="cm-btn on cmt">Comment</button><button class="cm-btn ask">Ask</button></div>
-<div class="cm-fab"><div class="cm-tools"><button data-tool="pick" class="pk" title="Pick an element (P)">Pick</button><span class="cm-sep"></span>${DRAW.map(([k,n,key])=>`<button data-tool="${k}" title="${n} (${key})">${n}</button>`).join('')}</div><button class="cm-btn cm-lst" title="Comments">0</button><button class="cm-btn cm-mode">Comment<b>C</b></button></div>`;
-const $c=s=>host.querySelector(s),pinsEl=$c('.cm-pins'),pops=$c('.cm-pops'),list=$c('.cm-list'),chip=$c('.cm-chip'),layer=$c('.cm-layer'),shapesEl=$c('.cm-shapes'),tools=$c('.cm-tools');
+<div class="cm-list"></div><div class="cm-chip"><button class="cm-btn on cmt">Comment</button><button class="cm-btn ask">Ask</button></div>`;
+// Comment and the comment list live in the top bar, beside Share: never over the page's rows, counts or tiles. The
+// drawing tools drop down under them while commenting
+const BUBBLE='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 15a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"/></svg>';
+const fab=document.createElement('div');fab.className='cm-fab';
+fab.innerHTML=`<div class="cm-tools"><button data-tool="pick" class="pk" title="Pick an element (P)">Pick</button><span class="cm-sep"></span>${DRAW.map(([k,n,key])=>`<button data-tool="${k}" title="${n} (${key})">${n}</button>`).join('')}</div><button class="cm-lst" title="Comments">${BUBBLE}<span></span></button><button class="cm-mode" title="Comment (c)">${BUBBLE.replace('</svg>','<path d="M12 8v5M9.5 10.5h5"/></svg>')}<span>Comment</span></button>`;
+const dock=()=>{const r=document.querySelector('#top .right');if(r){if(fab.parentElement!==r)r.prepend(fab)}else if(fab.parentElement!==host)host.append(fab)};
+const $c=s=>host.querySelector(s)||fab.querySelector(s),pinsEl=$c('.cm-pins'),pops=$c('.cm-pops'),list=$c('.cm-list'),chip=$c('.cm-chip'),layer=$c('.cm-layer'),shapesEl=$c('.cm-shapes'),tools=$c('.cm-tools');
 const h=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let mode=false,tool='pick',all=[],open=null,hot=null,draw=null,pending=null,agentOn=true;
 const here=()=>location.hash.slice(1)||'overview';
@@ -301,7 +306,7 @@ const isPage=el=>!el||el===document.documentElement||el===document.body||el.id==
 // never the page itself: #main and everything around it (the sheet, the app frame) are panels, not things on the page
 const panel=el=>{const m=document.getElementById('main');return !!m&&el.contains(m)};
 const picker=ARXPICK({doc:()=>document,root:()=>document.body,exit:()=>setMode(false),pick:el=>pickEl(el),
- skip:el=>host.contains(el)||isPage(el)||panel(el)||el.closest?.('.pk-box,.pk-tag,.kh-ov,.kh-l')});
+ skip:el=>host.contains(el)||fab.contains(el)||isPage(el)||panel(el)||el.closest?.('.pk-box,.pk-tag,.kh-ov,.kh-l')});
 function setTool(t,el){tool=t;tools.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.tool===t));
  layer.classList.toggle('pick',t==='pick');if(mode&&t==='pick')picker.on(el);else picker.off()}
 function setMode(on,el){mode=on;$c('.cm-mode').classList.toggle('on',on);tools.classList.toggle('on',on);layer.classList.toggle('on',on);
@@ -562,7 +567,9 @@ const klass=c=>c.resolved?'res':working(c)?'wait':c.messages.some(m=>m.agent)&&!
 // the anchors and every pin would fall back to its old page coordinates
 let drawnFor=null;const ready=()=>drawnFor===location.hash;
 function drawPins(){if(draw)return;const ts=ready()?mine():[],openN=mine().filter(t=>!t.resolved).length;
- $c('.cm-lst').textContent=openN?openN+' open':mine().length?mine().length+' resolved':all.length+' elsewhere';$c('.cm-lst').classList.toggle('none',!mine().length&&!all.length);
+ const lb=$c('.cm-lst'),elsewhere=all.filter(t=>t.route!==here()&&!t.resolved).length;lb.querySelector('span').textContent=openN||'';
+ lb.title=[openN&&openN+' open here',elsewhere&&elsewhere+' open on other views',!openN&&mine().length&&mine().length+' resolved here'].filter(Boolean).join(' · ')||'Comments';
+ lb.classList.toggle('none',!mine().length&&!all.length);
  const taken=[];  // two pins on one spot (a goal's track and its fill) sit side by side, never one under the other
  pinsEl.innerHTML=ts.map((c,i)=>{const xy=pos(c);if(!xy)return '';let [x,y]=xy;
   for(let k=0;k<8&&taken.some(([u,v])=>Math.abs(u-x)<20&&Math.abs(v-y)<20);k++)x+=x>innerWidth/2?-24:24;taken.push([x,y]);
@@ -622,7 +629,7 @@ function drawList(){const you=all.filter(forMe);$c('.cm-lst').classList.toggle('
 async function post(row,reload=true){let ev=null;row.by=myId();try{const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(row)});if(r.ok)ev=await r.json()}catch(e){}if(reload)await load();return ev}
 async function load(){try{const r=await fetch(API,{cache:'no-store'});if(!r.ok)return;const d=await r.json();all=d.threads||[];agentOn=!d.answer_agent||!!d.answer_agent.running;
  const p=pops.firstChild,reopen=open&&p&&!p.dataset.busy&&!p.contains(document.activeElement);drawPins();drawList();if(reopen)thread(open,'again')}catch(e){}}
-document.body.append(host);
+document.body.append(host);dock();new MutationObserver(dock).observe(document.getElementById('top')||document.body,{childList:true,subtree:true});
 addEventListener('scroll',drawPins,{passive:true,capture:true});addEventListener('resize',drawPins);
 // for keys.js: comment on an element, step through this view's threads, reply in or resolve the open one (or the one
 // anchored on the focused element)
