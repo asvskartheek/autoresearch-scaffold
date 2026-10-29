@@ -54,6 +54,11 @@ const isLive=t=>t&&(t.status==='running'||t.status==='stalled');
 const active=()=>S.state.tasks.filter(isLive);
 const archived=()=>S.state.tasks.filter(t=>!isLive(t));
 const byId=id=>S.state.tasks.find(t=>t.id===id);
+// atomic jobs the sidebar counts: live, no live child, not an answer agent; silent for more than a day is dead
+const DEAD_S=86400;
+const quietFor=t=>now()-(t.heartbeat||t.updated||t.created||0);
+const liveJobs=()=>{const live=active(),par=new Set(live.map(t=>t.parent).filter(Boolean));
+ return live.filter(t=>!par.has(t.id)&&t.kind!=='answer'&&!(t.status==='stalled'&&quietFor(t)>DEAD_S))};
 const kids=id=>S.state.tasks.filter(t=>t.parent===id).sort((a,b)=>(isLive(b)-isLive(a))||(b.created-a.created));
 // every descendant, depth-first, with its depth; a guard stops cycles from bad parent ids
 function tree(id,depth=0,seen=new Set([id])){return kids(id).filter(k=>!seen.has(k.id)&&seen.add(k.id)).flatMap(k=>[[k,depth],...tree(k.id,depth+1,seen)])}
@@ -82,6 +87,7 @@ const ICON={
  copy:I('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',13)};
 // the product's mark: a ladder (two rails, three rungs) in the accent
 const MARK='<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="6" fill="var(--accent)"/><path d="M8 18.5V5.5M16 18.5V5.5M8 15h8M8 11.5h8M8 8h8" stroke="var(--surface)" stroke-width="1.8" stroke-linecap="round"/></svg>';
+const routeLabel=r=>({task:'Task',hill:'Hill',model:'Model',goal:'Goal'})[r]||(ROUTES.find(([k])=>k===r)||ROUTES[0])[1];
 const ROUTES=[['overview','Overview'],['learn','Brief'],['workbench','Workbench'],['goals','Goals'],['questions','Questions'],['models','Models'],['hills','Hills'],['papers','Papers'],['slices','Slices'],['archive','Archive']];
 // the project this page serves: /p/<key>/ for a registered project, the server's own at /
 const PKEY=(location.pathname.match(/^\/p\/([^/]+)/)||[])[1]&&decodeURIComponent(location.pathname.split('/')[2]);
@@ -95,15 +101,22 @@ const goalPaper=g=>Object.values(S.state.papers||{}).find(p=>p.goal===g);
 // ---------- shell
 function renderNav(){
  const {r,arg}=route(),st=S.state;
- const navOn={task:st&&isLive(byId(arg))?'workbench':'archive',model:'models',hill:'hills',goal:'goals'}[r]||r;
- const stalled=st?active().filter(t=>t.status==='stalled').length:0;
- const waiting=st?Object.values(st.papers||{}).reduce((a,p)=>a+(p.waiting||0),0):0;
- const counts=st?{workbench:active().length,goals:Object.values(st.goals||{}).filter(g=>g.status==='open').length,hills:Object.values(st.hills).filter(h=>h.status==='open').length,papers:waiting}:{};
- const tip={workbench:n=>plural(n,'task')+' running'+(stalled?', '+stalled+' stalled':''),goals:n=>plural(n,'open goal'),hills:n=>plural(n,'open hill'),papers:n=>plural(n,'comment')+' waiting for the agent'};
+ const navOn={task:st&&isLive(byId(arg))?'workbench':'archive',model:'models',hill:'hills',goal:'goals'}[r]||(VIEWS[r]?r:'overview');
+ const jobs=st?liveJobs():[],stalled=jobs.filter(t=>t.status==='stalled').length,running=jobs.length-stalled;
+ const waiting=st?Object.values(st.papers||{}).reduce((a,p)=>a+(p.waiting||0),0):0,asks=st?.questions?.needs_human||0;
+ const counts=st?{workbench:jobs.length,goals:Object.values(st.goals||{}).filter(g=>g.status==='open').length,hills:Object.values(st.hills).filter(h=>h.status==='open').length,papers:waiting,questions:asks}:{};
+ const tip={workbench:()=>plural(running,'job')+' running'+(stalled?', '+stalled+' stalled':''),goals:n=>plural(n,'open goal'),hills:n=>plural(n,'open hill'),papers:n=>plural(n,'comment')+' waiting for the agent',questions:n=>plural(n,'question')+' waiting on you'};
+ const hot={papers:1,questions:1};
+ // switching project keeps the view: #goals on one project lands on #goals of the next (detail routes fall back to their list)
+ const keep=({task:'workbench',model:'models',hill:'hills',goal:'goals'})[r]||(VIEWS[r]?r:'');
+ const pq=q=>{const n=q.waiting||0,a=q.asks||0;
+  if(n||a)return `<span class="count hot" title="${[a&&plural(a,'question')+' waiting on you',n&&plural(n,'comment')+' waiting'].filter(Boolean).join(', ')}">${n+a}</span>`;
+  if(q.stalled&&!q.running)return `<span class="count bad" title="${plural(q.stalled,'job')} stalled">${q.stalled}</span>`;
+  return q.running?`<span class="count" title="${plural(q.running,'job')} running${q.stalled?', '+q.stalled+' stalled':''}">${q.running}</span>`:''};
  setHTML($('#nav'),`<a class="brand" href="#overview">${MARK}<span>arx<span class="proj">${esc(st?.config?.name||'')}</span></span></a>`+
-  ROUTES.map(([k,l])=>`<a class="nav ${navOn===k?'on':''}" href="#${k}" ${navOn===k?'aria-current="page"':''}>${ICON[k]}${l}${counts[k]?`<span class="count ${(k==='workbench'&&stalled)?'bad':k==='papers'?'hot':''}" title="${tip[k](counts[k])}">${counts[k]}</span>`:''}</a>`).join('')+
-  (S.projects.length>1?`<div class="grp">Projects</div>`+S.projects.map(q=>{const on=q.key===PKEY||(!PKEY&&q.default);return `<a class="nav proj ${on?'on':''}" href="/p/${enc(q.key)}/" title="${esc(q.name)} · ${esc(q.root)}" ${on?'aria-current="true"':''}><span class="pdot ${q.error?'bad':q.running?'run':''}"></span><span class="ell">${esc(q.name)}</span>${q.waiting?`<span class="count hot" title="${plural(q.waiting,'comment')} waiting">${q.waiting}</span>`:q.running?`<span class="count" title="${plural(q.running,'task')} running">${q.running}</span>`:''}</a>`}).join(''):'')+
-  (st?`<div class="foot"><b>${esc(st.champion||'No champion yet')}</b><span>${st.champion?'champion · ':''}${plural(Object.keys(st.models).length,'model')}</span></div>`:''));
+  ROUTES.map(([k,l])=>`<a class="nav ${navOn===k?'on':''}" href="#${k}" ${navOn===k?'aria-current="page"':''}>${ICON[k]}${l}${counts[k]?`<span class="count ${(k==='workbench'&&stalled)?'bad':hot[k]?'hot':''}" title="${tip[k](counts[k])}">${counts[k]}</span>`:''}</a>`).join('')+
+  (S.projects.length>1?`<div class="grp">Projects</div>`+S.projects.map(q=>{const on=q.key===PKEY||(!PKEY&&q.default);return `<a class="nav proj ${on?'on':''}" href="/p/${enc(q.key)}/${keep?'#'+keep:''}" title="${esc(q.name)} · ${esc(q.root)}" ${on?'aria-current="true"':''}><span class="pdot ${q.error?'bad':q.running?'run':q.stalled?'bad':''}"></span><span class="ell">${esc(q.name)}</span>${pq(q)}</a>`}).join(''):'')+
+  (st?`<div class="foot"><b title="${esc(st.champion||'')}">${st.champion?mn(st.champion):'No champion yet'}</b><span>${st.champion?'champion · ':''}${plural(Object.keys(st.models).length,'model')}</span></div>`:''));
 }
 function renderTop(){
  const dark=document.documentElement.dataset.theme==='dark'||(!document.documentElement.dataset.theme&&matchMedia('(prefers-color-scheme: dark)').matches);
