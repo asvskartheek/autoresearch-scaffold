@@ -118,7 +118,7 @@ function cardHTML(c){
    let cl=u.choice===o?' on':'';if(p&&truth!=null){if(o===truth)cl+=' truth';else if(u.choice===o)cl+=' wrong'}
    return `<button class="opt${cl}" data-l="pick" data-v="${esc(o)}" ${p?'disabled':''}><kbd>${i+1}</kbd>${esc(o)}</button>`}).join('')}</div>`;
  }else body=numberLine(c,u.guess,p?truth:null);
- body+=`<div class="conf"><label for="lcf">${c.type==='number'?'Sure it lands in the band':'Sure'}</label><input type="range" id="lcf" min="50" max="100" step="5" value="${u.conf}" ${p?'disabled':''}><output id="lcfo">${u.conf}%</output></div>`;
+ body+=`<div class="conf"><label for="lcf">${c.type==='number'?'Sure it lands in the band':'Sure'}</label><input type="range" id="lcf" min="${Math.round(100*(c.cmin??.5))}" max="100" step="5" value="${u.conf}" ${p?'disabled':''}><output id="lcfo">${u.conf}%</output></div>`;
  let reveal='';
  if(p){
   const yours=c.type==='choice'?esc(p.guess):lfmt(c,p.guess);
@@ -144,10 +144,10 @@ function doneHTML(){
   <div class="actions">${L.b.cards.length?'<button class="btn" data-l="prev">Back</button>':''}</div>`;
 }
 function calChart(cal){
- const W=268,H=180,Lx=34,B=150,T=10,R=W-10,x=v=>Lx+(v-50)/50*(R-Lx),y=v=>B-v/100*(B-T);
+ const W=268,H=180,Lx=34,B=150,T=10,R=W-10,x=v=>Lx+v/100*(R-Lx),y=v=>B-v/100*(B-T);
  let s='';[0,50,100].forEach(v=>s+=`<line x1="${Lx}" x2="${R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/><text x="${Lx-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`);
- [50,75,100].forEach(v=>s+=`<text x="${x(v)}" y="${B+16}" text-anchor="middle">${v}</text>`);
- s+=`<line x1="${x(50)}" y1="${y(50)}" x2="${x(100)}" y2="${y(100)}" stroke="var(--control)" stroke-dasharray="4 4"/>`;
+ [0,50,100].forEach(v=>s+=`<text x="${x(v)}" y="${B+16}" text-anchor="middle">${v}</text>`);
+ s+=`<line x1="${x(0)}" y1="${y(0)}" x2="${x(100)}" y2="${y(100)}" stroke="var(--control)" stroke-dasharray="4 4"/>`;
  s+=`<text x="${(Lx+R)/2}" y="${H-2}" text-anchor="middle">confidence</text><text x="10" y="${(T+B)/2}" text-anchor="middle" transform="rotate(-90 10 ${(T+B)/2})">hit rate</text>`;
  const pt=cal.bins.map(b=>({c:100*b.conf,h:100*b.hit,n:b.n}));
  if(pt.length>1)s+=`<polyline points="${pt.map(p=>x(p.c)+','+y(p.h)).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="1.5"/>`;
@@ -273,7 +273,7 @@ document.addEventListener('keydown',e=>{
  if(c.pred)return;
  const n=+e.key;
  if(c.type==='choice'&&n>=1&&n<=c.opts.length){u.choice=shuf(c.id,c.opts)[n-1];render(true);return}
- if(e.key==='ArrowUp'||e.key==='ArrowDown'){u.conf=Math.min(100,Math.max(50,u.conf+(e.key==='ArrowUp'?5:-5)));render(true);e.preventDefault();return}
+ if(e.key==='ArrowUp'||e.key==='ArrowDown'){u.conf=Math.min(100,Math.max(Math.round(100*(c.cmin??.5)),u.conf+(e.key==='ArrowUp'?5:-5)));render(true);e.preventDefault();return}
  if(e.key==='ArrowLeft'||e.key==='ArrowRight'){
   const dir=e.key==='ArrowRight'?1:-1;
   if(c.type==='number'){const st=c.step*(e.shiftKey?10:Math.max(1,Math.round((c.max-c.min)/c.step/200)));u.guess=snap(c,u.guess+dir*st)}

@@ -7,7 +7,8 @@ Routes (relative to the project: `/api/...` on its own server, `/p/<key>/api/...
        {now, since, cards: [card], concepts: [concept], calibration, understanding, open: [prediction]}
        A card's answer (`reveal`) is only sent once this viewer has predicted it.
   POST /api/predictions  {viewer, card, guess, conf}
-       guess: an option label (choice cards) or a number (number cards); conf: 0.5..1 (sure it is right / in the band).
+       guess: an option label (choice cards) or a number (number cards); conf: chance..1 (sure it is right / in the
+       band; chance is the card's `cmin`: 1/options for a choice, 0.05 for a number band).
        The server rebuilds the card, so truth and hit are its own: -> {prediction, card (with reveal)}.
   GET  /api/predictions?viewer=<name>     {predictions: [...], calibration}
   POST /api/understanding                 see UNDERSTANDING below
@@ -488,9 +489,16 @@ def cards(p: Project, since: float = 0) -> list[dict]:
 PUBLIC = ("id", "type", "opts", "unit", "int", "min", "max", "step", "start", "tol", "label", "tone", "t", "q", "ctx", "ev")
 
 
+def conf_floor(c: dict) -> float:
+    """The lowest confidence a card takes: chance for a choice (1 in 4 -> 0.25, on a 5% step), near 0 for a band."""
+    if c.get("type") == "choice" and c.get("opts"):
+        return max(0.05, (100 // len(c["opts"])) // 5 * 5 / 100)
+    return 0.05
+
+
 def public(c: dict, pred: dict | None = None) -> dict:
     """What the page gets: the question always, the answer only once this viewer has predicted."""
-    out = {k: c[k] for k in PUBLIC if k in c} | dict(open=c.get("truth") is None)
+    out = {k: c[k] for k in PUBLIC if k in c} | dict(open=c.get("truth") is None, cmin=conf_floor(c))
     if pred:
         out["reveal"] = dict(truth=c.get("truth"), why=c.get("why"), viz=c.get("viz"))
         out["pred"] = pred
@@ -540,7 +548,7 @@ def predict(p: Project, body: dict) -> tuple[int, dict]:
         if g is None or not c["min"] <= g <= c["max"]:
             return 400, dict(error="guess out of range")
         guess = g
-    conf = min(1.0, max(0.5, _f(body.get("conf"), 0.7)))
+    conf = min(1.0, max(conf_floor(c), _f(body.get("conf"), 0.7)))
     rec = dict(t=_now(), viewer=viewer, card=c["id"], q=c["q"], guess=guess, conf=round(conf, 3),
                truth=c.get("truth"), hit=_hit(c, guess))
     _append(p.dir / "predictions.jsonl", rec)
@@ -551,7 +559,7 @@ def calibration(preds: list[dict]) -> dict:
     """Hits, Brier score and a reliability curve (stated confidence vs hit rate) over the scored predictions."""
     sc = [r for r in preds if r.get("hit") is not None]
     bins = []
-    for a, b in ((0.5, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 0.9), (0.9, 1.01)):
+    for a, b in ((0, 0.2), (0.2, 0.4), (0.4, 0.5), (0.5, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 0.9), (0.9, 1.01)):
         g = [r for r in sc if a <= _f(r.get("conf")) < b]
         if g:
             bins.append(dict(conf=sum(_f(r["conf"]) for r in g) / len(g), hit=sum(bool(r["hit"]) for r in g) / len(g), n=len(g)))

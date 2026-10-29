@@ -60,6 +60,15 @@ class Review(unittest.TestCase):
         self.assertEqual(learn._rule_text(self.p, dict(slice="ds/full", rule="not_worse", threshold=-0.01)),
                          "may lose at most 1 pt")
 
+    def test_confidence_goes_down_to_chance(self):
+        self.assertEqual(learn.conf_floor(dict(type="choice", opts=list("abcd"))), 0.25)
+        self.assertEqual(learn.conf_floor(dict(type="choice", opts=["Yes", "No"])), 0.5)
+        self.assertEqual(learn.conf_floor(dict(type="number")), 0.05)
+        self.p.open_goal("g", "Goal", "full", 0.9)
+        _, r = learn.predict(self.p, dict(viewer="ann", card="goal|g", guess=20, conf=0.1))
+        self.assertEqual(r["prediction"]["conf"], 0.1)
+        self.assertEqual(r["card"]["cmin"], 0.05)
+
 
 if __name__ == "__main__":
     unittest.main()
