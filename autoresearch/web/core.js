@@ -131,7 +131,8 @@ function renderTop(){
  <div class="right">${hereFaces()}<span class="live" title="${S.ok?'Polling the ledger every 4s':'The dashboard server is not answering'}"><span class="dot ${S.ok?'':'off'}"></span>${S.ok?'Live':'Offline'}<span class="clk">${S.state&&S.ok?' · '+clock(S.state.now):''}</span></span>
  <button class="iconbtn" aria-label="Share" title="Share this view" onclick="shareMenu(this)">${ICON.share}</button><button class="iconbtn" aria-label="Theme: ${THEMES[t]}. Switch to ${THEMES[next]}" title="Theme: ${THEMES[t]} (click for ${THEMES[next]})" onclick="toggleTheme()">${t==='light'?ICON.sun:t==='dark'?ICON.moon:ICON.auto}</button></div>`);
 }
-// Share: a link to this view (it works on another machine once `arx share on` ran) and a one-file snapshot
+// Share: a link to this view (it works on another machine once `arx share on` ran) and a one-file snapshot that opens
+// on this same view (?view=<hash>, read by share.py)
 async function shareMenu(btn){
  document.querySelector('.sh-pop')?.remove();
  let d={};try{d=await (await fetch('api/share',{cache:'no-store'})).json()}catch(e){}
@@ -140,7 +141,7 @@ async function shareMenu(btn){
  pop.innerHTML=`<div class="sh-row"><span class="sh-l">${d.link?'Anyone on your network with this link':'Only this machine'}</span></div>
   <div class="sh-url"><code>${esc(url)}</code>${copyBtn(url)}</div>
   ${d.link?'':`<div class="sh-row sub"><code>arx share on</code>${copyBtn('arx share on')}<span>for others</span></div>`}
-  <a class="btn sh-dl" href="api/export" download>${ICON.download}Snapshot</a>`;
+  <a class="btn sh-dl" href="api/export?view=${enc(here.slice(1))}" download>${ICON.download}Snapshot</a>`;
  document.body.append(pop);const r=btn.getBoundingClientRect();pop.style.top=r.bottom+6+'px';pop.style.right=Math.max(8,innerWidth-r.right)+'px';
  setTimeout(()=>addEventListener('click',function off(e){if(!pop.contains(e.target)){pop.remove();removeEventListener('click',off)}}),0);
 }
