@@ -661,7 +661,8 @@ def concepts(p: Project) -> list[dict]:
         qs.append(dict(q=f"{sd(p, sl, noisy['delta'])}, 90% interval [{sd(p, sl, noisy['lo'])}, {sd(p, sl, noisy['hi'])}]. Is the gain shown?",
                        o=["Not yet", "Yes"], a="Not yet"))
     qs.append(dict(q="What narrows a paired interval most?", o=["More examples", "Re-running the same greedy eval"], a="More examples"))
-    out.append(dict(id="ci", t="Interval crosses zero", viz=dict(kind="ci-mini", rows=rows[:3] or [[0.016, -0.005, 0.037]]), qs=qs))
+    # with no candidate checks in the ledger the tile is a schematic, and it says so
+    out.append(dict(id="ci", t="Interval crosses zero", viz=dict(kind="ci-mini", rows=rows[:3] or [[0.016, -0.005, 0.037]], example=not rows), qs=qs))
     order = {"open": 0, "climbed": 1}
     hills = sorted(p.hills().items(), key=lambda kv: (order.get(kv[1].get("status"), 2), -_f((kv[1].get("share") or {}).get("count") if isinstance(kv[1].get("share"), dict) else 0)))
     for name, h in hills:
