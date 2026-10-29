@@ -56,7 +56,8 @@ function sketchBars(c,s){
 }
 // redraw the sketch in place; keep keyboard focus on it
 function redrawSketch(c,s){const g=document.getElementById('tsk');if(!g)return;const f=document.activeElement===g;
- g.outerHTML=(c.task||s.tk).kind==='bars'?sketchBars(c,s):sketchCI(c,s);if(f)document.getElementById('tsk')?.focus()}
+ g.outerHTML=(c.task||s.tk).kind==='bars'?sketchBars(c,s):sketchCI(c,s);if(f)document.getElementById('tsk')?.focus();
+ const go=document.querySelector('#main [data-t=go]');if(go)go.disabled=!(s.sk?.moved||s.sbm)}
 // move one part of the CI sketch to v: the delta carries its interval, the ends stay on their side of the delta;
 // everything stays on the axis
 function setCI(t,s,which,v){const [a,b]=ciWin(t,s),k=s.sk;v=Math.max(a,Math.min(b,v));
