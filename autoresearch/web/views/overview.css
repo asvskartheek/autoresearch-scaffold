@@ -30,7 +30,9 @@ a.ov-goal:hover .ov-gt{color:var(--accent)}
 .ov-gd{white-space:nowrap;font-size:15px}
 .ov-gd b{font-weight:600}
 .ov-gb{display:flex;align-items:center;gap:16px;min-width:0}
-.ov-trk{flex:1;height:8px;border-radius:4px;background:var(--rule);overflow:hidden;min-width:60px}
+.ov-trk{flex:1;position:relative;height:8px;border-radius:4px;background:var(--rule);overflow:hidden;min-width:60px}
+/* a goal on its own scale (met with headroom): the target as a tick, as on the goal page */
+.ov-trk b{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--text)}
 .ov-trk i{display:block;height:100%;background:var(--accent);border-radius:4px}
 .ov-trk.met i{background:var(--positive)}
 .ov-spark{flex:none}

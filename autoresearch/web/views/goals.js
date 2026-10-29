@@ -124,6 +124,16 @@ const ORDER={open:0,achieved:1,abandoned:2};
 const isMain=g=>!g.role||g.role==='main';
 const rank=g=>g.status!=='open'?0:g.met?2:((p=>p.mode==='rel'?Math.max(-1,Math.min(1,p.p)):-1)(prog(g)));
 
+// ---------- one encoding for every goal bar (goal page, map, Overview, Start): rel fills from the baseline (0) to the
+// target (1); abs draws the KPI's own scale from 0 with the target as a tick (mark), so 13 s under a 45 s line shows
+// its headroom instead of a full bar
+const bar=function(g){
+ const P=prog(g),cl=x=>Math.max(0,Math.min(1,x));
+ if(P.mode==='rel')return {f:g.met?1:cl(P.p),mark:null};
+ if(P.mode!=='abs')return {f:0,mark:null};
+ const D=v=>byN(g)?v:dsg(g)*v,top=byN(g)?1:Math.max(D(P.v),D(P.t),P.b!=null?D(P.b):0)*1.15||1;
+ return {f:cl(D(P.v)/top),mark:cl(D(P.t)/top)};
+}
 // ---------- the track: baseline on the left, target on the right, filled to the champion now
 const track=function(g,{big=false}={}){
  const P=prog(g),pc=f=>(100*Math.max(0,Math.min(1,f))).toFixed(1)+'%';
@@ -135,8 +145,7 @@ const track=function(g,{big=false}={}){
    <div class="gl-ends"><span>Baseline <b>${gu(g,P.b)}</b>${big?`<span class="gl-bn"> · ${mLink(g.baseline)}</span>`:''}</span><span>Target <b>${cmpSym(g)}&nbsp;${gt(g)}</b>${ofP(g)}</span></div></div>`;
  }
  // abs: the KPI's own scale from 0, the target as a tick; lower-is-better fills to the value and passes left of the tick
- const D=v=>byN(g)?v:dsg(g)*v,top=byN(g)?1:Math.max(D(P.v),D(P.t),P.b!=null?D(P.b):0)*1.15||1,f=D(P.v)/top,m=D(P.t)/top;
- const mp=(100*Math.max(0,Math.min(1,m))).toFixed(1);
+ const {f,mark:m}=bar(g),mp=(100*m).toFixed(1);
  return `<div class="gl-trk abs ${big?'big':''}">
   <div class="gl-tgt"><span style="--m:${mp}">Target <b>${cmpSym(g)}&nbsp;${gt(g)}</b></span></div>
   <div class="gl-bar ${g.met?'met':''}"><i style="width:${pc(f)}"></i><b class="tgt" style="left:${pc(m)}"></b></div>
@@ -208,11 +217,10 @@ const card=function(g){
 // ---------- the map: each main goal with its guards and sub-goals under it
 const mapNode=function(g,gs,depth=0){
  const d=dist(g),P=prog(g),kids=kidsOf(g.name,gs);
- const dv=dsg(g)*g.value,dt=dsg(g)*g.target,ab=cmpSym(g)==='≥'?dv/dt:dt/dv;
- const f=g.met||g.status==='achieved'?1:P.mode==='rel'?Math.max(0,Math.min(1,P.p)):P.mode==='abs'&&isFinite(ab)?Math.max(0,Math.min(1,ab)):0;
+ const B=bar(g),f=g.status==='achieved'&&B.mark==null?1:B.f;
  const fig=g.status==='abandoned'?'<span class="faint">abandoned</span>':g.status==='achieved'?'<span class="pos">Achieved</span>':d?(d.short?`<span class="neg">${d.v}</span> <span class="faint">${d.s}</span>`:`<span class="pos">Met</span> <span class="faint">${d.s}</span>`):'<span class="faint">not measured</span>';
  const grp=(r,l)=>{const k=kids.filter(x=>(x.role||'sub')===r);return k.length?`<div class="gm-lvl"><div class="gm-lab">${l}</div>${k.map(x=>mapNode(x,gs,depth+1)).join('')}</div>`:''};
- return `<div class="gm-tree${depth?'':' root'}"><a class="gm-node ${esc(g.role||'main')} ${esc(g.status)}" href="#goal/${enc(g.name)}"><span class="gm-t">${esc(g.title)}</span><span class="gm-d num">${fig}</span><span class="gm-bar ${g.met||g.status==='achieved'?'met':''} ${g.value==null?'none':''}"><i style="width:${(100*f).toFixed(1)}%"></i></span><span class="gm-m mono">${kpiPre(g)}${cmpSym(g)} ${gt(g)}${byN(g)?` of ${N(g.n)}`:''}</span></a>${depth<3?grp('guard','Guards')+grp('sub','Sub-goals')+grp('main','Under it'):''}</div>`;
+ return `<div class="gm-tree${depth?'':' root'}"><a class="gm-node ${esc(g.role||'main')} ${esc(g.status)}" href="#goal/${enc(g.name)}"><span class="gm-t">${esc(g.title)}</span><span class="gm-d num">${fig}</span><span class="gm-bar ${g.met||g.status==='achieved'?'met':''} ${g.value==null?'none':''}"><i style="width:${(100*f).toFixed(1)}%"></i>${B.mark!=null?`<b style="left:${(100*B.mark).toFixed(1)}%"></b>`:''}</span><span class="gm-m mono">${kpiPre(g)}${cmpSym(g)} ${gt(g)}${byN(g)?` of ${N(g.n)}`:''}</span></a>${depth<3?grp('guard','Guards')+grp('sub','Sub-goals')+grp('main','Under it'):''}</div>`;
 }
 const goalMap=function(gs,{title='Map',focus=null}={}){
  const names=new Set(gs.map(g=>g.name)),roots=gs.filter(g=>!g.parent||!names.has(g.parent));
@@ -526,7 +534,7 @@ window.Intake={
  dismiss:id=>act(id,()=>ipost('dismiss',{id})),
 };
 // the Overview draws each open goal with these, so a goal reads the same on both pages
-window.GoalUnits={gu,gt,gv,ofP,dist,prog,cmpSym,kpiPre,byN,isMain,slRuns,kpiKey,sgn,disp:(g,v)=>byN(g)?v*g.n:dsg(g)*v};
+window.GoalUnits={bar,gu,gt,gv,ofP,dist,prog,cmpSym,kpiPre,byN,isMain,slRuns,kpiKey,sgn,disp:(g,v)=>byN(g)?v*g.n:dsg(g)*v};
 // the chart is sized to the sheet in pixels so its labels stay legible; redraw once a resize settles
 let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(route().r==='goal'&&S.state)render(true)},150)});
 }

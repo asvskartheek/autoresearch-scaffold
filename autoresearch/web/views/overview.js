@@ -35,13 +35,13 @@ const ovTask=t=>{
 // one open goal: where the champion stands on the way from the baseline to the target, in the goal's units
 const ovGoal=g=>{
  const U=window.GoalUnits,P=U.prog(g),d=U.dist(g),met=g.met;
- const f=met?1:P.mode==='rel'?Math.max(0,Math.min(1,P.p)):P.mode==='abs'?(x=>isFinite(x)?Math.max(0,Math.min(1,x)):0)(U.cmpSym(g)==='≥'?U.disp(g,g.value)/U.disp(g,g.target):U.disp(g,g.target)/U.disp(g,g.value)):0;
+ const {f,mark}=U.bar(g);  // the goal page's encoding: a met ≤ goal shows its headroom left of the target tick
  const fig=d?(d.short?`<b class="neg">${d.v}</b> <span class="faint">${d.s}</span>`:`<b class="pos">Met</b> <span class="faint">${d.s}</span>`):'<span class="faint">not run yet</span>';
  const now=g.value==null?DASH:`${U.gu(g,g.value)}${U.ofP(g)}`;
  const base=P.b!=null&&P.mode==='rel'?`<span>Baseline ${U.gu(g,P.b)}</span>`:'<span></span>';
  return `<a class="ov-goal ${U.isMain(g)?'':'ov-sub'}" href="#goal/${enc(g.name)}">
   <span class="ov-gh"><span class="ell ov-gt">${esc(g.title||g.name)}</span><span class="ov-gd num">${fig}</span></span>
-  <span class="ov-gb"><span class="ov-trk ${met?'met':''}"><i style="width:${(100*f).toFixed(1)}%"></i></span>${ovSpark(g)}</span>
+  <span class="ov-gb"><span class="ov-trk ${met?'met':''}"><i style="width:${(100*f).toFixed(1)}%"></i>${mark!=null?`<b style="left:${(100*mark).toFixed(1)}%"></b>`:''}</span>${ovSpark(g)}</span>
   <span class="ov-ge num">${base}<span>Now <b>${now}</b></span><span>Target ${U.cmpSym(g)}&nbsp;${U.gt(g)}</span></span></a>`;
 };
 // the best run on the goal slice over time, as a step, with the target dashed
