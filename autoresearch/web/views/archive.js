@@ -44,7 +44,10 @@ function sessions(){
 }
 function sessionOf([a,b]){
  const st=S.state,inS=x=>x>=a-1&&x<=b+1;
- const tasks=st.tasks.filter(t=>top(t)&&inS(t.created)).sort((x,y)=>x.created-y.created);
+ // a model's eval or training run nested under an experiment still belongs in that model's lane (an eval's own
+ // harness sub-tasks do not: the eval stands for them)
+ const lane=t=>top(t)||t.model&&st.models[t.model]&&byId(t.parent)?.kind!=='eval';
+ const tasks=st.tasks.filter(t=>lane(t)&&inS(t.created)).sort((x,y)=>x.created-y.created);
  const decs=(st.decisions||[]).filter(d=>d.model&&inS(d.t));
  const first=[...tasks.filter(t=>t.model).map(t=>[t.created,t.model]),
   ...Object.entries(st.models).filter(([,m])=>m.created&&m.status!=='historical'&&inS(+m.created)).map(([k,m])=>[+m.created,k]),
@@ -103,7 +106,7 @@ function story(){
  const results=st.tasks.filter(t=>t.created>=a-1&&t.created<=b+1&&wbResultSummary(t));
  const resultLinks=results.map(t=>`<p><a class="ln" href="#task/${enc(t.id)}">${esc(t.title)}</a>: ${esc(wbResultSummary(t))}</p>`).join('');
  const stale=X.tasks.filter(t=>t.status==='stalled');
- const staleNote=stale.length?`<p class="sub">${stale.map(t=>`<a class="ln" href="#task/${enc(t.id)}">${esc(t.title)}</a>: last observed ${wbWhen(wbObservedEnd(t))}, silent for ${silent(t)}`).join('; ')}. Inactivity is excluded from this timeline.</p>`:'';
+ const staleNote=stale.length?`<p class="sub">${stale.map(t=>`<a class="ln" href="#task/${enc(t.id)}">${esc(t.title)}</a>: last observed ${wbWhen(wbObservedEnd(t))}, silent for ${silent(t)}`).join('; ')}.</p>`:'';
  return panel(i?'Research session':'Latest research session',`<div class="arc-story">
   ${lanes||oLane?`<div class="arc-tl"><div class="arc-ln arc-ax"><div class="arc-lh"></div><div class="arc-tk">${ticks}</div></div>${lanes}${oLane}</div>`:''}
   ${staleNote}${resultLinks}${tpf?`<div class="arc-tpf"><div class="arc-r arc-hd"><div>Tried</div><div>Predicted</div><div>Found</div></div>${tpf}</div>`:''}</div>`,{cls:'section arc-st',meta,right:nav});
