@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import asks, learner, stats
+from . import asks, learner, stats, verify
 from .store import LedgerError, Project, registry
 from .view import METRICS, Views, measure_of
 
@@ -65,6 +65,7 @@ def build_state(p: Project, until: float | None = None) -> dict:
     timeline = [{"t": e["t"], "type": e["type"], "key": e.get("key") or e.get("id"), "status": e.get("status")}
                 for e in s["log"] if e["type"] in ("champion", "candidate.status", "goal", "goal.status", "hill", "hill.status", "run", "set")]
     m = memory_state(p, v)
+    findings = verify.audit(p, v=v)
     return {
         "key": None, "project": s["project"], "measure": measure_of(s), "champion": champ,
         "champions": s["champions"], "sets": {k: _slim_set(k, x) for k, x in s["sets"].items()},
@@ -74,6 +75,7 @@ def build_state(p: Project, until: float | None = None) -> dict:
         "timeline": timeline,
         "span": [s["log"][0]["t"], s["log"][-1]["t"]] if s["log"] else [0, 0], "until": until,
         "n_events": len(s["log"]), "learner": m, "asks": s["asks"],
+        "audit": {**verify.summary(findings), "findings": findings},
     }
 
 
@@ -111,6 +113,7 @@ def project_card(key: str, root: str) -> dict:
                                                       "metric": g.get("metric"), "now": g["track"]["current"], "met": g["track"]["met"],
                                                       "status": g["status"]} for k, g in st["goals"].items()],
             "running": len(running), "stale": sum(1 for t in running if t["stale"]), "split_ok": st["split"]["ok"],
+            "errors": st["audit"]["errors"],
             "last": last, "n_candidates": len(st["candidates"]), "n_due": st["learner"]["n_due"]}
 
 
