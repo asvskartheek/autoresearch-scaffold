@@ -203,7 +203,7 @@ function ladderBoard(limit, filter) {
     const cells = cols.map((r) => {
       const steps = c.climb.filter((x) => x.from === r.i);
       const a = aggSteps(steps);
-      return `<td style="text-align:center"><span class="cell st-${a}" title="${esc(steps.map(stepTitle).join("\n") || STATE_WORD.todo)}">${GLYPH[a]}</span></td>`;
+      return `<td style="text-align:center" data-ask="candidate|${esc(c.key)}|ladder cell: ${esc(c.name)} × ${esc(r.name)}"><span class="cell st-${a}" title="${esc(steps.map(stepTitle).join("\n") || STATE_WORD.todo)}">${GLYPH[a]}</span></td>`;
     }).join("");
     return `<tr class="click" onclick="location.hash='#/p/${S.key}/cand/${encodeURIComponent(c.key)}'"><td>${cand(c.key)}<div class="small mute">${c.hill ? esc(st.hills[c.hill]?.name || c.hill) : ""} · ${esc(c.status === "trying" ? "climbing" : c.status)}</div></td>${cells}</tr>`;
   }).join("");
@@ -388,7 +388,7 @@ function hillCard(hk, h) {
   const p = st.patterns[h.pattern];
   const res = hillTargetResults(hk);
   const best = res.slice().sort((a, b) => b.s.delta - a.s.delta)[0];
-  return `<a class="sheet" href="#/p/${S.key}/hill/${encodeURIComponent(hk)}" style="text-decoration:none;display:block">
+  return `<a class="sheet" href="#/p/${S.key}/hill/${encodeURIComponent(hk)}" data-ask="hill|${esc(hk)}|hill card: ${esc(h.name)}" style="text-decoration:none;display:block">
     <div class="spread"><h3>${esc(h.name)}</h3><span class="pill ${h.status === "climbed" ? "champ" : ""}">${esc(h.status)}</span></div>
     <p class="small" style="min-height:3.6em">${esc((h.symptom || "").slice(0, 150))}</p>
     ${prevalence(p)}
@@ -568,7 +568,7 @@ PAGES.library = (tab) => {
   const t = (k, l) => `<a class="${tab === k ? "on" : ""}" href="#/p/${S.key}/library/${k}">${l} · ${docs.filter(pick[k]).length}</a>`;
   return `${projNav("library")}<h1>Library</h1><p class="sub">External papers explain a goal to anyone. Internal papers are the working notes of one hill.</p>
     <nav class="tabs">${t("external", "External papers")}${t("internal", "Internal papers")}${t("notes", "Notes")}${t("diagrams", "Diagrams")}</nav>
-    <div class="grid g3">${list.map(([k, d]) => `<a class="sheet" href="#/p/${S.key}/doc/${encodeURIComponent(k)}" style="text-decoration:none"><div class="small mute">${esc(d.kind)} · ${esc(d.audience || "internal")}</div><h3>${esc(d.name)}</h3><p class="small">${esc(d.title || "")}</p><p class="small mute">about ${d.about ? esc(st.goals[d.about]?.name || st.hills[d.about]?.name || d.about) : "the project"} · updated ${ago(d.updated)}</p></a>`).join("") || '<p class="empty">Nothing here yet.</p>'}</div>`;
+    <div class="grid g3">${list.map(([k, d]) => `<a class="sheet" href="#/p/${S.key}/doc/${encodeURIComponent(k)}" style="text-decoration:none"><div class="small mute">${esc(d.kind)} · ${esc(d.audience || "internal")}</div><h3>${esc(d.name)}</h3><p class="small">${esc(d.title || "")}</p><p class="small mute">about ${d.about ? esc(st.goals[d.about]?.name || st.hills[d.about]?.name || st.candidates[d.about]?.name || st.sets[d.about]?.name || (d.about === S.key ? "the project" : d.about)) : "the project"} · updated ${ago(d.updated)}</p></a>`).join("") || '<p class="empty">Nothing here yet.</p>'}</div>`;
 };
 
 PAGES.doc = (k) => {

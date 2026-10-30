@@ -128,3 +128,24 @@ iframe.doc { width: 100%; height: calc(100vh - 160px); border: 1px solid var(--l
 .scroll-x { overflow-x: auto; }
 input[type=search], select { font: inherit; padding: 5px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--sheet); color: var(--ink); }
 [hidden] { display: none !important; }
+#askbtn.on { background: var(--live); color: #fff; border-color: var(--live); }
+body.asking #app, body.asking #app * { cursor: crosshair !important; }
+.ask-hl { outline: 2px solid var(--live) !important; outline-offset: 2px; }
+#pins { position: absolute; top: 0; left: 0; width: 0; height: 0; z-index: 30; }
+.pin { position: absolute; width: 22px; height: 22px; padding: 0; border-radius: 50% 50% 50% 0; font-size: 11px; font-weight: 700; background: var(--ink); color: var(--bg); border: 2px solid var(--sheet); box-shadow: 0 2px 6px rgba(0,0,0,.2); }
+.pin.st-open, .pin.st-claimed { background: var(--live); color: #fff; animation: pulse 1.4s ease-in-out infinite; }
+.askpop, #askbox { position: absolute; z-index: 31; width: 460px; max-width: calc(100vw - 16px); background: var(--sheet); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; box-shadow: 0 10px 34px rgba(0,0,0,.16); }
+.askpop { overflow: auto; overscroll-behavior: contain; }
+#askbox { width: 380px; }
+#askbox textarea { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; resize: vertical; margin-bottom: 8px; }
+.askpop .q, .saved .q { font-weight: 600; margin: 4px 0 10px; }
+.md p, .md ul { margin: 0 0 8px; } .md ul { padding-left: 18px; } .md h3 { margin-top: 6px; }
+.md code, .q code, .askpop code { font: 12px var(--mono); background: var(--soft); padding: 1px 4px; border-radius: 4px; }
+.fig { display: block; margin: 8px 0; max-width: 100%; }
+.fig svg { max-width: 100%; height: auto; }
+iframe.fig { width: 100%; height: 300px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.golink { font-weight: 600; color: var(--live); }
+hr.soft { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
+.askpop .row { margin-top: 10px; }
+.askpop input { font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.saved + .saved { border-top: 1px solid var(--soft); margin-top: 12px; padding-top: 12px; }
