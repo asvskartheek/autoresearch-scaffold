@@ -99,14 +99,12 @@ class CourseSemantics(unittest.TestCase):
         lesson=course.lesson_project_hills(p,{},learn)
         self.assertNotIn('illustrated error',lesson['checks'][0]['q'])
 
-    def test_duplicate_model_titles_keep_recorded_qualifiers_and_budgets(self):
+    def test_duplicate_model_titles_keep_recorded_qualifiers_and_ids(self):
         p=CapturedProject('gsm8k')
         self.assertEqual(learn._title(p,'qwen3-4b-rl-archived'),'Qwen3-4B RL — archived baseline')
         self.assertEqual(learn._title(p,'qwen3-4b-rl-fresh-v1'),'Qwen3-4B RL — fresh audited harness')
-        for model,budget in [('thinking4b-numeric8192-v1','8,192'),('thinking4b-numeric32768-v1','32,768')]:
-            title=learn._title(p,model)
-            self.assertIn(budget+' output tokens',title)
-            self.assertNotIn(model,title)
+        for model in ('thinking4b-numeric8192-v1','thinking4b-numeric32768-v1'):
+            self.assertEqual(learn._title(p,model),'Thinking4B universal numeric final line · '+model)
 
     def test_rung_continuous_tolerance_is_not_scaled_to_percentage_points(self):
         from tests.test_goal_units import ledger
