@@ -8,7 +8,7 @@ from urllib.parse import parse_qsl, unquote, urlencode, urlsplit
 
 from . import features, papers, people, projects, share
 from .core import Project, _read, contract_of, paired, per_id, same_contract, summarize
-from .readable import readable
+from .readable import names, readable
 
 WEB = Path(__file__).with_name("web")
 TYPES = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml"}
@@ -133,14 +133,14 @@ def _gates(p: Project, models: dict) -> dict:
     return gates
 
 
-def _enrich(p: Project, t: dict) -> dict:
+def _enrich(p: Project, t: dict, keep: frozenset = frozenset()) -> dict:
     """A list row: its latest note, a readable description, an ETA and a sparkline of its first metric."""
     ev = p.events(t["id"])
-    t["note"] = ev[-1] | {"text": readable(ev[-1].get("msg"))} if ev else None
+    t["note"] = ev[-1] | {"text": readable(ev[-1].get("msg"), keep)} if ev else None
     if t.get("description"):
-        t["description"] = readable(t["description"])
+        t["description"] = readable(t["description"], keep)
     if t.get("title"):
-        t["title"] = readable(t["title"])
+        t["title"] = readable(t["title"], keep)
     series = p.metrics(t["id"])[-40:]
     keys = [k for k in (t.get("last") or {}) if isinstance(t["last"][k], (int, float))]
     t["eta"] = eta(p, t)
@@ -175,7 +175,8 @@ def all_tasks(p: Project) -> dict:
     with p.snapshot():
         tasks = p.tasks()
         infer_parents(tasks)
-        return dict(rev=_rev(tasks), tasks=[_enrich(p, t) for t in tasks])
+        keep = names(p)
+        return dict(rev=_rev(tasks), tasks=[_enrich(p, t, keep) for t in tasks])
 
 
 def _clean_reason(s: str) -> str:
@@ -230,9 +231,10 @@ def _state(p: Project) -> dict:
     lift_progress(tasks)
     gates = running_next(gates, tasks, p.slices())
     win = window(tasks, {g["task"] for g in gl.values() if g.get("task")})
+    keep = names(p)
     return dict(config=p.config, now=time.time(), champion=champ, datasets=p.datasets(), slices=slices,
                 hills=p.hills(), models={k: _model_row(m) for k, m in models.items()}, papers=papers.papers(p, with_health=True), gates=gates,
-                tasks=[_enrich(p, t) for t in win], tasks_total=len(tasks), tasks_rev=_rev(tasks), leaderboard=board,
+                tasks=[_enrich(p, t, keep) for t in win], tasks_total=len(tasks), tasks_rev=_rev(tasks), leaderboard=board,
                 goals=gl,
                 baseline=p.baseline_plan(champ) if champ else None,
                 decisions=_tail(p.dir / "decisions.jsonl", 50))
@@ -426,9 +428,10 @@ def task_detail(p: Project, tid: str) -> dict:
     infer_parents(tasks)
     t = next((x for x in tasks if x["id"] == tid), None) or p.task(tid)
     t["eta"] = eta(p, t)
+    keep = names(p)
     if t.get("description"):
-        t["description"] = readable(t["description"])
-    out = dict(task=t, metrics=_downsample(p.metrics(tid)), events=[e | {"text": readable(e.get("msg"))} for e in p.events(tid)[-300:]])
+        t["description"] = readable(t["description"], keep)
+    out = dict(task=t, metrics=_downsample(p.metrics(tid)), events=[e | {"text": readable(e.get("msg"), keep)} for e in p.events(tid)[-300:]])
     if t.get("kind") == "eval":
         rows = p.rows(tid)
         out["rows"] = [dict(id=r["id"], score=r.get("score"), error=bool(r.get("error")), latency_s=r.get("latency_s"), cost=r.get("cost")) for r in rows]
