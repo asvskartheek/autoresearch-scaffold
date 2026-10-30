@@ -112,7 +112,8 @@ def summarize(rows: list[dict], continuous: bool = False) -> dict:
     lat = sorted(r["latency_s"] for r in rows if isinstance(r.get("latency_s"), (int, float)))
     costs = [r["cost"] for r in rows if isinstance(r.get("cost"), (int, float))]
     pct = lambda q: lat[min(len(lat) - 1, math.ceil(q * len(lat)) - 1)] if lat else None
-    return dict(n=n, score=statistics.mean(scores) if scores else None, errors=sum(bool(r.get("error")) for r in rows),
+    extra = dict(errors_excluded=True) if continuous else {}  # marks a summary made under the continuous rule
+    return extra | dict(n=n, score=statistics.mean(scores) if scores else None, errors=sum(bool(r.get("error")) for r in rows),
                 cost=sum(costs) / n if costs and n else None, cost_total=sum(costs) if costs else None,
                 latency_p50=pct(0.5), latency_p95=pct(0.95), latency_mean=statistics.mean(lat) if lat else None)
 
@@ -394,13 +395,26 @@ class Project:
             t = _read(Path(d.path) / "task.json") if d.is_dir() else None
             if t:
                 out.append(self._liveness(t, stall))
+        for t in out:
+            self._fresh_summary(t, out)
         return sorted(out, key=lambda t: t.get("updated", 0), reverse=True)
 
     def task(self, tid: str) -> dict:
         t = _read(self.task_dir(tid) / "task.json")
         if not t:
             raise KeyError(tid)
-        return self._liveness(t)
+        return self._fresh_summary(self._liveness(t))
+
+    def _fresh_summary(self, t: dict, tasks: list[dict] | None = None) -> dict:
+        """A finished eval's summary as the current rule reads it. Runs on continuous slices summarised before errored
+        rows were left out of the mean (no `errors_excluded`) are recomputed from their rows on read; the ledger file
+        is never rewritten. Only runs with errors can differ, so clean ones cost nothing."""
+        s = t.get("summary")
+        if (t.get("kind") != "eval" or not isinstance(s, dict) or s.get("errors_excluded") or not s.get("errors")
+                or not t.get("slice") or t.get("status") == "running" or not self.is_continuous(t["slice"], tasks)):
+            return t
+        t["summary"] = s | summarize(self.rows(t["id"]), True)
+        return t
 
     def _stall(self) -> float:
         return 60 * self.config.get("stall_minutes", 10)

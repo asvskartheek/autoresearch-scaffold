@@ -321,5 +321,37 @@ class GoalPairingOnContinuousSlices(unittest.TestCase):
             self.assertAlmostEqual(vs["delta"], 10.0)
 
 
+class OldContinuousSummaries(unittest.TestCase):
+    def test_summary_written_before_the_rule_is_right_on_read(self):
+        from autoresearch import server
+        p = project([])
+        sl = continuous_slice(p, "lat/n6", unit="ms")
+        p.add_model("v0", status="champion")
+        t = run(p, "v0", sl, [-168.0] * 6, errors={0, 1})
+        f = p.task_dir(t.id) / "task.json"
+        old = json.loads(f.read_text())
+        old["summary"] = dict(core.summarize(p.rows(t.id)), missing=0)  # as the 0/1 rule wrote it: errors as 0
+        old["summary"].pop("errors_excluded", None)
+        f.write_text(json.dumps(old))
+        self.assertAlmostEqual(old["summary"]["score"], -112.0)
+        self.assertAlmostEqual(p.task(t.id)["summary"]["score"], -168.0)
+        self.assertAlmostEqual(next(x for x in p.tasks() if x["id"] == t.id)["summary"]["score"], -168.0)
+        self.assertAlmostEqual(server.task_detail(p, t.id)["task"]["summary"]["score"], -168.0)
+        self.assertEqual(json.loads(f.read_text())["summary"]["score"], -112.0)  # the ledger is not rewritten
+
+    def test_legacy_slice_summary_is_recomputed_too(self):
+        p = project([])
+        sl = legacy_slice(p)
+        p.add_model("v0", status="champion")
+        run(p, "v0", sl, [-2.0] * 6)
+        t = run(p, "v0", sl, [-2.0] * 6, errors={0, 1, 2})
+        f = p.task_dir(t.id) / "task.json"
+        old = json.loads(f.read_text())
+        old["summary"] = dict(core.summarize(p.rows(t.id)), missing=0)
+        old["summary"].pop("errors_excluded", None)
+        f.write_text(json.dumps(old))
+        self.assertAlmostEqual(next(x for x in p.tasks() if x["id"] == t.id)["summary"]["score"], -2.0)
+
+
 if __name__ == "__main__":
     unittest.main()
