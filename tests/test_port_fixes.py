@@ -71,5 +71,29 @@ class LegacyContinuousScale(unittest.TestCase):
         self.assertEqual(p.slice_scale(sl), "binary")
 
 
+class SharedDashboardScale(unittest.TestCase):
+    def test_learn_sees_a_slice_edit_on_a_long_lived_project(self):
+        from autoresearch import learn
+        p = project()
+        sl = legacy_slice(p)
+        p.add_model("v0", status="champion")
+        run(p, "v0", sl, [1, 0, 1, 1, 0, 1])
+        self.assertFalse(learn._cont(p, sl))  # cached on this Project, as the shared dashboard keeps it
+        data = json.loads((p.dir / "slices.json").read_text())
+        data[sl].update(scale="continuous", unit="s", metric="minus seconds")
+        (p.dir / "slices.json").write_text(json.dumps(data, indent=2))
+        self.assertTrue(learn._cont(p, sl))
+        self.assertEqual(learn._unit(p, sl), "s")
+
+    def test_first_run_decides_a_legacy_slice_on_a_long_lived_project(self):
+        from autoresearch import learn
+        p = project()
+        sl = legacy_slice(p)
+        p.add_model("v0", status="champion")
+        self.assertFalse(learn._cont(p, sl))  # no run yet
+        run(p, "v0", sl, [-2.5] * 6)
+        self.assertTrue(learn._cont(p, sl))
+
+
 if __name__ == "__main__":
     unittest.main()

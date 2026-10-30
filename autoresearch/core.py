@@ -22,6 +22,7 @@ def now() -> float:
     return time.time()
 
 
+_SCALES: dict = {}  # (ledger dir, slice) -> (slices.json version, scale inferred from its runs)
 _CACHE: dict = {}  # path -> (mtime_ns, size, parsed); the dashboard re-reads the same files on every poll
 
 
@@ -458,11 +459,23 @@ class Project:
         stored = self._slice_field(slice_name, "scale")
         if stored:
             return stored
+        # an inferred scale holds until slices.json changes (a long-lived dashboard must not keep a stale one); a slice
+        # with no scored run yet is not cached, so its first run decides
+        try:
+            st = os.stat(self.dir / "slices.json")
+            ver = (st.st_mtime_ns, st.st_size)
+        except OSError:
+            ver = None
+        key = (str(self.dir), slice_name)
+        hit = _SCALES.get(key)
+        if hit and hit[0] == ver:
+            return hit[1]
         runs = [t for t in (self.evals() if tasks is None else tasks)
                 if t.get("kind") == "eval" and t.get("slice") == slice_name and t.get("ended") and t.get("status") == "done"]
         for t in sorted(runs, key=lambda t: t.get("ended") or 0, reverse=True):
             scale = scale_of_rows(self.rows(t["id"]))
             if scale:
+                _SCALES[key] = (ver, scale)
                 return scale
         return "binary"
 
