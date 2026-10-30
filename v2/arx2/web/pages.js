@@ -134,7 +134,7 @@ function goalPanel(gk, g) {
   else if (gap != null && g.metric === "score") gapText = `<b>${pts(gap).replace("+", "")}</b> short · <b>${Math.ceil(gap * g.n - 1e-9)}</b> of ${g.n} items`;
   else if (gap != null) gapText = `<b>${metricVal(g.metric, Math.abs(gap))}</b> to go`;
   return `<div class="sheet"><div class="spread"><h2>Goal · ${ent("goal", gk)}</h2><span class="small mute">${day(g.created)}</span></div>
-    <div class="meta">${goalSentence(g)}</div>
+    <div class="small mute">${goalSentence(g)}</div>
     <div class="row" style="gap:22px;margin:10px 0"><div><div class="big">${metricVal(g.metric, tr.current)}</div><div class="small mute">now</div></div>
       <div><div class="big mute">${metricVal(g.metric, g.target)}</div><div class="small mute">target</div></div><div class="small">${gapText}</div></div>
     ${goalChart(g)}

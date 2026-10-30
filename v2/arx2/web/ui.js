@@ -97,7 +97,7 @@ function hoverHTML(kind, key) {
 
 function goalSentence(g) {
   const op = g.direction === "min" ? "≤" : "≥";
-  return `${METRIC_WORDS[g.metric] || g.metric} ${op} <b>${metricVal(g.metric, g.target)}</b> on ${ent("set", g.set)} <span class="mute">${g.n}</span>`;
+  return `${METRIC_WORDS[g.metric] || g.metric} ${op} <b>${metricVal(g.metric, g.target)}</b> on ${ent("set", g.set)} <span class="mute">(${g.n})</span>`;
 }
 
 let hoverTimer = null;
