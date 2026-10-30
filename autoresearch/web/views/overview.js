@@ -152,7 +152,8 @@ VIEWS.overview=()=>{
  }
 
  // leaderboard: dataset tabs, slice control, paired deltas vs the champion on the same slice
- if(!S.lbDataset||!ds.includes(S.lbDataset))S.lbDataset=ds.includes(prim)?prim:ds[0];
+ // a project with no full set (synthetic benches) opens on the dataset of the goal the champion reads by
+ if(!S.lbDataset||!ds.includes(S.lbDataset))S.lbDataset=(!st.slices[fullKey]&&cg&&st.slices[cg.slice]?.dataset)||(ds.includes(prim)?prim:ds[0]);
  const sl=Object.values(st.slices).filter(s=>s.dataset===S.lbDataset);
  const order={full:0,random:1,control:2,dev:3,synthetic:4};
  sl.sort((a,b)=>((order[a.kind]??9)-(order[b.kind]??9))||(b.n-a.n)||a.name.localeCompare(b.name));

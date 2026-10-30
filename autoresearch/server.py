@@ -437,9 +437,10 @@ def task_detail(p: Project, tid: str) -> dict:
         contract = (t.get("config") or {}).get("baseline_contract")
         if contract is not None:
             bases = [b for b in bases if (b.get("config") or {}).get("baseline_contract") == contract]
+        cont = p.is_continuous(t["slice"])
         if bases:
             out["vs_champion"] = dict(model=champ, task=bases[-1]["id"], runs=len(bases), baseline_contract=contract,
-                                      **paired(per_id(rows), per_id([r for b in bases for r in p.rows(b["id"])]),
+                                      **paired(per_id(rows, cont), per_id([r for b in bases for r in p.rows(b["id"])], cont),
                                                1 if p.config.get("higher_is_better", True) else -1))
     return out
 

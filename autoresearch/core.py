@@ -100,21 +100,29 @@ def ids_hash(ids) -> str:
 
 # ---------------------------------------------------------------- statistics
 
-def summarize(rows: list[dict]) -> dict:
+def summarize(rows: list[dict], continuous: bool = False) -> dict:
+    """On a 0/1 slice an errored row scores 0. On a continuous slice 0 can be the best value (minus ms), so errored rows
+    are left out of the mean and only counted in `errors`."""
     n = len(rows)
-    scores = [0.0 if r.get("error") else float(r.get("score") or 0) for r in rows]
+    if continuous:
+        scores = [float(r.get("score") or 0) for r in rows if not r.get("error")]
+    else:
+        scores = [0.0 if r.get("error") else float(r.get("score") or 0) for r in rows]
     lat = sorted(r["latency_s"] for r in rows if isinstance(r.get("latency_s"), (int, float)))
     costs = [r["cost"] for r in rows if isinstance(r.get("cost"), (int, float))]
     pct = lambda q: lat[min(len(lat) - 1, math.ceil(q * len(lat)) - 1)] if lat else None
-    return dict(n=n, score=statistics.mean(scores) if n else None, errors=sum(bool(r.get("error")) for r in rows),
+    return dict(n=n, score=statistics.mean(scores) if scores else None, errors=sum(bool(r.get("error")) for r in rows),
                 cost=sum(costs) / n if costs and n else None, cost_total=sum(costs) if costs else None,
                 latency_p50=pct(0.5), latency_p95=pct(0.95), latency_mean=statistics.mean(lat) if lat else None)
 
 
-def per_id(rows: list[dict]) -> dict[str, float]:
-    """Mean score per example id; repeated samples of one id are averaged."""
+def per_id(rows: list[dict], continuous: bool = False) -> dict[str, float]:
+    """Mean score per example id; repeated samples of one id are averaged. On a continuous slice errored rows are
+    skipped (an id with only errors drops out of pairing) instead of scoring 0."""
     acc: dict[str, list[float]] = {}
     for r in rows:
+        if continuous and r.get("error"):
+            continue
         acc.setdefault(str(r["id"]), []).append(0.0 if r.get("error") else float(r.get("score") or 0))
     return {k: statistics.mean(v) for k, v in acc.items()}
 
@@ -424,7 +432,11 @@ class Project:
 
     def pooled_scores(self, model: str, slice_name: str, reference_model: str | None = None) -> dict[str, float]:
         """Per-id mean over compatible complete repeats; never pool across a declared harness change."""
-        return per_id([r for t in self.score_runs(model, slice_name, reference_model) for r in self.rows(t["id"])])
+        return per_id([r for t in self.score_runs(model, slice_name, reference_model) for r in self.rows(t["id"])],
+                      continuous=self.is_continuous(slice_name))
+
+    def is_continuous(self, slice_name: str) -> bool:
+        return (self.slices().get(slice_name) or {}).get("scale") == "continuous"
 
     # gates -----------------------------------------------------------------------------
     def _resolve(self, ref: str, model: dict) -> list[str]:
@@ -481,8 +493,14 @@ class Project:
                         c["state"] = "need_run"
                         next_runs.append((model_name, sl))
                     else:
-                        p = paired(per_id([row for t in cand_runs for row in self.rows(t["id"])]),
-                                   per_id([row for t in base_runs for row in self.rows(t["id"])]), sign)
+                        cont = self.is_continuous(sl)
+                        p = paired(per_id([row for t in cand_runs for row in self.rows(t["id"])], cont),
+                                   per_id([row for t in base_runs for row in self.rows(t["id"])], cont), sign)
+                        if cont and p.get("base") is not None:
+                            # margin / tolerance are written for 0/1 slices; on a continuous one read them as a
+                            # fraction of the champion's mean (0.05 on ~160 MB allows 8 MB), not as raw units
+                            c["threshold"] *= abs(p["base"])
+                            c["relative"] = True
                         ok = p["delta"] is not None and (p["delta"] > c["threshold"] if chk["rule"] == "better" else p["delta"] >= c["threshold"])
                         c |= dict(state="pass" if ok else "fail", noisy=p["lo"] is not None and p["lo"] < 0 < p["hi"],
                                   cand_task=ce["id"], base_task=be["id"],
@@ -834,7 +852,7 @@ class Task:
                 want = set(self.p.slice(self.meta["slice"])["ids"])
                 got = {str(r["id"]) for r in rows}
                 self.meta["complete"] = got == want
-                self.meta["summary"] = summarize(rows) | {"missing": len(want - got)}
+                self.meta["summary"] = summarize(rows, self.p.is_continuous(self.meta["slice"])) | {"missing": len(want - got)}
             if summary:
                 self.meta["summary"] = self.meta.get("summary", {}) | summary
             self.meta["status"], self.meta["ended"] = status, now()
