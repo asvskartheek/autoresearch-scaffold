@@ -321,7 +321,7 @@ def _bar(p, c) -> str:
 
 
 def cmd_gate(a):
-    from .learn import sd, _neg
+    from .learn import sd, sv, _neg
     p = Project()
     g = p.gate(a.model)
     if a.json:
@@ -331,6 +331,11 @@ def cmd_gate(a):
         print(f"  {r['rung']:<10} {r['status'].upper()}")
         for c in r["checks"]:
             sl, extra = c["slice"], ""
+            if c["state"] == "champion":  # never paired with itself: no bar, no delta
+                n = c.get("champion_runs") or 0
+                extra = "no run" if not n else f"{sv(p, sl, c.get('champion_score'))}" + (f" ({n} runs pooled)" if n > 1 else "")
+                print(f"      {c['state']:<14} {sl:<28} {extra}".rstrip())
+                continue
             if c["state"] == "rejected" and c.get("reason"):
                 extra = c["reason"]
             elif c.get("harness_mismatch"):

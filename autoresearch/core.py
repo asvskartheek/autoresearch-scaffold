@@ -528,6 +528,10 @@ class Project:
                         c["baseline_contract"] = contract_of(ce)
                     if champ == model_name:
                         c["state"] = "champion"
+                        # the champion is not paired with itself: what it has on the slice, or that it has no run
+                        sc = per_id([row for t in cand_runs for row in self.rows(t["id"])], cont) if cand_runs else {}
+                        c |= dict(champion_runs=len(cand_runs), champion_task=ce["id"] if ce else None,
+                                  champion_score=sum(sc.values()) / len(sc) if sc else None)
                     elif not champ:
                         c["state"] = "no_champion"
                     elif not be:

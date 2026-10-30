@@ -214,5 +214,24 @@ class BaselineDryRun(unittest.TestCase):
         self.assertNotRegex(out, r"missing +qa/full")
 
 
+class ChampionGate(unittest.TestCase):
+    def test_champion_rungs_show_no_run_not_a_bar(self):
+        ladder = [dict(rung="random4", checks=[dict(slice="qa/random4", rule="not_worse", tolerance=0.02)]),
+                  dict(rung="full", checks=[dict(slice="qa/full", rule="better")])]
+        p = project(ladder)
+        p.add_slice("qa/full", [f"x{i}" for i in range(6)], kind="full")
+        p.add_slice("qa/random4", [f"x{i}" for i in range(4)], kind="random")
+        p.add_model("v0", status="champion")
+        run(p, "v0", "qa/full", [1, 1, 1, 0, 0, 0])
+        g = p.gate("v0")
+        r4, full = g["rungs"][0]["checks"][0], g["rungs"][1]["checks"][0]
+        self.assertEqual((r4["champion_runs"], r4["champion_score"]), (0, None))
+        self.assertEqual((full["champion_runs"], full["champion_score"]), (1, 0.5))
+        out = arx(p, "gate", "v0")
+        self.assertRegex(out, r"champion +qa/random4 +no run")
+        self.assertRegex(out, r"champion +qa/full +3 of 6")
+        self.assertNotIn("pts", out)
+
+
 if __name__ == "__main__":
     unittest.main()
