@@ -53,7 +53,7 @@ class Memory(unittest.TestCase):
         ks = {k["id"]: k for k in memory.knowledge("p-00aa11bb")}
         self.assertEqual(set(ks), {"paired", "ladder", "ci", f"model:{self.key}/cand"})
         self.assertEqual(ks["ladder"]["state"], "known")  # the check, minutes after the step, is the review that stands
-        self.assertEqual(ks["paired"]["state"], "shaky"); self.assertEqual(ks["ci"]["state"], "shaky")
+        self.assertEqual(ks["paired"]["state"], "due"); self.assertEqual(ks["ci"]["state"], "due")  # the step was missed
 
     def test_teach_phases(self):
         """answer, self and step rows (and rows from before phases) are read as what they are."""
@@ -107,7 +107,8 @@ class Memory(unittest.TestCase):
         self.assertEqual({i: k["lesson"] for i, k in ks.items()},
                          {"paired": "paired-delta", "ci": "interval", "lesson:gate": "gate", f"lesson:{self.key}/project-hills": "project-hills"})
         self.assertEqual((ks["lesson:gate"]["project"], ks[f"lesson:{self.key}/project-hills"]["project"]), ("", self.key))
-        self.assertEqual(titles["lesson:gate"], "Gate"); self.assertEqual(ks["lesson:gate"]["state"], "shaky")
+        self.assertEqual(titles["lesson:gate"], "Gate"); self.assertEqual(ks["lesson:gate"]["state"], "due")
+        self.assertEqual(course.memory(course.rows(self.p, "p-00aa11bb"))["gate"]["is_due"], True)  # the course agrees
         mem = course.memory(course.rows(self.p, "p-00aa11bb"))  # the course's own schedule reads the same rows
         self.assertEqual(set(mem), {"paired-delta", "gate", "project-hills", "interval"})
         self.assertEqual(memory.sync_all("backfill", full=True)["added"][self.key], 0)
@@ -141,6 +142,10 @@ class Memory(unittest.TestCase):
         miss = memory.step(dict(spaced), t0 + 4 * DAY, False)
         self.assertAlmostEqual(miss["stability"], 2.5 * 0.35); self.assertEqual(miss["lapses"], 1)
         self.assertLess(miss["mastery"], spaced["mastery"])
+        self.assertEqual(miss["due"], t0 + 4 * DAY)  # a miss is due again now, as in the 101 course
+        relearn = memory.step(dict(memory.step(dict(miss), t0 + 5 * DAY, False)), t0 + 5.2 * DAY, True)
+        self.assertEqual(relearn["stability"], 1.0)  # a right answer is never due again within the course's first day
+        self.assertEqual(relearn["due"], t0 + 6.2 * DAY)
         self.assertAlmostEqual(memory.recall(spaced, spaced["last_review"] + 2.5 * DAY), 0.9)
         self.assertEqual(memory.state_of(dict(n=1, due=t0, mastery=0.9), t0 + 1), "due")
         self.assertEqual(memory.state_of(dict(n=0), t0), "untested")

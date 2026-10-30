@@ -28,7 +28,8 @@ same rows into its cross-project schedule. course.jsonl is the one record of bot
 Knowledge (per person and concept) is rebuilt from that person's events whenever they change, so it never drifts:
   graded events (a hit or a miss) drive a spaced-repetition schedule: stability S in days (the gap after which recall
   drops to 90%), mastery m (a moving average of hits), due = last review + S.
-  a hit after a real gap multiplies S by 2.5 (hard methods 3), a hit while crammed by 1.3; a miss cuts S to 35%.
+  a hit after a real gap multiplies S by 2.5 (hard methods 3), a hit while crammed by 1.3, never below a day; a miss
+  cuts S to 35% and is due again at once (the 101 course's own schedule: a miss is due now, a hit not before a day).
   strength now = m * 0.9 ** (days since review / S). Exposures (seen, read, skip, comment) only update last seen.
 
   GET /api/memory?viewer=<person id>   {person, name, now, project, concepts (each with its 101 `lesson` or null), due, methods,
@@ -404,8 +405,9 @@ def step(k: dict, t: float, hit: bool, method: str | None = None) -> dict:
             s *= 0.35
             k["lapses"] = (k.get("lapses") or 0) + 1
         m += 0.4 * ((1.0 if hit else 0.0) - m)
-    s = min(365.0, max(0.1, s))
-    return k | dict(stability=s, mastery=m, reps=(k.get("reps") or 0) + 1, last_review=t, due=t + s * DAY)
+    s = min(365.0, max(1.0 if hit else 0.1, s))
+    # as the 101 course schedules it: a miss is due again now, a right answer not before a day has passed
+    return k | dict(stability=s, mastery=m, reps=(k.get("reps") or 0) + 1, last_review=t, due=t + s * DAY if hit else t)
 
 
 def recall(k: dict, now: float) -> float | None:
