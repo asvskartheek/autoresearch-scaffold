@@ -27,6 +27,7 @@ ledger cannot back with a row.
   rows/<run>.jsonl    eval rows, appended as they finish (streamed live to the dashboard)
   docs/<key>.*        papers, notes, diagrams (html, md, svg)
   learner.jsonl       what the person did on the dashboard (views, dwell, card reviews)
+  answers/<ask>-<n>.* html and image parts of answers to questions asked on the dashboard
 ~/.arx2/projects.json one registry, one dashboard for every project
 ```
 
