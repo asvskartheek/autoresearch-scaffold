@@ -201,8 +201,8 @@ function examples(rows){
  let fill=x=>Math.max(0,Math.min(1,x.score||0)),legend;
  if(c){const v=r.filter(x=>!x.error&&typeof x.score==='number').map(x=>x.score),lo=Math.min(...v),hi=Math.max(...v),T=timedSl(CUR);
   fill=x=>hi>lo?(x.score-lo)/(hi-lo):1;
-  legend=`<span><i class="k0"></i>${T?'slowest':'lowest'}${v.length?' '+cVal(lo,CUR):''}</span><span><i class="k1"></i>${T?'fastest':'highest'}${v.length?' '+cVal(hi,CUR):''}</span><span><i class="ke"></i>${err} errors</span>`}
- else{const ok=r.filter(x=>!x.error&&x.score>=1).length;legend=`<span><i class="k1"></i>${ok} right</span><span><i class="k0"></i>${r.length-ok-err} wrong</span><span><i class="ke"></i>${err} errors</span>`}
+  legend=`<span><i class="k0"></i>${T?'slowest':'lowest'}${v.length?' '+cVal(lo,CUR):''}</span><span><i class="k1"></i>${T?'fastest':'highest'}${v.length?' '+cVal(hi,CUR):''}</span><span><i class="ke"></i>${err} ${err===1?'error':'errors'}</span>`}
+ else{const ok=r.filter(x=>!x.error&&x.score>=1).length;legend=`<span><i class="k1"></i>${ok} right</span><span><i class="k0"></i>${r.length-ok-err} wrong</span><span><i class="ke"></i>${err} ${err===1?'error':'errors'}</span>`}
  return `<div class="section">${panel('Examples',`<div class="tk-strip">${r.map(x=>`<span class="${x.error?'e':''}" style="${x.error?'':`--s:${Math.round(100*fill(x))}%`}" title="${esc(x.id)} · ${x.error?'error':c?cVal(x.score,CUR).replace('&nbsp;',' '):fmtv(x.score)}"></span>`).join('')}</div>
  <div class="tk-legend">${legend}</div>`,{meta:`${r.length} examples, in id order`})}</div>`;
 }
