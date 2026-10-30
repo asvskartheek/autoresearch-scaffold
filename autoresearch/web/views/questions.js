@@ -156,7 +156,7 @@ function qPanel(id,ix){
  if(n.quote)h+=`<div class="q-quote"><mark>${esc(n.quote)}</mark></div>`;
  if(n.claim&&(!n.seeded||n.edited)){
   const stamp=n.settled||n.created, snap=n.evidence_snapshot;
-  h+=`<div class="q-why">${stamp?'Answered '+esc(new Date(stamp*1000).toLocaleString())+' ':''}<button class="btn" data-qact="retry">Refresh answer</button></div>`;
+  h+=`<div class="q-why">${stamp?'Answered '+wbWhen(stamp)+' ':''}<button class="btn" data-qact="retry">Refresh answer</button></div>`;
   if(snap)h+=qEvidence({...n,ev:snap});
   if(n.ev?.length)h+=`<details class="q-more"><summary>Current ledger evidence${snap&&JSON.stringify(snap)!==JSON.stringify(n.ev)?' · changed since this answer':''}</summary>${qEvidence(n)}</details>`;
  }else h+=qEvidence(n);
@@ -254,7 +254,7 @@ VIEWS.answer=arg=>{
  if(d?.error)return page({title,crumbs})+empty('No such answer');
  if(!d)return page({title:'',crumbs,acts})+`<div class="q-rwrap"><div class="q-rload">Reading the answer…</div></div>`;
  setTimeout(qFit,0);
- return page({title:'',crumbs,acts})+`<div class="q-why">Authored document${d.t?' · '+esc(new Date(d.t*1000).toLocaleString()):''}. Claims describe the saved answer; current ledger evidence may differ.${owner?` <a href="#questions/${enc(owner.id)}">Check evidence and refresh</a>`:''}</div><div class="q-rwrap"><div class="q-rload">Reading the answer…</div><iframe class="q-reader" title="${esc(title)}" sandbox="allow-scripts allow-popups" onload="this.parentNode.classList.add('ok')" srcdoc="${esc(qDocHtml(d.html,qTheme()))}"></iframe></div>`;
+ return page({title:'',crumbs,acts})+`<div class="q-why">Authored document${d.t?' · '+wbWhen(d.t):''}. Claims describe the saved answer; current ledger evidence may differ.${owner?` <a href="#questions/${enc(owner.id)}">Check evidence and refresh</a>`:''}</div><div class="q-rwrap"><div class="q-rload">Reading the answer…</div><iframe class="q-reader" title="${esc(title)}" sandbox="allow-scripts allow-popups" onload="this.parentNode.classList.add('ok')" srcdoc="${esc(qDocHtml(d.html,qTheme()))}"></iframe></div>`;
 };
 addEventListener('hashchange',()=>{const {r,arg}=route();if(r==='answer'&&QS.docs)delete QS.docs[arg]});  // reopening reads the latest version
 
