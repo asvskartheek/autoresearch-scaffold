@@ -445,7 +445,7 @@ PAGES.hill = (hk) => {
       <div style="margin-top:12px">${checks.length ? checks.map((c) => `<div class="row small"><span class="dot ${c.shared ? "bad" : ""}"></span>${setN(c.a)} and ${setN(c.b)}: <b class="${c.shared ? "alarm" : ""}">${c.shared} shared</b></div>`).join("") : '<p class="small mute">Only one set: nothing to compare.</p>'}
       <p class="small mute">Checked ${ago(st.split.checked)} from the frozen id lists. <a href="#/p/${S.key}/sets">Re-check now</a>.</p></div></div>
     <div class="sheet section"><h2>Every candidate on the target set, against the model it was built on</h2>${forest(res)}</div>
-    ${docs.length ? `<div class="sheet section"><h2>Papers</h2>${docs.map(([k, d]) => `<p>${ent("doc", k)} <span class="small mute">${esc(d.title || "")} · ${d.audience} · updated ${ago(d.updated)}</span></p>`).join("")}</div>` : ""}`;
+    ${docs.length ? `<div class="sheet section"><h2>Papers</h2>${docs.map(([k, d]) => `<p>${ent("doc", k)}${draftPill(d)} <span class="small mute">${esc(d.title || "")} · ${d.audience} · updated ${ago(d.updated)}</span></p>`).join("")}</div>` : ""}`;
 };
 
 function forest(res) {
@@ -582,6 +582,7 @@ function decisions(n) {
 }
 
 // ---- library -----------------------------------------------------------------
+const draftPill = (d) => (d.draft ? ' <span class="pill">draft</span>' : "");
 PAGES.library = (tab) => {
   const st = S.state;
   tab = tab || "external";
@@ -591,7 +592,7 @@ PAGES.library = (tab) => {
   const t = (k, l) => `<a class="${tab === k ? "on" : ""}" href="#/p/${S.key}/library/${k}">${l} · ${docs.filter(pick[k]).length}</a>`;
   return `${projNav("library")}<h1>Library</h1><p class="sub">External papers explain a goal to anyone. Internal papers are the working notes of one hill.</p>
     <nav class="tabs">${t("external", "External papers")}${t("internal", "Internal papers")}${t("notes", "Notes")}${t("diagrams", "Diagrams")}</nav>
-    <div class="grid g3">${list.map(([k, d]) => `<a class="sheet" href="#/p/${S.key}/doc/${encodeURIComponent(k)}" style="text-decoration:none"><div class="small mute">${esc(d.kind)} · ${esc(d.audience || "internal")}</div><h3>${esc(d.name)}</h3><p class="small">${esc(d.title || "")}</p><p class="small mute">about ${d.about ? esc(st.goals[d.about]?.name || st.hills[d.about]?.name || st.candidates[d.about]?.name || st.sets[d.about]?.name || (d.about === S.key ? "the project" : d.about)) : "the project"} · updated ${ago(d.updated)}</p></a>`).join("") || '<p class="empty">Nothing here yet.</p>'}</div>`;
+    <div class="grid g3">${list.map(([k, d]) => `<a class="sheet" href="#/p/${S.key}/doc/${encodeURIComponent(k)}" style="text-decoration:none"><div class="small mute">${esc(d.kind)} · ${esc(d.audience || "internal")}</div><h3>${esc(d.name)}${draftPill(d)}</h3><p class="small">${esc(d.title || "")}</p><p class="small mute">about ${d.about ? esc(st.goals[d.about]?.name || st.hills[d.about]?.name || st.candidates[d.about]?.name || st.sets[d.about]?.name || (d.about === S.key ? "the project" : d.about)) : "the project"} · updated ${ago(d.updated)}</p></a>`).join("") || '<p class="empty">Nothing here yet.</p>'}</div>`;
 };
 
 PAGES.doc = (k) => {
@@ -601,7 +602,7 @@ PAGES.doc = (k) => {
   const nav = projNav("library");
   crumbs([{ label: "All projects", href: "#/" }, { label: S.state.project.name, href: `#/p/${S.key}` }, { label: d.name }]);
   if ($("#app iframe.doc")?.dataset.v === v) return null; // same paper: keep the frame, its height and the reader's place
-  return `${nav}<a class="doc-alone small" href="${src}" target="_blank">Open alone ↗</a>
+  return `${nav}<span class="doc-alone small">${draftPill(d)} <a href="${src}" target="_blank">Open alone ↗</a></span>
     <iframe class="doc" data-v="${esc(v)}" src="${src}" onload="docLoaded(this)"></iframe>`;
 };
 
