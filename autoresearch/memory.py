@@ -7,7 +7,8 @@ project, the file and the raw line, so reading a file twice changes nothing.
 
 Read from each project's `.research/`:
   predictions.jsonl    Brief predictions            -> predict (hit, conf, a numeric guess)
-  teach.jsonl          method attempts and skips    -> attempt (method, hit, err, ms) / skip
+  teach.jsonl          by phase: answer, self, step -> attempt (method, hit, err, ms) / self (an explain's own check) /
+                                                    step (code, ndrag, spot after the reveal) / skip
   understanding.jsonl  time on a card or doc, checks -> seen (Brief card) / read (paper, explainer) / check (concept)
   comments.jsonl       dashboard comments           -> comment / reply / thread_seen (person's own, no body)
   papers/*/thread.jsonl paper threads               -> the same, on a paper
@@ -43,6 +44,7 @@ from . import features, projects
 DAY = 86400.0
 GENERAL = dict(paired="Paired delta", ci="Interval crosses zero", ladder="The gate ladder", hill="Hills", goal="Goals")
 HARD = {"code", "explain", "prototype"}
+GRADED = ("predict", "attempt", "self", "step", "check")
 SCHEMA = [
     """
     CREATE TABLE people (id TEXT PRIMARY KEY, name TEXT, first REAL, last REAL);
@@ -197,11 +199,15 @@ def _events_from(key: str, name: str, r: dict, ctx: dict) -> list[tuple[dict, li
         who = person(r.get("viewer"), roster)
         if not who:
             return []
+        from .teach import _phase
+        ph, m, skip = _phase(r), r.get("method"), bool(r.get("skip"))
         got = (r.get("show") or {}).get("got") if isinstance(r.get("show"), dict) else None
-        ev = dict(t=t, person=who, kind="skip" if r.get("skip") else "attempt", ref=r.get("card"), method=r.get("method"),
-                  hit=None if r.get("skip") else _hit(r.get("hit")), err=_num(r.get("err")), ms=_num(r.get("ms")),
-                  answer=None if got is None else json.dumps(dict(got=got)))
-        extra = ["paired"] if r.get("method") == "code" else []  # writing the line is the paired delta itself
+        # answer: the card answered before its reveal (an explain is ungraded until its self-check); self: that check;
+        # step: the consolidation after the reveal, graded on its own
+        kind = "skip" if skip else {"step": "step", "self": "self"}.get(ph, "attempt")
+        ev = dict(t=t, person=who, kind=kind, ref=r.get("card"), method=m, hit=None if skip else _hit(r.get("hit")),
+                  err=_num(r.get("err")), ms=_num(r.get("ms")), answer=None if got is None else json.dumps(dict(got=got)))
+        extra = dict(code=["paired"], ndrag=["ci"]).get(m, [])  # the line is the paired delta; dragging n is the interval
         return [(ev, card_concepts(key, r.get("card")) + extra)]
     if name == "understanding.jsonl":
         who = person(r.get("viewer"), roster)
@@ -375,7 +381,7 @@ def recall(k: dict, now: float) -> float | None:
 
 def rebuild(con, who: str) -> int:
     """Replay a person's events into their knowledge rows. Several graded events on one concept within ten minutes
-    (a card answered by prediction and by a method, a check retried) count as one review: the last result stands."""
+    (a card's answer and its step, a check retried) count as one review: the last result stands."""
     rows = con.execute("SELECT e.*, c.concept FROM events e JOIN event_concepts c ON c.uid=e.uid WHERE e.person=? ORDER BY e.t", (who,)).fetchall()
     state: dict[str, dict] = {}
     for r in rows:
@@ -383,7 +389,7 @@ def rebuild(con, who: str) -> int:
         k["seen"] += 1
         k["ms"] += r["ms"] or 0.0
         k["last_seen"] = r["t"]
-        if r["hit"] is None or r["kind"] not in ("predict", "attempt", "check"):
+        if r["hit"] is None or r["kind"] not in GRADED:
             continue
         k["n"] += 1
         k["hits"] += r["hit"]
@@ -433,8 +439,9 @@ def due(who: str, now: float | None = None, project: str | None = None) -> list[
 
 
 def methods(who: str, project: str | None = None, exclude: str | None = None) -> dict:
-    """Per teaching method across projects: tries, hits, skips and the last five results (teach.profile's shape)."""
-    q = "SELECT method, kind, hit FROM events WHERE person=? AND kind IN ('predict','attempt','skip') AND method IS NOT NULL"
+    """Per teaching method across projects: tries, hits, skips and the last five results (teach.profile's shape). An
+    explain answer takes the result of its self-check, as teach._settled does; the check is not a try of its own."""
+    q = "SELECT project, ref, method, kind, hit FROM events WHERE person=? AND kind IN ('predict','attempt','step','self','skip') AND method IS NOT NULL"
     args: list = [who]
     if project:
         q += " AND project=?"
@@ -443,9 +450,18 @@ def methods(who: str, project: str | None = None, exclude: str | None = None) ->
         q += " AND project<>?"
         args.append(exclude)
     with db() as con:
-        rows = con.execute(q + " ORDER BY t", args).fetchall()
-    out: dict = {}
+        rows = [dict(r) for r in con.execute(q + " ORDER BY t", args).fetchall()]
+    seq, said = [], {}
     for r in rows:
+        if r["kind"] == "self":
+            if (r["project"], r["ref"]) in said:
+                said.pop((r["project"], r["ref"]))["hit"] = r["hit"]
+            continue
+        seq.append(r)
+        if r["kind"] == "attempt" and r["method"] == "explain" and r["hit"] is None:
+            said[(r["project"], r["ref"])] = r
+    out: dict = {}
+    for r in seq:
         s = out.setdefault(r["method"], dict(n=0, hits=0, skips=0, last=[]))
         if r["kind"] == "skip":
             s["skips"] += 1
@@ -531,7 +547,7 @@ def _get(p, path, q):
 
 # ---------------------------------------------------------------- live writes
 # The Brief's own routes stay as they are; after one of them writes its ledger, memory reads the new lines. The typed
-# answer of a code or explain attempt is not in teach.jsonl, so it is taken from the request (the person's own words).
+# answer of a code step or an explain answer is not in teach.jsonl, so it is taken from the request (the person's own words).
 WATCH = ("/api/teach", "/api/predictions", "/api/understanding", "/api/comments")
 
 
@@ -546,7 +562,7 @@ def after_post(p, path: str, body, res) -> None:
             who = person(a.get("viewer"))
             got = (a.get("show") or {}).get("got")
             with db() as con:
-                con.execute("UPDATE events SET answer=? WHERE project=? AND person=? AND kind='attempt' AND ref=? AND abs(t-?)<1e-3",
+                con.execute("UPDATE events SET answer=? WHERE project=? AND person=? AND kind IN ('attempt','step') AND ref=? AND abs(t-?)<1e-3",
                             (json.dumps(dict(text=body["answer"][:1000], **({"got": got} if got is not None else {}))), key, who, a.get("card"), a.get("t")))
     except Exception:  # noqa: BLE001  the write already happened; memory catches up on the next sync
         pass

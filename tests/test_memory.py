@@ -42,16 +42,44 @@ class Memory(unittest.TestCase):
             self.assertEqual(memory.migrate(con), len(memory.SCHEMA))
 
     def test_live_answers_land_in_memory(self):
-        self.post("/api/teach", dict(viewer="p-00aa11bb", card=self.gate["id"], method="code", answer="fixed - broken", ms=900))
+        self.post("/api/predictions", dict(viewer="p-00aa11bb", card=self.gate["id"], guess="Pass", conf=0.8))
+        self.post("/api/teach", dict(viewer="p-00aa11bb", card=self.gate["id"], method="code", step=True, answer="fixed - broken", ms=900))
         self.post("/api/understanding", dict(events=[dict(viewer="p-00aa11bb", doc="concept:ladder", step=0, check="ladder#0", ok=True, ms=500)]))
         with memory.db() as con:
             ev = [dict(r) for r in con.execute("SELECT * FROM events WHERE person='p-00aa11bb' ORDER BY t")]
-        self.assertEqual([e["kind"] for e in ev], ["attempt", "check"])
-        self.assertEqual(ev[0]["method"], "code"); self.assertEqual(ev[0]["hit"], 0)
-        self.assertEqual(json.loads(ev[0]["answer"])["text"], "fixed - broken")  # the person's own line is kept
+        self.assertEqual([e["kind"] for e in ev], ["predict", "step", "check"])  # an old concept-tile check still reads
+        self.assertEqual((ev[0]["hit"], ev[1]["method"], ev[1]["hit"]), (1, "code", 0))
+        self.assertEqual(json.loads(ev[1]["answer"])["text"], "fixed - broken")  # the person's own line is kept
         ks = {k["id"]: k for k in memory.knowledge("p-00aa11bb")}
         self.assertEqual(set(ks), {"paired", "ladder", "ci", f"model:{self.key}/cand"})
-        self.assertEqual(ks["ladder"]["state"], "known"); self.assertEqual(ks["paired"]["state"], "shaky")
+        self.assertEqual(ks["ladder"]["state"], "known")  # the check, minutes after the step, is the review that stands
+        self.assertEqual(ks["paired"]["state"], "shaky"); self.assertEqual(ks["ci"]["state"], "shaky")
+
+    def test_teach_phases(self):
+        """answer, self and step rows (and rows from before phases) are read as what they are."""
+        c, g = "gate|cand|ds/target", self.gate["id"]
+        rows = [dict(t=100.0, viewer="p-00aa11bb", card=c, method="explain", phase="answer", hit=None, show={}),
+                dict(t=110.0, viewer="p-00aa11bb", card=c, method="explain", phase="self", hit=True, show=dict(named=["which way"])),
+                dict(t=120.0, viewer="p-00aa11bb", card=g, method="spot", phase="step", hit=False, show=dict(got="delta")),
+                dict(t=130.0, viewer="p-00aa11bb", card=g, method="ndrag", phase="step", skip=True),
+                dict(t=140.0, viewer="p-00aa11bb", card=g, method="sketch", phase="answer", skip=True),
+                dict(t=150.0, viewer="p-00aa11bb", card=g, method="code", hit=True)]  # no phase: an answer
+        with open(self.p.dir / "teach.jsonl", "a") as f:
+            f.writelines(json.dumps(r) + "\n" for r in rows)
+        memory.sync(self.key, self.p.root)
+        with memory.db() as con:
+            ev = [dict(r) for r in con.execute("SELECT kind, method, hit FROM events WHERE person='p-00aa11bb' ORDER BY t")]
+            spot = con.execute("SELECT group_concat(concept) FROM event_concepts c JOIN events e ON e.uid=c.uid WHERE e.method='spot'").fetchone()[0]
+        self.assertEqual([(e["kind"], e["method"], e["hit"]) for e in ev],
+                         [("attempt", "explain", None), ("self", "explain", 1), ("step", "spot", 0), ("skip", "ndrag", None),
+                          ("skip", "sketch", None), ("attempt", "code", 1)])
+        self.assertEqual(set(spot.split(",")), {"ladder", "ci", f"model:{self.key}/cand"})
+        ms = memory.methods("p-00aa11bb")
+        self.assertEqual(ms["explain"], dict(n=1, hits=1, skips=0, last=[True]))  # the self-check grades the answer
+        self.assertEqual(ms["spot"], dict(n=1, hits=0, skips=0, last=[False]))
+        self.assertEqual((ms["ndrag"]["skips"], ms["sketch"]["skips"], ms["code"]["hits"]), (1, 1, 1))
+        prof = teach.profile(teach.attempts(self.p, "p-00aa11bb"), [])
+        self.assertEqual({m: prof["methods"][m] for m in ms}, ms)  # the same record teach.profile keeps
 
     def test_no_project_text_is_stored(self):
         c = learn.card(self.p, f"hill|h1|base")
@@ -64,19 +92,20 @@ class Memory(unittest.TestCase):
         self.assertIn(f"hill:{self.key}/h1", dump)
 
     def test_backfill_is_idempotent(self):
-        teach.answer(self.p, dict(viewer="ann", card=self.gate["id"], method="spot", answer="delta"))
+        learn.predict(self.p, dict(viewer="ann", card=self.gate["id"], guess="Fail", conf=0.6))
+        teach.answer(self.p, dict(viewer="ann", card=self.gate["id"], method="spot", step=True, answer="delta"))
         learn.record(self.p, dict(viewer="ann", doc="brief", step=self.gate["id"], ms=1200))
         with open(self.p.dir / "understanding.jsonl", "a") as f:
             f.write('{"t": 1, "viewer": "ann", "doc": "br')  # a writer mid-line
         first = memory.sync_all("backfill", full=True)["added"][self.key]
-        self.assertEqual(first, 2)
+        self.assertEqual(first, 3)
         self.assertEqual(memory.sync_all("backfill", full=True)["added"][self.key], 0)
         self.assertEqual(memory.sync(self.key, self.p.root)["added"], 0)
         with open(self.p.dir / "understanding.jsonl", "a") as f:
             f.write('ief", "step": "x", "ms": 5}\n')
         self.assertEqual(memory.sync(self.key, self.p.root)["added"], 1)  # the finished line is read once
         with memory.db() as con:
-            self.assertEqual(con.execute("SELECT count(*) FROM events").fetchone()[0], 3)
+            self.assertEqual(con.execute("SELECT count(*) FROM events").fetchone()[0], 4)
             self.assertEqual(con.execute("SELECT count(*) FROM knowledge WHERE person='ann'").fetchone()[0], 3)
 
     def test_spaced_repetition(self):
@@ -104,12 +133,14 @@ class Memory(unittest.TestCase):
         self.assertEqual((k["reps"], k["n"], k["hits"]), (1, 2, 1))
         self.assertEqual(k["stability"], 1.0)  # the retry replaced the first result
 
-    def test_api_and_brief(self):
-        self.post("/api/teach", dict(viewer="p-00aa11bb", card=self.gate["id"], method="spot", answer="nope"))
+    def test_api(self):
+        learn.predict(self.p, dict(viewer="p-00aa11bb", card=self.gate["id"], guess="Pass", conf=0.8))
+        self.post("/api/teach", dict(viewer="p-00aa11bb", card=self.gate["id"], method="spot", step=True, answer="nope"))
         code, body, _ = _feature(features.GET, self.p, "/api/memory", dict(viewer="p-00aa11bb"))[:3]
         d = json.loads(body)
         self.assertEqual(code, 200); self.assertEqual(d["person"], "p-00aa11bb"); self.assertEqual(d["project"], self.key)
         self.assertEqual(d["methods"]["spot"], dict(n=1, hits=0, skips=0, last=[False]))
+        self.assertEqual(d["methods"]["predict"], dict(n=1, hits=1, skips=0, last=[True]))
         self.assertIn("ladder", {k["id"] for k in d["concepts"]})
         anon = json.loads(_feature(features.GET, self.p, "/api/memory", dict(viewer="anon"))[1])
         self.assertIsNone(anon["person"]); self.assertEqual(anon["concepts"], [])
