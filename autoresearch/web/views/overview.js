@@ -156,12 +156,14 @@ VIEWS.overview=()=>{
  }
 
  // leaderboard: dataset tabs, slice control, paired deltas vs the champion on the same slice
- // a project with no full set (synthetic benches) opens on the dataset of the goal the champion reads by
- if(!S.lbDataset||!ds.includes(S.lbDataset))S.lbDataset=(!st.slices[fullKey]&&cg&&st.slices[cg.slice]?.dataset)||(ds.includes(prim)?prim:ds[0]);
+ // a project with no full set (synthetic benches) opens on the goal's slice: the one the champion reads by, else the
+ // first open goal's
+ const gsl=!st.slices[fullKey]&&GU?(cg||gs.find(GU.isMain)||gs[0])?.slice:null,gSl=gsl&&st.slices[gsl]?gsl:null;
+ if(!S.lbDataset||!ds.includes(S.lbDataset))S.lbDataset=(gSl&&st.slices[gSl].dataset)||(ds.includes(prim)?prim:ds[0]);
  const sl=Object.values(st.slices).filter(s=>s.dataset===S.lbDataset);
  const order={full:0,random:1,control:2,dev:3,synthetic:4};
  sl.sort((a,b)=>((order[a.kind]??9)-(order[b.kind]??9))||(b.n-a.n)||a.name.localeCompare(b.name));
- if(!S.lbSlice||!sl.some(s=>s.name===S.lbSlice))S.lbSlice=(sl.find(s=>st.leaderboard[s.name])||sl[0])?.name;
+ if(!S.lbSlice||!sl.some(s=>s.name===S.lbSlice))S.lbSlice=(sl.find(s=>s.name===gSl)||sl.find(s=>st.leaderboard[s.name])||sl[0])?.name;
  const entries=Object.entries(st.leaderboard[S.lbSlice]||{});
  const rank=new Map([...entries].sort((a,b)=>(hib?-1:1)*((a[1].score??-1)-(b[1].score??-1))).map(([m],i)=>[m,i+1]));
  const so=S.ovSort||{k:'score',d:-1},key={score:r=>r.score,delta:r=>r.score,errors:r=>r.errors??0,cost:r=>r.cost,p50:r=>r.latency_p50,p95:r=>r.latency_p95,n:r=>r.n,ended:r=>r.ended}[so.k]||(r=>r.score);
