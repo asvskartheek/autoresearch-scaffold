@@ -168,12 +168,11 @@ function calChart(cal){
 function knowHTML(){
  const b=L.b,cal=b.calibration,u=b.understanding||{docs:{}},ids=new Set(b.cards.map(c=>c.id));
  const bs=u.docs?.brief?.step_ms||{},catchMs=Object.entries(bs).filter(([k])=>ids.has(k)).reduce((a,[,v])=>a+v,0);
- const missed=(u.missed||[]).filter(m=>m.doc!=='brief').map(m=>{const id=m.doc.startsWith('concept:')?m.doc.slice(8):null,c=id&&(b.concepts||[]).find(x=>x.id===id);return c?{t:c.t,id}:{t:m.doc}});
- const uniq=[...new Map(missed.map(m=>[m.t,m])).values()];
+ const missed=[...new Set((u.missed||[]).map(m=>m.doc).filter(d=>d!=='brief'&&!d.startsWith('concept:')))];  // concept: rows predate the 101 course
  const v=viewerName();
  return `<div class="score"><div><b>${cal.all_hits??cal.hits}/${cal.all_n??cal.n}</b><span>right</span></div><div title="${plural(cal.n,'prediction')} with a stated confidence"><b>${cal.brier==null?'–':cal.brier.toFixed(2)}</b><span>Confidence error</span></div><div><b>${catchMs?span(catchMs/1000):'–'}</b><span>to catch up</span></div></div>
   ${calChart(cal)}${typeof TEACH!=='undefined'?TEACH.profile():''}
-  ${uniq.length?`<div class="missed"><span class="muted">Missed</span>${uniq.map(m=>m.id?`<button class="chip" data-l="concept" data-id="${esc(m.id)}">${esc(m.t)}</button>`:`<span class="chip">${esc(m.t)}</span>`).join('')}</div>`:''}
+  ${missed.length?`<div class="missed"><span class="muted">Missed</span>${missed.map(d=>`<span class="chip">${esc(d)}</span>`).join('')}</div>`:''}
   <div class="who"><span class="muted">${v?esc(v):'No name set'}</span><button class="linkbtn" data-l="name">${v?'Change':'Set your name'}</button></div>`;
 }
 function conceptsHTML(){
@@ -225,7 +224,6 @@ document.addEventListener('click',e=>{
  else if(k==='next')go(L.cur+1);
  else if(k==='prev')go(L.cur-1);
  else if(k==='go')go(+a.dataset.i);
- else if(k==='concept')location.hash='#course';
  else if(k==='name')setName();
  else if(k==='mode'){L.mode=a.dataset.v;L.since=sinceFor(L.mode);L.cur=null;L.ui={};L.b=null;render(true);loadBrief(true)}
 });
