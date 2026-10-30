@@ -108,6 +108,32 @@ class Vitals(unittest.TestCase):
         self.assertIsNotNone(next((p for p in tt["vitals"] if p["id"] == "pair"), None))
         t.finish()
 
+    def test_live_champion_line_and_pair_keep_to_the_evals_harness(self):
+        # the champion ran q/all only under a declared harness; a candidate eval that declares none is not read against it
+        self.p.add_dataset("q", range(10))
+        self.p.add_slice("q/all", list(range(10)))
+        self.p.add_model("base", status="champion")
+        self.p.add_model("c")
+        evaluate(self.p, "base", "q/all", lambda i: {"score": 1.0}, config=dict(baseline_contract="h1"))
+
+        def live(config):
+            t = Task(self.p, "eval", "c on q/all", model="c", slice="q/all", config=config)
+            for k in range(1, 6):
+                t.add_row(dict(id=str(k), score=0.0))
+                t.progress(k)
+                t.log(step=k, running_score=0.0)
+            features.load()
+            tt = next(x for x in server.state(self.p)["tasks"] if x["id"] == t.id)
+            t.finish()
+            return tt
+
+        tt = live({})
+        self.assertIsNone(tt["champ_ref"])
+        self.assertIsNone(next((p for p in tt["vitals"] if p["id"] == "pair"), None))
+        tt = live(dict(baseline_contract="h1"))
+        self.assertAlmostEqual(tt["champ_ref"]["y"], 1.0)
+        self.assertEqual(next(p for p in tt["vitals"] if p["id"] == "pair")["lost"], 5)
+
     def test_union_slice_without_full_cover_has_no_line(self):
         self.p.add_dataset("q", range(30))
         self.p.add_slice("q/a", list(range(15)))

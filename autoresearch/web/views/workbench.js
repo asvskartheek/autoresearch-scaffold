@@ -61,13 +61,9 @@ const jobs=()=>active().filter(t=>!detail(t)&&!S.state.tasks.some(k=>k.parent===
 // the live sub-task an eval's numbers come from, if any
 const kidOf=t=>t.kind==='eval'?(byId(t.progress_from)||S.state.tasks.find(k=>k.detail_of===t.id&&isLive(k))):null;
 const binary=t=>S.state.slices?.[t.slice]?.scale!=='continuous';
-// the champion's score on this eval's slice, when it has one: the line the running score is read against
-function champRef(t){
- const c=S.state.champion;if(!c||c===t.model)return null;
- const r=S.state.leaderboard?.[t.slice]?.[c];
- // a union slice has no champion run of its own: the server pools the champion's runs on the slices it is made of
- return typeof r?.score==='number'?{y:r.score,label:'champion'}:t.champ_ref?{y:t.champ_ref.y,label:t.champ_ref.runs>1?`champion, ${t.champ_ref.runs} runs`:'champion'}:null;
-}
+// the champion's score on this eval's slice under the same declared harness, when it has one (the server picks it,
+// pooling a union slice's member runs): the line the running score is read against
+const champRef=t=>t.champ_ref?{y:t.champ_ref.y,label:t.champ_ref.runs>1?`champion, ${t.champ_ref.runs} runs`:'champion'}:null;
 // an eval's panels, completed from its harness sub-task: the sub-task's score becomes the eval's "Score so far"
 function evVitals(t){
  const own=t.vitals||[],k=kidOf(t);
