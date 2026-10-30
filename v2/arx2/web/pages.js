@@ -32,21 +32,21 @@ function evidenceLine(e) {
   return `No evidence: ${e.missing.join(", ")}.`;
 }
 
+function findingLine(f) {
+  return `<a href="#/p/${S.key}/${f.link || ""}" data-check="${esc(f.check)}">${esc(f.what)}.</a>`;
+}
+
 function needsYou() {
-  const st = S.state, out = [];
-  for (const t of Object.values(st.tasks)) if (t.stale) out.push(`Task ${ent("task", t.id)} has been silent for ${ago(t.beat).replace(" ago", "")}. Fix it or end it.`);
-  const bad = st.split.pairs.filter((p) => p.shared);
-  if (bad.length) out.push(`${bad.length} hill${bad.length > 1 ? "s" : ""} share items between sets that must be separate. <a href="#/p/${S.key}/sets">See the split check</a>.`);
-  const lacking = {};  // what is missing -> open hills missing it
-  for (const [hk, h] of Object.entries(st.hills)) {
-    const e = h.status === "open" && noEvidence(hk);
-    if (e) (lacking[e.missing.join(", ")] ||= []).push(hk);
-  }
-  for (const [why, hks] of Object.entries(lacking))
-    out.push(hks.length === 1 ? `${hillN(hks[0])} has no evidence: ${why}. Freeze a symptom set or close the hill.`
-      : `${hks.length} open hills have no evidence (${why}): ${hks.map(hillN).join(", ")}. Freeze a symptom set for each or close it.`);
+  const st = S.state;
+  const out = (st.audit?.findings || []).filter((f) => f.level === "error").map(findingLine);
   for (const t of Object.values(st.tasks)) if (t.status === "failed" && t.ended && Date.now() / 1000 - t.ended < 86400) out.push(`Task ${ent("task", t.id)} failed ${ago(t.ended)}.`);
   return out;
+}
+
+function checksSheet() {
+  const warns = (S.state.audit?.findings || []).filter((f) => f.level === "warn");
+  if (!warns.length) return "";
+  return `<div class="sheet"><h2>Checks <span class="mute">${warns.length}</span></h2>${warns.map((f) => `<p class="small">${findingLine(f)}</p>`).join("")}</div>`;
 }
 
 // ---- all projects ----------------------------------------------------------
@@ -65,7 +65,7 @@ PAGES.home = async () => {
         <span>Champion <b>${esc(p.champion || "–")}</b></span>
         ${p.running ? `<span class="pill live"><span class="dot live"></span>${p.running} running</span>` : ""}
         ${p.stale ? `<span class="pill alarm">${p.stale} stalled</span>` : ""}
-        ${p.split_ok ? "" : `<span class="pill alarm">sets overlap</span>`}
+        ${p.errors ? `<span class="pill alarm">${p.errors} error${p.errors > 1 ? "s" : ""}</span>` : ""}
         ${p.n_due ? `<span class="pill">${p.n_due} cards to review</span>` : ""}
       </div></a>`).join("")}</div>`;
 };
@@ -97,6 +97,7 @@ PAGES.map = () => {
     <div class="grid" style="align-content:start">
       <div class="sheet"><h2>Running now</h2>${running.length ? running.map(liveCard).join("") : `<p class="empty">Nothing running. Last activity ${ago(Math.max(...Object.values(st.tasks).map((t) => t.beat || 0)))}.</p>`}</div>
       <div class="sheet">${splitBanner()}</div>
+      ${checksSheet()}
     </div>
   </div>
   <div class="section"><div class="spread"><h2>Hills: what is wrong, and how often</h2><a class="small" href="#/p/${k}/hills">All hills →</a></div>${hillMultiples(false)}</div>
