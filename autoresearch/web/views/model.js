@@ -15,7 +15,9 @@ const runCmd=n=>`arx eval record --model ${n.model} --slice ${n.slice} --rows <r
 const mag=(k,t)=>esc(sd(k,Math.abs(t)).replace(/^[+−]/,''));
 // on a continuous slice the gate reads margin / tolerance as a fraction of the champion's mean (relative)
 const rel=c=>c.relative&&c.base?` (${+(100*Math.abs(c.threshold/c.base)).toFixed(1)}% of the champion)`:'';
-const rule=c=>c.rule==='better'?(c.threshold?`Better by more than ${mag(c.slice,c.threshold)}${rel(c)}`:'Better than champion'):c.rule==='not_worse'?(c.threshold?`Worse by at most ${mag(c.slice,c.threshold)}${rel(c)}`:'No worse than champion'):c.rule==='manual'?'Signed off by hand':esc(c.rule);
+// before pairing the champion's mean is unknown, so a continuous threshold is still the raw fraction: read it as a share
+const bar=c=>isCont(c.slice)&&!(c.relative&&c.base!=null)?`${+(100*Math.abs(c.threshold)).toFixed(1)}% of the champion’s mean`:mag(c.slice,c.threshold)+rel(c);
+const rule=c=>c.rule==='better'?(c.threshold?`Better by more than ${bar(c)}`:'Better than champion'):c.rule==='not_worse'?(c.threshold?`Worse by at most ${bar(c)}`:'No worse than champion'):c.rule==='manual'?'Signed off by hand':esc(c.rule);
 const list=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a.at(-1);
 // a slice name that may break only after its / and - parts on a phone, never mid-word
 const slw=k=>esc(short(k)).replace(/([\/-])/g,'$1<wbr>');
