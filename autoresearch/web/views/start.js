@@ -157,7 +157,7 @@ function needsBlock(){
   group(failed,t=>t.status==='budget'?'out of time':'failed',n=>`${n} jobs failed since ${since&&since<=t0+1?'you looked':stamp(t0).split(',')[0]}`,'failed','#archive');
  }
  for(const g of Object.values(st.goals||{}))if(g.status==='open'&&g.value==null)
-  items.push(['bad',`#goal/${enc(g.name)}`,ICON.goals,`${esc(g.title||g.name)}: ${mn(g.model||st.champion)} has no complete measurement`,'champion unmeasured']);
+  items.push(['bad',`#goal/${enc(g.name)}`,ICON.goals,`${esc(g.title||g.name)}: ${g.model||st.champion?`${mn(g.model||st.champion)} has no complete run on ${esc(g.slice)}`:'no champion to measure'}`,'unmeasured']);
  const body=items.length?`<div class="sx-needs">${items.map(([k,h,ic,txt,tag])=>`<a class="sx-need ${k}" href="${h}" data-item>${ic}<span class="ell">${txt}</span><span class="sx-tag">${tag}</span></a>`).join('')}</div>`
   :loading?`<div class="sx-none">Checking…</div>`:`<div class="sx-none ok">${OKI}Nothing waits on you</div>`;
  return panel('Needs you',body,{meta:loading?'…':items.length?String(items.length):'',cls:items.length?'sx-hot':''});
