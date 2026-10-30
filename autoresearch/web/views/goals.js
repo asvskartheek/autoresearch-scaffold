@@ -94,9 +94,10 @@ const conChips=g=>(g.constraints||[]).map(c=>`<span class="gl-con">${esc(c)}</sp
 const baseVal=function(g){
  if(g.vs_baseline?.base!=null)return g.vs_baseline.base;
  if(g.baseline&&g.baseline===g.model&&g.status!=='achieved')return g.value;  // the champion is still the baseline: same pooled figure
- return null; // Historical or unmatched runs must not define current relative progress.
+ if(isScore(g))return null;  // a score is only compared paired (vs_baseline); an unmatched run never stands in
+ const v=g.baseline&&(S.state.leaderboard[g.slice]||{})[g.baseline]?.[kpiKey(g)];return typeof v==='number'&&isFinite(v)?v:null;  // cost, latency: latest runs
 }
-const comparisonNote=g=>({same_model:'starting point: same model',different_harness:'no matching comparison under the current harness',missing_measurement:'champion measurement missing',missing_baseline:'baseline has no complete run on this slice',paired:'paired on identical examples'}[g.comparison_state]||(g.baseline===g.model?'starting point: same model':'no compatible paired comparison'));
+const comparisonNote=g=>({same_model:'starting point: same model',different_harness:'no matching comparison under the current harness',missing_measurement:'champion measurement missing',missing_baseline:'baseline has no complete run on this slice',paired:'paired on identical examples',unpaired:'latest runs, unpaired'}[g.comparison_state]||(g.baseline===g.model?'starting point: same model':'no compatible paired comparison'));
 // how far along the way from the baseline to the target the champion stands. rel: 0 at the baseline, 1 at the target.
 // abs: the baseline already met the target, or it has no run, so the track is drawn on the KPI's own scale.
 const prog=function(g){

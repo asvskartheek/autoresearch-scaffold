@@ -3,7 +3,7 @@
 // calibration from .research/predictions.jsonl, and understanding telemetry posted to api/understanding (only after
 // the viewer has answered something: see leaveCard).
 // The deck's `since` is fixed when the page opens; finishing the deck moves last-seen for the next visit.
-const L={b:null,loading:false,err:null,at:0,cur:null,ui:{},since:null,mode:null,dlg:null,timer:{id:null,ms:0,t0:0},visits:{}};
+const L={b:null,loading:false,err:null,at:0,cur:null,ui:{},since:null,mode:null,timer:{id:null,ms:0,t0:0},visits:{}};
 const LK=()=>'arx-brief-seen:'+(PKEY||'home')+':'+(viewer()||'anon');
 const lget=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
 const lset=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};

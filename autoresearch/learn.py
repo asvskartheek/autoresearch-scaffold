@@ -66,30 +66,10 @@ def _short(slice_name: str) -> str:
 
 
 def _title(p: Project, model: str) -> str:
-    """Keep authored qualifiers; distinguish identical titles by recorded output budget."""
-    titles = {m: str(features.model_label(p, m)).strip() for m in p.models()}
-    title = titles.get(model, str(features.model_label(p, model)).strip())
-    siblings = [m for m, value in titles.items() if value == title]
-    if len(siblings) > 1:
-        def output_budget(name):
-            record = p.models().get(name) or {}
-            for source in (record, record.get("config") or {}):
-                for key in ("max_new_tokens", "output_tokens", "output_budget", "max_output_tokens"):
-                    value = source.get(key)
-                    if isinstance(value, (int, float)) and value > 0:
-                        return int(value)
-            # These phrases explicitly declare generation budget; model IDs and context limits do not.
-            change = str(record.get("change") or "")
-            match = re.search(r"(?:sampled\s*|(?:preregistered\s*)?)(\d[\d,]*)\s+output\s+(?:tokens|budget)", change, re.I)
-            if match is None:
-                match = re.search(r"\bsampled\s*(\d[\d,]*)\b", change, re.I)
-            return int(match.group(1).replace(",", "")) if match else None
-        budgets = {m: output_budget(m) for m in siblings}
-        budget = budgets.get(model)
-        if budget is not None and list(budgets.values()).count(budget) == 1:
-            title += f" · {budget:,} output tokens"
-        else:
-            title += f" · {model}"
+    """A model's title, qualifier kept; two models with one title read as title · id, as the dashboard does."""
+    title = str(features.model_label(p, model)).strip()
+    if any(m != model and str(features.model_label(p, m)).strip() == title for m in p.models()):
+        title += f" · {model}"
     if len(title) <= 110:
         return title
     if " — " in title:

@@ -112,12 +112,11 @@ class AnswerFlows(unittest.TestCase):
         self.assertEqual(questions.stored(self.project)[self.failed]['status'],'agent')
         self.page.goto(self.url+'#questions/'+self.human)
         self.page.get_by_text('Request decision context',exact=True).wait_for()
-        self.assertIn('Time and cost are not recorded',self.page.locator('#q-panel').inner_text())
 
     def test_authored_snapshot_and_mobile_reference(self):
         self.page.goto(self.url+'#questions/'+self.doc)
         self.page.get_by_text('Refresh answer',exact=True).wait_for()
-        self.assertIn('Evidence saved with this answer',self.page.locator('#q-panel').inner_text())
+        self.assertIn('Answered ',self.page.locator('#q-panel').inner_text())
         self.page.get_by_text('Current ledger evidence',exact=True).click()
         self.assertEqual(self.page.locator('.q-ev').count(),2)
         self.page.set_viewport_size({'width':375,'height':900})

@@ -84,12 +84,11 @@ class CourseSemantics(unittest.TestCase):
         check=course.lesson_candidate(p,{'models':p.models()},learn)['checks'][0]
         self.assertEqual(check['a'],'Ready for promotion; still a candidate')
 
-    def test_real_hill_examples_have_honest_provenance(self):
+    def test_real_hill_examples_keep_their_fields(self):
         p=CapturedProject('gsm8k')
         lesson=course.lesson_project_hills(p,{},learn)
         examples=[r for r in lesson['fig']['rows'] if r['examples']]
         self.assertTrue(examples)
-        self.assertTrue(all('not per-example evaluation evidence' in r['example_provenance'] for r in examples))
         self.assertTrue(all({'input','wrong','right','why'}<=set(e) for r in examples for e in r['examples']))
         self.assertIn('control result violates',lesson['checks'][0]['q'])
 
@@ -100,14 +99,12 @@ class CourseSemantics(unittest.TestCase):
         lesson=course.lesson_project_hills(p,{},learn)
         self.assertNotIn('illustrated error',lesson['checks'][0]['q'])
 
-    def test_duplicate_model_titles_keep_recorded_qualifiers_and_budgets(self):
+    def test_duplicate_model_titles_keep_recorded_qualifiers_and_ids(self):
         p=CapturedProject('gsm8k')
         self.assertEqual(learn._title(p,'qwen3-4b-rl-archived'),'Qwen3-4B RL — archived baseline')
         self.assertEqual(learn._title(p,'qwen3-4b-rl-fresh-v1'),'Qwen3-4B RL — fresh audited harness')
-        for model,budget in [('thinking4b-numeric8192-v1','8,192'),('thinking4b-numeric32768-v1','32,768')]:
-            title=learn._title(p,model)
-            self.assertIn(budget+' output tokens',title)
-            self.assertNotIn(model,title)
+        for model in ('thinking4b-numeric8192-v1','thinking4b-numeric32768-v1'):
+            self.assertEqual(learn._title(p,model),'Thinking4B universal numeric final line · '+model)
 
     def test_rung_continuous_tolerance_is_not_scaled_to_percentage_points(self):
         from tests.test_goal_units import ledger

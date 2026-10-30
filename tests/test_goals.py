@@ -87,6 +87,13 @@ class Goals(unittest.TestCase):
         g = self.p.open_goal("cheap", "cheap", "full", 0.5, kpi="cost")
         self.assertFalse(g["higher_is_better"])
 
+    def test_cost_goal_is_unpaired_not_a_harness_mismatch(self):
+        self.p.open_goal("cheap", "cheap", "full", 0.5, kpi="cost")
+        self.p.add_model("next"); run(self.p, "next", [1] * 20); self.p.promote("next", force=True)
+        st = self.p.goal_status("cheap")
+        self.assertIsNone(st["vs_baseline"])
+        self.assertEqual(st["comparison_state"], "unpaired")
+
 
 GOAL = dict(name="gsm8k-96", status="open", slice="gsm8k-test/full", n=1319, kpi="score", target=0.96,
             value=1224 / 1319, model="percent-base-1024-v1", baseline="qwen3-4b-rl-fresh-v1",

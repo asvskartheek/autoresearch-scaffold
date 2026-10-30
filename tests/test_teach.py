@@ -233,8 +233,7 @@ class Narration(unittest.TestCase):
         c = {"viz": {"delta": 2, "lo": -1, "hi": 5, "n": 100}}
         result = teach.grade_step(c, "ndrag", 4)
         self.assertFalse(result["hit"])
-        self.assertIn("not a new measurement", result["show"]["why"])
-        self.assertIn("independent examples", result["show"]["why"])
+        self.assertIn("1/√n", result["show"]["why"])
 
     def test_duplicate_learning_titles_keep_identity(self):
         p = ledger()

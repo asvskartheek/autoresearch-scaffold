@@ -40,7 +40,7 @@ HARDER = dict(predict=0, sketch=1, explain=2, spot=0, ndrag=1, code=2)  # within
 PRIOR = dict(predict=0.52, sketch=0.56, explain=0.40, code=0.50, ndrag=0.55, spot=0.52)  # hands-on first, writing last
 LABEL = dict(predict="Predict", sketch="Sketch", explain="Say it", code="Write the line", ndrag="Drag n", spot="Spot the error")
 IDEAS = ("which way", "real or noise")
-NDRAG_WHY = "This is a projection, not a new measurement. Holding the effect fixed, interval width scales as 1/√n: four times as many independent examples halves the width. The threshold is approximate; a new sample can also change the effect."
+NDRAG_WHY = "Holding the effect fixed, the interval's width scales as 1/√n: four times the examples halves it."
 
 
 def selfcheck(c: dict) -> list[str]:
