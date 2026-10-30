@@ -168,6 +168,7 @@ class Views:
 
         Evidence = items named by the symptom set, the pattern or the example, AND a run of the champion
         (or of the model the hill was found on) where at least one of those items is wrong.
+        `waived` holds the reason when the hill was opened with --no-evidence; `ok` stays False.
         """
         s = self.s
         h = s["hills"][hk]
@@ -185,7 +186,8 @@ class Views:
         if ex_item is not None:
             claimed.setdefault(str(ex_item), None)
 
-        out = {"ok": False, "items": len(claimed), "failing": 0, "checked": 0, "run": None, "model": None, "missing": []}
+        out = {"ok": False, "items": len(claimed), "failing": 0, "checked": 0, "run": None, "model": None, "missing": [],
+               "waived": h.get("evidence_waived")}
         if not claimed:
             out["missing"] = ["no symptom set",
                               "pattern lists no items" if h.get("pattern") else "no pattern",

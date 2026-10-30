@@ -199,14 +199,31 @@ def cmd_hill_open(a):
     for k in ev + tr + [a.symptom_set, a.control]:
         if k and k not in s["sets"]:
             fail(f"no set {k!r}", fix="arx2 set add ...")
-    p.append("hill", key=a.key, name=check_name(a.name, "hill name"), goal=a.goal, pattern=a.pattern,
-             symptom=a.symptom, measure=a.measure_text, example=json.loads(a.example) if a.example else None,
-             predict=a.predict, symptom_set=a.symptom_set, eval_sets=ev, train_sets=tr, control=a.control)
+    hill = dict(key=a.key, name=check_name(a.name, "hill name"), goal=a.goal, pattern=a.pattern,
+                symptom=a.symptom, measure=a.measure_text, example=json.loads(a.example) if a.example else None,
+                predict=a.predict, symptom_set=a.symptom_set, eval_sets=ev, train_sets=tr, control=a.control)
+    if a.no_evidence:
+        hill["evidence_waived"] = a.no_evidence
+    else:
+        e = _would_be_evidence(p, hill)
+        if not a.symptom_set or not e["ok"]:
+            why = "no symptom set" if not a.symptom_set else e["missing"][0]
+            fail(f"hill {a.key} has no evidence: {why}",
+                 fix=f'arx2 set add {a.key}-symptom --name "<two words>" --dataset <d> --role symptom --ids-file <champion failures>.txt, '
+                     f'then rerun with --symptom-set {a.key}-symptom (or --no-evidence "<why this hill exists without observed failures>")')
+    p.append("hill", **hill)
     chk = [c for c in Views(p).split_check()["pairs"] if c["hill"] == a.key and c["shared"]]
     if chk:
         emit(table("overlaps", chk, ["a", "b", "shared"]))
         fail("the hill's sets share items", fix="make disjoint sets with new names, then reopen the hill")
     emit(f"hill: {a.key} open; splits disjoint", help=['arx2 cand add <key> --name "<two words>" --hill ' + a.key + ' --change "..." --predict "..."'])
+
+
+def _would_be_evidence(p: Project, hill: dict) -> dict:
+    """Evidence for a hill before it is written: fold it into the state in memory, then derive."""
+    v = Views(p)
+    v.s["hills"][hill["key"]] = {"status": "open", **hill, "created": time.time()}
+    return v.hill_evidence(hill["key"])
 
 
 def cmd_hill_close(a):
@@ -606,6 +623,7 @@ def build() -> argparse.ArgumentParser:
     y.add_argument("--example", help='json {"input","wrong","right","why"}'); y.add_argument("--predict")
     y.add_argument("--symptom-set"); y.add_argument("--eval-sets", required=True); y.add_argument("--train-sets")
     y.add_argument("--control")
+    y.add_argument("--no-evidence", metavar="WHY", help="open without a symptom set the champion fails; say why")
     y = hsp.add_parser("close"); y.set_defaults(fn=cmd_hill_close)
     y.add_argument("key"); y.add_argument("--status", choices=["climbed", "closed"], required=True); y.add_argument("--reason", required=True)
 

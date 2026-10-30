@@ -112,7 +112,7 @@ def test_full_loop(proj):
 def test_overlap_is_caught(proj):
     cli(proj, "goal", "open", "acc", "--name", "Accuracy 80", "--vague", "x", "--set", "all", "--target", "0.8")
     r = cli(proj, "hill", "open", "bad", "--name", "Leaky Hill", "--goal", "acc", "--symptom", "x", "--symptom-set", "sym",
-            "--eval-sets", "all", ok=False)
+            "--eval-sets", "all", "--no-evidence", "overlap check only", ok=False)
     assert r.returncode == 1 and "share items" in r.stdout
 
 

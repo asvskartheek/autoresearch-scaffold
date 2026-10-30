@@ -21,7 +21,11 @@ function stepCounts(s) {
 
 function noEvidence(hk) {
   const e = (S.state.evidence || {})[hk];
-  return e && !e.ok ? e : null;
+  return e && !e.ok && !e.waived ? e : null;
+}
+
+function waived(hk) {
+  return (S.state.evidence || {})[hk]?.waived || null;
 }
 
 function evidenceLine(e) {
@@ -406,7 +410,7 @@ function hillCard(hk, h) {
   const res = hillTargetResults(hk);
   const best = res.slice().sort((a, b) => b.s.delta - a.s.delta)[0];
   return `<a class="sheet" href="#/p/${S.key}/hill/${encodeURIComponent(hk)}" data-ask="hill|${esc(hk)}|hill card: ${esc(h.name)}" style="text-decoration:none;display:block">
-    <div class="spread"><h3>${esc(h.name)}</h3><span class="row">${noEvidence(hk) ? `<span class="pill alarm" title="${esc(evidenceLine(noEvidence(hk)))}">no evidence</span>` : ""}<span class="pill ${h.status === "climbed" ? "champ" : ""}">${esc(h.status)}</span></span></div>
+    <div class="spread"><h3>${esc(h.name)}</h3><span class="row">${noEvidence(hk) ? `<span class="pill alarm" title="${esc(evidenceLine(noEvidence(hk)))}">no evidence</span>` : ""}${waived(hk) ? `<span class="pill" title="${esc(waived(hk))}">waived</span>` : ""}<span class="pill ${h.status === "climbed" ? "champ" : ""}">${esc(h.status)}</span></span></div>
     <p class="small" style="min-height:3.6em">${esc((h.symptom || "").slice(0, 150))}</p>
     ${prevalence(p)}
     <div class="small mute" style="margin-top:8px">${res.length} candidate${res.length === 1 ? "" : "s"} tried${best ? ` · best ${pts(best.s.delta)} by ${esc(best.c.name)}` : ""}</div></a>`;
@@ -428,6 +432,7 @@ PAGES.hill = (hk) => {
     <div class="spread"><h1>${esc(h.name)}</h1><span class="pill ${h.status === "climbed" ? "champ" : ""}">${esc(h.status)}</span></div>
     <p class="statement">${esc(h.symptom || h.problem || "")}</p>
     ${noEvidence(hk) ? `<p class="${h.status === "closed" ? "small mute" : "alarm"}"><b>${esc(evidenceLine(noEvidence(hk)))}</b></p>` : ""}
+    ${waived(hk) ? `<p class="small mute">Waived: ${esc(waived(hk))}</p>` : ""}
     ${h.reason ? `<p class="small mute">${esc(h.reason)}</p>` : ""}
     <div class="grid g2 section">
       <div class="sheet"><h2>One real case</h2>${ex ? `<dl class="example"><dt>Question</dt><dd>${esc(ex.input)}</dd><dt>Model said</dt><dd class="wrong">${esc(ex.wrong)}</dd><dt>Should say</dt><dd class="right">${esc(ex.right)}</dd><dt>Why wrong</dt><dd>${esc(ex.why)}</dd></dl>` : '<p class="empty">No example recorded. A hill should show one.</p>'}
