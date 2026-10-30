@@ -48,6 +48,9 @@ def cmd_home(a):
     champ = s["candidates"].get(s["champion"] or "", {})
     blocks = [f"project: {pr.get('name')} ({p.root})", f"task: {pr.get('task')}",
               f"champion: {champ.get('name', '-')} [{s['champion']}]"]
+    orders = [k for k, q in s["asks"].items() if q.get("to") == asks.ORCH and q["status"] != "answered"]
+    if orders:  # the person's directions come before everything else
+        blocks.append(f"directives: {len(orders)} open (arx2 orchestrator poll)")
     goals = []
     for gk, g in s["goals"].items():
         if g["status"] != "open":
@@ -74,9 +77,6 @@ def cmd_home(a):
                 nexts.append({"cand": ck, "rung": r["name"], "set": r["set"], "state": r["v"]["state"]})
                 break
     blocks.append(table("next_gates", nexts, ["cand", "rung", "set", "state"]))
-    orders = [k for k, q in s["asks"].items() if q.get("to") == asks.ORCH and q["status"] != "answered"]
-    if orders:
-        blocks.append(f"directives: {len(orders)} open (arx2 orchestrator poll)")
     sm = verify.summary(verify.audit(p, v=v))
     blocks.append(f"verify: {sm['errors']} errors, {sm['warnings']} warnings")
     hints = ['arx2 task start --name "<two words>" --about "<what and why>"', "arx2 gate <cand>"]
