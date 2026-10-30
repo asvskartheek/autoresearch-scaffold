@@ -8,7 +8,9 @@ const goalMeasureCmd=g=>{
  `arx eval record --model ${quote(g.model||S.state.champion)} --slice ${quote(g.slice)} --rows <rows.jsonl>`;
 };
 const distinctModel=mn;  // mn already reads a shared title as "title · id"
-const boardHarnessMismatch=(a,b)=>a?.baseline_contract!=null&&b?.baseline_contract!=null&&JSON.stringify(a.baseline_contract)!==JSON.stringify(b.baseline_contract);
+// as core.same_contract: runs pool only under one declared harness, and a run that declares none matches only runs
+// that declare none
+const boardHarnessMismatch=(a,b)=>!!(a&&b)&&JSON.stringify(a.baseline_contract??null)!==JSON.stringify(b.baseline_contract??null);
 const ovPassed=g=>(g?.rungs||[]).filter(r=>r.status==='pass').length;
 const ovFailedAt=g=>(g?.rungs||[]).find(r=>r.status==='fail')?.rung;
 const ovN=n=>n==null?'—':Number(n).toLocaleString();

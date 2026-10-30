@@ -64,7 +64,7 @@ function hPair(x,runs){
 // signed count / value change vs a reference, coloured good or bad; time reads as seconds faster (−) or slower (+)
 function hDelta(r,base,U,sl,model){
  if(!r||!base)return DASH;
- if(boardHarnessMismatch(r,base))return `<span class="faint">Different harness</span>${model?` · <a class="ln" href="#model/${enc(model)}">Inspect matched gate</a>`:''}`;
+ if(boardHarnessMismatch(r,base))return model?`<a class="ln faint" href="#model/${enc(model)}" title="Not paired: the champion's latest run used another harness. The model page pairs it under its own harness" onclick="event.stopPropagation()">Different harness</a>`:'<span class="faint">Different harness</span>';
  if(isRate(r,sl)&&isRate(base,sl)){const k=solved(r)-solved(base);return k===0?'<span class="faint">0</span>':`<span class="${better(k,0)?'pos':'neg'}">${k>0?'+':'−'}${Math.abs(k)}</span>`}
  const d=r.score-base.score;if(Math.abs(d)<1e-9)return '<span class="faint">0</span>';
  return `<span class="${better(d,0)?'pos':'neg'}">${cDelta(d,sl,U)}</span>`;
@@ -73,9 +73,11 @@ function hDelta(r,base,U,sl,model){
 // else the same computation (mean per-example difference, 2000 seeded resamples) on the hill's per-example rows
 const PAIR={};
 function hPaired(m,slice,a,b){
- if(boardHarnessMismatch(S.state.leaderboard[slice]?.[m],S.state.leaderboard[slice]?.[S.state.champion]))return null;
+ // the gate pairs the champion's runs under this model's own harness, so its check stands even when the two
+ // models' latest runs (the leaderboard) used different harnesses
  const g=S.state.gates?.[m],c=g&&!g.error&&g.champion===S.state.champion?g.rungs.flatMap(r=>r.checks).find(c=>c.slice===slice&&c.delta!=null):null;
  if(c)return {delta:c.delta,lo:c.lo,hi:c.hi,n:c.n};
+ if(boardHarnessMismatch(S.state.leaderboard[slice]?.[m],S.state.leaderboard[slice]?.[S.state.champion]))return null;
  return pairedRows(m+'\u0000'+slice,a,b);
 }
 // the gate's paired statistic on per-example rows (core.paired): mean difference and a seeded 90% bootstrap interval.
