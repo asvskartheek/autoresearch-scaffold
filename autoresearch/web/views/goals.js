@@ -166,7 +166,7 @@ const vsFig=function(g){
  if(v&&v.delta!=null)return {v:gchg(g,v.delta),s:`${byN(g)?`of ${N(g.n)} · `:''}${gci(g,v.lo,v.hi)}`,wl:`better on ${v.wins}, worse on ${v.losses}`};
  if(g.value==null)return {v:DASH,s:'no run yet'};
  if(g.baseline&&g.model&&g.baseline===g.model)return {v:zero(g),s:'the champion is still the baseline'};
- if(P.b!=null&&g.value!=null)return {v:gchg(g,g.value-P.b,false),s:'latest runs, unpaired'};
+ if(P.b!=null&&g.value!=null)return {v:gchg(g,g.value-P.b,false),s:'latest runs, unpaired',dup:!!gained(g)};  // the same change Since baseline shows
  return {v:DASH,s:g.baseline?comparisonNote(g):'no baseline'};
 }
 const paperBtn=g=>(g.model?`<a class="btn" href="reference/${enc(g.model)}">Model paper</a>`:'')+(g=>{const p=goalPaper(g.name);return p?`<a class="btn" href="${paperUrl(p)}">${ICON.papers}${g.status==='open'?'Draft paper':'Paper'}${p.waiting?`<span class="gl-wait">${p.waiting}</span>`:''}</a>`:''})(g);
@@ -209,8 +209,8 @@ const card=function(g){
    <div class="gl-mid">${track(g)}</div>
    <dl class="gl-figs">
     <div><dt>To go</dt><dd>${g.status==='achieved'?'Met':gap.v}</dd><dd class="sub">${gap.s}</dd></div>
-    <div><dt>Since baseline</dt><dd>${gn.v}</dd><dd class="sub">${gn.s}</dd></div>
-    <div><dt>vs baseline</dt><dd>${vs.v}</dd><dd class="sub" title="${esc((g.baseline?(S.state.models[g.baseline]?.title||g.baseline)+': ':'')+vs.s.replace(/&nbsp;/g,' '))}">${vs.s}</dd></div>
+    <div><dt>Since baseline</dt><dd>${gn.v}</dd><dd class="sub">${gn.s}${vs.dup?' · '+vs.s:''}</dd></div>
+    ${vs.dup?'':`<div><dt>vs baseline</dt><dd>${vs.v}</dd><dd class="sub" title="${esc((g.baseline?(S.state.models[g.baseline]?.title||g.baseline)+': ':'')+vs.s.replace(/&nbsp;/g,' '))}">${vs.s}</dd></div>`}
    </dl>
   </div>
   <div class="gl-foot"><span class="gl-hl">${hs.length?`Hills: ${hs.slice(0,4).map(([k,s])=>`${hLink(k)}<span class="faint"> ${esc(s)}</span>`).join(', ')}${hs.length>4?`, +${hs.length-4} more`:''}`:'<span class="faint">No hill serves this goal yet</span>'}</span><a class="more" href="#goal/${enc(g.name)}">Runs and next steps</a></div>
@@ -272,9 +272,9 @@ const hero=function(g){
  const head=`<div class="gl-hh"><div><div class="gl-hero">${gu(g,g.status==='achieved'?ev?.value:g.value)}${ofN(g)}</div><div class="sub">${who}${g.status==='achieved'?(ev?.task?` · <a class="ln" href="#task/${enc(ev.task)}">the run</a>`:''):g.task?` · <a class="ln" href="#task/${enc(g.task)}">latest run</a>`:''}</div></div>
   <div class="gl-hgap"><div class="gl-gv">${g.status==='achieved'?'Met':gap.v}</div><div class="sub">${g.status==='achieved'?'target reached':gap.s}</div></div></div>`;
  const strip=kpis([
-  ['Since baseline',gn.v,gn.s],
-  ['vs baseline',vs.v,vs.s],
-  ['Paired on',g.vs_baseline?.n?N(g.vs_baseline.n):DASH,g.vs_baseline?.n?`questions; ${vs.wl}`:comparisonNote(g)],
+  ['Since baseline',gn.v,vs.dup?`${gn.s} · ${vs.s}`:gn.s],
+  ...(vs.dup?[]:[['vs baseline',vs.v,vs.s],
+  ['Paired on',g.vs_baseline?.n?N(g.vs_baseline.n):DASH,g.vs_baseline?.n?`questions; ${vs.wl}`:comparisonNote(g)]]),
   ['Hills',String(goalHills(g).length),goalHills(g).length?hillSum(g):'none serve it yet'],
  ]);
  return panel('Progress',head+track(g,{big:true})+`<div class="gl-strip">${strip}</div>`,{meta:`${kpiPre(g)}${cmpSym(g)} ${gt(g)}${byN(g)?` of ${N(g.n)}`:''} on ${sLink(g.slice)}`,cls:'gl-prog'});
