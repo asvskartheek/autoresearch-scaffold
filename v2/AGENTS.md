@@ -19,6 +19,7 @@ Every command prints compact text with a `help[]` block of next steps; errors pr
 
 ## Rules
 
+- Run `arx2 verify` before reporting any result, and fix every error. `arx2 rules` lists what it enforces and why.
 - Names are one or two plain words a person remembers ("Route Tracing", "Random 50"). Keys can be anything; people never see them.
 - Every job longer than a minute is a task (`arx2.task(...)` or `arx2 task start`). Note decisions as plain sentences.
 - Never edit a frozen set; make a new one. Rows hold only id, score, cost, latency_s, error.
