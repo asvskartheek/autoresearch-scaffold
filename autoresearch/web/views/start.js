@@ -117,8 +117,11 @@ function nextSteps(){
  // candidates nearest promotion first: most rungs passed
  const cands=Object.entries(gates).filter(([m,g])=>st.models[m]?.status==='candidate'&&!g.error)
   .map(([m,g])=>[m,g,(g.rungs||[]).filter(r=>r.status==='pass').length]).sort((a,b)=>b[2]-a[2]);
- for(const [m] of cands.filter(([,g])=>g.promotable))
-  out.push({h:`#model/${enc(m)}`,t:`Promote ${distinctModel(m)}: it cleared every ${term('rung')} of the ${term('gate')}`,c:`arx promote ${m}`});
+ // several cleared the gate: promote the one with the largest gain on the last rung's first check; the rest are
+ // gated again against the new champion, so they are one row, not one each
+ const gain=g=>g.rungs?.at(-1)?.checks?.[0]?.delta??0;
+ const prom=cands.filter(([,g])=>g.promotable).sort((a,b)=>gain(b[1])-gain(a[1]));
+ if(prom.length)out.push({h:`#model/${enc(prom[0][0])}`,t:`Promote ${distinctModel(prom[0][0])}: it cleared every ${term('rung')} of the ${term('gate')}${prom.length>1?` <span class="faint">· ${prom.length-1} more cleared it, with a smaller gain</span>`:''}`,c:`arx promote ${prom[0][0]}`});
  for(const [m,g] of cands){
   const nx=(g.next||[]).filter(n=>n.model===m);if(!nx.length)continue;
   const n=nx.find(n=>!n.running)||nx[0],rt=n.running&&byId(n.running),r=rungOf(g,n.slice);
