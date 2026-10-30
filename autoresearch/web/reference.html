@@ -420,7 +420,7 @@ function section(id, fn) { DRAW[id] = fn; try { const h = fn(); if (typeof h ===
 section("claim", () => {
   if (!MAIN) return `<div class="empty">${mn(CH)} has no complete eval run yet.</div>`;
   const r = MAIN, p = r.vs, bin = isBin(r), g = champGoal && champGoal.slice === r.slice && champGoal.kpi === "score" ? champGoal : D.goals.find(x => x.slice === r.slice && x.kpi === "score" && x.status === "open");
-  const val = v => bin ? v * r.n : v;
+  const val = v => bin ? v * r.n : negR(r) ? -v : v;  // a "minus ms" score is drawn as the plain amount
   const bars = [[PV ? "before · " + mnt(PV) : null, p ? p.base : null, "f-mut"], ["this · " + mnt(CH), r.score, "f-pos"]].filter(b => b[0] && b[1] != null);
   const tgt = g ? (g.need ?? g.target * r.n) : null;
   const vals = [...bars.map(b => val(b[1])), ...(tgt != null && bin ? [tgt] : [])];
@@ -431,7 +431,7 @@ section("claim", () => {
   const yEnd = Y0 + (bars.length - 1) * GAP + BH, H = yEnd + 62, maxCh = Math.max(12, Math.floor((W - 24) / 7));
   let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" role="img" aria-label="${esc(r.slice)}: before, this model, target">`;
   const step = niceStep((top - lo) / Math.max(3, Math.min(6, Math.floor(W / 120))));
-  for (let v = Math.ceil(lo / step) * step; v <= top + 1e-9; v += step) s += `<line class="grid" x1="${X(v)}" x2="${X(v)}" y1="${Y0 - 4}" y2="${yEnd + 4}"/><text class="t-f" x="${X(v)}" y="${yEnd + 36}" text-anchor="middle">${bin ? N0(v) : num(v, 3)}</text>`;
+  for (let v = Math.ceil(lo / step) * step; v <= top + 1e-9; v += step) s += `<line class="grid" x1="${X(v)}" x2="${X(v)}" y1="${Y0 - 4}" y2="${yEnd + 4}"/><text class="t-f" x="${X(v)}" y="${yEnd + 36}" text-anchor="middle">${bin ? N0(v) : num(v, 3) + unit(r)}</text>`;
   bars.forEach(([lab, v, c], i) => {
     const y = Y0 + i * GAP, xe = X(val(v)), w = Math.max(2, xe - X(lo)), txt = bin ? N0(val(v)) : sc(v, r), tw = txt.length * 9 + 10;
     const inside = xe + 8 + tw > W - 2;  // no room after the bar: the value goes inside its end, in a colour that reads on the bar
@@ -454,7 +454,7 @@ section("claim", () => {
   <dl class="f">
     <dt>result</dt><dd>${bin ? ev(NC(r.right) + " / " + N0(r.n), evRes(r)) + ` right (${pct(r.score)})` : ev(sc(r.score, r), evRes(r))} on ${esc(r.slice)} · ${runsTxt(r)}</dd>
     ${p ? `<dt>vs before</dt><dd>${ev(dl(p.delta, r), evPair(r, p))} paired, 90% CI ${ev(ciTxt(p, r), evPair(r, p))}${p.noisy ? ' <span class="warn">noisy</span>' : ""}, same ${N0(p.n)} ids</dd>
-    <dt>churn</dt><dd><span class="pos">${ev(p.wins + " fixed", evPair(r, p))}</span> · <span class="neg">${ev(p.losses + " broken", evPair(r, p))}</span> · net ${sgn(p.wins - p.losses, 0)}</dd>` : `<dt>current comparison</dt><dd class="warn">${PV ? "No matching current harness comparison with " + mn(PV) : "no comparator in the ledger"}${D.promotion ? `; <a href="#gates">historical promotion ${dt(D.promotion.t)}</a>` : ""}</dd>`}
+    <dt>churn</dt><dd><span class="pos">${ev(p.wins + (bin ? " fixed" : " better"), evPair(r, p))}</span> · <span class="neg">${ev(p.losses + (bin ? " broken" : " worse"), evPair(r, p))}</span> · net ${sgn(p.wins - p.losses, 0)}</dd>` : `<dt>current comparison</dt><dd class="warn">${PV ? "No matching current harness comparison with " + mn(PV) : "no comparator in the ledger"}${D.promotion ? `; <a href="#gates">historical promotion ${dt(D.promotion.t)}</a>` : ""}</dd>`}
     ${g ? `<dt>goal</dt><dd>${goalLine(g, r)}</dd>` : ""}
     ${M.title ? `<dt>change</dt><dd>${esc(M.title)}</dd>` : ""}
     ${lat || cost ? `<dt>cost of it</dt><dd>${[lat, cost].filter(Boolean).join(" · ")}</dd>` : ""}
