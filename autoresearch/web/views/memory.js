@@ -85,7 +85,7 @@ VIEWS.memory=()=>{
  const head=t=>page({title:'What you know',crumbs:[['Memory']],finding:t});
  if(!M.d)return head('')+(M.err?empty('Could not load memory',esc(M.err)):'<div class="mk skel"></div>');
  const d=M.d,ks=d.concepts||[];
- if(!d.person||!ks.length)return head('')+panel('',empty('Nothing remembered yet','Answer a card in the Brief and it lands here.')+`<div class="mk-cta"><a class="btn primary" href="#learn">Open the Brief</a></div>`);
+ if(!d.person||!ks.length)return head('')+panel('',empty('Nothing remembered yet')+`<div class="mk-cta"><a class="btn primary" href="#course">Start 101</a><a class="btn" href="#learn">Open the Brief</a></div>`);
  const due=ks.filter(k=>k.state==='due').sort((a,b)=>a.due-b.due),n=s=>ks.filter(k=>k.state===s).length;
  const legend=`<span class="mk-leg">${['known','shaky','due','untested'].map(s=>`<span><i style="background:${COL[s]}"></i>${ST[s]} ${n(s)}</span>`).join('')}</span>`;
  return head(due.length?`<b>${plural(due.length,'concept')} due</b>`:'Nothing due')+

@@ -35,5 +35,5 @@
 .mk-bar i.h{background:var(--positive)}.mk-bar i.m{background:var(--negative)}
 .mk-bar i.s{background:repeating-linear-gradient(135deg,var(--faint) 0 2px,transparent 2px 5px)}
 .mk-days{max-height:140px}
-.mk-cta{padding:0 0 16px;text-align:center}
+.mk-cta{padding:0 0 16px;display:flex;justify-content:center;gap:8px}
 @media (max-width:560px){.mk-node{width:76px}.mk-row .mk-node{width:72px}.mk-mr{grid-template-columns:84px minmax(0,1fr) 40px}}
