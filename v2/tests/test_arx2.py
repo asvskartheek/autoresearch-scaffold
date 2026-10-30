@@ -370,3 +370,97 @@ def test_texty_answers_are_warned(proj):
     assert "warn: 90 words" in out and "warn: no figure" in out
     (proj / "f.svg").write_text("<svg/>")
     assert "warn" not in cli(proj, "ask", "answer", q["key"], "--file", "f.svg", "--text", "Item 3 broke; 2 of 30 overall.").stdout
+
+
+# ---- the paper gate ----------------------------------------------------------
+
+def climbed(proj):
+    """The toy project after one promotion: champion at 65% on All 100, goal 80% not met."""
+    cli(proj, "goal", "open", "acc", "--name", "Accuracy 80", "--vague", "Get better at maths", "--set", "all", "--target", "0.8")
+    cli(proj, "hill", "open", "units", "--name", "Unit Slips", "--goal", "acc", "--symptom", "Converts units wrongly",
+        "--symptom-set", "sym", "--eval-sets", "hill", "--train-sets", "train", "--control", "ctl")
+    cli(proj, "cand", "add", "base", "--name", "Plain Prompt", "--change", "The starting prompt.")
+    cli(proj, "promote", "base", "--reason", "Seeded.")
+    cli(proj, "cand", "add", "v1", "--name", "Unit Check", "--hill", "units", "--change", "Restate units.")
+    p = Project(proj)
+    for model, good in [("base", lambda i: int(i) % 2 == 0), ("v1", lambda i: int(i) % 2 == 0 or 10 <= int(i) < 40)]:
+        for s in ["hill", "all"]:
+            evaluate(model, s, lambda i, g=good: {"score": float(g(i))}, project=p, workers=4)
+    cli(proj, "promote", "v1", "--reason", "Passed every step.")
+    return p
+
+
+def filled(proj, about, audience):
+    cli(proj, "paper", "new", "pp", "--about", about, "--audience", audience, "--out", "pp.html", "--force")
+    page = (proj / "pp.html").read_text()
+    return page.replace("TODO", "Written")
+
+
+def test_long_abstract_fails(proj):
+    climbed(proj)
+    page = filled(proj, "acc", "external").replace("Written: the task and why it matters, in one sentence.",
+                                                   " ".join(["word"] * 200) + ".")
+    r = paper_check(proj, page, "acc", ok=False)
+    assert r.returncode == 1 and "Abstract has 2" in r.stdout and "cut to 80 words" in r.stdout
+
+
+def paper_check(proj, page, about, audience="external", ok=True):
+    (proj / "p.html").write_text(page)
+    return cli(proj, "paper", "check", "p.html", "--about", about, "--audience", audience, ok=ok)
+
+
+def test_paper_skeleton_passes_once_filled(proj):
+    climbed(proj)
+    cli(proj, "paper", "new", "pp", "--about", "acc", "--out", "pp.html")
+    raw = (proj / "pp.html").read_text()
+    assert 'data-claim="score"' in raw and "65.0%" in raw and "+15.0 pts" in raw and "Draft" in raw
+    assert paper_check(proj, raw, "acc", ok=False).returncode == 1  # TODOs left
+    out = paper_check(proj, filled(proj, "acc", "external"), "acc").stdout
+    assert "0 errors, 0 warnings" in out
+    cli(proj, "doc", "add", "pp", "--kind", "paper", "--name", "Accuracy Paper", "--file", "p.html", "--about", "acc",
+        "--audience", "external")
+    assert Project(proj).state()["docs"]["pp"]["draft"] is False
+    assert "0 errors" in paper_check(proj, filled(proj, "units", "internal"), "units", "internal").stdout
+
+
+def test_paper_with_a_wrong_number_fails_naming_the_claim(proj):
+    climbed(proj)
+    page = filled(proj, "acc", "external").replace(">65.0%<", ">70.0%<", 1)
+    r = paper_check(proj, page, "acc", ok=False)
+    assert r.returncode == 1 and "score claim '70.0%'" in r.stdout and "65.0%" in r.stdout
+    bare = filled(proj, "acc", "external").replace("<p>The champion scores", "<p>About 64% of answers were right. The champion scores", 1)
+    assert "not claims: 64%" in paper_check(proj, bare, "acc", ok=False).stdout
+    (proj / "p.html").write_text(page)
+    r = cli(proj, "doc", "add", "pp", "--kind", "paper", "--name", "Accuracy Paper", "--file", "p.html", "--about", "acc",
+            "--audience", "external", ok=False)
+    assert r.returncode == 1 and "refused" in r.stdout and "pp" not in Project(proj).state()["docs"]
+
+
+def test_paper_with_an_external_script_fails(proj):
+    climbed(proj)
+    page = filled(proj, "acc", "external").replace("</head>", '<script src="https://cdn.example.com/x.js"></script></head>')
+    r = paper_check(proj, page, "acc", ok=False)
+    assert r.returncode == 1 and "https://cdn.example.com/x.js" in r.stdout and "fix:" in r.stdout
+
+
+def test_paper_claiming_an_unmet_goal_achieved_fails(proj):
+    climbed(proj)
+    page = filled(proj, "acc", "external").replace("Written: what the reader should take away.", "We achieved the goal.")
+    r = paper_check(proj, page, "acc", ok=False)
+    assert r.returncode == 1 and "says achieved" in r.stdout
+    undrafted = filled(proj, "acc", "external").replace("Draft: ", "").replace(" This is a draft: the goal is not met yet.", "")
+    assert "does not say draft" in paper_check(proj, undrafted, "acc", ok=False).stdout
+
+
+def test_draft_papers_pass_only_when_titled_draft(proj):
+    climbed(proj)
+    page = filled(proj, "acc", "external")
+    cut = page[:page.index('<section data-part="threats">')] + "</body></html>"
+    (proj / "d.html").write_text(cut)
+    args = ["doc", "add", "dd", "--kind", "paper", "--name", "Early Draft", "--file", "d.html", "--about", "acc", "--audience", "external"]
+    assert cli(proj, *args, ok=False).returncode == 1
+    cli(proj, *args, "--draft")
+    assert Project(proj).state()["docs"]["dd"]["draft"] is True
+    (proj / "d.html").write_text(cut.replace("Draft: ", "").replace("This is a draft", "This is early"))
+    r = cli(proj, *args, "--draft", ok=False)
+    assert r.returncode == 1 and "Draft in the <title>" in r.stdout
