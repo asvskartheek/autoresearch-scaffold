@@ -23,7 +23,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from . import features
-from .core import per_id
+from .core import goal_evidence_status, per_id, same_contract
 from .readable import readable
 
 WEB = Path(__file__).with_name("web")
@@ -105,10 +105,8 @@ class _Index:
         return self._rows[tid]
 
     def compatible(self, m, sl, reference_model=None):
-        latest = self.latest(reference_model or m, sl)
-        contract = (latest.get("config") or {}).get("baseline_contract") if latest else None
-        runs = self.runs.get((m, sl), [])
-        return [t for t in runs if (t.get("config") or {}).get("baseline_contract") == contract] if contract is not None else runs
+        """core.Project.score_runs from the index."""
+        return same_contract(self.runs.get((m, sl), []), self.latest(reference_model or m, sl))
 
     def pooled(self, m, sl, reference_model=None):
         k = (m, sl, reference_model)
@@ -343,7 +341,6 @@ def _goal_status(p, ix, name, g, champ):
                 slice_changed=bool(cur and g.get("slice_hash") and cur != g["slice_hash"]),
                 scale=slr.get("scale") or "binary", unit=slr.get("unit"), metric=slr.get("metric"))
 
-    from .core import goal_evidence_status
     return goal_evidence_status(status, ix.has(g.get("baseline"), sl))
 
 

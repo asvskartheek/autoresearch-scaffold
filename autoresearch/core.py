@@ -412,15 +412,10 @@ class Project:
         return c[-1] if c else None
 
     def score_runs(self, model: str, slice_name: str, reference_model: str | None = None) -> list[dict]:
-        """Complete repeats compatible with the latest reference model's declared harness contract.
-
-        With no reference, use this model's latest run. Legacy runs without a declared contract keep
-        their existing pooling behavior. Comparisons pass the candidate on both sides.
-        """
-        runs = self.slice_evals(model, slice_name)
-        latest = self.latest_eval(reference_model or model, slice_name)
-        contract = (latest.get("config") or {}).get("baseline_contract") if latest else None
-        return [t for t in runs if (t.get("config") or {}).get("baseline_contract") == contract] if contract is not None else runs
+        """The model's complete runs made under the same declared harness (`config.baseline_contract`) as the
+        reference model's latest run on the slice (default: this model's own latest). Comparisons pass the candidate
+        as the reference for both sides. A run that declares no contract matches only runs that declare none."""
+        return same_contract(self.slice_evals(model, slice_name), self.latest_eval(reference_model or model, slice_name))
 
     def pooled_scores(self, model: str, slice_name: str, reference_model: str | None = None) -> dict[str, float]:
         """Per-id mean over compatible complete repeats; never pool across a declared harness change."""
@@ -461,15 +456,12 @@ class Project:
                     continue
                 for sl in self._resolve(chk["slice"], m):
                     c = dict(slice=sl, rule=chk["rule"], threshold=chk.get("margin", 0) if chk["rule"] == "better" else -chk.get("tolerance", 0))
-                    ce, be = self.latest_eval(model_name, sl), self.latest_eval(champ, sl) if champ else None
+                    # both sides pool only the runs made under the candidate's latest declared harness
                     cand_runs = self.score_runs(model_name, sl)
                     base_runs = self.score_runs(champ, sl, reference_model=model_name) if champ else []
-                    contract = (ce.get("config") or {}).get("baseline_contract") if ce else None
-                    if contract is not None:
-                        # A newer run made with another harness is not a comparator. Pool repeats only
-                        # within the candidate's declared contract on both sides of the comparison.
-                        be = base_runs[-1] if base_runs else None
-                        c["baseline_contract"] = contract
+                    ce, be = (cand_runs or [None])[-1], (base_runs or [None])[-1]
+                    if contract_of(ce) is not None:
+                        c["baseline_contract"] = contract_of(ce)
                     if champ == model_name:
                         c["state"] = "champion"
                     elif not champ:
@@ -926,6 +918,20 @@ def _timed(fn, i):
         return dict(id=str(i), latency_s=round(time.time() - t0, 3)) | out | {"id": str(i)}
     except Exception as e:  # an example that crashes is wrong, never skipped
         return dict(id=str(i), score=0.0, error=f"{type(e).__name__}: {e}"[:300], latency_s=round(time.time() - t0, 3))
+
+
+def contract_of(task: dict | None):
+    """The harness a run declares it was made with (`config.baseline_contract`); None when it declares none."""
+    return ((task or {}).get("config") or {}).get("baseline_contract")
+
+
+def same_contract(runs: list[dict], reference: dict | None) -> list[dict]:
+    """The runs made under the reference run's declared harness. Never pools across a declared harness change: a
+    reference without a contract keeps only the runs without one. No reference run: every run."""
+    if reference is None:
+        return runs
+    c = contract_of(reference)
+    return [t for t in runs if contract_of(t) == c]
 
 
 def goal_evidence_status(status, baseline_exists):

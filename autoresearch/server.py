@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlencode, urlsplit
 
 from . import features, papers, people, projects, share
-from .core import Project, _read, paired, per_id, summarize
+from .core import Project, _read, contract_of, paired, per_id, same_contract, summarize
 from .readable import readable
 
 WEB = Path(__file__).with_name("web")
@@ -216,7 +216,7 @@ def _state(p: Project) -> dict:
         summary = summarize([r for t in runs for r in p.rows(t["id"])])
         summary.update(n=len(scores), score=sum(scores.values()) / len(scores) if scores else None)
         board.setdefault(sl, {})[model] = dict(task=latest["id"], ended=latest["ended"], runs=len(runs),
-                                              baseline_contract=(latest.get("config") or {}).get("baseline_contract"), **summary)
+                                              baseline_contract=contract_of(latest), **summary)
         if latest["ended"] > newest.get(sl, (0, 0))[0]:
             newest[sl] = (latest["ended"], latest["id"])
     for name, sl in slices.items():  # slices frozen before `scale` existed: read it off the scores
@@ -433,12 +433,9 @@ def task_detail(p: Project, tid: str) -> dict:
         rows = p.rows(tid)
         out["rows"] = [dict(id=r["id"], score=r.get("score"), error=bool(r.get("error")), latency_s=r.get("latency_s"), cost=r.get("cost")) for r in rows]
         champ = p.champion()
-        bases = p.slice_evals(champ, t["slice"]) if champ and champ != t.get("model") else []
-        contract = (t.get("config") or {}).get("baseline_contract")
-        if contract is not None:
-            bases = [b for b in bases if (b.get("config") or {}).get("baseline_contract") == contract]
+        bases = same_contract(p.slice_evals(champ, t["slice"]), t) if champ and champ != t.get("model") else []
         if bases:
-            out["vs_champion"] = dict(model=champ, task=bases[-1]["id"], runs=len(bases), baseline_contract=contract,
+            out["vs_champion"] = dict(model=champ, task=bases[-1]["id"], runs=len(bases), baseline_contract=contract_of(t),
                                       **paired(per_id(rows), per_id([r for b in bases for r in p.rows(b["id"])]),
                                                1 if p.config.get("higher_is_better", True) else -1))
     return out

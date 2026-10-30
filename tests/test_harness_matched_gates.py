@@ -66,8 +66,17 @@ class HarnessMatchedGates(unittest.TestCase):
         self.assertEqual(check['delta'], .25)
         self.assertEqual(check['state'], 'pass')
 
-    def test_legacy_runs_keep_existing_latest_behavior(self):
+    def test_undeclared_candidate_never_pools_declared_champion_runs(self):
+        # the champion's A and B runs are two harnesses: a candidate that declares none is paired with neither
         self.runs[-1]['config']={};g=self.p.gate('cand')
-        self.assertFalse(g['promotable']);self.assertEqual(g['rungs'][0]['checks'][0]['base_task'],'new')
+        self.assertFalse(g['promotable']);self.assertEqual(g['rungs'][0]['checks'][0]['state'],'need_baseline')
+        self.assertEqual(g['next'],[{'model':'base','slice':'d/full'}])
+
+    def test_undeclared_runs_pool_with_each_other(self):
+        for t in self.runs:t['config']={}
+        check=self.p.gate('cand')['rungs'][0]['checks'][0]
+        self.assertEqual((check['base_task'],check['base_runs']),('new',2))
+        self.assertEqual(check['delta'],.0)
+        self.assertNotIn('baseline_contract',check)
 
 if __name__=='__main__':unittest.main()
