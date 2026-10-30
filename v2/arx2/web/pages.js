@@ -19,11 +19,28 @@ function stepCounts(s) {
   return `${Math.round(s.cand * s.n)} of ${s.n} vs ${Math.round(s.base * s.n)} of ${s.n}`;
 }
 
+function noEvidence(hk) {
+  const e = (S.state.evidence || {})[hk];
+  return e && !e.ok ? e : null;
+}
+
+function evidenceLine(e) {
+  return `No evidence: ${e.missing.join(", ")}.`;
+}
+
 function needsYou() {
   const st = S.state, out = [];
   for (const t of Object.values(st.tasks)) if (t.stale) out.push(`Task ${ent("task", t.id)} has been silent for ${ago(t.beat).replace(" ago", "")}. Fix it or end it.`);
   const bad = st.split.pairs.filter((p) => p.shared);
   if (bad.length) out.push(`${bad.length} hill${bad.length > 1 ? "s" : ""} share items between sets that must be separate. <a href="#/p/${S.key}/sets">See the split check</a>.`);
+  const lacking = {};  // what is missing -> open hills missing it
+  for (const [hk, h] of Object.entries(st.hills)) {
+    const e = h.status === "open" && noEvidence(hk);
+    if (e) (lacking[e.missing.join(", ")] ||= []).push(hk);
+  }
+  for (const [why, hks] of Object.entries(lacking))
+    out.push(hks.length === 1 ? `${hillN(hks[0])} has no evidence: ${why}. Freeze a symptom set or close the hill.`
+      : `${hks.length} open hills have no evidence (${why}): ${hks.map(hillN).join(", ")}. Freeze a symptom set for each or close it.`);
   for (const t of Object.values(st.tasks)) if (t.status === "failed" && t.ended && Date.now() / 1000 - t.ended < 86400) out.push(`Task ${ent("task", t.id)} failed ${ago(t.ended)}.`);
   return out;
 }
@@ -389,7 +406,7 @@ function hillCard(hk, h) {
   const res = hillTargetResults(hk);
   const best = res.slice().sort((a, b) => b.s.delta - a.s.delta)[0];
   return `<a class="sheet" href="#/p/${S.key}/hill/${encodeURIComponent(hk)}" data-ask="hill|${esc(hk)}|hill card: ${esc(h.name)}" style="text-decoration:none;display:block">
-    <div class="spread"><h3>${esc(h.name)}</h3><span class="pill ${h.status === "climbed" ? "champ" : ""}">${esc(h.status)}</span></div>
+    <div class="spread"><h3>${esc(h.name)}</h3><span class="row">${noEvidence(hk) ? `<span class="pill alarm" title="${esc(evidenceLine(noEvidence(hk)))}">no evidence</span>` : ""}<span class="pill ${h.status === "climbed" ? "champ" : ""}">${esc(h.status)}</span></span></div>
     <p class="small" style="min-height:3.6em">${esc((h.symptom || "").slice(0, 150))}</p>
     ${prevalence(p)}
     <div class="small mute" style="margin-top:8px">${res.length} candidate${res.length === 1 ? "" : "s"} tried${best ? ` · best ${pts(best.s.delta)} by ${esc(best.c.name)}` : ""}</div></a>`;
@@ -410,6 +427,7 @@ PAGES.hill = (hk) => {
     <div class="small mute">Hill · serves ${ent("goal", h.goal)} · opened ${day(h.created)}</div>
     <div class="spread"><h1>${esc(h.name)}</h1><span class="pill ${h.status === "climbed" ? "champ" : ""}">${esc(h.status)}</span></div>
     <p class="statement">${esc(h.symptom || h.problem || "")}</p>
+    ${noEvidence(hk) ? `<p class="${h.status === "closed" ? "small mute" : "alarm"}"><b>${esc(evidenceLine(noEvidence(hk)))}</b></p>` : ""}
     ${h.reason ? `<p class="small mute">${esc(h.reason)}</p>` : ""}
     <div class="grid g2 section">
       <div class="sheet"><h2>One real case</h2>${ex ? `<dl class="example"><dt>Question</dt><dd>${esc(ex.input)}</dd><dt>Model said</dt><dd class="wrong">${esc(ex.wrong)}</dd><dt>Should say</dt><dd class="right">${esc(ex.right)}</dd><dt>Why wrong</dt><dd>${esc(ex.why)}</dd></dl>` : '<p class="empty">No example recorded. A hill should show one.</p>'}
