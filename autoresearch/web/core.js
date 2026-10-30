@@ -51,7 +51,7 @@ const sd=(s,d)=>{if(d==null||!isFinite(d))return '—';if(isCont(s)){const x=neg
 // server's pooled count and share (`errors` / `error_share`, or with a side prefix, `cand_` / `base_`); without the
 // share it adds nothing
 const errWarn=(o,pre='')=>{const sh=o?.[pre+'error_share'],k=o?.[pre+'errors'];
- return typeof sh==='number'&&sh>=.1&&k?` <span class="${sh>=.5?'neg':'warn'} errw" title="${esc(`${Math.round(100*sh)}% of the pooled examples errored`)}">${Number(k).toLocaleString('en-US')} errored</span>`:''};
+ return typeof sh==='number'&&sh>=.1&&k?` · <span class="${sh>=.5?'neg':'warn'} errw" title="${esc(`${Math.round(100*sh)}% of the pooled examples errored`)}">${Number(k).toLocaleString('en-US')} errored</span>`:''};
 // a leaderboard entry's paired Δ against the champion under the entry's own harness contract, when the server sends one
 // (the champion's latest run may use another harness, so the two latest scores cannot be subtracted)
 const ownPair=r=>{const p=r?.vs_champion??r?.paired;return p&&typeof p.delta==='number'&&isFinite(p.delta)?p:null};
