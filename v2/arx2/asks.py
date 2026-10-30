@@ -17,7 +17,8 @@ from .view import Views
 KINDS = {".svg": "svg", ".png": "png", ".jpg": "png", ".jpeg": "png", ".gif": "png", ".webp": "png",
          ".html": "html", ".htm": "html", ".md": "md", ".txt": "text"}
 INLINE = ("svg", "md", "text")  # small text parts live in the event; html and images are files
-CLAIM_S = 600  # a claim older than this is taken to be abandoned
+CLAIM_S = 600
+MAX_WORDS, BARE_WORDS = 60, 30  # people read answers in a small box by what they clicked  # a claim older than this is taken to be abandoned
 SAVE_AS = ("note", "card", "paper")
 
 
@@ -106,6 +107,11 @@ def answer(p: Project, key: str, parts: list[tuple[str, str]], agent: str | None
         raise LedgerError(f"no question {key}", fix="arx2 ask list")
     if not parts:
         raise LedgerError("an answer needs at least one part", fix='--text "..." or --file diagram.svg or --link "label=#/..."')
+    words = sum(len(v.split()) for k, v in parts if k == "text")
+    if words > MAX_WORDS:
+        raise LedgerError(f"{words} words; an answer has at most {MAX_WORDS}", fix="cut it: one real item, the aggregate with set and n, the takeaway; draw the rest (--file x.svg)")
+    if words > BARE_WORDS and not any(k == "file" for k, _ in parts):
+        raise LedgerError(f"{words} words and no figure; past {BARE_WORDS} words the numbers go in a figure", fix="--file figure.svg with the numbers, and fewer words")
     out = []
     for i, (kind, val) in enumerate(parts):
         if kind == "text":

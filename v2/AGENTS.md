@@ -78,7 +78,7 @@ get skipped.
   Use `currentColor` and the dashboard tokens (`var(--ink)`, `var(--champ)`, `var(--broke)`, `var(--mute)`), so it reads
   in light and dark.
 - Then at most three short lines: the one real example (item id, what happened on each side), the aggregate (set, n,
-  paired delta, 90% interval) and the takeaway. About 60 words in all; `ask answer` warns above 80.
+  paired delta, 90% interval) and the takeaway. At most 60 words; past 30 the numbers must be in a figure. `ask answer` refuses otherwise.
 - If the ledger cannot back a claim, say so in one line. "The ledger does not show this" is a good answer.
 - Add a `--link` to the dashboard view that shows more, rather than describing it.
 - Never paste client text, questions or model outputs into an answer; ids, counts and your own words only.

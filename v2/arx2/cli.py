@@ -583,14 +583,7 @@ def cmd_ask_poll(a):
 def cmd_ask_answer(a):
     p = P()
     asks.answer(p, a.key, a.parts, agent=a.agent or os.environ.get("ARX2_AGENT"))
-    words = sum(len(v.split()) for k, v in a.parts if k == "text")
-    pictures = sum(1 for k, _ in a.parts if k == "file")
-    warn = []
-    if words > 80:
-        warn.append(f"warn: {words} words; answers read best as one figure and about 60 words")
-    if not pictures and words > 40:
-        warn.append("warn: no figure; draw the numbers (--file x.svg) instead of writing them")
-    emit(f"answered: {a.key} ({len(a.parts)} part{'s' if len(a.parts) != 1 else ''})", *warn, help=["arx2 ask poll"])
+    emit(f"answered: {a.key} ({len(a.parts)} part{'s' if len(a.parts) != 1 else ''})", help=["arx2 ask poll"])
 
 
 def cmd_ask_reply(a):

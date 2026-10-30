@@ -363,13 +363,15 @@ def test_watch_gives_each_question_its_own_agent(proj):
         w.kill()
 
 
-def test_texty_answers_are_warned(proj):
+def test_texty_answers_are_refused(proj):
     from arx2 import asks
     q = asks.ask(Project(proj), "Why?", "project", "toy", "x")
-    out = cli(proj, "ask", "answer", q["key"], "--text", " ".join(["word"] * 90)).stdout
-    assert "warn: 90 words" in out and "warn: no figure" in out
+    r = cli(proj, "ask", "answer", q["key"], "--text", " ".join(["word"] * 70), ok=False)
+    assert r.returncode == 1 and "at most 60" in r.stdout and "fix:" in r.stdout
+    r = cli(proj, "ask", "answer", q["key"], "--text", " ".join(["word"] * 40), ok=False)
+    assert "no figure" in r.stdout
     (proj / "f.svg").write_text("<svg/>")
-    assert "warn" not in cli(proj, "ask", "answer", q["key"], "--file", "f.svg", "--text", "Item 3 broke; 2 of 30 overall.").stdout
+    cli(proj, "ask", "answer", q["key"], "--file", "f.svg", "--text", " ".join(["word"] * 40))
 
 
 # ---- the paper gate ----------------------------------------------------------

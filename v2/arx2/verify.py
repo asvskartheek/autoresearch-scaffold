@@ -14,7 +14,7 @@ from .store import Project, fold, ids_hash
 from .view import STALE_S, Views
 
 FLAKY = re.compile(r"flak|inconsisten", re.I)
-ANSWER_WORDS, FIGURE_WORDS = 80, 40
+ANSWER_WORDS, FIGURE_WORDS = 60, 30  # the same limits ask answer enforces
 TEXT_PARTS = ("md", "text", "txt", "link")
 
 CHECKS: dict = {}
