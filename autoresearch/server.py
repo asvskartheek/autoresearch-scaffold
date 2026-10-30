@@ -650,7 +650,11 @@ def serve(port: int = 8890, root=None):
                     return self._send(200, json.dumps(p.gate(path.rsplit("/", 1)[1]), default=str).encode(), "application/json")
                 if path == "/api/papers":
                     return self._send(200, json.dumps(papers.papers(p), default=str).encode(), "application/json")
-                r = _feature(features.GET, p, path, dict(parse_qsl(urlsplit(self.path).query), _port=str(self.server.server_port)))
+                features.REQUEST.remote = remote  # a feature may answer a share-link guest with less (memory.py)
+                try:
+                    r = _feature(features.GET, p, path, dict(parse_qsl(urlsplit(self.path).query), _port=str(self.server.server_port)))
+                finally:
+                    features.REQUEST.remote = False
                 if r:
                     return self._send(*r[:3], r[3] if len(r) > 3 else None)
                 parts = [unquote(x) for x in path.strip("/").split("/")]

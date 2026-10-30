@@ -1,6 +1,6 @@
 """Learner memory (memory.py): the schema, backfill idempotence, the spaced-repetition schedule, live writes through
 the Brief's routes (teach phases, 101 course checks), and GET /api/memory."""
-import json, os, sqlite3, tempfile, unittest
+import json, os, sqlite3, tempfile, time, unittest
 
 os.environ["ARX_HOME"] = tempfile.mkdtemp()  # never touch the real ~/.arx
 from autoresearch import course, features, learn, memory, projects, teach
@@ -53,7 +53,8 @@ class Memory(unittest.TestCase):
         ks = {k["id"]: k for k in memory.knowledge("p-00aa11bb")}
         self.assertEqual(set(ks), {"paired", "ladder", "ci", f"model:{self.key}/cand"})
         self.assertEqual(ks["ladder"]["state"], "known")  # the check, minutes after the step, is the review that stands
-        self.assertEqual(ks["paired"]["state"], "shaky"); self.assertEqual(ks["ci"]["state"], "shaky")
+        self.assertEqual(ks[f"model:{self.key}/cand"]["state"], "shaky")  # a model is never due for review
+        self.assertEqual(ks["paired"]["state"], "due"); self.assertEqual(ks["ci"]["state"], "due")  # the step was missed
 
     def test_teach_phases(self):
         """answer, self and step rows (and rows from before phases) are read as what they are."""
@@ -107,7 +108,8 @@ class Memory(unittest.TestCase):
         self.assertEqual({i: k["lesson"] for i, k in ks.items()},
                          {"paired": "paired-delta", "ci": "interval", "lesson:gate": "gate", f"lesson:{self.key}/project-hills": "project-hills"})
         self.assertEqual((ks["lesson:gate"]["project"], ks[f"lesson:{self.key}/project-hills"]["project"]), ("", self.key))
-        self.assertEqual(titles["lesson:gate"], "Gate"); self.assertEqual(ks["lesson:gate"]["state"], "shaky")
+        self.assertEqual(titles["lesson:gate"], "Gate"); self.assertEqual(ks["lesson:gate"]["state"], "due")
+        self.assertEqual(course.memory(course.rows(self.p, "p-00aa11bb"))["gate"]["is_due"], True)  # the course agrees
         mem = course.memory(course.rows(self.p, "p-00aa11bb"))  # the course's own schedule reads the same rows
         self.assertEqual(set(mem), {"paired-delta", "gate", "project-hills", "interval"})
         self.assertEqual(memory.sync_all("backfill", full=True)["added"][self.key], 0)
@@ -141,9 +143,21 @@ class Memory(unittest.TestCase):
         miss = memory.step(dict(spaced), t0 + 4 * DAY, False)
         self.assertAlmostEqual(miss["stability"], 2.5 * 0.35); self.assertEqual(miss["lapses"], 1)
         self.assertLess(miss["mastery"], spaced["mastery"])
+        self.assertEqual(miss["due"], t0 + 4 * DAY)  # a miss is due again now, as in the 101 course
+        relearn = memory.step(dict(memory.step(dict(miss), t0 + 5 * DAY, False)), t0 + 5.2 * DAY, True)
+        self.assertEqual(relearn["stability"], 1.0)  # a right answer is never due again within the course's first day
+        self.assertEqual(relearn["due"], t0 + 6.2 * DAY)
         self.assertAlmostEqual(memory.recall(spaced, spaced["last_review"] + 2.5 * DAY), 0.9)
         self.assertEqual(memory.state_of(dict(n=1, due=t0, mastery=0.9), t0 + 1), "due")
         self.assertEqual(memory.state_of(dict(n=0), t0), "untested")
+
+    def test_knowledge_is_rebuilt_when_the_rules_change(self):
+        with memory.db() as con:
+            memory._insert(con, "k", dict(t=1000.0, person="p-0000beef", kind="check", hit=0), ["ci"], "u0", "live")
+            memory.rebuild(con, "p-0000beef")
+            con.execute("UPDATE knowledge SET due=99999")  # as an older version scheduled it
+            con.execute("UPDATE meta SET v='old' WHERE k='rules'")
+        self.assertEqual(memory.knowledge("p-0000beef", 2000.0)[0]["due"], 1000.0)
 
     def test_reviews_close_together_count_once(self):
         with memory.db() as con:
@@ -165,6 +179,29 @@ class Memory(unittest.TestCase):
         self.assertIn("ladder", {k["id"] for k in d["concepts"]})
         anon = json.loads(_feature(features.GET, self.p, "/api/memory", dict(viewer="anon"))[1])
         self.assertIsNone(anon["person"]); self.assertEqual(anon["concepts"], [])
+
+    def test_a_guest_reads_only_their_own_memory_of_this_project(self):
+        from autoresearch import people
+        people.remember("p-0c0c0c0c", "Owner", self.key)
+        people.remember("p-0e0e0e0e", "Guest", self.key, remote=True)
+        with memory.db() as con:
+            for who in ("p-0c0c0c0c", "p-0e0e0e0e"):
+                for i, proj in enumerate(("elsewhere", self.key)):
+                    memory._insert(con, proj, dict(t=time.time() - 60 + i, person=who, kind="attempt", method="code", hit=1),
+                                   ["paired", f"hill:{proj}/h"], f"{who}{i}", "live")
+                memory.rebuild(con, who)
+        get = lambda v: json.loads(_feature(features.GET, self.p, "/api/memory", dict(viewer=v))[1])
+        self.assertNotIn("people", get("p-0c0c0c0c"))  # who else is in memory is no one's business here
+        self.assertIn("hill:elsewhere/h", {k["id"] for k in get("p-0c0c0c0c")["concepts"]})  # on this machine: everything
+        features.REQUEST.remote = True
+        try:
+            self.assertIsNone(get("p-0c0c0c0c")["person"])  # a person of this machine is not the guest's to read
+            g = get("p-0e0e0e0e")
+        finally:
+            features.REQUEST.remote = False
+        self.assertEqual({k["id"] for k in g["concepts"]}, {"paired", f"hill:{self.key}/h"})
+        self.assertEqual(g["methods"]["code"]["n"], 1)
+        self.assertEqual({e["project"] for e in g["timeline"]}, {self.key})
 
     def test_methods_carry_across_projects(self):
         with memory.db() as con:

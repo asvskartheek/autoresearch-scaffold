@@ -28,11 +28,12 @@ same rows into its cross-project schedule. course.jsonl is the one record of bot
 Knowledge (per person and concept) is rebuilt from that person's events whenever they change, so it never drifts:
   graded events (a hit or a miss) drive a spaced-repetition schedule: stability S in days (the gap after which recall
   drops to 90%), mastery m (a moving average of hits), due = last review + S.
-  a hit after a real gap multiplies S by 2.5 (hard methods 3), a hit while crammed by 1.3; a miss cuts S to 35%.
+  a hit after a real gap multiplies S by 2.5 (hard methods 3), a hit while crammed by 1.3, never below a day; a miss
+  cuts S to 35% and is due again at once (the 101 course's own schedule: a miss is due now, a hit not before a day).
   strength now = m * 0.9 ** (days since review / S). Exposures (seen, read, skip, comment) only update last seen.
 
   GET /api/memory?viewer=<person id>   {person, name, now, project, concepts (each with its 101 `lesson` or null), due, methods,
-                                        changed, timeline, people}
+                                        changed, timeline}; a share-link guest: their own, this project only
   arx memory [show|due|changed|backfill] [--viewer ID]
 """
 from __future__ import annotations
@@ -72,7 +73,9 @@ SCHEMA = [
     CREATE TABLE sources (project TEXT NOT NULL, path TEXT NOT NULL, pos INTEGER NOT NULL, mtime REAL,
                           PRIMARY KEY (project, path));
     """,
+    "CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT);",
 ]
+RULES = "2"  # the scheduling rules (step); knowledge built under other rules is rebuilt from the events
 _lock = threading.RLock()
 
 
@@ -93,6 +96,10 @@ def db():
         con.execute("PRAGMA synchronous=NORMAL")
         migrate(con)
         with _lock:
+            if (con.execute("SELECT v FROM meta WHERE k='rules'").fetchone() or [None])[0] != RULES:
+                for (who,) in con.execute("SELECT DISTINCT person FROM events").fetchall():
+                    rebuild(con, who)
+                con.execute("INSERT OR REPLACE INTO meta VALUES ('rules', ?)", (RULES,))
             yield con
             con.commit()
     finally:
@@ -404,8 +411,9 @@ def step(k: dict, t: float, hit: bool, method: str | None = None) -> dict:
             s *= 0.35
             k["lapses"] = (k.get("lapses") or 0) + 1
         m += 0.4 * ((1.0 if hit else 0.0) - m)
-    s = min(365.0, max(0.1, s))
-    return k | dict(stability=s, mastery=m, reps=(k.get("reps") or 0) + 1, last_review=t, due=t + s * DAY)
+    s = min(365.0, max(1.0 if hit else 0.1, s))
+    # as the 101 course schedules it: a miss is due again now, a right answer not before a day has passed
+    return k | dict(stability=s, mastery=m, reps=(k.get("reps") or 0) + 1, last_review=t, due=t + s * DAY if hit else t)
 
 
 def recall(k: dict, now: float) -> float | None:
@@ -444,9 +452,10 @@ def rebuild(con, who: str) -> int:
 
 
 def state_of(k: dict, now: float) -> str:
+    """A model is one candidate's result: nothing to review later, so never due (its general ideas carry the schedule)."""
     if not k.get("n"):
         return "untested"
-    if k.get("due") and k["due"] <= now:
+    if k.get("due") and k["due"] <= now and k.get("kind") != "model":
         return "due"
     return "known" if (k.get("mastery") or 0) >= 0.7 else "shaky"
 
@@ -553,9 +562,17 @@ def blend(p, prof: dict, viewer: str, aliases: set | None = None) -> dict:
         return prof
 
 
-def view(p, viewer: str, now: float | None = None, others: bool = True) -> dict:
+def view(p, viewer: str, now: float | None = None, others: bool = True, guest: bool = False) -> dict:
+    """What the Memory page shows. A share-link guest sees only a guest person's memory, and only of this project:
+    the share names one project, and a person of this machine is not theirs to read."""
     now = now or time.time()
     key = projects.key_for(p.root) or ""
+    if guest:
+        from . import people
+        cur = _roster().get(viewer)
+        if not people.ID.fullmatch(str(viewer or "")) or (cur and not cur.get("remote")):
+            viewer = ""
+        others = False
     if key:
         sync(key, p.root)
     if others:
@@ -567,17 +584,20 @@ def view(p, viewer: str, now: float | None = None, others: bool = True) -> dict:
                     pass
     who = person(viewer)
     if not who:
-        return dict(person=None, now=now, project=key, concepts=[], due=[], methods={}, changed=[], timeline=[], people=people_known())
-    ks = knowledge(who, now)
+        return dict(person=None, now=now, project=key, concepts=[], due=[], methods={}, changed=[], timeline=[])
+    ks, ch, tl = knowledge(who, now), changed(who, now - 7 * DAY), timeline(who, now - 30 * DAY)
+    if guest:
+        ks = [k for k in ks if k["project"] in ("", key)]
+        ch = [c for c in ch if _title(c["concept"])[0] in ("", key)]
+        tl = [e for e in tl if e["project"] == key]
     return dict(person=who, name=(_roster().get(who) or {}).get("name") or who, now=now, project=key, concepts=ks,
                 due=[k["id"] for k in sorted((k for k in ks if k["state"] == "due"), key=lambda k: k["due"])],
-                methods=methods(who), changed=changed(who, now - 7 * DAY), timeline=timeline(who, now - 30 * DAY),
-                people=people_known())
+                methods=methods(who, project=key if guest else None), changed=ch, timeline=tl)
 
 
 @features.get("/api/memory")
 def _get(p, path, q):
-    return 200, view(p, str(q.get("viewer") or ""), others=q.get("others") != "0")
+    return 200, view(p, str(q.get("viewer") or ""), others=q.get("others") != "0", guest=bool(getattr(features.REQUEST, "remote", False)))
 
 
 # ---------------------------------------------------------------- live writes
@@ -657,19 +677,21 @@ def cmd_memory(a):
         ds = due(who, now)
         print(f"{name}: {len(ds)} due")
         for k in ds:
-            print(f"  {k['title'] or k['id']:<34} {k['project'] or 'all projects':<28} due {_when(k['due'], now)}")
+            print(f"  {(k['title'] or k['id'])[:34]:<34} {(k['project'] or 'all projects')[:28]:<28} due {_when(k['due'], now)}")
         return
     if a.what == "changed":
         from .learn import _since
         since = _since(a.since or "1w")
         for r in changed(who, since):
-            print(f"  {r['concept']:<50} {r['n']:>3} events, {r['hits']} of {r['graded']} right, {_when(r['t'], now)}")
+            proj, _, title, _ = _title(r["concept"])
+            res = f"{r['hits']} of {r['graded']} right" if r["graded"] else f"seen {r['n']}x"
+            print(f"  {title[:34]:<34} {(proj or 'all projects')[:28]:<28} {res}, {_when(r['t'], now)}")
         return
     ks = knowledge(who, now)
     print(f"{name} ({who}): {len(ks)} concepts, {sum(k['state'] == 'due' for k in ks)} due")
     for k in ks:
-        print(f"  {_bar(k['strength'])} {k['state']:<8} {(k['title'] or k['id'])[:34]:<34} {k['project'] or 'all':<24}"
-              f" {k['hits']} of {k['n']} right" + (f", due {_when(k['due'], now)}" if k.get("due") else ""))
+        print(f"  {_bar(k['strength'])} {k['state']:<8} {(k['title'] or k['id'])[:34]:<34} {(k['project'] or 'all')[:24]:<24}"
+              f" {k['hits']} of {k['n']} right" + (f", due {_when(k['due'], now)}" if k.get("due") and k["kind"] != "model" else ""))
     ms = methods(who)
     if ms:
         print("  methods: " + ", ".join(f"{m} {s['hits']}/{s['n']}" + (f" ({s['skips']} skipped)" if s["skips"] else "") for m, s in ms.items()))
