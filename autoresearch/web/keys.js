@@ -25,7 +25,7 @@ const NAMES={r:'Start',o:'Overview',b:'Brief',c:'101',w:'Workbench',t:'Goals',q:
 // a view's items: rows, cards, tiles, comment cards; plus (below) any block-sized link in the view
 const ITEMS=['tr.click','#main tbody tr:has(a[href])','article.wb-job','a.wb-chip','.q-row','a.ov-goal','a.ov-task',
  'a.sx-g','a.sx-need','a.sx-job','a.sx-tile','a.sx-pg','a.sx-champ','a.sx-brief','a.gm-node','section.gl-card',
- 'article.hcard','.lrn section.stage','.lrn aside.lside>section.card','.concepts>button.concept','#main details>summary','[data-item]','#col .card'].join(',');
+ 'article.hcard','.lrn section.stage','.lrn aside.lside>section.card','#main details>summary','[data-item]','#col .card'].join(',');
 const CLICKABLE='a[href],button,[role=button],[role=tab],[role=menuitem],[role=switch],[role=checkbox],[role=radio],[role=option],summary,input:not([type=hidden]),select,textarea,tr.click,[onclick],[data-qgo],.cm-pin,'+ITEMS;
 // keys no action may take: fixed ones and the views' own (the Brief's); the paper's tools keep B A D H P
 const FIXED=new Set(['Escape','Enter','Backspace','Tab','g',' ','[',']','+','-','=','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','1','2','3','4','5','6','7','8','9','0']);
