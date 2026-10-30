@@ -23,7 +23,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from . import features
-from .core import goal_evidence_status, latest_shared, per_id, same_contract
+from .core import goal_evidence_status, latest_shared, per_id, pool_errors, same_contract
 from .readable import readable
 
 WEB = Path(__file__).with_name("web")
@@ -81,7 +81,10 @@ class _Index:
         self.p = p
         self.slices = p.slices()
         self.runs: dict[tuple, list] = {}
-        for t in p.evals():
+        evals = p.evals()
+        for name, sl in self.slices.items():  # slices frozen before `scale` existed: inferred as core does
+            sl["scale"] = p.slice_scale(name, evals)
+        for t in evals:
             sl = self.slices.get(t.get("slice"))
             if not sl or t.get("slice_hash") != sl.get("hash") or t.get("superseded_by"):
                 continue
@@ -210,6 +213,8 @@ def _ladder(p, ix, model, base, sign):
             for sl in targets:
                 thr = chk.get("margin", 0) if chk["rule"] == "better" else -chk.get("tolerance", 0)
                 c = dict(slice=sl, rule=chk["rule"], threshold=thr, ref=chk["slice"], **_scale_of(ix, sl))
+                if c.get("scale") == "continuous":  # a fraction of the comparator's mean until a pairing gives units
+                    c |= dict(relative=True, threshold_fraction=thr)
                 if not base:
                     c["state"] = "no_comparator"
                 elif not ix.has(base, sl):
@@ -218,9 +223,9 @@ def _ladder(p, ix, model, base, sign):
                     c["state"] = "need_run"
                 else:
                     d = _paired(ix, model, base, sl, sign)
-                    if d and d.get("base") is not None and p.is_continuous(sl):
+                    if d and d.get("base") is not None and c.get("relative"):
                         thr *= abs(d["base"])  # as core.gate: a fraction of the champion's mean on a continuous slice
-                        c |= dict(threshold=thr, relative=True)
+                        c["threshold"] = thr
                     ok = d and (d["delta"] > thr if chk["rule"] == "better" else d["delta"] >= thr)
                     c |= dict(state="pass" if ok else "fail", **(d or {}))
                 checks.append(c)
@@ -342,14 +347,17 @@ def _goal_status(p, ix, name, g, champ):
     vs = None
     if kpi == "score" and model and g.get("baseline") and g["baseline"] != model and ix.has(g["baseline"], sl):
         mine, theirs = latest_shared(ix.runs.get((model, sl), []), ix.runs[(g["baseline"], sl)])
-        key = (str(ix.p.root), sl, sign, "goal", tuple(t["id"] for t in mine), tuple(t["id"] for t in theirs))
+        key = (str(ix.p.root), sl, sign, "goal", (ix.slices.get(sl) or {}).get("scale"), tuple(t["id"] for t in mine), tuple(t["id"] for t in theirs))
         if key not in _PAIRS:
-            _PAIRS[key] = fast_paired(per_id([r for t in mine for r in ix.rows(t["id"])]),
-                                      per_id([r for t in theirs for r in ix.rows(t["id"])]), sign)
+            cont = (ix.slices.get(sl) or {}).get("scale") == "continuous"
+            _PAIRS[key] = fast_paired(per_id([r for t in mine for r in ix.rows(t["id"])], cont),
+                                      per_id([r for t in theirs for r in ix.rows(t["id"])], cont), sign)
         vs = dict(_PAIRS[key])
     slr = ix.slices.get(sl) or {}
     cur = slr.get("hash")
-    status = dict(g, name=name, model=model, value=value, task=ev["id"] if ev else None,
+    errs = pool_errors([r for t in ix.compatible(model, sl) for r in ix.rows(t["id"])]) if model and ev else \
+        dict(pooled_rows=0, pooled_errors=0, error_share=None)
+    status = dict(g, name=name, model=model, value=value, task=ev["id"] if ev else None, **errs, errors=errs["pooled_errors"],
                 runs=len(ix.compatible(model, sl)) if model else 0,
                 met=value is not None and sign * (value - g["target"]) >= 0,
                 gap=None if value is None else sign * (g["target"] - value), vs_baseline=vs,

@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import parse_qsl, quote, unquote, urlencode, urlsplit
 
 from . import features, papers, people, projects, share
-from .core import Project, _read, contract_of, paired, per_id, same_contract, summarize
+from .core import ERROR_SHARE_WARN, Project, _read, contract_of, paired, per_id, pool_errors, same_contract, summarize
 from .readable import names, readable
 
 WEB = Path(__file__).with_name("web")
@@ -207,24 +207,28 @@ def _state(p: Project) -> dict:
     slices = {k: {kk: vv for kk, vv in v.items() if kk != "ids"} | {"name": k} for k, v in p.slices().items()}
     models, tasks = p.models(), p.tasks()
     champ = p.champion()
-    board, newest = {}, {}
-    for sl, model in {(t["slice"], t["model"]) for t in p.evals()}:
+    evals = p.evals()
+    for name, sl in slices.items():  # slices frozen before `scale` existed: read it off the scores, as core does
+        sl["scale"] = p.slice_scale(name, evals)
+    board = {}
+    for sl, model in {(t["slice"], t["model"]) for t in evals}:
         runs = p.score_runs(model, sl)
         if not runs:
             continue
         latest = runs[-1]
         scores = p.pooled_scores(model, sl)
-        summary = summarize([r for t in runs for r in p.rows(t["id"])], p.is_continuous(sl))
+        rows = [r for t in runs for r in p.rows(t["id"])]
+        summary = summarize(rows, (slices.get(sl) or {}).get("scale") == "continuous") | pool_errors(rows)
         summary.update(n=len(scores), score=sum(scores.values()) / len(scores) if scores else None)
         board.setdefault(sl, {})[model] = dict(task=latest["id"], ended=latest["ended"], runs=len(runs),
                                               baseline_contract=contract_of(latest), **summary)
-        if latest["ended"] > newest.get(sl, (0, 0))[0]:
-            newest[sl] = (latest["ended"], latest["id"])
-    for name, sl in slices.items():  # slices frozen before `scale` existed: read it off the scores
-        if not sl.get("scale") and name in newest:
-            vals = {r.get("score") for r in p.rows(newest[name][1]) if not r.get("error")}
-            sl["scale"] = "binary" if vals <= {0, 1} else "continuous"
     fp = _fp(p)
+    # each row's paired delta vs the champion under the row's own harness (as the gate pairs it), so lists that
+    # compare latest runs can show a delta where a matched pool exists instead of "Different harness"
+    vs = _memo("versus", p, fp, lambda: {sl: {m: p.versus_champion(m, sl) for m in ms} for sl, ms in board.items()})
+    for sl, ms in board.items():
+        for m, e in ms.items():
+            e["vs_champion"] = (vs.get(sl) or {}).get(m)
     gates = _memo("gates", p, fp, lambda: _gates(p, models))
     gl = _memo("goals", p, fp, lambda: goals(p))
     infer_parents(tasks)
@@ -232,7 +236,7 @@ def _state(p: Project) -> dict:
     gates = running_next(gates, tasks, p.slices())
     win = window(tasks, {g["task"] for g in gl.values() if g.get("task")})
     keep = names(p)
-    return dict(config=p.config, now=time.time(), champion=champ, datasets=p.datasets(), slices=slices,
+    return dict(config=p.config, now=time.time(), champion=champ, error_share_warn=ERROR_SHARE_WARN, datasets=p.datasets(), slices=slices,
                 hills=p.hills(), models={k: _model_row(m) for k, m in models.items()}, papers=papers.papers(p, with_health=True), gates=gates,
                 tasks=[_enrich(p, t, keep) for t in win], tasks_total=len(tasks), tasks_rev=_rev(tasks), leaderboard=board,
                 goals=gl,
@@ -389,7 +393,8 @@ def project_list(default: Project) -> list[dict]:
 
 
 _CHECK = ("slice", "rule", "state", "threshold", "noisy", "n", "delta", "lo", "hi", "wins", "losses", "cand", "base",
-          "cand_runs", "base_runs", "cand_task", "base_task", "baseline_contract", "relative", "harness_mismatch",
+          "cand_runs", "base_runs", "cand_errors", "base_errors", "cand_rows", "base_rows",
+          "cand_error_share", "base_error_share", "error_warn", "cand_task", "base_task", "baseline_contract", "relative", "threshold_fraction", "harness_mismatch",
           "champion_runs_other_harness")
 
 

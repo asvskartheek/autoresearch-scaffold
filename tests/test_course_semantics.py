@@ -19,6 +19,7 @@ class CapturedProject:
     def champion(self): return self.data['champion']
     def hills(self): return self.data['hills']
     def evals(self): return []
+    def slice_scale(self, sl, tasks=None): return (self.slices().get(sl) or {}).get('scale') or 'binary'
 
 
 class CourseSemantics(unittest.TestCase):

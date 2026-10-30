@@ -50,7 +50,7 @@ def cmd_init(a):
     # Step 0: the dashboard is up and setup itself is a visible task before any other work happens.
     from .projects import register
     register(root)
-    url = _up(root, a.port) if not a.no_serve else None
+    url = _project_url(root, _up(root, a.port)) + "/" if not a.no_serve else None
     os.chdir(root)
     t = Task(Project(root), "setup", "Project setup", "Environment, model and dataset preparation. Note each step; finish when the first eval can run.")
     t.note("arx init")
@@ -65,9 +65,18 @@ def _port_open(port: int) -> bool:
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
+def _project_url(root: Path, base: str) -> str:
+    """This project's URL on a dashboard at `base`: always /p/<key>, since one server serves every registered project
+    and its bare root shows whichever project started it. The bare base only for an unregistered project."""
+    from . import projects
+    key = projects.key_for(root)
+    return f"{base}/p/{key}" if key else base
+
+
 def _served(p: Project) -> str | None:
-    """The base URL that serves this project, or None. Its own server.json first; else any running dashboard of
-    another registered project, since one server lists every registered project at /p/<key>/."""
+    """This project's URL on a running dashboard (http://127.0.0.1:<port>/p/<key>), or None. Its own server.json
+    first; else any running dashboard of another registered project, since one server lists every registered project
+    at /p/<key>/."""
     from . import projects
     import urllib.request
     own = p.dir / "server.json"
@@ -76,7 +85,7 @@ def _served(p: Project) -> str | None:
     except (ValueError, TypeError):
         port = 0
     if port and _port_open(port):
-        return f"http://127.0.0.1:{port}"
+        return _project_url(p.root, f"http://127.0.0.1:{port}")
     key = projects.key_for(p.root)
     if not key:
         return None
@@ -143,7 +152,7 @@ def cmd_up(a):
     key = register(root)
     url = _up(root, a.port, a.restart)
     from .answer import spawn; spawn(root)  # agents answer comments and inbox items
-    print(f"{url}\n{url}/p/{key}/  (this project; every registered project is listed in the sidebar)")
+    print(f"{url}/p/{key}/  (this project; every registered project is listed in the sidebar)")
 
 
 def cmd_projects(a):
@@ -166,7 +175,7 @@ def cmd_sync(a):
         raise SystemExit("this is the vendored copy itself; run the installed `arx sync`")
     shutil.rmtree(dst, ignore_errors=True)
     shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__"))
-    print(f"vendored copy updated from {src}\n{_up(root, 8890, restart=True)}")
+    print(f"vendored copy updated from {src}\n{_project_url(root, _up(root, 8890, restart=True))}/")
 
 
 def cmd_dataset(a):
@@ -285,6 +294,9 @@ def cmd_goal(a):
               f"  {st['model'] or 'no champion'}: {_kpi_fmt(st, st['value'])} vs {op} {tgt}"
               f"{'  MET' if st['met'] else '  not met' if st['value'] is not None else ''}"
               + (f"  Δ vs {st['baseline']} {_goal_delta(st, vs)} n={vs['n']}" if vs and vs['delta'] is not None else ""))
+        warn = _error_warning(st["model"], st.get("pooled_errors"), st.get("pooled_rows"))
+        if warn:
+            print(f"  {warn}")
         for h, s in st["hills"].items():
             print(f"  hill {h} [{s}]")
 
@@ -301,8 +313,27 @@ def cmd_reject(a):
     Project().set_model_status(a.name, "rejected", a.reason)
 
 
+def _error_warning(model, errors, rows) -> str | None:
+    """A warning line when a pooled side is mostly errors: they still score 0, so the number is not the model's."""
+    from .core import ERROR_SHARE_WARN
+    if not rows or not errors or errors / rows < ERROR_SHARE_WARN:
+        return None
+    return (f"warning: {errors:,} of {rows:,} pooled rows of {model} are errors ({100 * errors / rows:.0f}%); "
+            f"the pooled score mostly measures the harness failing")
+
+
+def _bar(p, c) -> str:
+    """The rule's bar: signed in the slice's units once paired; before a pairing on a continuous slice, a share of
+    the champion's mean (the units come from the champion's runs)."""
+    from .learn import bar_amount, sd
+    if c.get("relative") and c.get("delta") is None:
+        thr = c.get("threshold_fraction", c.get("threshold")) or 0
+        return ("by " if c["rule"] == "better" else "within ") + bar_amount(p, c) if thr else ""
+    return sd(p, c["slice"], c["threshold"])
+
+
 def cmd_gate(a):
-    from .learn import sd, _neg
+    from .learn import sd, sv, _neg
     p = Project()
     g = p.gate(a.model)
     if a.json:
@@ -312,6 +343,11 @@ def cmd_gate(a):
         print(f"  {r['rung']:<10} {r['status'].upper()}")
         for c in r["checks"]:
             sl, extra = c["slice"], ""
+            if c["state"] == "champion":  # never paired with itself: no bar, no delta
+                n = c.get("champion_runs") or 0
+                extra = "no run" if not n else f"{sv(p, sl, c.get('champion_score'))}" + (f" ({n} runs pooled)" if n > 1 else "")
+                print(f"      {c['state']:<14} {sl:<28} {extra}".rstrip())
+                continue
             if c["state"] == "rejected" and c.get("reason"):
                 extra = c["reason"]
             elif c.get("harness_mismatch"):
@@ -322,8 +358,12 @@ def cmd_gate(a):
                 runs = f" runs {c['cand_runs']}/{c['base_runs']}" if c.get("cand_runs", 1) > 1 or c.get("base_runs", 1) > 1 else ""
                 extra = (f"Δ {sd(p, sl, c['delta'])} [{sd(p, sl, lo)}, {sd(p, sl, hi)}] n={c['n']}{runs} "
                          f"W/L {c['wins']}/{c['losses']}{' noisy' if c.get('noisy') else ''}")
-            bar = "" if c["rule"] in ("recorded", "manual") else sd(p, sl, c["threshold"]) if sl in p.slices() else _fmt(c["threshold"])
+            bar = ("" if c["rule"] in ("recorded", "manual") else _bar(p, c) if sl in p.slices() else _fmt(c["threshold"]))
             print(f"      {c['state']:<14} {sl:<28} {c['rule']} {bar}  {extra}".rstrip())
+            for side, who in (("cand", a.model), ("base", g["champion"])):
+                warn = _error_warning(who, c.get(f"{side}_errors"), c.get(f"{side}_rows"))
+                if warn:
+                    print(f"        {warn}")
     if g["next"]:
         print("next runs:")
         for n in g["next"]:
@@ -412,7 +452,7 @@ def cmd_status(a):
             print(f"  candidate {name}: " + " → ".join(f"{r['rung']}:{r['status']}" for r in g["rungs"]))
     for name in p.goals():
         st = p.goal_status(name)
-        print(f"  goal {name} [{st['status']}] {_kpi_fmt(st, st['value'])} / {_kpi_fmt(st, st['target'])} on {st['slice']}")
+        print(f"  goal {name} [{st['status']}] {_kpi_fmt(st, st['value'])} / {_kpi_fmt(st, st['target'], target=True)} on {st['slice']}")
     for name, h in p.hills().items():
         print(f"  hill {name} [{h['status']}] {h['title']}" + (f" (goal {h['goal']})" if h.get("goal") else ""))
 
@@ -431,7 +471,7 @@ def cmd_paper(a):
     p = Project()
     base = _served(p)
     if not base:  # no dashboard serves it: point at the command rather than a dead port
-        base = "http://127.0.0.1:8890"
+        base = _project_url(p.root, "http://127.0.0.1:8890")
         print("(this project's dashboard is not running: `arx up` prints where it is served)", file=sys.stderr)
     if a.verb in ("add", "edit"):  # edit = republish; open pages swap the new version in without reloading
         if not a.name or not a.file:
@@ -651,7 +691,7 @@ def main(argv=None):
 
     s = sp.add_parser("task", help="workbench tasks from a shell")
     s.add_argument("action", choices=["start", "log", "note", "link", "progress", "left", "finish"])
-    s.add_argument("id", nargs="?"); s.add_argument("values", nargs="*")
+    s.add_argument("id", nargs="?", help="the task id (start: the title)"); s.add_argument("values", nargs="*")
     s.add_argument("--kind", default="experiment"); s.add_argument("--title"); s.add_argument("--description")
     s.add_argument("--model"); s.add_argument("--slice"); s.add_argument("--agent"); s.add_argument("--total", type=int)
     s.add_argument("--parent", help="task id this one sits under (default $ARX_PARENT)")
@@ -690,8 +730,13 @@ def main(argv=None):
     s = sp.add_parser("serve", help="run the dashboard in the foreground (`arx up` runs it in the background)"); s.add_argument("--port", type=int, default=8890, help="dashboard port"); s.set_defaults(fn=cmd_serve)
 
     a = ap.parse_args(argv)
-    if a.cmd == "task" and a.action == "start" and not a.title:
-        ap.error("task start needs --title")
+    if a.cmd == "task" and a.action == "start":
+        if a.id and not a.title:  # arx task start "Download the weights": the title as a positional argument
+            a.title, a.id, a.values = " ".join([a.id, *a.values]), None, []
+        if a.id or a.values:
+            ap.error("task start takes the title once: arx task start \"title\" or --title \"title\"")
+        if not a.title:
+            ap.error("task start needs a title: arx task start \"title\" (or --title)")
     a.fn(a)
 
 

@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import time
 
@@ -150,17 +151,20 @@ def _dead(t: dict) -> bool:
 # stored negated (higher is better) and reads as the plain amount.
 
 def _slc(p: Project, sl: str) -> dict:
-    """The slice with `scale` filled in (read off the newest run's scores for slices frozen before it existed)."""
-    memo = p.__dict__.setdefault("_scales", {})
-    if sl not in memo:
-        s = dict(p.slices().get(sl) or {})
-        if not s.get("scale"):
-            ts = [t for t in p.evals() if t.get("slice") == sl and t.get("ended")]
-            t = max(ts, key=lambda t: _f(t.get("ended")), default=None)
-            vals = {r.get("score") for r in p.rows(t["id"]) if not r.get("error")} if t else set()
-            s["scale"] = "continuous" if vals and not vals <= {0, 1} else "binary"
-        memo[sl] = s
-    return memo[sl]
+    """The slice with `scale` filled in (read off the newest run's scores for slices frozen before it existed). The
+    fields are kept per version of slices.json, and the scale is asked each time: the shared dashboard keeps one
+    Project per project for its whole life, so nothing here may outlive an edit."""
+    try:
+        st = os.stat(p.dir / "slices.json")
+        ver = (st.st_mtime_ns, st.st_size)
+    except (OSError, AttributeError, TypeError):
+        ver = None
+    memo = p.__dict__.get("_slice_fields")
+    if not memo or memo[0] != ver or ver is None:
+        memo = p.__dict__["_slice_fields"] = (ver, {})
+    if sl not in memo[1]:
+        memo[1][sl] = {k: v for k, v in (p.slices().get(sl) or {}).items() if k != "ids"}
+    return dict(memo[1][sl], scale=p.slice_scale(sl))
 
 
 def _cont(p: Project, sl: str) -> bool:
@@ -308,9 +312,18 @@ def _goal_ctx(g: dict, name: str) -> str:
     return t if t and not re.search(r"\d[\d,.]*\d|\d{2,}", t) else name
 
 
+def bar_amount(p: Project, c: dict) -> str:
+    """A gate check's margin / tolerance as an amount: in the slice's units once paired; on a continuous slice not
+    paired yet it is still a fraction of the champion's mean ("5% of the champion's mean"), never "0.05 tok/s"."""
+    if c.get("relative") and c.get("delta") is None:
+        f = abs(c.get("threshold_fraction", c.get("threshold")) or 0)
+        return f"{100 * f:.3g}% of the champion's mean"
+    return sd(p, c.get("slice"), abs(c.get("threshold") or 0)).lstrip("+−")  # a "minus" metric must not read negative
+
+
 def _rule_text(p: Project, c: dict) -> str:
     thr = abs(c.get("threshold") or 0)
-    amt = sd(p, c.get("slice"), thr).lstrip("+−")  # an amount: a "minus" metric must not make it read negative
+    amt = bar_amount(p, c)
     if c.get("rule") == "better":
         return "must be better" + (f" by {amt}" if thr else "")
     return f"may lose at most {amt}" if thr else "must not be worse"
