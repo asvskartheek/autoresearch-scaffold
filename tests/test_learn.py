@@ -75,7 +75,7 @@ class Brief(unittest.TestCase):
         run(self.p, "bad", [1] * 6 + [0] * 14, "ds/target")
         self.p.set_model_status("bad", "rejected", "Failedfrozenpairedgate")
         c = learn.card(self.p, "rej|bad")
-        self.assertTrue(c["why"].startswith("It fixed 0 and broke 6 of 20 on target"), c["why"])
+        self.assertTrue(c["why"].startswith("It fixed 0 and broke 6 of 20 on ds/target"), c["why"])
         self.assertNotIn("Failedfrozen", c["why"])
         self.assertTrue(c["viz"]["exact"])
         pooled = learn._ci_viz(dict(delta=-0.03, lo=-0.05, hi=0.0, wins=11, losses=13, n=185))
