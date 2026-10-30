@@ -26,6 +26,10 @@ class PaperContext(unittest.TestCase):
         papers.add(p, "h", src, hill="h")
         papers.add(p, "g", src, goal="g", title="Reach 90: draft")
 
+    def test_context_carries_what_the_header_needs_for_units(self):
+        g = papers.context(self.p, "g")["goal"]
+        self.assertEqual((g["higher_is_better"], g["metric"], g["scale"]), (True, None, "binary"))
+
     def test_title_falls_back_to_h1(self):
         self.assertEqual(papers.papers(self.p)["h"]["title"], "Units, explained & fixed")
         self.assertEqual(papers.papers(self.p)["g"]["title"], "Reach 90: draft")

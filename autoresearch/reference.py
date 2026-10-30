@@ -187,6 +187,12 @@ def _main_slice(p, ix, model, goals):
     return max(pool, key=lambda s: ix.slices[s].get("n") or 0) if pool else None
 
 
+def _scale_of(ix, sl) -> dict:
+    """A gate check's slice scale and unit, so the paper writes a continuous threshold in the slice's unit, not pts."""
+    m = ix.slices.get(sl) or {}
+    return dict(scale="continuous", unit=m.get("unit"), metric=m.get("metric")) if m.get("scale") == "continuous" else {}
+
+
 def _ladder(p, ix, model, base, sign):
     """The ladder walked for `model` against `base` (not only the current champion): how the model earned its place."""
     m = p.models().get(model) or {}
@@ -203,7 +209,7 @@ def _ladder(p, ix, model, base, sign):
                 targets = []
             for sl in targets:
                 thr = chk.get("margin", 0) if chk["rule"] == "better" else -chk.get("tolerance", 0)
-                c = dict(slice=sl, rule=chk["rule"], threshold=thr, ref=chk["slice"])
+                c = dict(slice=sl, rule=chk["rule"], threshold=thr, ref=chk["slice"], **_scale_of(ix, sl))
                 if not base:
                     c["state"] = "no_comparator"
                 elif not ix.has(base, sl):
@@ -266,6 +272,7 @@ def _promotion(p, ix, model):
                 c.setdefault("cand_runs", upto(model, c.get("slice")))
                 c.setdefault("base_runs", upto(old, c.get("slice")))
             c.setdefault("ref", c.get("slice"))
+            c = _scale_of(ix, c.get("slice")) | c
             checks.append({k: _r(v) for k, v in c.items()})
         rungs.append(dict(rung=rg.get("rung"), status=rg.get("status"), checks=checks))
     return dict(t=t, replaced=old, rungs=rungs)
@@ -601,7 +608,9 @@ def _build(p, model, vs):
     goal_list = []
     for g in goals.values():
         n = g.get("n")
-        need = math.ceil(g["target"] * n - 1e-9) if g.get("kpi", "score") == "score" and n and g.get("target") is not None else None
+        # answers of n only on a 0/1 slice: a continuous score (ms, MB) has no count to reach
+        need = (math.ceil(g["target"] * n - 1e-9) if g.get("kpi", "score") == "score" and g.get("scale") != "continuous"
+                and n and g.get("target") is not None else None)
         have = round(g["value"] * n) if need is not None and isinstance(g.get("value"), (int, float)) else None
         goal_list.append(dict(name=g["name"], title=_txt(g.get("title")), status=g.get("status"), slice=g.get("slice"),
                               n=n, kpi=g.get("kpi", "score"), target=g.get("target"), value=_r(g.get("value")),

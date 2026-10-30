@@ -1,7 +1,7 @@
 """`ar` command line: the same ledger operations agents use from Python, for shells and subagents."""
 from __future__ import annotations
 
-import argparse, json, math, os, shutil, socket, subprocess, sys, time
+import argparse, json, math, os, re, shutil, socket, subprocess, sys, time
 from pathlib import Path
 
 from .core import Project, Task, _jsonl
@@ -214,6 +214,26 @@ def cmd_hill(a):
 KPI_UNITS = dict(latency_p50="s", latency_p95="s", latency_mean="s", cost="$")
 
 
+def _minus(sl) -> bool:
+    return bool(re.match(r"\s*minus\b", str(sl.get("metric") or ""), re.I))
+
+
+def _goal_op(st) -> str:
+    """The comparator as read: a "minus ms" score stored as >= -1000 reads "<= 1000 ms"."""
+    neg = st.get("kpi", "score") == "score" and st.get("scale") == "continuous" and _minus(st)
+    return ">=" if bool(st.get("higher_is_better", True)) != neg else "<="
+
+
+def _goal_delta(st, vs) -> str:
+    """A paired delta vs the baseline: pts on a 0/1 slice, the slice's unit on a continuous one."""
+    if st.get("scale") != "continuous":
+        return f"{_fmt(vs['delta'])} pts [{_fmt(vs['lo'])}, {_fmt(vs['hi'])}]"
+    s, u = (-1 if _minus(st) else 1), (" " + st["unit"] if st.get("unit") else "")
+    lo, hi = sorted((s * vs["lo"], s * vs["hi"])) if vs.get("lo") is not None else (None, None)
+    f = lambda x: "—" if x is None else f"{x:+.4g}{u}"
+    return f"{f(s * vs['delta'])} [{f(lo)}, {f(hi)}]"
+
+
 def _kpi_fmt(g, v, target=False):
     """A goal value in units: solved/n on a 0/1 slice, seconds or dollars for latency and cost, the slice's own unit on
     a continuous one. A target count is the count that meets it: rounded up for >=, down for <=, never to a count that
@@ -222,11 +242,11 @@ def _kpi_fmt(g, v, target=False):
         return "—"
     kpi = g.get("kpi", "score")
     if kpi != "score":
-        u = KPI_UNITS.get(kpi)
-        return f"${v:.4g}" if u == "$" else f"{v:.3g} {u}" if u else f"{v:.4g}"
+        u = KPI_UNITS.get(kpi) or ("tok/s" if re.search(r"tokens?_per_s|throughput", kpi) else None)
+        return f"${v:.4g}" if u == "$" else f"{v:.4g} {u}" if u else f"{v:.4g}"
     sl = Project().slices().get(g.get("slice")) or {}
-    if sl.get("scale") == "continuous":
-        return f"{v:.4g} {sl.get('unit') or ''}".rstrip()
+    if sl.get("scale") == "continuous":  # a "minus ms" score reads as the plain amount, as on the dashboard
+        return f"{-v if _minus(sl) else v:.4g} {sl.get('unit') or ''}".rstrip()
     n = g.get("n") or sl.get("n")
     if not n:
         return f"{100 * v:.1f}%"
@@ -258,13 +278,13 @@ def cmd_goal(a):
             print(json.dumps(st, default=str))
             continue
         vs = st["vs_baseline"]
-        op = ">=" if st["higher_is_better"] else "<="
+        op = _goal_op(st)
         tgt = _kpi_fmt(st, st["target"], target=True)
         print(f"{name} [{st['status']}] {st['title']}\n"
               f"  target {st['kpi']} {op} {tgt} on {st['slice']} (n = {st['n']})\n"
               f"  {st['model'] or 'no champion'}: {_kpi_fmt(st, st['value'])} vs {op} {tgt}"
               f"{'  MET' if st['met'] else '  not met' if st['value'] is not None else ''}"
-              + (f"  Δ vs {st['baseline']} {_fmt(vs['delta'])} pts [{_fmt(vs['lo'])}, {_fmt(vs['hi'])}] n={vs['n']}" if vs and vs['delta'] is not None else ""))
+              + (f"  Δ vs {st['baseline']} {_goal_delta(st, vs)} n={vs['n']}" if vs and vs['delta'] is not None else ""))
         for h, s in st["hills"].items():
             print(f"  hill {h} [{s}]")
 
@@ -445,9 +465,9 @@ def cmd_paper(a):
         shutil.copy(TEMPLATE / "paper-goal-example.html", out)
         st = p.goal_status(a.goal)
         print(f"{out}\na worked example: one possible shape, not a template (PROTOCOL.md § Papers). From the ledger:\n"
-              f"  target  {st['kpi']} {_kpi_fmt(st, st['target'])} on {st['slice']}, n = {st['n']}\n"
+              f"  target  {st['kpi']} {_goal_op(st)} {_kpi_fmt(st, st['target'], target=True)} on {st['slice']}, n = {st['n']}\n"
               f"  now     {st['model']}: {_kpi_fmt(st, st['value'])} [{st['status']}]\n"
-              + (f"  vs {st['baseline']}: Δ {_fmt(st['vs_baseline']['delta'])} pts, 90% CI [{_fmt(st['vs_baseline']['lo'])}, {_fmt(st['vs_baseline']['hi'])}], n = {st['vs_baseline']['n']}\n" if st["vs_baseline"] else "")
+              + (f"  vs {st['baseline']}: Δ {_goal_delta(st, st['vs_baseline'])} (90% CI), n = {st['vs_baseline']['n']}\n" if st["vs_baseline"] and st["vs_baseline"].get("delta") is not None else "")
               + "".join(f"  internal: ../{h} (hill {h}, {s})\n" for h, s in st["hills"].items())
               + f"  arx paper check --goal {a.goal} --file {out}\n  arx paper add {a.goal} --goal {a.goal} --file {out}")
     elif a.verb == "new":  # a starter page: the worked example, to rewrite with this hill's content

@@ -1004,8 +1004,12 @@ async function loadContext() {
   if (g) {
     const tag = { open: ["warn", "Draft · goal open"], achieved: ["ok", "Goal achieved"], abandoned: ["bad", "Goal abandoned · negative result"], missing: ["", "Goal not in the ledger"] }[g.status] || ["", g.status];
     const bin = g.kpi === "score" && (g.scale || "binary") === "binary" && g.n;
-    const val = g.value == null ? "" : bin ? `${fmtN(Math.round(g.value * g.n))} of ${fmtN(g.n)}` : `${+Number(g.value).toPrecision(3)}${g.unit ? " " + g.unit : ""}`;
-    const tgt = g.target == null ? "" : bin ? `${fmtN(Math.ceil(g.target * g.n - 1e-9))} of ${fmtN(g.n)}` : `${g.target}${g.unit ? " " + g.unit : ""}`;
+    // anything else in its unit, as the goal page reads it: a "minus ms" score as the plain amount, latency in s
+    const neg = g.kpi === "score" && /^\s*minus\b/i.test(g.metric || ""), cmp = (g.higher_is_better !== false) !== neg ? "≥" : "≤";
+    const u = g.kpi === "score" ? g.unit || "" : /^latency/.test(g.kpi) ? "s" : /tokens?_per_s|throughput/i.test(g.kpi) ? "tok/s" : "";
+    const amt = x => { x = Number(neg ? -x : x); const s = Math.abs(x) >= 100 ? fmtN(Math.round(x)) : String(+x.toPrecision(3)); return g.kpi === "cost" ? "$" + s : s + (u ? " " + u : ""); };
+    const val = g.value == null ? "" : bin ? `${fmtN(Math.round(g.value * g.n))} of ${fmtN(g.n)}` : amt(g.value);
+    const tgt = g.target == null ? "" : bin ? `${fmtN(Math.ceil(g.target * g.n - 1e-9))} of ${fmtN(g.n)}` : `${cmp} ${amt(g.target)}`;
     const when = g.when ? new Date(g.when * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
     line = `<span class="tag ${tag[0]}">${esc(tag[1])}</span>` + (g.status === "abandoned"
       ? `<span class="why">${when ? esc(when) + (g.reason ? ": " : "") : ""}${esc(g.reason || "")}</span>`

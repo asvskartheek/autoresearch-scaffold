@@ -50,11 +50,13 @@ const ofP=g=>byN(g)?` of ${N(g.n)}`:'';
 const cmpSym=g=>sgn(g)*dsg(g)>0?'≥':'≤';
 // a signed change as shown (a drop in ms reads "−458 ms"), coloured by whether it helps the goal.
 // signedGood: d is already in the good direction (a paired delta); otherwise d is a raw change of the stored value
+// no change, still in the goal's unit ("0 ms", "0 s"); answers of n and pts stay a bare 0
+const zero=g=>`<span class="faint">${byN(g)||(isScore(g)&&!cont(g))?'0':kpiOf(g)==='cost'?money(0):withU('0',unitG(g))}</span>`;
 const gsigned=(g,x)=>(x>0?'+':x<0?'−':'')+gamt(g,x);
 const gchg=function(g,d,signedGood=true){
  if(d==null||!isFinite(d))return DASH;
  const good=signedGood?d:sgn(g)*d,x=dsg(g)*(signedGood?sgn(g)*d:d);
- if(Math.abs(d)<1e-12||(byN(g)&&!Math.round(Math.abs(d)*g.n)))return '<span class="faint">0</span>';
+ if(Math.abs(d)<1e-12||(byN(g)&&!Math.round(Math.abs(d)*g.n)))return zero(g);
  return `<span class="${good>0?'pos':'neg'}">${gsigned(g,x)}</span>`;
 }
 // a paired CI (good-direction bounds) in the same terms as gchg: "+50 to +88", "−1,200 to −300 ms"
@@ -80,7 +82,7 @@ const gained=function(g){
  const P=prog(g);if(P.b==null||g.value==null)return null;
  if(byN(g)){const d=cnt(g,g.value)-cnt(g,P.b);return {v:d?`<span class="${d>0?'pos':'neg'}">${d>0?'+':'−'}${N(Math.abs(d))}</span>`:'<span class="faint">0</span>',s:`from ${N(cnt(g,P.b))}`}}
  const good=sgn(g)*(g.value-P.b);
- if(Math.abs(good)<1e-12)return {v:'<span class="faint">0</span>',s:`from ${gv(g,P.b)}`};
+ if(Math.abs(good)<1e-12)return {v:zero(g),s:`from ${gv(g,P.b)}`};
  const timed=isTime(g)||/^(ms|s|sec|seconds?|min)$/i.test(unitG(g));
  const w=timed?(good>0?'faster':'slower'):kpiOf(g)==='cost'?(good>0?'cheaper':'dearer'):(good>0?'better':'worse');
  return {v:`<span class="${good>0?'pos':'neg'}">${gamt(g,good)} ${w}</span>`,s:`from ${gv(g,P.b)}`};
@@ -97,7 +99,7 @@ const baseVal=function(g){
  if(isScore(g))return null;  // a score is only compared paired (vs_baseline); an unmatched run never stands in
  const v=g.baseline&&(S.state.leaderboard[g.slice]||{})[g.baseline]?.[kpiKey(g)];return typeof v==='number'&&isFinite(v)?v:null;  // cost, latency: latest runs
 }
-const comparisonNote=g=>({same_model:'starting point: same model',different_harness:'no matching comparison under the current harness',missing_measurement:'champion measurement missing',missing_baseline:'baseline has no complete run on this slice',paired:'paired on identical examples',unpaired:'latest runs, unpaired'}[g.comparison_state]||(g.baseline===g.model?'starting point: same model':'no compatible paired comparison'));
+const comparisonNote=g=>g.status==='open'&&!g.model?'no champion yet':g.status==='open'&&g.value==null?'no run on this slice yet':({same_model:'starting point: same model',different_harness:'no matching comparison under the current harness',missing_measurement:'champion measurement missing',missing_baseline:'baseline has no complete run on this slice',paired:'paired on identical examples',unpaired:'latest runs, unpaired'}[g.comparison_state]||(g.baseline===g.model?'starting point: same model':'no compatible paired comparison'));
 // how far along the way from the baseline to the target the champion stands. rel: 0 at the baseline, 1 at the target.
 // abs: the baseline already met the target, or it has no run, so the track is drawn on the KPI's own scale.
 const prog=function(g){
@@ -163,7 +165,7 @@ const vsFig=function(g){
  const v=g.vs_baseline,P=prog(g);
  if(v&&v.delta!=null)return {v:gchg(g,v.delta),s:`${byN(g)?`of ${N(g.n)} · `:''}${gci(g,v.lo,v.hi)}`,wl:`better on ${v.wins}, worse on ${v.losses}`};
  if(g.value==null)return {v:DASH,s:'no run yet'};
- if(g.baseline&&g.model&&g.baseline===g.model)return {v:'<span class="faint">0</span>',s:'the champion is still the baseline'};
+ if(g.baseline&&g.model&&g.baseline===g.model)return {v:zero(g),s:'the champion is still the baseline'};
  if(P.b!=null&&g.value!=null)return {v:gchg(g,g.value-P.b,false),s:'latest runs, unpaired'};
  return {v:DASH,s:g.baseline?comparisonNote(g):'no baseline'};
 }
@@ -193,7 +195,7 @@ VIEWS.goals=()=>{
  if(linked||open.length>1)h+=goalMap(gs.filter(g=>g.status==='open'||kidsOf(g.name,gs).some(k=>k.status==='open')));
  if(open.length)h+=`<section class="gl-grp"><div class="gl-gh"><h2>Open</h2><span class="meta">${open.length}</span></div><div class="gl-cards">${open.map(card).join('')}</div></section>`;
  if(done.length)h+=`<section class="gl-grp"><div class="gl-gh"><h2>Achieved</h2><span class="meta">${done.length}</span></div><div class="gl-cards">${done.map(card).join('')}</div></section>`;
- if(gone.length)h+=`<section class="gl-grp"><div class="gl-gh"><h2>Abandoned</h2><span class="meta">${gone.length}</span></div>${panel('',table([['Goal'],['Why it was abandoned'],['Best','num'],['Target','num']],gone.map(g=>`<tr class="click" onclick="if(!event.target.closest('a,button'))location.hash='goal/${enc(g.name)}'"><td><div class="two"><a href="#goal/${enc(g.name)}"><b>${esc(g.title)}</b></a><span class="sub mono">${esc(short(g.slice))}</span></div></td><td class="gl-why">${g.reason?esc(g.reason):'<span class="dash">No reason recorded</span>'}</td><td class="num">${gu(g,g.value)}${ofP(g)}</td><td class="num">${cmpSym(g)}&nbsp;${gt(g)}${ofP(g)}</td></tr>`)),{cls:'gl-ab'})}</section>`;
+ if(gone.length)h+=`<section class="gl-grp"><div class="gl-gh"><h2>Abandoned</h2><span class="meta">${gone.length}</span></div>${panel('',table([['Goal'],['Why it was abandoned'],['Best','num'],['Target','num']],gone.map(g=>`<tr class="click" onclick="if(!event.target.closest('a,button'))location.hash='goal/${enc(g.name)}'"><td><div class="two"><a href="#goal/${enc(g.name)}"><b>${esc(g.title)}</b></a><span class="sub mono">${esc(g.slice)}</span></div></td><td class="gl-why">${g.reason?esc(g.reason):'<span class="dash">No reason recorded</span>'}</td><td class="num">${gu(g,g.value)}${ofP(g)}</td><td class="num">${cmpSym(g)}&nbsp;${gt(g)}${ofP(g)}</td></tr>`)),{cls:'gl-ab'})}</section>`;
  return h;
 };
 const card=function(g){

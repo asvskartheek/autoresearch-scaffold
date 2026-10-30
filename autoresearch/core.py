@@ -176,6 +176,13 @@ class Project:
 
     def datasets(self) -> dict: return self._coll("datasets")
     def slices(self) -> dict: return self._coll("slices")
+
+    def _slice_field(self, name: str, key: str):
+        """One field of one slice, read without copying every slice's id list (gates and goals ask per run)."""
+        try:
+            return ((_cached(self.dir / "slices.json", json.loads) or {}).get(name) or {}).get(key)
+        except (OSError, ValueError):
+            return None
     def hills(self) -> dict: return self._coll("hills")
     def models(self) -> dict: return self._coll("models")
     def goals(self) -> dict: return self._coll("goals")
