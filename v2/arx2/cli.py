@@ -167,7 +167,22 @@ def cmd_annotate(a):
 
 def cmd_pattern_add(a):
     p = P()
-    items = [i for i in a.items.split(",") if i]
+    s = p.state()
+    items = [i for i in (a.items or "").split(",") if i]
+    if a.items_file:
+        items += [l.strip() for l in open(a.items_file) if l.strip()]
+    items = list(dict.fromkeys(items))
+    if not items:
+        fail("a pattern needs the items it was seen on", fix=f"arx2 pattern add {a.key} ... --items 3,7,9 (or --items-file ids.txt)")
+    if a.count and a.count > len(items):
+        fail(f"--count {a.count} but only {len(items)} items listed; prevalence must be backed by ids",
+             fix=f"arx2 pattern add {a.key} ... --items-file ids.txt --set <set> (at least {a.count} ids), or drop --count")
+    if a.count:
+        frozen = s["sets"][a.set]["ids"] if a.set in s["sets"] else [i for st in s["sets"].values() for i in st["ids"]]
+        unknown = [i for i in items if i not in {str(x) for x in frozen}]
+        if unknown:
+            fail(f"{len(unknown)} listed items are in no frozen set{' ' + a.set if a.set else ''} (e.g. {unknown[0]})",
+                 fix="arx2 set add <key> ... --ids-file ids.txt, then list items from it")
     p.append("pattern", key=a.key, name=check_name(a.name, "pattern name"), cause=a.cause, items=items,
              count=a.count or len(items), of=a.of, of_what=a.of_what, set=a.set)
     emit(f"pattern: {a.key} ({len(items)} items)", help=[f"arx2 hill open <key> --pattern {a.key} --goal <goal> ..."])
@@ -580,7 +595,7 @@ def build() -> argparse.ArgumentParser:
 
     x = cmd("pattern", None, "group annotations"); psp = x.add_subparsers(dest="sub")
     y = psp.add_parser("add"); y.set_defaults(fn=cmd_pattern_add)
-    y.add_argument("key"); y.add_argument("--name", required=True); y.add_argument("--items", required=True)
+    y.add_argument("key"); y.add_argument("--name", required=True); y.add_argument("--items"); y.add_argument("--items-file")
     y.add_argument("--cause", required=True); y.add_argument("--count", type=int); y.add_argument("--of", type=int)
     y.add_argument("--of-what"); y.add_argument("--set")
 

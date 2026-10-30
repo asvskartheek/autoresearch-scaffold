@@ -76,16 +76,18 @@ def test_frozen_sets_refuse_edits(proj):
 def test_full_loop(proj):
     cli(proj, "goal", "open", "acc", "--name", "Accuracy 80", "--vague", "Get better at maths", "--set", "all", "--target", "0.8")
     cli(proj, "annotate", "3", "Answer in metres when cm were asked", "--set", "sym")
-    cli(proj, "pattern", "add", "units", "--name", "Unit Slips", "--items", "3", "--cause", "Converts units wrongly", "--count", "10", "--of", "40")
+    cli(proj, "pattern", "add", "units", "--name", "Unit Slips", "--items-file", "sym.txt", "--set", "sym", "--cause", "Converts units wrongly", "--count", "10", "--of", "40")
+    cli(proj, "cand", "add", "base", "--name", "Plain Prompt", "--change", "The starting prompt.")
+    cli(proj, "promote", "base", "--reason", "Seeded as the starting champion.")
+    evaluate("base", "sym", lambda i: {"score": float(int(i) % 2 == 0)}, project=Project(proj), workers=4)
     cli(proj, "hill", "open", "units", "--name", "Unit Slips", "--goal", "acc", "--pattern", "units", "--symptom", "Converts units wrongly",
         "--symptom-set", "sym", "--eval-sets", "hill", "--train-sets", "train", "--control", "ctl")
     ladder = [{"name": "Hill target", "set": "@hill.eval", "rule": "improve"}, {"name": "Hill control", "set": "@hill.control", "rule": "hold", "tol": 0.05},
               {"name": "Full set", "set": "all", "rule": "improve"}]
     (proj / "ladder.json").write_text(json.dumps(ladder))
     cli(proj, "ladder", "ladder.json")
-    cli(proj, "cand", "add", "base", "--name", "Plain Prompt", "--change", "The starting prompt.")
-    cli(proj, "promote", "base", "--reason", "Seeded as the starting champion.")
-    cli(proj, "cand", "add", "units-v1", "--name", "Unit Check", "--hill", "units", "--change", "Ask the model to restate units.", "--predict", "+20 pts on the hill target")
+    r = cli(proj, "cand", "add", "units-v1", "--name", "Unit Check", "--hill", "units", "--change", "Ask the model to restate units.", "--predict", "+20 pts on the hill target")
+    assert "warning" not in r.stdout
 
     p = Project(proj)
     for model, good in [("base", lambda i: int(i) % 2 == 0), ("units-v1", lambda i: int(i) % 2 == 0 or 10 <= int(i) < 40)]:
