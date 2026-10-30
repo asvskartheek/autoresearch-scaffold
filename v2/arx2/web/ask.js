@@ -232,6 +232,47 @@ async function sendAsk() {
   await loadState(); render(true);
 }
 
+// ---- @mentions: "@orchestrator ..." sends a directive to the agent running the research -------
+const MENTIONS = ["orchestrator"];
+const M = { ta: null, items: [], i: 0, at: 0 };
+const mentionBox = () => $("#mention") || document.body.appendChild(Object.assign(document.createElement("div"), { id: "mention", hidden: true }));
+function mentionClose() { M.ta = null; mentionBox().hidden = true; }
+function mentionInput(e) {
+  const ta = e.target;
+  if (!ta.matches?.("#askbox textarea, .askpop textarea.reply")) return;
+  const m = ta.value.slice(0, ta.selectionStart).match(/(^|\s)@(\w*)$/);
+  const items = m ? MENTIONS.filter((x) => x.startsWith(m[2].toLowerCase())) : [];
+  if (!items.length) return mentionClose();
+  Object.assign(M, { ta, items, i: 0, at: ta.selectionStart - m[2].length - 1 });
+  const box = mentionBox(), r = ta.getBoundingClientRect();
+  box.innerHTML = items.map((x, i) => `<div class="opt${i ? "" : " on"}" data-i="${i}">@${x}</div>`).join("");
+  box.style.left = `${r.left + scrollX}px`; box.style.top = `${r.bottom + scrollY + 2}px`;
+  box.hidden = false;
+}
+function mentionPick(i = M.i) {
+  const ta = M.ta, end = ta.selectionStart, word = `@${M.items[i]} `;
+  ta.value = ta.value.slice(0, M.at) + word + ta.value.slice(end).replace(/^\s/, "");
+  ta.selectionStart = ta.selectionEnd = M.at + word.length;
+  mentionClose(); ta.focus();
+}
+function mentionKey(e) {
+  if (!M.ta || e.target !== M.ta) return;
+  const n = M.items.length;
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") M.i = (M.i + (e.key === "ArrowDown" ? 1 : n - 1)) % n;
+  else if (e.key === "Tab" || e.key === "Enter") mentionPick();
+  else if (e.key === "Escape") mentionClose();
+  else return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  mentionBox().querySelectorAll(".opt").forEach((x, i) => x.classList.toggle("on", i === M.i));
+}
+document.addEventListener("input", mentionInput);
+document.addEventListener("keydown", mentionKey, true);
+document.addEventListener("mousedown", (e) => {
+  const o = e.target.closest?.("#mention .opt");
+  if (o) { e.preventDefault(); mentionPick(+o.dataset.i); } else if (!e.target.closest?.("#mention")) mentionClose();
+}, true);
+document.addEventListener("focusout", (e) => { if (e.target === M.ta) setTimeout(() => document.activeElement !== M.ta && mentionClose()); });
+
 // ---- answers, inline --------------------------------------------------------
 // "#/set/pid183/full" is the set "pid183/full": everything after the page name is one key.
 function linkHref(u) {
@@ -262,11 +303,13 @@ function partHTML(x) {
   return "";
 }
 // The whole conversation about one clicked thing: the person's turns as questions, the agent's as parts.
-const threadHTML = (a) => a.thread.map((x) => x.who === "person" ? `<p class="q">${esc(x.text)}</p>` : x.parts.map(partHTML).join("")).join("");
+// A directive ("@orchestrator ...") carries a pill on each of the person's turns.
+const ORCH = '<span class="pill orch">orchestrator</span> ';
+const threadHTML = (a) => a.thread.map((x) => x.who === "person" ? `<p class="q">${a.to ? ORCH : ""}${esc(x.text)}</p>` : x.parts.map(partHTML).join("")).join("");
 
 function waitWord(a) {
   if (a.status === "claimed") return '<p class="small live">Working…</p>';
-  return Date.now() / 1000 - a.created > 45 ? '<p class="small mute">No agent · <code>arx2 ask poll</code></p>' : '<p class="small mute">Waiting…</p>';
+  return Date.now() / 1000 - a.created > 45 ? `<p class="small mute">No agent · <code>arx2 ${a.to ? "orchestrator" : "ask"} poll</code></p>` : '<p class="small mute">Waiting…</p>';
 }
 
 function saveHTML(a) {
@@ -293,8 +336,9 @@ async function replyKey(e, key) {
   const text = e.target.value.trim();
   if (!text) return;
   e.target.value = "";
-  await fetch(`/api/p/${S.key}/reply`, { method: "POST", body: JSON.stringify({ ask: key, text }) });
+  const r = await fetch(`/api/p/${S.key}/reply`, { method: "POST", body: JSON.stringify({ ask: key, text }) }).then((x) => x.json());
   learn({ kind: "ask.reply", view: S.route.join("/") });
+  if (r.key) A.open = r.key;  // "@orchestrator ..." under a question opens a new directive pin
   await loadState(); render(true);
 }
 
@@ -309,9 +353,9 @@ function placePins() {
   const box = $("#pins");
   if (!box) return;
   const list = pageAsks();
-  const html = list.map((a, i) => `<button class="pin st-${a.status}" data-ask-pin="${a.key}" onclick="A.open=A.open==='${a.key}'?null:'${a.key}';A.saving=null;placePins()">${i + 1}</button>
+  const html = list.map((a, i) => `<button class="pin st-${a.status}${a.to ? " to" : ""}" data-ask-pin="${a.key}" onclick="A.open=A.open==='${a.key}'?null:'${a.key}';A.saving=null;placePins()">${i + 1}</button>
     ${A.open === a.key ? `<div class="askpop" data-pop="${a.key}">${threadHTML(a)}
-      ${a.status === "answered" ? saveHTML(a) + `<textarea class="reply" rows="2" placeholder="Ask more" onkeydown="replyKey(event,'${a.key}')"></textarea>` : waitWord(a)}</div>` : ""}`).join("");
+      ${a.status === "answered" ? (a.to ? "" : saveHTML(a)) + `<textarea class="reply" rows="2" placeholder="Ask more" onkeydown="replyKey(event,'${a.key}')"></textarea>` : waitWord(a)}</div>` : ""}`).join("");
   const top = $(".askpop", box)?.scrollTop || 0;
   if (html !== A.html) {
     const ta = $("textarea.reply", box), typed = ta?.value, focused = ta && document.activeElement === ta;

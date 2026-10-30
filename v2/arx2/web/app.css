@@ -166,3 +166,8 @@ hr.soft { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
 #theme { padding: 5px 9px; }
 #askpick { position: absolute; z-index: 32; padding: 3px 10px; font-size: 12px; font-weight: 600; background: var(--live); color: #fff; border-color: var(--live); box-shadow: 0 4px 14px rgba(0,0,0,.2); }
 .md.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+.pill.orch { background: var(--champ-soft); color: var(--champ); font-weight: 600; vertical-align: 1px; }
+.pin.to { border-radius: 4px 4px 4px 0; }
+#mention { position: absolute; z-index: 40; min-width: 140px; background: var(--sheet); border: 1px solid var(--line); border-radius: 6px; padding: 3px; box-shadow: 0 6px 20px rgba(0,0,0,.18); font-size: 13px; }
+#mention .opt { padding: 4px 8px; border-radius: 4px; cursor: pointer; color: var(--ink); }
+#mention .opt.on, #mention .opt:hover { background: var(--live-soft); color: var(--live); }
