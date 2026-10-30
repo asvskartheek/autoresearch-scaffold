@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import base64
 import html
+import os
 import re
 import secrets
 import time
 from pathlib import Path
+from urllib.parse import quote, unquote
 
 from .axi import clip
 from .store import LedgerError, Project, check_name, registry
@@ -140,7 +142,7 @@ def context(v: Views, a: dict) -> list[str]:
     return out
 
 
-def describe(p: Project, a: dict, base_url: str = "http://127.0.0.1:8790/") -> str:
+def describe(p: Project, a: dict, base_url: str = os.environ.get("ARX2_URL", "http://127.0.0.1:8790/")) -> str:
     v = Views(p)
     pk = project_key(p)
     lines = [f"ask: {a['key']}", f"question: {a['text']}", f"clicked: {a.get('what') or '-'}",
@@ -160,6 +162,7 @@ def _md_html(text: str) -> str:
         e = html.escape(b)
         e = re.sub(r"`([^`]+)`", r"<code>\1</code>", e)
         e = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", e)
+        e = re.sub(r"(^|[^*\w])\*([^*\s][^*]*)\*", r"\1<i>\2</i>", e)
         lines = e.split("\n")
         if all(re.match(r"[-*] ", l) for l in lines):
             out.append("<ul>" + "".join(f"<li>{l[2:]}</li>" for l in lines) + "</ul>")
@@ -194,7 +197,10 @@ def note_html(p: Project, a: dict, title: str) -> str:
                 body.append(f'<iframe sandbox="allow-scripts" srcdoc="{src}"></iframe>')
             elif x["type"] == "link":
                 url = x["url"]
-                if url.startswith("#/") and not url.startswith("#/p/"):
+                m = re.match(r"#/(set|hill|cand|goal|task|doc)/(.+)$", url)
+                if m:
+                    url = f"#/p/{pk}/{m[1]}/{quote(unquote(m[2]), safe='')}"
+                elif url.startswith("#/") and not url.startswith("#/p/"):
                     url = f"#/p/{pk}/{url[2:]}"
                 href = "/" + url if url.startswith("#") else url
                 body.append(f'<p><a target="_top" href="{html.escape(href)}">{html.escape(x["label"])} →</a></p>')
