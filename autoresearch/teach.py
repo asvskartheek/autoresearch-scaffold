@@ -432,6 +432,8 @@ def attach(p: Project, cards_full: list[dict], public_cards: list[dict], viewer:
     """Give each public card its method and task (the reveal waits for an answer), its step once revealed, and
     return the profile."""
     rows, prof = _person(p, viewer, aliases)
+    from . import memory
+    prof = memory.blend(p, prof, viewer, aliases)  # what worked for this person in other projects counts too
     rows_s = _settled(rows)
     done = {r["card"]: r for r in rows_s if not r.get("skip") and r.get("card") and _phase(r) == "answer"}
     selfed = {r.get("card") for r in rows if r.get("phase") == "self"}

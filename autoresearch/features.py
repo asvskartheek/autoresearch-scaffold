@@ -26,7 +26,7 @@ CLI: list = []
 PROMPTS: dict = {}
 REQUEST = threading.local()  # set by the server around a feature POST: .remote is True for a share-link guest
 
-MODULES = ("people", "share", "questions", "comments", "learn", "teach", "course", "reference", "intake", "vitals", "answer")
+MODULES = ("people", "share", "questions", "comments", "learn", "teach", "course", "reference", "intake", "vitals", "answer", "memory")
 
 
 def load() -> None:
