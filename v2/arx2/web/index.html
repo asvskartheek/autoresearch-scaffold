@@ -5,12 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Research Bridge</title>
 <link rel="stylesheet" href="/static/app.css">
+<script>try { const t = localStorage.getItem("arx2.theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}</script>
 </head>
 <body>
 <header id="top">
   <a class="brand" href="#/">arx</a>
   <nav id="crumbs"></nav>
   <div id="clock"></div>
+  <button id="theme" onclick="cycleTheme()"></button>
   <button id="askbtn" onclick="askToggle()" title="Ask about anything (A)">Ask</button>
 </header>
 <div id="replay" hidden></div>

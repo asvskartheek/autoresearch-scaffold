@@ -241,5 +241,17 @@ async function replayTo(t) {
   render(true);
 }
 
+// ---- theme: follow the system, or pin light or dark. Answer frames and saved notes follow it too. -----
+const THEMES = { auto: "◐", light: "☀", dark: "☾" };
+function theme() { return document.documentElement.dataset.theme || "auto"; }
+function showTheme() { const b = $("#theme"); if (b) { b.textContent = THEMES[theme()]; b.title = `Theme: ${theme()}`; } }
+function cycleTheme() {
+  const next = { auto: "light", light: "dark", dark: "auto" }[theme()];
+  if (next === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = next;
+  try { localStorage.setItem("arx2.theme", next); } catch (e) {}
+  showTheme();
+}
+addEventListener("DOMContentLoaded", showTheme);
+
 addEventListener("hashchange", route);
 addEventListener("DOMContentLoaded", route);

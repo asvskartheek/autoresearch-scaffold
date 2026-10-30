@@ -212,7 +212,8 @@ def test_dashboard_asks_and_saves_over_http(proj, monkeypatch):
         a = st["asks"][key]
         assert a["status"] == "answered" and a["what"] == "item square: 7"
         f = a["answers"][0]["parts"][1]["file"]
-        assert urllib.request.urlopen(f"{base}/answer/{f}").read() == b"<p>explorable</p>"
+        served = urllib.request.urlopen(f"{base}/answer/{f}").read()
+        assert served.endswith(b"<p>explorable</p>") and b"/static/app.css" in served  # follows the dashboard theme
         assert post("/save", {"ask": key, "as": "note", "name": "three words here"})["status"] == 400
         assert post("/save", {"ask": key, "as": "note", "name": "Square Seven"})["key"] == f"note-{key}"
         st = json.load(urllib.request.urlopen(base + "/state"))

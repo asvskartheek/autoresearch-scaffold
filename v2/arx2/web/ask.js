@@ -138,7 +138,7 @@ function partHTML(x) {
   if (x.type === "md" || x.type === "text") return `<div class="md">${mdHTML(x.body)}</div>`;
   if (x.type === "svg") return `<div class="fig">${cleanSVG(x.body)}</div>`;
   if (x.type === "png") return `<img class="fig" src="${fileURL(x.file)}" alt="">`;
-  if (x.type === "html") return `<iframe class="fig" sandbox="allow-scripts" src="${fileURL(x.file)}"></iframe>`;
+  if (x.type === "html") return `<iframe class="fig" sandbox="allow-scripts allow-same-origin" src="${fileURL(x.file)}"></iframe>`;
   if (x.type === "link") return `<p><a class="golink" href="${esc(linkHref(x.url))}">${esc(x.label)} →</a></p>`;
   return "";
 }

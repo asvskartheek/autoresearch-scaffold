@@ -15,6 +15,12 @@
     --fixed: #4cc0b0; --broke: #e39a4c; --both: #24423e; --neither: #3a3934; color-scheme: dark;
   }
 }
+:root[data-theme="dark"] {
+  --bg: #141412; --sheet: #1c1c1a; --ink: #ecebe6; --ink2: #c2c0b8; --mute: #8d8b84; --line: #2f2e2a; --soft: #24231f;
+  --champ: #4cc0b0; --champ-soft: #183a36; --pass: #4cc0b0; --fail: #77746c; --unclear: #d9b440;
+  --alarm: #ef6a5d; --alarm-soft: #3d1f1b; --live: #7a9bff; --live-soft: #1f2843;
+  --fixed: #4cc0b0; --broke: #e39a4c; --both: #24423e; --neither: #3a3934; color-scheme: dark;
+}
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--sans); }
 body { font-variant-numeric: tabular-nums; }
@@ -119,7 +125,7 @@ svg .lbl { fill: var(--ink); font-weight: 600; }
 .ok-banner { display: flex; gap: 12px; align-items: center; }
 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--champ); display: inline-block; }
 .dot.bad { background: var(--alarm); } .dot.live { background: var(--live); animation: pulse 1.2s infinite; }
-iframe.doc { width: 100%; height: calc(100vh - 160px); border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+iframe.doc { width: 100%; height: calc(100vh - 160px); border: 1px solid var(--line); border-radius: 10px; background: var(--sheet); }
 .hint { font-size: 12px; color: var(--mute); }
 .quiz { background: var(--live-soft); border-radius: 10px; padding: 14px 16px; }
 .quiz button { margin-right: 6px; }
@@ -143,7 +149,7 @@ body.asking #app, body.asking #app * { cursor: crosshair !important; }
 .md code, .q code, .askpop code { font: 12px var(--mono); background: var(--soft); padding: 1px 4px; border-radius: 4px; }
 .fig { display: block; margin: 8px 0; max-width: 100%; }
 .fig svg { max-width: 100%; height: auto; }
-iframe.fig { width: 100%; height: 300px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+iframe.fig { width: 100%; height: 300px; border: 1px solid var(--line); border-radius: 8px; background: var(--sheet); }
 .golink { font-weight: 600; color: var(--live); }
 hr.soft { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
 .askpop .row { margin-top: 10px; }
@@ -151,3 +157,4 @@ hr.soft { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
 .saved + .saved { border-top: 1px solid var(--soft); margin-top: 12px; padding-top: 12px; }
 .askpop textarea.reply { width: 100%; margin-top: 10px; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; resize: vertical; }
 .askpop .q + .q, .md + .q, .fig + .q, p + .q { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
+#theme { padding: 5px 9px; }

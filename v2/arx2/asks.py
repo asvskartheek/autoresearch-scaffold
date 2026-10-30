@@ -214,6 +214,21 @@ def clean_svg(svg: str) -> str:
     return re.sub(r"\son\w+\s*=\s*(\"[^\"]*\"|'[^']*')", "", svg)
 
 
+# Answer pages use the dashboard's colour tokens (var(--ink), var(--sheet), ...) and follow its theme: the pinned
+# choice when the page can read it, otherwise the theme of the frame it sits in.
+THEME_HEAD = ('<meta name="color-scheme" content="light dark"><link rel="stylesheet" href="/static/app.css">'
+              '<script>try{const t=localStorage.getItem("arx2.theme");if(t==="light"||t==="dark")'
+              'document.documentElement.dataset.theme=t}catch(e){}</script>'
+              '<style>html,body{background:var(--sheet)}body{margin:10px}</style>')
+
+
+def themed(page: str) -> str:
+    m = re.search(r"<head[^>]*>", page, re.I) or re.match(r"\s*<!doctype[^>]*>", page, re.I)
+    if m:
+        return page[:m.end()] + THEME_HEAD + page[m.end():]
+    return "<!doctype html>" + THEME_HEAD + page
+
+
 def note_html(p: Project, a: dict, title: str) -> str:
     """A self-contained page for the saved answer: images inlined, explorables in sandboxed frames."""
     pk = project_key(p) or ""
@@ -233,7 +248,7 @@ def note_html(p: Project, a: dict, title: str) -> str:
                 mime = {".jpg": "jpeg", ".jpeg": "jpeg", ".gif": "gif", ".webp": "webp"}.get(f.suffix, "png")
                 body.append(f'<figure><img src="data:image/{mime};base64,{base64.b64encode(f.read_bytes()).decode()}"></figure>')
             elif x["type"] == "html":
-                src = html.escape((p.dir / "answers" / x["file"]).read_text(), quote=True)
+                src = html.escape(themed((p.dir / "answers" / x["file"]).read_text()), quote=True)
                 body.append(f'<iframe sandbox="allow-scripts" srcdoc="{src}"></iframe>')
             elif x["type"] == "link":
                 url = x["url"]
@@ -244,12 +259,13 @@ def note_html(p: Project, a: dict, title: str) -> str:
                     url = f"#/p/{pk}/{url[2:]}"
                 href = "/" + url if url.startswith("#") else url
                 body.append(f'<p><a target="_top" href="{html.escape(href)}">{html.escape(x["label"])} →</a></p>')
-    return f"""<!doctype html><meta charset="utf-8"><title>{html.escape(title)}</title>
-<style>body{{font:15px/1.55 -apple-system,BlinkMacSystemFont,sans-serif;max-width:760px;margin:28px auto;padding:0 18px;color:#1c1c1a}}
-.q{{color:#4a4945;border-left:3px solid #e3e0d7;padding-left:12px}}.on{{color:#8a8880;font-size:12px}}
-figure{{margin:14px 0}}figure svg,figure img{{max-width:100%;height:auto}}iframe{{width:100%;height:360px;border:1px solid #e3e0d7;border-radius:8px}}
-code{{font:12px ui-monospace,Menlo,monospace;background:#efede6;padding:1px 4px;border-radius:4px}}</style>
-<h1>{html.escape(title)}</h1><p class="on">{html.escape(a.get('what') or '')}</p><p class="q">{html.escape(a['text'])}</p>
+    return f"""<!doctype html><meta charset="utf-8"><title>{html.escape(title)}</title>{THEME_HEAD}
+<style>body{{max-width:760px;margin:28px auto;padding:0 18px;font-size:15px;line-height:1.55}}
+.q{{color:var(--ink2);border-left:3px solid var(--line);padding-left:12px;font-weight:600}}
+figure{{margin:14px 0}}figure svg,figure img{{max-width:100%;height:auto}}a{{color:var(--live)}}
+iframe{{width:100%;height:360px;border:1px solid var(--line);border-radius:8px;background:var(--sheet)}}
+code{{font:12px var(--mono);background:var(--soft);padding:1px 4px;border-radius:4px}}</style>
+<h1>{html.escape(title)}</h1><p class="small mute">{html.escape(a.get('what') or '')}</p><p class="q">{html.escape(a['text'])}</p>
 {''.join(body)}"""
 
 

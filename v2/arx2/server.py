@@ -216,6 +216,8 @@ class H(BaseHTTPRequestHandler):
                     f = (p.dir / "answers" / rest[1]).resolve()
                     if f.parent != (p.dir / "answers").resolve() or not f.exists():
                         return self._send(404, {"error": "not found"})
+                    if f.suffix in (".html", ".htm"):
+                        return self._send(200, asks.themed(f.read_text()), "text/html; charset=utf-8")
                     return self._send(200, f.read_bytes(), mimetypes.guess_type(str(f))[0] or "text/plain")
                 if rest == ["events"]:
                     return self._stream(p)
