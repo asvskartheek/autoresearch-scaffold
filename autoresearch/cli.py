@@ -282,6 +282,7 @@ def cmd_reject(a):
 
 
 def cmd_gate(a):
+    from .learn import sd, _neg
     p = Project()
     g = p.gate(a.model)
     if a.json:
@@ -290,10 +291,19 @@ def cmd_gate(a):
     for r in g["rungs"]:
         print(f"  {r['rung']:<10} {r['status'].upper()}")
         for c in r["checks"]:
-            extra = ""
-            if c.get("delta") is not None:
-                extra = f"Δ {_fmt(c['delta'])} pts [{_fmt(c['lo'])}, {_fmt(c['hi'])}] n={c['n']} W/L {c['wins']}/{c['losses']}{' noisy' if c.get('noisy') else ''}"
-            print(f"      {c['state']:<14} {c['slice']:<28} {c['rule']} {_fmt(c['threshold'])}  {extra}")
+            sl, extra = c["slice"], ""
+            if c["state"] == "rejected" and c.get("reason"):
+                extra = c["reason"]
+            elif c.get("harness_mismatch"):
+                extra = (f"champion has {c['champion_runs_other_harness']} run(s) here, none under this model's harness "
+                         f"({str(c.get('baseline_contract'))[:12]}); it needs one")
+            elif c.get("delta") is not None:  # in the slice's units: pts on 0/1 slices, ms / MB / … on continuous ones
+                lo, hi = (c["hi"], c["lo"]) if p.is_continuous(sl) and _neg(p, sl) else (c["lo"], c["hi"])
+                runs = f" runs {c['cand_runs']}/{c['base_runs']}" if c.get("cand_runs", 1) > 1 or c.get("base_runs", 1) > 1 else ""
+                extra = (f"Δ {sd(p, sl, c['delta'])} [{sd(p, sl, lo)}, {sd(p, sl, hi)}] n={c['n']}{runs} "
+                         f"W/L {c['wins']}/{c['losses']}{' noisy' if c.get('noisy') else ''}")
+            bar = "" if c["rule"] in ("recorded", "manual") else sd(p, sl, c["threshold"]) if sl in p.slices() else _fmt(c["threshold"])
+            print(f"      {c['state']:<14} {sl:<28} {c['rule']} {bar}  {extra}".rstrip())
     if g["next"]:
         print("next runs:")
         for n in g["next"]:

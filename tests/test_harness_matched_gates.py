@@ -33,6 +33,21 @@ class HarnessMatchedGates(unittest.TestCase):
         self.runs=[t for t in self.runs if t['model']!='base'];c=self.p.gate('cand')['rungs'][0]['checks'][0]
         self.assertEqual(c['state'],'need_baseline');self.assertNotIn('harness_mismatch',c)
 
+    def test_cli_gate_names_the_mismatch_and_the_rejection_reason(self):
+        import io, os
+        from contextlib import redirect_stdout
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from autoresearch import cli
+        self.runs=self.runs[1:];out=io.StringIO()
+        with patch.object(cli,'Project',return_value=self.p),redirect_stdout(out):
+            cli.cmd_gate(SimpleNamespace(model='cand',json=False))
+        self.assertIn("none under this model's harness",out.getvalue())
+        self.p.set_model_status('cand','rejected','Failed the dev rung by 3 pts.');out=io.StringIO()
+        with patch.object(cli,'Project',return_value=self.p),redirect_stdout(out):
+            cli.cmd_gate(SimpleNamespace(model='cand',json=False))
+        self.assertIn('Failed the dev rung by 3 pts.',out.getvalue());self.assertNotIn('+0.0',out.getvalue())
+
     def test_candidate_repeats_from_other_contract_are_excluded(self):
         self.runs.insert(0, dict(self.runs[-1], id="other-cand", ended=0,
                                  config={"baseline_contract": "B"}))
