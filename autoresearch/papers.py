@@ -472,7 +472,8 @@ def context(p: Project, name: str) -> dict:
             try:
                 st = p.goal_status(meta["goal"])
                 info |= dict(model=st.get("model"), label=features.model_label(p, st.get("model")) if st.get("model") else None,
-                             value=st.get("value"), met=st.get("met"), scale=st.get("scale"), unit=st.get("unit"))
+                             value=st.get("value"), met=st.get("met"), scale=st.get("scale"), unit=st.get("unit"),
+                             metric=st.get("metric"), higher_is_better=st.get("higher_is_better", True))
             except SystemExit:
                 pass
             out["goal"] = info
