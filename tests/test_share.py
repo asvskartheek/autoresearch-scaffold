@@ -192,6 +192,11 @@ class Remote(unittest.TestCase):
         self.assertTrue(all(x["id"] == guest for x in mem["people"]))
         local = json.loads(self.req(base + f"course?viewer={owner}", host="127.0.0.1")[1])
         self.assertIn("goal", local["memory"])  # loopback still reads anyone's
+        from autoresearch import learn
+        learn.record(self.a, dict(viewer=owner, kind="active", doc="brief", ms=100))
+        snap = self.req(base + "export", cookie=self.tok)[1].decode()  # a guest's snapshot is no way around it
+        self.assertNotIn('"api/understanding"', snap)
+        self.assertIn('"api/understanding"', self.req(base + "export", host="127.0.0.1")[1].decode())
 
     def test_guest_cannot_rename(self):
         from autoresearch import people
