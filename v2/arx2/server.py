@@ -259,6 +259,9 @@ class H(BaseHTTPRequestHandler):
                 ev = asks.ask(project(parts[2]), body.get("text"), body.get("kind") or "project", body.get("key") or parts[2],
                               body.get("what"), route=body.get("route") or "", loc=body.get("loc") or "")
                 return self._send(200, {"key": ev["key"]})
+            if parts[:2] == ["api", "p"] and parts[3:] == ["reply"]:
+                ev = asks.reply(project(parts[2]), body.get("ask"), body.get("text"))
+                return self._send(200, {"key": ev["key"]})
             if parts[:2] == ["api", "p"] and parts[3:] == ["save"]:
                 ev = asks.save(project(parts[2]), body.get("ask"), body.get("as"), body.get("name") or "")
                 return self._send(200, {"key": ev["key"]})

@@ -38,11 +38,43 @@ def ask(p: Project, text: str, kind: str, key: str, what: str, route: str = "", 
                     what=(what or "")[:200], route=route, loc=loc)
 
 
-def next_open(s: dict, skip=(), now: float | None = None) -> dict | None:
+def reply(p: Project, key: str, text: str) -> dict:
+    """A follow-up in the same thread: the question opens again, with everything said so far."""
+    text = (text or "").strip()
+    if key not in p.state()["asks"]:
+        raise LedgerError(f"no question {key}", fix="arx2 ask list")
+    if not text:
+        raise LedgerError("the follow-up is empty", fix="type what you want to understand")
+    return p.append("ask.reply", actor="person", key=key, text=text[:2000])
+
+
+def latest(a: dict) -> str:
+    return next(x["text"] for x in reversed(a["thread"]) if x["who"] == "person")
+
+
+def _turn(x: dict) -> str:
+    if x["who"] == "person":
+        return f"person: {clip(x['text'], 300)}"
+    bits = [clip(y["body"], 400) if y["type"] in ("md", "text") else f"[{y['type']}: {y.get('label') or y.get('file') or 'inline'}]"
+            for y in x["parts"]]
+    return "agent: " + " ".join(bits).replace("\n", " ")
+
+
+def owner(a: dict) -> str | None:
+    """The agent that answered this thread last: its follow-ups go back to it, since it holds the context."""
+    return next((x.get("agent") for x in reversed(a["thread"]) if x["who"] == "agent"), None)
+
+
+def next_open(s: dict, skip=(), now: float | None = None, agent: str | None = None) -> dict | None:
     now = now or time.time()
-    waiting = [a for a in s["asks"].values() if a["key"] not in skip and
+
+    def mine(a):  # a follow-up waits for the agent that owns the thread, unless that agent has gone quiet
+        o = owner(a)
+        return not o or agent and (o == agent or o.startswith(agent + "/")) or now - s["agents"].get(o, 0) > CLAIM_S
+
+    waiting = [a for a in s["asks"].values() if a["key"] not in skip and mine(a) and
                (a["status"] == "open" or a["status"] == "claimed" and now - a.get("claimed", 0) > CLAIM_S)]
-    return min(waiting, key=lambda a: a["created"]) if waiting else None
+    return min(waiting, key=lambda a: (owner(a) != agent or not agent, a["created"])) if waiting else None
 
 
 def part_from_file(p: Project, ask_key: str, path: str, n: int) -> dict:
@@ -145,10 +177,14 @@ def context(v: Views, a: dict) -> list[str]:
 def describe(p: Project, a: dict, base_url: str = os.environ.get("ARX2_URL", "http://127.0.0.1:8790/")) -> str:
     v = Views(p)
     pk = project_key(p)
-    lines = [f"ask: {a['key']}", f"question: {a['text']}", f"clicked: {a.get('what') or '-'}",
-             f"entity: {a.get('kind')} {a.get('entity')}"]
+    turns = a["thread"]
+    lines = [f"ask: {a['key']}", f"question: {latest(a)}" + (" (follow-up)" if len(turns) > 1 else ""),
+             f"clicked: {a.get('what') or '-'}", f"entity: {a.get('kind')} {a.get('entity')}"]
     if pk:
         lines.append(f"page: {base_url}#/p/{pk}/{a.get('route') or ''}")
+    if len(turns) > 1:
+        lines.append(f"thread[{len(turns) - 1}] (earlier turns, oldest first):")
+        lines += ["  " + _turn(x) for x in turns[:-1]]
     lines.append("context:")
     lines += ["  " + x for x in context(v, a)]
     return "\n".join(lines)
@@ -182,8 +218,12 @@ def note_html(p: Project, a: dict, title: str) -> str:
     """A self-contained page for the saved answer: images inlined, explorables in sandboxed frames."""
     pk = project_key(p) or ""
     body = []
-    for ans in a["answers"]:
-        for x in ans["parts"]:
+    for i, turn in enumerate(a["thread"]):
+        if turn["who"] == "person":
+            if i:
+                body.append(f'<p class="q">{html.escape(turn["text"])}</p>')
+            continue
+        for x in turn["parts"]:
             if x["type"] in ("md", "text"):
                 body.append(_md_html(x["body"]))
             elif x["type"] == "svg":

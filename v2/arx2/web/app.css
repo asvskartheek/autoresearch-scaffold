@@ -149,3 +149,5 @@ hr.soft { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
 .askpop .row { margin-top: 10px; }
 .askpop input { font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
 .saved + .saved { border-top: 1px solid var(--soft); margin-top: 12px; padding-top: 12px; }
+.askpop textarea.reply { width: 100%; margin-top: 10px; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; resize: vertical; }
+.askpop .q + .q, .md + .q, .fig + .q, p + .q { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }

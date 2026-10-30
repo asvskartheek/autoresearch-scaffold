@@ -126,7 +126,7 @@ def empty_state() -> dict:
     return {
         "project": {}, "sets": {}, "goals": {}, "annotations": [], "patterns": {}, "hills": {},
         "ladders": {}, "candidates": {}, "champion": None, "champions": [], "tasks": {}, "runs": {},
-        "docs": {}, "cards": {}, "asks": {}, "log": [],
+        "docs": {}, "cards": {}, "asks": {}, "agents": {}, "log": [],
     }
 
 
@@ -209,16 +209,27 @@ def apply(s: dict, ev: dict) -> None:
         s["cards"][d["key"]] = d
         _saved(s, d, "card")
     elif ty == "ask":
-        s["asks"][d["key"]] = {"status": "open", **d, "created": t, "answers": [], "saved": []}
+        s["asks"][d["key"]] = {"status": "open", **d, "created": t, "answers": [], "saved": [],
+                               "thread": [{"who": "person", "t": t, "text": d["text"]}]}
+    elif ty == "ask.reply":
+        a = s["asks"].get(d["key"])
+        if a:
+            a["thread"].append({"who": "person", "t": t, "text": d["text"]})
+            a["status"] = "open"
     elif ty in ("ask.claim", "ask.release"):
+        if d.get("agent"):
+            s["agents"][d["agent"]] = t
         a = s["asks"].get(d["key"])
         if a and a["status"] != "answered":
             a["status"] = "claimed" if ty == "ask.claim" else "open"
             a["claimed"], a["agent"] = t, d.get("agent")
     elif ty == "answer":
+        if d.get("agent"):
+            s["agents"][d["agent"]] = t
         a = s["asks"].get(d["key"])
         if a:
             a["answers"].append({"t": t, "parts": d["parts"], "agent": d.get("agent")})
+            a["thread"].append({"who": "agent", "t": t, "parts": d["parts"], "agent": d.get("agent")})
             a["status"] = "answered"
     s["log"].append(ev)
 

@@ -142,7 +142,8 @@ function partHTML(x) {
   if (x.type === "link") return `<p><a class="golink" href="${esc(linkHref(x.url))}">${esc(x.label)} →</a></p>`;
   return "";
 }
-const answerHTML = (a) => a.answers.map((x) => x.parts.map(partHTML).join("")).join('<hr class="soft">');
+// The whole conversation about one clicked thing: the person's turns as questions, the agent's as parts.
+const threadHTML = (a) => a.thread.map((x) => x.who === "person" ? `<p class="q">${esc(x.text)}</p>` : x.parts.map(partHTML).join("")).join("");
 
 function waitWord(a) {
   if (a.status === "claimed") return '<p class="small live">An agent is working on it…</p>';
@@ -168,6 +169,17 @@ async function saveAs(key, as) {
   await loadState(); render(true);
 }
 
+async function replyKey(e, key) {
+  if (e.key !== "Enter" || e.shiftKey) return;
+  e.preventDefault();
+  const text = e.target.value.trim();
+  if (!text) return;
+  e.target.value = "";
+  await fetch(`/api/p/${S.key}/reply`, { method: "POST", body: JSON.stringify({ ask: key, text }) });
+  learn({ kind: "ask.reply", view: S.route.join("/") });
+  await loadState(); render(true);
+}
+
 // ---- pins: one per question on this page, re-placed after every render --------
 function pageAsks() {
   if (!S.key || !S.state?.asks || S.until) return [];
@@ -180,10 +192,16 @@ function placePins() {
   if (!box) return;
   const list = pageAsks();
   const html = list.map((a, i) => `<button class="pin st-${a.status}" data-ask-pin="${a.key}" onclick="A.open=A.open==='${a.key}'?null:'${a.key}';A.saving=null;placePins()">${i + 1}</button>
-    ${A.open === a.key ? `<div class="askpop" data-pop="${a.key}"><div class="small mute">${esc(a.what)}</div><p class="q">${esc(a.text)}</p>
-      ${a.answers.length ? answerHTML(a) + saveHTML(a) : waitWord(a)}</div>` : ""}`).join("");
+    ${A.open === a.key ? `<div class="askpop" data-pop="${a.key}"><div class="small mute">${esc(a.what)}</div>${threadHTML(a)}
+      ${a.status === "answered" ? saveHTML(a) + `<textarea class="reply" rows="2" placeholder="Ask more" onkeydown="replyKey(event,'${a.key}')"></textarea>` : waitWord(a)}</div>` : ""}`).join("");
   const top = $(".askpop", box)?.scrollTop || 0;
-  if (html !== A.html) { box.innerHTML = html; A.html = html; }
+  if (html !== A.html) {
+    const ta = $("textarea.reply", box), typed = ta?.value, focused = ta && document.activeElement === ta;
+    box.innerHTML = html; A.html = html;
+    const nt = $("textarea.reply", box);
+    if (nt && typed) nt.value = typed;
+    if (nt && focused) nt.focus();
+  }
   for (const a of list) {
     const el = findLoc(a.loc) || $("#app h1");
     const r = el?.getBoundingClientRect() || { right: 40, top: 80 };
@@ -209,7 +227,7 @@ function savedHere(key) {
   return `<div class="sheet section"><h2>Notes</h2>${docs.map(([k, d]) => {
     const a = st.asks[d.ask];
     return `<div class="saved"><div class="spread"><h3>${ent("doc", k)}</h3><span class="small mute">${esc(d.kind)} · ${ago(d.updated)}</span></div>
-      <p class="q">${esc(a.text)}</p>${answerHTML(a)}</div>`;
+      ${threadHTML(a)}</div>`;
   }).join("")}</div>`;
 }
 for (const [page, keyOf] of [["hill", (k) => k], ["cand", (k) => k], ["goal", (k) => k], ["set", (k) => k], ["task", (k) => k], ["map", () => S.key]]) {
