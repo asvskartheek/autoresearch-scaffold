@@ -380,6 +380,8 @@ def climbed(proj):
     cli(proj, "hill", "open", "units", "--name", "Unit Slips", "--goal", "acc", "--symptom", "Converts units wrongly",
         "--symptom-set", "sym", "--eval-sets", "hill", "--train-sets", "train", "--control", "ctl",
         "--no-evidence", "Paper tests need a hill, not its evidence.")
+    (proj / "ladder.json").write_text(json.dumps([{"name": "Full set", "set": "all", "rule": "improve"}]))
+    cli(proj, "ladder", "ladder.json")  # promote refuses a candidate that has not passed a ladder
     cli(proj, "cand", "add", "base", "--name", "Plain Prompt", "--change", "The starting prompt.")
     cli(proj, "promote", "base", "--reason", "Seeded.")
     cli(proj, "cand", "add", "v1", "--name", "Unit Check", "--hill", "units", "--change", "Restate units.")
@@ -465,3 +467,87 @@ def test_draft_papers_pass_only_when_titled_draft(proj):
     (proj / "d.html").write_text(cut.replace("Draft: ", "").replace("This is a draft", "This is early"))
     r = cli(proj, *args, "--draft", ok=False)
     assert r.returncode == 1 and "Draft in the <title>" in r.stdout
+
+
+# ---- arx2 verify ------------------------------------------------------------------
+
+def _climbed(proj, promote=True):
+    """A small honest project: a seeded champion, an evidenced hill, a ladder, and a candidate that passes it."""
+    cli(proj, "goal", "open", "acc", "--name", "Accuracy 80", "--vague", "x", "--set", "all", "--target", "0.8")
+    cli(proj, "pattern", "add", "units", "--name", "Unit Slips", "--items-file", "sym.txt", "--set", "sym", "--cause", "x", "--count", "10", "--of", "40")
+    cli(proj, "cand", "add", "base", "--name", "Plain Prompt", "--change", "x")
+    cli(proj, "promote", "base", "--reason", "seed")
+    p = Project(proj)
+    evaluate("base", "sym", lambda i: {"score": float(int(i) % 2 == 0)}, project=p, workers=2)
+    cli(proj, "hill", "open", "units", "--name", "Unit Slips", "--goal", "acc", "--pattern", "units", "--symptom", "x",
+        "--symptom-set", "sym", "--eval-sets", "hill", "--control", "ctl")
+    (proj / "ladder.json").write_text(json.dumps([{"name": "Hill target", "set": "@hill.eval", "rule": "improve"},
+                                                  {"name": "Hill control", "set": "@hill.control", "rule": "hold", "tol": 0.05}]))
+    cli(proj, "ladder", "ladder.json")
+    cli(proj, "cand", "add", "fix", "--name", "Unit Check", "--hill", "units", "--change", "x", "--predict", "+50 pts on the hill target")
+    for model, good in [("base", lambda i: int(i) % 2 == 0), ("fix", lambda i: True)]:
+        for s in ["hill", "ctl"]:
+            evaluate(model, s, lambda i, g=good: {"score": float(g(i))}, project=p, workers=2)
+    if promote:
+        cli(proj, "promote", "fix", "--reason", "passed both rungs")
+    return p
+
+
+def _errors(p, check=None):
+    from arx2 import verify
+    return [f for f in verify.audit(p, check) if f["level"] == "error"]
+
+
+def test_clean_ledger_verifies(proj):
+    p = _climbed(proj)
+    assert _errors(p) == []
+    r = cli(proj, "verify")
+    assert r.returncode == 0 and r.stdout.startswith("verify: 0 errors")
+    assert build_state(p)["audit"]["errors"] == 0
+    assert "verify: 0 errors" in cli(proj).stdout
+
+
+def test_broken_run_is_caught(proj):
+    p = _climbed(proj)
+
+    def boom(i):
+        raise RuntimeError("harness down")
+    evaluate("fix", "all", boom, project=p, workers=2)  # a complete run, every row an error
+    errs = _errors(p, "broken_runs")
+    assert len(errs) == 1 and "100 of 100 rows are errors" in errs[0]["what"] and errs[0]["entity"].startswith("run:")
+    r = cli(proj, "verify", ok=False)
+    assert r.returncode == 1 and "fix: run:" in r.stdout
+
+
+def test_promotion_with_a_failing_rung_is_caught(proj):
+    p = _climbed(proj, promote=False)
+    cli(proj, "cand", "add", "worse", "--name", "Worse Try", "--hill", "units", "--change", "x", "--predict", "+10 pts")
+    for s in ["hill", "ctl"]:
+        evaluate("worse", s, lambda i: {"score": 0.0}, project=p, workers=2)
+    r = cli(proj, "promote", "worse", "--reason", "trust me", ok=False)  # the CLI refuses
+    assert r.returncode == 1 and "cannot be promoted" in r.stdout and "Hill target fail" in r.stdout
+    p.append("champion", key="worse", reason="by hand", previous="base")  # an old ledger that skipped the gate
+    errs = _errors(p, "promotions")
+    assert len(errs) == 1 and errs[0]["entity"] == "candidate:worse" and "Hill target fail" in errs[0]["what"]
+
+
+def test_prevalence_without_ids_is_caught(proj):
+    p = _climbed(proj)
+    p.append("pattern", key="ghost", name="Ghost Count", cause="x", items=[], count=4, of=183)  # before pattern add refused this
+    errs = _errors(p, "prevalence")
+    assert len(errs) == 1 and errs[0]["entity"] == "pattern:ghost" and "lists only 0 item ids" in errs[0]["what"]
+
+
+def test_flakiness_needs_same_model_repeats(proj):
+    p = _climbed(proj)
+    p.append("pattern", key="flaky", name="Flaky Answers", cause="right on one run, wrong on the next", items=[], count=0)
+    errs = _errors(p, "flakiness")
+    assert len(errs) == 1 and "no model has two complete runs" in errs[0]["what"]
+    evaluate("fix", "hill", lambda i: {"score": float(int(i) % 3 != 0)}, project=p, workers=2)  # a second run of one model
+    assert _errors(p, "flakiness") == []
+
+
+def test_init_writes_the_rules(proj):
+    rules = (proj / ".arx2" / "RULES.md").read_text()
+    assert "Prevalence is backed by ids" in rules and "arx2 verify" in rules
+    assert cli(proj, "rules").stdout == rules
