@@ -73,7 +73,9 @@ SCHEMA = [
     CREATE TABLE sources (project TEXT NOT NULL, path TEXT NOT NULL, pos INTEGER NOT NULL, mtime REAL,
                           PRIMARY KEY (project, path));
     """,
+    "CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT);",
 ]
+RULES = "2"  # the scheduling rules (step); knowledge built under other rules is rebuilt from the events
 _lock = threading.RLock()
 
 
@@ -94,6 +96,10 @@ def db():
         con.execute("PRAGMA synchronous=NORMAL")
         migrate(con)
         with _lock:
+            if (con.execute("SELECT v FROM meta WHERE k='rules'").fetchone() or [None])[0] != RULES:
+                for (who,) in con.execute("SELECT DISTINCT person FROM events").fetchall():
+                    rebuild(con, who)
+                con.execute("INSERT OR REPLACE INTO meta VALUES ('rules', ?)", (RULES,))
             yield con
             con.commit()
     finally:

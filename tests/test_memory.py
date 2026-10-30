@@ -151,6 +151,14 @@ class Memory(unittest.TestCase):
         self.assertEqual(memory.state_of(dict(n=1, due=t0, mastery=0.9), t0 + 1), "due")
         self.assertEqual(memory.state_of(dict(n=0), t0), "untested")
 
+    def test_knowledge_is_rebuilt_when_the_rules_change(self):
+        with memory.db() as con:
+            memory._insert(con, "k", dict(t=1000.0, person="p-0000beef", kind="check", hit=0), ["ci"], "u0", "live")
+            memory.rebuild(con, "p-0000beef")
+            con.execute("UPDATE knowledge SET due=99999")  # as an older version scheduled it
+            con.execute("UPDATE meta SET v='old' WHERE k='rules'")
+        self.assertEqual(memory.knowledge("p-0000beef", 2000.0)[0]["due"], 1000.0)
+
     def test_reviews_close_together_count_once(self):
         with memory.db() as con:
             for i, (dt, hit) in enumerate(((0, 0), (120, 1))):
