@@ -184,7 +184,7 @@ function primerHTML(id){const x=COURSE.lesson(id);return `<div class="crs crs-on
 VIEWS.learn=()=>{
  loadBrief();
  const head=page({title:'Since you last looked',crumbs:[['Brief']],acts:`<div class="seg">${[['last','Last visit'],['day','24 h'],['week','7 d'],['all','All']].map(([k,l])=>`<button class="${L.mode===k?'on':''}" data-l="mode" data-v="${k}">${l}</button>`).join('')}</div>`});
- if(!L.b)return head+(L.err?empty('Could not load the brief',esc(L.err)):`<div class="lrn"><div class="stage skel"></div></div>`);
+ if(!L.b||L.cur==null)return head+(L.err?empty('Could not load the brief',esc(L.err)):`<div class="lrn"><div class="stage skel"></div></div>`);
  const b=L.b,i=L.cur,c=b.cards[i],primer=primerFor(c);L.primer=primer;
  if(c&&L.timer.id!==c.id){leaveCard();tStart(c.id);L.visits[c.id]=(L.visits[c.id]||0)+1}
  if(!c&&L.timer.id){leaveCard();L.timer.id=null}
