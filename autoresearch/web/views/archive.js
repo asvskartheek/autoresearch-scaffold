@@ -75,10 +75,12 @@ function story(){
  const lane=(ts,lab,top0=0)=>{const rows=[];let h='';
   for(const t of ts){const x0=at(t.created),x1=Math.max(x0+.5,at(wbObservedEnd(t))),sc=t.kind==='eval'?evScore(t):'';
    const lw=lab&&t.kind==='eval'?100*((short(t.slice||'').length+sc.length+1)*7.2+10)/trackPx:0;
-   let r=rows.findIndex(e=>e<=x0);if(r<0){r=rows.length;rows.push(0)}rows[r]=x1+lw+.5;
+   // a label that would run past the track's end sits before its bar instead
+   const flip=lw&&x1+lw>100+120*100/trackPx,from=flip?x0-lw:x0;
+   let r=rows.findIndex(e=>e<=from);if(r<0){r=rows.length;rows.push(0)}rows[r]=(flip?x1:x1+lw)+.5;
    const [sl,sc_]=wbState(t);
    h+=`<a class="arc-bar ${esc(sc_)}${t.status==='running'?' live':''}" href="#task/${enc(t.id)}" style="left:${x0.toFixed(2)}%;width:${(x1-x0).toFixed(2)}%;top:${top0+r*22}px" title="${esc(t.title)} · ${esc(sl)}${sc?' · '+esc(sc):''}"></a>`
-    +(lw?`<span class="arc-bl" style="left:calc(${x1.toFixed(2)}% + 4px);top:${top0+r*22}px">${esc(short(t.slice||''))} <b>${esc(sc)}</b></span>`:'');}
+    +(lw?`<span class="arc-bl" style="${flip?`right:calc(${(100-x0).toFixed(2)}% + 4px)`:`left:calc(${x1.toFixed(2)}% + 4px)`};top:${top0+r*22}px">${esc(short(t.slice||''))} <b>${esc(sc)}</b></span>`:'');}
   return [h,Math.max(1,rows.length)]};
  const multiDay=wbDay(a)!==wbDay(b);
  const seen=new Set(),ticks=(W<640?[0,1]:[0,.25,.5,.75,1]).map(f=>{const c=multiDay?wbWhen(a+f*w):wbClock(a+f*w);if(seen.has(c))return '';seen.add(c);return `<span style="left:${100*f}%">${c}</span>`}).join('');
