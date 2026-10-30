@@ -182,3 +182,41 @@ def test_ask_watch_runs_an_agent_per_question(proj):
         w.kill()
     a = p.state()["asks"][q["key"]]
     assert a["status"] == "answered" and a["answers"][0]["parts"][0]["body"] == f"ask: {q['key']}"
+
+
+def test_dashboard_asks_and_saves_over_http(proj, monkeypatch):
+    import threading
+    import urllib.error
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+    from arx2 import asks, server, store
+    monkeypatch.setattr(store, "HOME", proj / ".home")
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), server.H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_port}/api/p/toy-math"
+
+    def post(path, body):
+        req = urllib.request.Request(base + path, json.dumps(body).encode(), {"Content-Type": "application/json"})
+        try:
+            return json.load(urllib.request.urlopen(req))
+        except urllib.error.HTTPError as e:
+            return {"status": e.code, **json.load(e)}
+
+    try:
+        key = post("/ask", {"text": "What is this square?", "kind": "set", "key": "all", "what": "item square: 7", "route": "set/all"})["key"]
+        assert post("/save", {"ask": key, "as": "note", "name": "Square Seven"})["status"] == 400  # no answer yet
+        p = Project(proj)
+        (proj / "x.html").write_text("<p>explorable</p>")
+        asks.answer(p, key, [("text", "Item 7 passed."), ("file", str(proj / "x.html"))])
+        st = json.load(urllib.request.urlopen(base + "/state"))
+        a = st["asks"][key]
+        assert a["status"] == "answered" and a["what"] == "item square: 7"
+        f = a["answers"][0]["parts"][1]["file"]
+        assert urllib.request.urlopen(f"{base}/answer/{f}").read() == b"<p>explorable</p>"
+        assert post("/save", {"ask": key, "as": "note", "name": "three words here"})["status"] == 400
+        assert post("/save", {"ask": key, "as": "note", "name": "Square Seven"})["key"] == f"note-{key}"
+        st = json.load(urllib.request.urlopen(base + "/state"))
+        assert st["docs"][f"note-{key}"]["about"] == "all" and st["asks"][key]["saved"][0]["as"] == "note"
+        assert b"srcdoc" in urllib.request.urlopen(f"{base}/doc/note-{key}").read()
+    finally:
+        srv.shutdown()

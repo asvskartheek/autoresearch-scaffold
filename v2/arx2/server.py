@@ -9,8 +9,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import learner, stats
-from .store import Project, registry
+from . import asks, learner, stats
+from .store import LedgerError, Project, registry
 from .view import METRICS, Views, measure_of
 
 WEB = Path(__file__).parent / "web"
@@ -72,7 +72,7 @@ def build_state(p: Project, until: float | None = None) -> dict:
         "ladder": s["ladders"].get("main", {"rungs": []}), "candidates": cands, "runs": runs, "tasks": tasks,
         "docs": s["docs"], "split": v.split_check(), "timeline": timeline,
         "span": [s["log"][0]["t"], s["log"][-1]["t"]] if s["log"] else [0, 0], "until": until,
-        "n_events": len(s["log"]), "learner": m,
+        "n_events": len(s["log"]), "learner": m, "asks": s["asks"],
     }
 
 
@@ -212,6 +212,11 @@ class H(BaseHTTPRequestHandler):
                     d = p.state()["docs"][rest[1]]
                     f = p.dir / "docs" / d["file"]
                     return self._send(200, f.read_bytes(), mimetypes.guess_type(str(f))[0] or "text/plain")
+                if rest[:1] == ["answer"]:
+                    f = (p.dir / "answers" / rest[1]).resolve()
+                    if f.parent != (p.dir / "answers").resolve() or not f.exists():
+                        return self._send(404, {"error": "not found"})
+                    return self._send(200, f.read_bytes(), mimetypes.guess_type(str(f))[0] or "text/plain")
                 if rest == ["events"]:
                     return self._stream(p)
             return self._send(404, {"error": "not found"})
@@ -249,6 +254,18 @@ class H(BaseHTTPRequestHandler):
                 e.setdefault("t", time.time())
                 p.learner(e)
             return self._send(200, {"ok": True})
+        try:
+            if parts[:2] == ["api", "p"] and parts[3:] == ["ask"]:
+                ev = asks.ask(project(parts[2]), body.get("text"), body.get("kind") or "project", body.get("key") or parts[2],
+                              body.get("what"), route=body.get("route") or "", loc=body.get("loc") or "")
+                return self._send(200, {"key": ev["key"]})
+            if parts[:2] == ["api", "p"] and parts[3:] == ["save"]:
+                ev = asks.save(project(parts[2]), body.get("ask"), body.get("as"), body.get("name") or "")
+                return self._send(200, {"key": ev["key"]})
+        except LedgerError as e:
+            return self._send(400, {"error": str(e), "fix": e.fix})
+        except KeyError as e:
+            return self._send(404, {"error": f"unknown {e}"})
         return self._send(404, {"error": "not found"})
 
 
