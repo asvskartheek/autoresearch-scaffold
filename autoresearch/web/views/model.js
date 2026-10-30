@@ -22,10 +22,8 @@ const slw=k=>esc(short(k)).replace(/([\/-])/g,'$1<wbr>');
 const mlink=k=>`<a href="#model/${enc(k)}" title="${esc(k)}">${mn(k)}</a>`;
 // figures in the slice's own units (core sv/sd): a count of n on 0/1 slices, "387 ms" on continuous ones, never a %
 const bin=k=>!isCont(k);
-// a count pooled over repeated runs is not whole: 28.5 of 30 reads as such, never rounded to a count its Δ contradicts
-const score=(v,k,n)=>{if(v==null)return '—';n=n??sliceOf(k).n;
- if(!isCont(k)&&n){const x=v*n;if(Math.abs(x-Math.round(x))>1e-6)return esc(`${(+x.toFixed(1)).toLocaleString('en-US')} of ${n.toLocaleString('en-US')}`)}
- return esc(sv(k,v,n))};
+// a count pooled over repeated runs rounds like every other page (core sv): 353.5 of 1,319 reads 354 of 1,319
+const score=(v,k,n)=>v==null?'—':esc(sv(k,v,n));
 const diff=(d,k)=>d==null?'—':esc(sd(k,d));
 // a paired CI low to high, read in the direction the numbers are shown (negated slices flip it)
 const ciText=(c,k)=>{const [x,y]=negSlice(k)?[c.hi,c.lo]:[c.lo,c.hi];return `${diff(x,k).replace(/ \S+$/,'')} to ${diff(y,k)}`};

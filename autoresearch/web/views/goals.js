@@ -264,7 +264,7 @@ VIEWS.goal=name=>{
 const laterEvidence=g=>{
  const c=g.current_observation;
  if(!c||(c.task===g.task&&c.runs===g.runs))return '';
- return panel('Later observations',`<p>${mLink(c.model)} now pools ${byN(g)&&c.value!=null?N(Number((c.value*g.n).toFixed(2))):gu(g,c.value)}${ofP(g)} across ${N(c.runs)} runs. ${c.met?'This pooled measurement meets':'This pooled measurement does not meet'} the target. The achievement above retains its recorded evidence.</p>${c.task?`<a class="ln" href="#task/${enc(c.task)}">Latest observed run</a>`:''}`);
+ return panel('Later observations',`<p>${mLink(c.model)} now pools ${gu(g,c.value)}${ofP(g)} across ${N(c.runs)} runs. ${c.met?'This pooled measurement meets':'This pooled measurement does not meet'} the target. The achievement above retains its recorded evidence.</p>${c.task?`<a class="ln" href="#task/${enc(c.task)}">Latest observed run</a>`:''}`);
 };
 const hero=function(g){
  const gap=gapFig(g),vs=vsFig(g),gn=gainFig(g),ev=g.evidence;
