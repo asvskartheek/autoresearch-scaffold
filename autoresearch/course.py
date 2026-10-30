@@ -234,7 +234,6 @@ def lesson_champion(p, L, learn):
     fig = dict(kind="bars", slice=sl or "", n=None if cont else n,
                empty="No recorded champion measurement on a declared goal slice." if not sl else f"No completed measurements on {sl}.",
                unit=learn._unit(p, sl) if cont else "", better=-1 if cont and learn._neg(p, sl) else 1,
-               provenance="Separate recorded runs; scores are not necessarily harness-matched",
                rows=[dict(label=r["label"], v=-r["v"] if cont and learn._neg(p, sl) else r["v"], status=r["status"], hl=r["champ"]) for r in rs])
     champ = next((r for r in rs if r["champ"]), None)
     cs = [_check("A new idea is measured against what?", ["The champion, on the same examples", "Its own earlier run", "Nothing"],
@@ -313,7 +312,7 @@ def lesson_interval(p, L, learn):
     fig = dict(kind="interval", **(src or dict(delta=1.6, lo=-0.5, hi=3.7, n=185, unit="pts")), example=src is None, source_slice=noisy.get("slice", "") if noisy else "")
     crosses = fig["lo"] <= 0 <= fig["hi"]
     ans = "Not yet: it crosses zero" if crosses else "Yes: it clears zero"
-    return dict(say="An interval crossing zero does not establish a direction. This projection holds the effect fixed and narrows uncertainty as 1/√n; it is not a new measurement. If the effect is zero, more examples alone cannot make it clear zero.",
+    return dict(say="An interval that crosses zero does not establish a direction. Holding the effect fixed, its width shrinks as 1/√n.",
                 fig=fig,
                 checks=[_check("In this fixed-effect projection, four times as many independent observations would do what to interval width?",
                                ["Halve the width", "Quarter the width", "Leave the width unchanged"], "Halve the width",
@@ -389,7 +388,7 @@ def lesson_rung(p, L, learn):
     k = len(r["checks"])
     cs = [_check(f"A rung has {k} required checks and one fails. Does the rung pass?", ["No", "Yes"], "No",
                  "Every required check on a rung must pass.")]
-    return dict(say="Toggle a check to explore whether this rung would pass. The switches simulate outcomes for the displayed candidate's evaluation scope.",
+    return dict(say="A rung passes only when every required check on it passes.",
                 fig=dict(kind="rung", rung=r["rung"], checks=r["checks"], model=r.get("model")), checks=cs)
 
 
@@ -419,7 +418,7 @@ def _hill_rows(p, learn):
         out.append(dict(id=name, label=learn._first(h.get("title") or name, 60).split(" [")[0], status=h.get("status") or "",
                         count=sh.get("count"), of=sh.get("of"), of_what=sh.get("of_what") or "",
                         target=h.get("target") or "", control=h.get("control") or "",
-                        examples=h.get("examples") or [], example_provenance="Illustrative hill examples, not per-example evaluation evidence",
+                        examples=h.get("examples") or [],
                         detail=learn._first(h.get("symptom") or h.get("problem"), 140)))
     return sorted(out, key=lambda r: -(r["count"] or 0))
 

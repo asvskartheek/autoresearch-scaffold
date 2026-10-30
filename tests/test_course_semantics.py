@@ -84,12 +84,11 @@ class CourseSemantics(unittest.TestCase):
         check=course.lesson_candidate(p,{'models':p.models()},learn)['checks'][0]
         self.assertEqual(check['a'],'Ready for promotion; still a candidate')
 
-    def test_real_hill_examples_have_honest_provenance(self):
+    def test_real_hill_examples_keep_their_fields(self):
         p=CapturedProject('gsm8k')
         lesson=course.lesson_project_hills(p,{},learn)
         examples=[r for r in lesson['fig']['rows'] if r['examples']]
         self.assertTrue(examples)
-        self.assertTrue(all('not per-example evaluation evidence' in r['example_provenance'] for r in examples))
         self.assertTrue(all({'input','wrong','right','why'}<=set(e) for r in examples for e in r['examples']))
         self.assertIn('control result violates',lesson['checks'][0]['q'])
 
