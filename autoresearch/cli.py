@@ -670,7 +670,7 @@ def main(argv=None):
 
     s = sp.add_parser("task", help="workbench tasks from a shell")
     s.add_argument("action", choices=["start", "log", "note", "link", "progress", "left", "finish"])
-    s.add_argument("id", nargs="?"); s.add_argument("values", nargs="*")
+    s.add_argument("id", nargs="?", help="the task id (start: the title)"); s.add_argument("values", nargs="*")
     s.add_argument("--kind", default="experiment"); s.add_argument("--title"); s.add_argument("--description")
     s.add_argument("--model"); s.add_argument("--slice"); s.add_argument("--agent"); s.add_argument("--total", type=int)
     s.add_argument("--parent", help="task id this one sits under (default $ARX_PARENT)")
@@ -709,8 +709,13 @@ def main(argv=None):
     s = sp.add_parser("serve", help="run the dashboard in the foreground (`arx up` runs it in the background)"); s.add_argument("--port", type=int, default=8890, help="dashboard port"); s.set_defaults(fn=cmd_serve)
 
     a = ap.parse_args(argv)
-    if a.cmd == "task" and a.action == "start" and not a.title:
-        ap.error("task start needs --title")
+    if a.cmd == "task" and a.action == "start":
+        if a.id and not a.title:  # arx task start "Download the weights": the title as a positional argument
+            a.title, a.id, a.values = " ".join([a.id, *a.values]), None, []
+        if a.id or a.values:
+            ap.error("task start takes the title once: arx task start \"title\" or --title \"title\"")
+        if not a.title:
+            ap.error("task start needs a title: arx task start \"title\" (or --title)")
     a.fn(a)
 
 

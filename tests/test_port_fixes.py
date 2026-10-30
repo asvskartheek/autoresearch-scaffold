@@ -181,5 +181,14 @@ class ProjectLinks(unittest.TestCase):
         self.assertEqual(cli._project_url(p.root, "http://127.0.0.1:8890"), f"http://127.0.0.1:8890/p/{key}")
 
 
+class TaskStartTitle(unittest.TestCase):
+    def test_title_as_a_positional_argument(self):
+        p = project([])
+        tid = arx(p, "task", "start", "Download the weights").strip()
+        self.assertEqual(p.task(tid)["title"], "Download the weights")
+        tid = arx(p, "task", "start", "--title", "Prepare the data").strip()
+        self.assertEqual(p.task(tid)["title"], "Prepare the data")
+
+
 if __name__ == "__main__":
     unittest.main()
