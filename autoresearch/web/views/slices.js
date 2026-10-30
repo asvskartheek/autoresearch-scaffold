@@ -16,7 +16,10 @@ const slVal=(v,s,n)=>v==null?'—':esc(sv(s.name,v,n));
 // the champion on this slice: its run (from the baseline plan), or whether the slice still needs one
 function slChamp(s){
  const st=S.state,b=st.baseline;if(!b)return DASH;
- const h=b.have?.[s.name];if(h)return `<a class="sl-cs" href="#task/${enc(h.task)}" title="${h.runs>1?h.runs+' runs pooled · ':''}n ${slN(h.n)}">${slVal(h.score,s,h.n)}</a>${h.runs>1?`<small class="sl-pr">pooled, ${h.runs} runs</small>`:''}`;
+ // the pooled score the gate pairs against (leaderboard: every compatible run, per example); the baseline plan only
+ // knows the latest run's own score, which is not the pooled number when runs repeat
+ const lb=st.leaderboard?.[s.name]?.[st.champion],h0=b.have?.[s.name],h=lb?{task:lb.task,score:lb.score,n:lb.n,runs:lb.runs}:h0;
+ if(h)return `<a class="sl-cs" href="#task/${enc(h.task)}" title="${h.runs>1?h.runs+' runs pooled · ':''}n ${slN(h.n)}">${slVal(h.score,s,h.n)}</a>${h.runs>1?`<small class="sl-pr">pooled, ${h.runs} runs</small>`:''}`;
  if(!(b.need||[]).includes(s.name))return DASH;
  return active().some(t=>t.kind==='eval'&&t.model===st.champion&&t.slice===s.name)?pill('Running','running'):pill('Not run','warn');
 }
