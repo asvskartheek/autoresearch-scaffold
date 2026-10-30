@@ -375,6 +375,7 @@ def papers(c: Ctx):
     except (ImportError, AttributeError):
         return [finding("info", "papers", "Papers not checked: this arx2 has no paper check yet", "project:", "none needed")]
     out = []
+    failing: dict = {}
     for dk, d in c.s["docs"].items():
         if d.get("kind") != "paper":
             continue
@@ -383,17 +384,29 @@ def papers(c: Ctx):
             out.append(finding("error", "papers", f"Paper {d.get('name', dk)} has no file", f"doc:{dk}", f"arx2 doc add {dk} --file paper.html ..."))
             continue
         about = d.get("about")
-        kind = "goal" if about in c.s["goals"] else "hill" if about in c.s["hills"] else "paper"
+        kind = "external" if d.get("audience") == "external" else "internal"
         try:
-            res = fn(c.p, f.read_text(errors="replace"), kind, about)
+            res = fn(c.p, f.read_text(errors="replace"), kind, about, draft=bool(d.get("draft")))
         except Exception as e:  # a crashing check is itself a finding
             out.append(finding("error", "papers", f"Paper {d.get('name', dk)}: the paper check failed ({type(e).__name__}: {e})",
                                f"doc:{dk}", "arx2 paper check"))
             continue
-        for item in _paper_items(res):
-            out.append(finding(item[0], "papers", f"Paper {d.get('name', dk)}: {item[1]}", f"doc:{dk}",
-                               f"fix the paper, then arx2 doc add {dk} --kind paper --file <fixed.html> ..."))
+        for lv, w in _paper_items(res):
+            failing.setdefault(lv, {}).setdefault(d.get("name", dk), set()).add(_reason(w))
+    for lv, papers_ in failing.items():  # one line for all papers: names and short reasons, never every issue
+        reasons = sorted({r for rs in papers_.values() for r in rs})
+        out.append(finding(lv, "papers", f"{len(papers_)} paper{'s' if len(papers_) > 1 else ''} fail the paper check "
+                           f"({', '.join(reasons)}): {', '.join(papers_)}", "project:", "arx2 paper check <file> --about <key>"))
     return out
+
+
+REASONS = [("name the set", "set and n not named"), ("outside", "outside assets"), ("color-scheme", "no theme"), ("section", "missing sections"), ("words", "too long"),
+           ("bare", "numbers without a source"), ("claim", "numbers that do not match"), ("real item", "no real item"),
+           ("figure", "no figure"), ("draft", "unmet goal not marked draft"), ("TODO", "unfinished")]
+
+
+def _reason(what: str) -> str:
+    return next((r for k, r in REASONS if k in what), "other")
 
 
 def _paper_items(res):
