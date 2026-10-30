@@ -195,7 +195,7 @@ VIEWS.overview=()=>{
  const meta=cur?`${esc(ovKind[cur.kind]||cur.kind)} · ${ovN(cur.n)} examples${cs==null&&champ&&board.length?' · no champion run here':''}`:'';
  h+=`<section class="card section ov-lb" id="ov-lb"><div class="ph"><h2>Leaderboard</h2><span class="meta">${meta}</span>${cur?`<span class="r"><a class="more" href="#slices/${enc(cur.name)}">View slice</a></span>`:''}</div>${tabs}<div class="ov-pick">${sl.length?pick:''}</div>
   ${board.length?table(head,rows)+(board.length>LB?`<button class="btn ov-all" onclick="S.ovLbAll=!S.ovLbAll;render()">${S.ovLbAll?'Show top '+LB:'Show all '+board.length+' models'}</button>`:'')
-  :empty(sl.length?'No complete runs on this slice':'No slices in this dataset','')}</section>`;
+  :empty(sl.length?'No complete runs on this slice':ds.length?'No slices in this dataset':'No slices yet','')}</section>`;
  if(S.ovJump){S.ovJump=false;setTimeout(()=>document.getElementById('ov-lb')?.scrollIntoView({block:'start'}),0)}
  return h;
 };
