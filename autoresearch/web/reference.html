@@ -377,6 +377,9 @@ const opts = (list, sel) => list.map(m => `<option value="${esc(m.name)}"${m.nam
 const byStatus = [...D.models].sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || a.name.localeCompare(b.name));
 const gPick = [g => g.status === "open" && g.kpi === "score" && !g.met && g.slice === D.main, g => g.status === "open" && g.kpi === "score" && !g.met, g => g.status === "open", () => true];
 const champGoal = gPick.map(f => D.goals.find(g => g.model === CH && f(g))).find(Boolean) || null;
+// a goal's slice as a results row, and its comparator as read: a "minus ms" score stored as >= -1000 reads "≤ 1,000 ms"
+const gR = g => RS[g.slice] || { slice: g.slice, scale: g.scale || "binary", n: g.n, unit: g.unit, metric: g.metric };
+const gCmp = g => (g.higher_is_better !== false) !== (g.kpi === "score" && negR(gR(g))) ? "≥" : "≤";
 
 $("#app").innerHTML = `
 <div class="bar"><div class="in">
@@ -452,25 +455,36 @@ section("claim", () => {
     <dt>result</dt><dd>${bin ? ev(NC(r.right) + " / " + N0(r.n), evRes(r)) + ` right (${pct(r.score)})` : ev(sc(r.score, r), evRes(r))} on ${esc(r.slice)} · ${runsTxt(r)}</dd>
     ${p ? `<dt>vs before</dt><dd>${ev(dl(p.delta, r), evPair(r, p))} paired, 90% CI ${ev(ciTxt(p, r), evPair(r, p))}${p.noisy ? ' <span class="warn">noisy</span>' : ""}, same ${N0(p.n)} ids</dd>
     <dt>churn</dt><dd><span class="pos">${ev(p.wins + " fixed", evPair(r, p))}</span> · <span class="neg">${ev(p.losses + " broken", evPair(r, p))}</span> · net ${sgn(p.wins - p.losses, 0)}</dd>` : `<dt>current comparison</dt><dd class="warn">${PV ? "No matching current harness comparison with " + mn(PV) : "no comparator in the ledger"}${D.promotion ? `; <a href="#gates">historical promotion ${dt(D.promotion.t)}</a>` : ""}</dd>`}
-    ${g ? `<dt>goal</dt><dd>${esc(g.title || g.name)}: ${g.met ? '<span class="pos">met</span>' : g.need != null && g.have != null ? ev(N0(g.need - g.have) + " more", { label: "Distance to goal " + g.name, slice: g.slice, n: g.n, runs: [g.task], src: ".research/goals.json › " + g.name, note: `target ${g.target} → ${N0(g.need)} of ${N0(g.n)}; now ${N0(g.have)}` }) + ` of ${N0(g.n)} to reach ${N0(g.need)}` : "target " + g.target}</dd>` : ""}
+    ${g ? `<dt>goal</dt><dd>${goalLine(g, r)}</dd>` : ""}
     ${M.title ? `<dt>change</dt><dd>${esc(M.title)}</dd>` : ""}
     ${lat || cost ? `<dt>cost of it</dt><dd>${[lat, cost].filter(Boolean).join(" · ")}</dd>` : ""}
   </dl>
   ${goalStrips()}`;
 });
+// where this model stands against a score goal on its own slice: "43 more of 1,319 to reach 1,267", "458 ms to cut to ≤ 1,000 ms"
+function goalLine(g, r) {
+  const sg = g.higher_is_better !== false ? 1 : -1, v = r.score, met = v != null && sg * (v - g.target) >= -1e-12;
+  const need = isBin(r) ? g.need ?? Math.ceil(g.target * r.n - 1e-9) : null, have = isBin(r) && v != null ? Math.round(v * r.n) : null;
+  const e = { label: "Distance to goal " + g.name, slice: g.slice, n: r.n, runs: runIds(r), src: ".research/goals.json › " + g.name, note: isBin(r) ? `target ${g.target} → ${N0(need)} of ${N0(r.n)}; now ${N0(have)}` : `target ${gCmp(g)} ${sc(g.target, r)}; now ${sc(v, r)}` };
+  const head = `${esc(g.title || g.name)}: `;
+  if (v == null) return head + `target ${gCmp(g)} ${isBin(r) ? N0(need) + " of " + N0(r.n) : sc(g.target, r)}`;
+  if (met) return head + `<span class="pos">met</span>`;
+  return head + (isBin(r) ? ev(N0(need - have) + " more", e) + ` of ${N0(r.n)} to reach ${N0(need)}`
+    : ev(grp(Math.abs(g.target - v)) + unit(r) + (gCmp(g) === "≤" ? " to cut" : " to go"), e) + ` to reach ${gCmp(g)} ${sc(g.target, r)}`);
+}
 function niceStep(raw) { if (!(raw > 0)) return 1; const e = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / e; return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * e; }
 function goalStrips() {
   if (!D.goals.length) return "";
   const ord = { open: 0, achieved: 1, abandoned: 2 };
   return `<div class="goals">${[...D.goals].sort((a, b) => (ord[a.status] ?? 3) - (ord[b.status] ?? 3)).map(g => {
     const v = g.value, t = g.target, hib = g.higher_is_better !== false, isS = g.kpi === "score";
-    const r = RS[g.slice] || { slice: g.slice, scale: g.scale || "binary", n: g.n, unit: g.unit, metric: g.metric }, bin = isS && isBin(r);
-    const fmtv = x => x == null ? "—" : isS ? sc(x, r) : g.kpi.startsWith("latency") ? secs(x) : num(x);
+    const r = gR(g), bin = isS && isBin(r), Dv = x => x == null ? x : isS && negR(r) ? -x : x;
+    const fmtv = x => x == null ? "—" : isS ? sc(x, r) : g.kpi.startsWith("latency") ? secs(x) : g.kpi === "cost" ? "$" + num(x, 3) : /tokens?_per_s|throughput/i.test(g.kpi) ? num(x) + " tok/s" : num(x);
     const now = bin && g.have != null ? `${N0(g.have)} of ${N0(g.n)} <span class="faint">(${pct(v)})</span>` : fmtv(v);
     const goal = bin && g.need != null ? N0(g.need) : isS && !bin ? fmtv(t) : fmtv(t);
-    const dist = g.met ? '<span class="pos">met</span>' : g.need != null && g.have != null ? `<b>${N0(g.need - g.have)} more</b>` : v != null && isS && !bin ? `${grp(Math.abs(t - v))}${unit(r)} to go` : v != null ? `${fmtv(Math.abs(t - v))} to go` : "no run";
-    const top = Math.max(v ?? 0, t ?? 0) * (isS && !bin ? 1.15 : isS ? 1 : 1.15) || 1, hi = bin ? 1 : top, X = x => Math.max(0, Math.min(1, x / hi));
-    return `<div class="goal${g.status === "abandoned" ? " dim" : ""}"><div class="gt">${esc(g.title || g.name)} <span class="faint mono" style="font-size:11.5px">${esc(g.status)} · ${esc(short(g.slice))}${g.model && g.model !== CH ? " · " + mn(g.model) : ""}</span></div><div class="gv">${g.status === "abandoned" ? now : `${now} <span class="faint">${hib ? "≥" : "≤"} ${goal}</span> · ${dist}`}</div>
+    const dist = g.met ? '<span class="pos">met</span>' : g.need != null && g.have != null ? `<b>${N0(g.need - g.have)} more</b>` : v != null ? `${isS && !bin ? grp(Math.abs(t - v)) + unit(r) : fmtv(Math.abs(t - v))} ${gCmp(g) === "≤" ? "to cut" : "to go"}` : "no run";
+    const top = Math.max(Dv(v) ?? 0, Dv(t) ?? 0) * (isS && !bin ? 1.15 : isS ? 1 : 1.15) || 1, hi = bin ? 1 : top, X = x => Math.max(0, Math.min(1, Dv(x) / hi));
+    return `<div class="goal${g.status === "abandoned" ? " dim" : ""}"><div class="gt">${esc(g.title || g.name)} <span class="faint mono" style="font-size:11.5px">${esc(g.status)} · ${esc(short(g.slice))}${g.model && g.model !== CH ? " · " + mn(g.model) : ""}</span></div><div class="gv">${g.status === "abandoned" ? now : `${now} <span class="faint">${gCmp(g)} ${goal}</span> · ${dist}`}</div>
     ${trk([`<i class="tbar c-trk" style="left:0;width:100%;height:8px"></i>`, v != null ? `<i class="tbar ${g.met ? "c-pos" : "c-acc"}" style="left:0;width:${X(v) * 100}%;height:8px"></i>` : "", t != null ? tMark(X(t), "c-text", true) : ""], 14)}</div>`;
   }).join("")}</div>`;
 }

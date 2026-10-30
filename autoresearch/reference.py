@@ -608,7 +608,9 @@ def _build(p, model, vs):
     goal_list = []
     for g in goals.values():
         n = g.get("n")
-        need = math.ceil(g["target"] * n - 1e-9) if g.get("kpi", "score") == "score" and n and g.get("target") is not None else None
+        # answers of n only on a 0/1 slice: a continuous score (ms, MB) has no count to reach
+        need = (math.ceil(g["target"] * n - 1e-9) if g.get("kpi", "score") == "score" and g.get("scale") != "continuous"
+                and n and g.get("target") is not None else None)
         have = round(g["value"] * n) if need is not None and isinstance(g.get("value"), (int, float)) else None
         goal_list.append(dict(name=g["name"], title=_txt(g.get("title")), status=g.get("status"), slice=g.get("slice"),
                               n=n, kpi=g.get("kpi", "score"), target=g.get("target"), value=_r(g.get("value")),

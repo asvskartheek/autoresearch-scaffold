@@ -47,11 +47,14 @@ class Continuous(unittest.TestCase):
         p.add_model("v1", parent="v0")
         run(p, "v0", [-160.0] * 12)
         run(p, "v1", [-150.0] * 12)
+        p.open_goal("lean", "Under 100 MB", "mem/n12", -100.0)
         d = reference.build(p, "v1", cache=False)
         c = d["ladder"][0]["checks"][0]
         # the paper writes the threshold in MB, as a fraction of the champion's mean, never in pts
         self.assertEqual((c["scale"], c["unit"], c["relative"]), ("continuous", "MB", True))
         self.assertAlmostEqual(c["threshold"], -8.0)
+        g = d["goals"][0]
+        self.assertEqual((g["scale"], g["need"], g["have"]), ("continuous", None, None))  # no "N more of 12" on MB
 
     def test_tolerance_is_a_fraction_of_the_champion(self):
         p = ledger()
