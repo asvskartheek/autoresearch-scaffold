@@ -65,10 +65,23 @@ def _short(slice_name: str) -> str:
     return slice_name.split("/", 1)[-1] if slice_name else ""
 
 
+def _labels(p: Project) -> dict:
+    """Every model's label. Inside a brief or the course they are read once (p._labels): checking each title for
+    duplicates against every model made a brief on a 60-model ledger take seconds."""
+    cache = getattr(p, "_labels", None)
+    if cache:
+        return cache
+    out = {m: str(features.model_label(p, m)).strip() for m in p.models()}
+    if cache is not None:
+        p._labels = out
+    return out
+
+
 def _title(p: Project, model: str) -> str:
     """A model's title, qualifier kept; two models with one title read as title · id, as the dashboard does."""
-    title = str(features.model_label(p, model)).strip()
-    if any(m != model and str(features.model_label(p, m)).strip() == title for m in p.models()):
+    labels = _labels(p)
+    title = labels.get(model) or str(features.model_label(p, model)).strip()
+    if any(m != model and t == title for m, t in labels.items()):
         title += f" · {model}"
     if len(title) <= 110:
         return title
@@ -257,8 +270,8 @@ def _card_promote(p: Project, model: str, t: float = None) -> dict | None:
     elif c.get("lo") is not None:
         why += " The 90% interval still touches zero."
     return _delta_card(f"promote|{model}", c, p, c["slice"], _sign(p), label="Promoted", tone="acc", t=dec.get("t"),
-                       q=f"{_title(p, model)} replaced {_title(p, old) if old else 'the champion'}. Paired change on {_short(c['slice'])}?",
-                       ctx=f"Frozen promotion evidence · {_short(c['slice'])}, n = {c['n']:,}", ev=c.get("cand_task") or model, why=why, w=100)
+                       q=f"{_title(p, model)} replaced {_title(p, old) if old else 'the champion'}. Paired change on {c['slice']}?",
+                       ctx=f"Frozen promotion evidence · {c['slice']}, n = {c['n']:,}", ev=c.get("cand_task") or model, why=why, w=100)
 
 
 def _card_goal(p: Project, name: str) -> dict | None:
@@ -283,7 +296,7 @@ def _card_goal(p: Project, name: str) -> dict | None:
         why += f" Against the starting champion: {vb['wins']} fixed, {vb['losses']} broken."
     return dict(id=f"goal|{name}", type="number", unit="", int=True, min=lo, max=N, step=1, start=lo + (N - lo) // 2,
                 tol=max(2, round(N * 0.01)), truth=have, label="Goal", tone="acc", t=g.get("created"),
-                q=f"How many of {N:,} does the champion get right on {_short(g['slice'])}?",
+                q=f"How many of {N:,} does the champion get right on {g['slice']}?",
                 ctx=_goal_ctx(g, name), ev=g.get("task") or g["slice"], why=why, w=95,
                 viz=dict(kind="goal", have=have, need=need, N=N, lo=lo, traj=traj))
 
@@ -318,7 +331,7 @@ def _card_gate(p: Project, model: str, sl: str) -> dict | None:
                 ended = next((t.get("ended") for t in p.evals() if t["id"] == c.get("cand_task")), None)
                 return dict(id=f"gate|{model}|{sl}", type="choice", opts=["Pass", "Fail"], truth="Pass" if ok else "Fail",
                             label=f"Gate · {r['rung']}", tone="pos" if ok else "neg", t=ended,
-                            q=f"{_title(p, model)} on {_short(sl)}: it {_rule_text(p, c)}. Pass or fail?",
+                            q=f"{_title(p, model)} on {sl}: it {_rule_text(p, c)}. Pass or fail?",
                             ctx=f"n = {c['n']:,} · against {_title(p, g.get('champion'))}", ev=c.get("cand_task") or sl,
                             why=why, w=85 if r["rung"] != (g["rungs"][0]["rung"] if g["rungs"] else "") else 80,
                             viz=(vz := _ci_viz(c, p, sl, c.get("threshold"))), axis=_room(c, vz, _sign(p)),
@@ -351,7 +364,7 @@ def _card_rejected(p: Project, model: str) -> dict | None:
         return None
     m = p.models().get(model) or {}
     return _delta_card(f"rej|{model}", r, p, sl, _sign(p), label="Rejected", tone="neg", t=dec.get("t"),
-                       q=f"{_title(p, model)}: paired change against {_title(p, base)} on {_short(sl)}?",
+                       q=f"{_title(p, model)}: paired change against {_title(p, base)} on {sl}?",
                        ctx=f"n = {r['n']:,}", ev=(p.latest_eval(model, sl) or {}).get("id", model),
                        why=_rej_why(p, r, sl, dec.get("reason") or m.get("reason")), w=70)
 
@@ -369,7 +382,7 @@ def _rej_why(p: Project, r: dict, sl: str, reason) -> str:
     lo, hi = sorted((r["lo"], r["hi"]))
     side = ("the whole 90% interval is below zero" if hi < 0 else "the whole 90% interval is above zero, yet another check failed"
             if lo > 0 else "the 90% interval crosses zero, so no gain is shown")  # deltas come signed: above zero is better
-    out = f"{_counts(p, r, sl)} on {_short(sl)}: {side}."
+    out = f"{_counts(p, r, sl)} on {sl}: {side}."
     txt = re.sub(r"(?:/[\w.\-]+){2,}\S*", "", _first(reason, 160)).strip(" ;:,")
     if txt and txt.count(" ") >= 3:
         out += f" Ledger: {txt.rstrip('.')}."
@@ -396,7 +409,7 @@ def _card_rejected_batch(p: Project, models: list[str]) -> dict | None:
         rows.append(dict(label=_title(p, champ), tag="champion", v=ref, hl=3))
     return dict(id="batch|" + sl + "|" + ",".join(ms), type="choice", opts=[_title(p, m) for m in ms], truth=_title(p, best),
                 label=f"{len(ms)} rejected", tone="neg", t=max(_f((p.latest_eval(m, sl) or {}).get("ended")) for m in ms),
-                q=f"Which of these scored highest on {_short(sl)}?", ctx=f"n = {p.slices()[sl]['n']:,}",
+                q=f"Which of these scored highest on {sl}?", ctx=f"n = {p.slices()[sl]['n']:,}",
                 ev=sl, why=f"All {len(ms)} were rejected; the best reached {sv(p, sl, vals[best])}.", w=65,
                 viz=_bars(p, sl, rows, ref))
 
@@ -433,17 +446,17 @@ def _card_hill(p: Project, name: str, model: str, counts: str = None) -> dict | 
     if h.get("control") and v is not None:
         cv = _score(p, model, h["control"])
         if cv is not None:
-            rows.append(dict(label=_title(p, model), tag=f"on {_short(h['control'])}", v=cv, hl=0, sl=h["control"]))
+            rows.append(dict(label=_title(p, model), tag=f"on {h['control']}", v=cv, hl=0, sl=h["control"]))
     sym = h.get("symptom") or h.get("title") or name
     ran = v is not None
     band = _band(n, v if ran else 0.5)
     if counts:
         num = dict(id=f"hill|{name}|{model}|n", unit="", int=True, min=0, max=n, step=1, start=n // 2,
                    tol=max(1, round(band * n / 100)), truth=round(v * n) if ran else None,
-                   q=f"How many of {n:,} does {_title(p, model)} get right on {_short(sl)}?")
+                   q=f"How many of {n:,} does {_title(p, model)} get right on {sl}?")
     else:
         num = dict(id=f"hill|{name}|{model}", unit="%", min=0, max=100, step=0.5, start=50, tol=band,
-                   truth=round(100 * v, 1) if ran else None, q=f"{_title(p, model)} on {_short(sl)}: its score?")
+                   truth=round(100 * v, 1) if ran else None, q=f"{_title(p, model)} on {sl}: its score?")
     return dict(type="number", **num,
                 label="New hill" if ran else "Hill · no run yet", tone="acc" if ran else "warn", t=h.get("created"),
                 ctx=f"n = {n:,} · {_first(sym, 140)}", ev=sl,
@@ -465,7 +478,7 @@ def _card_run(p: Project, model: str, base: str, sl: str, task: dict | None = No
     why = ("No heartbeat; scored if the run is restarted and lands." if stalled else "Logged. Scored when the run lands.") if r is None else f"Δ {sd(p, sl, r['delta'])}: {r['wins']} fixed, {r['losses']} broken."
     return dict(id=f"run|{model}|{base}|{sl}", type="choice", opts=["Yes", "No"], truth=truth,
                 label="Landed" if r else "Stalled" if stalled else "Running", tone="acc" if r else "neg" if stalled else "warn",
-                t=(live or {}).get("created"), q=f"Will {_title(p, model)} beat {_title(p, base)} on {_short(sl)}?",
+                t=(live or {}).get("created"), q=f"Will {_title(p, model)} beat {_title(p, base)} on {sl}?",
                 ctx=ctx, ev=(live or {}).get("id") or sl, why=why, w=50, viz=(vz := _ci_viz(r, p, sl) if r else None),
                 axis=_room(r, vz, _sign(p)) if r else None)
 
@@ -488,7 +501,7 @@ def _card_question(p: Project, qid: str) -> dict | None:
         truth = "Better" if r["lo"] > 0 else "Worse" if r["hi"] < 0 else "Can't tell yet"
         return dict(id=f"q|{qid}", type="choice", opts=["Better", "Worse", "Can't tell yet"], truth=truth,
                     label="Answered", tone="acc", t=q.get("answered") or q.get("updated") or q.get("created"),
-                    q=f"{_title(p, ev['model'])} against {_title(p, base)} on {_short(sl)}: better, worse or can't tell yet?",
+                    q=f"{_title(p, ev['model'])} against {_title(p, base)} on {sl}: better, worse or can't tell yet?",
                     ctx=f"From the question “{_first(q.get('title') or qid, 90)}” · n = {r['n']:,}",
                     ev=(p.latest_eval(ev["model"], sl) or {}).get("id", sl),
                     why=_first(q.get("claim"), 200) or truth, w=75, viz=(vz := _ci_viz(r, p, sl)), axis=_room(r, vz, _sign(p)))
@@ -723,8 +736,15 @@ def aliases(viewer: str) -> set:
 
 
 def brief(p: Project, since: float = 0, viewer: str = "anon") -> dict:
+    p._gates, p._labels = {}, {}
+    try:
+        return _brief(p, since, viewer)
+    finally:
+        p._labels = None
+
+
+def _brief(p: Project, since: float, viewer: str) -> dict:
     from . import course, teach
-    p._gates = {}
     with p.snapshot():
         cs = cards(p, since)
         al = aliases(viewer)

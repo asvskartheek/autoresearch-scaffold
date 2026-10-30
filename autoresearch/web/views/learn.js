@@ -57,7 +57,7 @@ addEventListener('pagehide',()=>leaveCard({beacon:true}));
 // an axis step near span/k on the 1-2-5 ladder
 const nstep=(span,k)=>{const raw=span/k,mag=10**Math.floor(Math.log10(raw||1));return [1,2,5,10].map(m=>m*mag).find(m=>m>=raw)};
 // a signed amount in a viz's unit: "+5.2 pts" (0/1 slice) or "−1,071 ms" (continuous); 0/1 values come in points
-const lamt=(u,x)=>(x=u==='pts'&&+Math.abs(x).toFixed(2)===0?0:x,(x>0?'+':x<0?'−':''))+(u==='pts'?(+Math.abs(x).toFixed(2)).toString():grp(Math.abs(x)))+(u?' '+(u==='pts'&&Math.abs(x)===1?'pt':u):'');
+const lamt=(u,x)=>(x=(u==='pts'?+Math.abs(x).toFixed(2):+grp(Math.abs(x)).replace(/,/g,''))===0?0:x,(x>0?'+':x<0?'−':''))+(u==='pts'?(+Math.abs(x).toFixed(2)).toString():grp(Math.abs(x)))+(u?' '+(u==='pts'&&+Math.abs(x).toFixed(2)===1?'pt':u):'');
 function vizCI(v){
  const u=v.unit==null?'pts':v.unit,k=v.unit==null?100:1;  // older payloads carry fractions
  const d=k*v.delta,lo=k*v.lo,hi=k*v.hi,bar=v.bar!=null?k*v.bar:null,W=LW(),H=136,Lx=16,R=W-16;
@@ -106,7 +106,7 @@ function numberLine(c,guess,truth){
  const W=LW(),H=76,Lx=16,R=W-16,x=v=>Lx+(v-c.min)/(c.max-c.min)*(R-Lx),span=c.max-c.min;
  const raw=span/(W<420?7:12),mag=10**Math.floor(Math.log10(raw)),stp=[1,2,5,10].map(m=>m*mag).find(m=>m>=raw);
  let s=`<line x1="${Lx}" x2="${R}" y1="36" y2="36" stroke="var(--control)" stroke-width="2"/>`;
- for(let v=Math.ceil(c.min/stp)*stp;v<=c.max+1e-9;v+=stp)s+=`<line x1="${x(v)}" x2="${x(v)}" y1="31" y2="41" stroke="var(--control)"/><text x="${x(v)}" y="58" text-anchor="middle">${c.unit==='pts'&&v>0?'+':''}${(+v.toFixed(2)).toLocaleString()}</text>`;
+ for(let v=Math.ceil(c.min/stp)*stp;v<=c.max+1e-9;v+=stp)s+=`<line x1="${x(v)}" x2="${x(v)}" y1="31" y2="41" stroke="var(--control)"/><text x="${x(v)}" y="58" text-anchor="middle">${c.unit==='pts'&&v>0?'+':v<0?'−':''}${(+Math.abs(v).toFixed(2)).toLocaleString()}</text>`;
  if(c.unit==='pts')s+=`<line x1="${x(0)}" x2="${x(0)}" y1="24" y2="48" stroke="var(--text)"/>`;
  const g0=Math.max(c.min,guess-c.tol),g1=Math.min(c.max,guess+c.tol);
  s+=`<rect x="${x(g0)}" y="28" width="${Math.max(2,x(g1)-x(g0))}" height="16" rx="3" fill="var(--accent)" opacity=".18"/>`;
@@ -168,24 +168,23 @@ function calChart(cal){
 function knowHTML(){
  const b=L.b,cal=b.calibration,u=b.understanding||{docs:{}},ids=new Set(b.cards.map(c=>c.id));
  const bs=u.docs?.brief?.step_ms||{},catchMs=Object.entries(bs).filter(([k])=>ids.has(k)).reduce((a,[,v])=>a+v,0);
- const missed=(u.missed||[]).filter(m=>m.doc!=='brief').map(m=>{const id=m.doc.startsWith('concept:')?m.doc.slice(8):null,c=id&&(b.concepts||[]).find(x=>x.id===id);return c?{t:c.t,id}:{t:m.doc}});
- const uniq=[...new Map(missed.map(m=>[m.t,m])).values()];
+ const missed=[...new Set((u.missed||[]).map(m=>m.doc).filter(d=>d!=='brief'&&!d.startsWith('concept:')))];  // concept: rows predate the 101 course
  const v=viewerName();
  return `<div class="score"><div><b>${cal.all_hits??cal.hits}/${cal.all_n??cal.n}</b><span>right</span></div><div title="${plural(cal.n,'prediction')} with a stated confidence"><b>${cal.brier==null?'–':cal.brier.toFixed(2)}</b><span>Confidence error</span></div><div><b>${catchMs?span(catchMs/1000):'–'}</b><span>to catch up</span></div></div>
   ${calChart(cal)}${typeof TEACH!=='undefined'?TEACH.profile():''}
-  ${uniq.length?`<div class="missed"><span class="muted">Missed</span>${uniq.map(m=>m.id?`<button class="chip" data-l="concept" data-id="${esc(m.id)}">${esc(m.t)}</button>`:`<span class="chip">${esc(m.t)}</span>`).join('')}</div>`:''}
+  ${missed.length?`<div class="missed"><span class="muted">Missed</span>${missed.map(d=>`<span class="chip">${esc(d)}</span>`).join('')}</div>`:''}
   <div class="who"><span class="muted">${v?esc(v):'No name set'}</span><button class="linkbtn" data-l="name">${v?'Change':'Set your name'}</button></div>`;
 }
 function conceptsHTML(){
  const cs=L.b.course;if(!cs)return '';return `<section class="strip"><div class="hd"><h2>101</h2><a href="#course">All lessons</a></div><div class="crs-grid">${cs.lessons.map(x=>`<a class="crs-tile" href="#course/${enc(x.id)}" data-item><b>${esc(x.t)}</b>${cs.due.includes(x.id)?'<span class="muted">Review due</span>':''}</a>`).join('')}</div></section>`;
 }
-function primerFor(c){if(!c||c.pred||typeof COURSE==='undefined')return null;COURSE.ensure();if(!COURSE.data())return null;return (c.needs||[]).find(id=>COURSE.lesson(id)&&!L.primers?.[id]&&(COURSE.primed(id)||COURSE.state(id)!=='learned'))||null}
-function primerHTML(id){const x=COURSE.lesson(id);return `<div class="crs crs-one" data-primer="${esc(id)}"><div class="kind">Before this result · ${esc(x.t)}</div>${COURSE.primer(id)}${COURSE.primed(id)?`<button class="btn primary" data-l="primer-next" data-id="${esc(id)}">Continue</button>`:''}</div>`}
+function primerFor(c){if(!c||c.pred||typeof COURSE==='undefined')return null;COURSE.ensure();if(!COURSE.data())return null;return (c.needs||[]).find(id=>COURSE.askable(id)&&!L.primers?.[id]&&(COURSE.primed(id)||COURSE.state(id)!=='learned'))||null}
+function primerHTML(id){const x=COURSE.lesson(id);return `<div class="crs crs-one" data-primer="${esc(id)}"><div class="kind">Before this result · ${esc(x.t)}</div>${COURSE.primer(id)}${COURSE.primed(id)?`<div class="actions"><button class="btn primary" data-l="primer-next" data-id="${esc(id)}">Continue</button></div>`:''}</div>`}
 
 VIEWS.learn=()=>{
  loadBrief();
  const head=page({title:'Since you last looked',crumbs:[['Brief']],acts:`<div class="seg">${[['last','Last visit'],['day','24 h'],['week','7 d'],['all','All']].map(([k,l])=>`<button class="${L.mode===k?'on':''}" data-l="mode" data-v="${k}">${l}</button>`).join('')}</div>`});
- if(!L.b)return head+(L.err?empty('Could not load the brief',esc(L.err)):`<div class="lrn"><div class="stage skel"></div></div>`);
+ if(!L.b||L.cur==null)return head+(L.err?empty('Could not load the brief',esc(L.err)):`<div class="lrn"><div class="stage skel"></div></div>`);
  const b=L.b,i=L.cur,c=b.cards[i],primer=primerFor(c);L.primer=primer;
  if(c&&L.timer.id!==c.id){leaveCard();tStart(c.id);L.visits[c.id]=(L.visits[c.id]||0)+1}
  if(!c&&L.timer.id){leaveCard();L.timer.id=null}
@@ -225,7 +224,6 @@ document.addEventListener('click',e=>{
  else if(k==='next')go(L.cur+1);
  else if(k==='prev')go(L.cur-1);
  else if(k==='go')go(+a.dataset.i);
- else if(k==='concept')location.hash='#course';
  else if(k==='name')setName();
  else if(k==='mode'){L.mode=a.dataset.v;L.since=sinceFor(L.mode);L.cur=null;L.ui={};L.b=null;render(true);loadBrief(true)}
 });
