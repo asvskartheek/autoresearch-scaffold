@@ -22,8 +22,31 @@ Every command prints compact text with a `help[]` block of next steps; errors pr
 - Names are one or two plain words a person remembers ("Route Tracing", "Random 50"). Keys can be anything; people never see them.
 - Every job longer than a minute is a task (`arx2.task(...)` or `arx2 task start`). Note decisions as plain sentences.
 - Never edit a frozen set; make a new one. Rows hold only id, score, cost, latency_s, error.
-- Write cards for facts a person must not forget: `arx2 card add --front ... --back ...`. Papers: `arx2 doc add <key> --kind paper --audience internal|external`.
+- Write cards for facts a person must not forget: `arx2 card add --front ... --back ...`. Papers: `arx2 doc add <key> --kind paper --audience internal|external` (see Papers below).
 - Read `arx2 learner` now and then: it says which names the person keeps hovering and which cards they miss. Make those clearer.
+
+## Papers
+
+A paper is published only when it is complete, self-contained and backed by the ledger. `arx2 doc add --kind paper`
+runs the gate and refuses on any error; `arx2 paper check <file> --about <key>` runs it without publishing.
+
+- Start from `arx2 paper new <key> --about <goal-or-hill>`: every section, the theme head, and the champion's
+  numbers already written as claims. Replace every TODO.
+- External (about a goal): abstract, introduction, setup, method, results, what did not work (`negative`), threats to
+  validity, conclusion. Internal (about a hill): problem with one real item (`data-item="<id>"`), measure, sets,
+  candidates, result, next. Use `<section data-part="...">` or `<h2>` headings; an `appendix` part is allowed.
+- Self-contained: no outside scripts, images or fonts; only `/static/app.css` may be linked. A `<title>`, an `<h1>`,
+  `<meta name="color-scheme" content="light dark">`. Results open with a figure (inline `<svg>` or `<figure>`).
+- Every number in abstract, results and conclusion is a claim the gate recomputes from the rows:
+  `<span data-claim="score" data-run="<run>">74.3%</span>` (`data-metric="latency_p50|cost"` for other summaries),
+  `data-claim="delta" data-base-run data-run [data-lo data-hi]`, `data-claim="n" data-set`,
+  `data-claim="count"` (`data-run` for passed items, `data-base-run` + `data-run` for fixed or broken, `data-of`
+  for the denominator), `data-claim="target" data-goal [data-unit="count" [data-run]]`. Numbers inside an `<svg>` are exempt
+  from the bare-number rule. Name the set and its n in the same sentence or caption.
+- Short: abstract at most 80 words; sections 120 to 200; the paper at most 1,500 words of prose (hill papers half).
+- A goal the ledger has not met: the title or abstract says Draft, and the word "achieved" never appears.
+- `--draft` lets an unfinished paper through (missing sections or figures) when its title says Draft; the dashboard
+  marks it draft. Wrong numbers and outside resources are never let through.
 
 ## Answering questions
 
