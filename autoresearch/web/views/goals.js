@@ -50,11 +50,13 @@ const ofP=g=>byN(g)?` of ${N(g.n)}`:'';
 const cmpSym=g=>sgn(g)*dsg(g)>0?'≥':'≤';
 // a signed change as shown (a drop in ms reads "−458 ms"), coloured by whether it helps the goal.
 // signedGood: d is already in the good direction (a paired delta); otherwise d is a raw change of the stored value
+// no change, still in the goal's unit ("0 ms", "0 s"); answers of n and pts stay a bare 0
+const zero=g=>`<span class="faint">${byN(g)||(isScore(g)&&!cont(g))?'0':kpiOf(g)==='cost'?money(0):withU('0',unitG(g))}</span>`;
 const gsigned=(g,x)=>(x>0?'+':x<0?'−':'')+gamt(g,x);
 const gchg=function(g,d,signedGood=true){
  if(d==null||!isFinite(d))return DASH;
  const good=signedGood?d:sgn(g)*d,x=dsg(g)*(signedGood?sgn(g)*d:d);
- if(Math.abs(d)<1e-12||(byN(g)&&!Math.round(Math.abs(d)*g.n)))return '<span class="faint">0</span>';
+ if(Math.abs(d)<1e-12||(byN(g)&&!Math.round(Math.abs(d)*g.n)))return zero(g);
  return `<span class="${good>0?'pos':'neg'}">${gsigned(g,x)}</span>`;
 }
 // a paired CI (good-direction bounds) in the same terms as gchg: "+50 to +88", "−1,200 to −300 ms"
@@ -80,7 +82,7 @@ const gained=function(g){
  const P=prog(g);if(P.b==null||g.value==null)return null;
  if(byN(g)){const d=cnt(g,g.value)-cnt(g,P.b);return {v:d?`<span class="${d>0?'pos':'neg'}">${d>0?'+':'−'}${N(Math.abs(d))}</span>`:'<span class="faint">0</span>',s:`from ${N(cnt(g,P.b))}`}}
  const good=sgn(g)*(g.value-P.b);
- if(Math.abs(good)<1e-12)return {v:'<span class="faint">0</span>',s:`from ${gv(g,P.b)}`};
+ if(Math.abs(good)<1e-12)return {v:zero(g),s:`from ${gv(g,P.b)}`};
  const timed=isTime(g)||/^(ms|s|sec|seconds?|min)$/i.test(unitG(g));
  const w=timed?(good>0?'faster':'slower'):kpiOf(g)==='cost'?(good>0?'cheaper':'dearer'):(good>0?'better':'worse');
  return {v:`<span class="${good>0?'pos':'neg'}">${gamt(g,good)} ${w}</span>`,s:`from ${gv(g,P.b)}`};
@@ -163,7 +165,7 @@ const vsFig=function(g){
  const v=g.vs_baseline,P=prog(g);
  if(v&&v.delta!=null)return {v:gchg(g,v.delta),s:`${byN(g)?`of ${N(g.n)} · `:''}${gci(g,v.lo,v.hi)}`,wl:`better on ${v.wins}, worse on ${v.losses}`};
  if(g.value==null)return {v:DASH,s:'no run yet'};
- if(g.baseline&&g.model&&g.baseline===g.model)return {v:'<span class="faint">0</span>',s:'the champion is still the baseline'};
+ if(g.baseline&&g.model&&g.baseline===g.model)return {v:zero(g),s:'the champion is still the baseline'};
  if(P.b!=null&&g.value!=null)return {v:gchg(g,g.value-P.b,false),s:'latest runs, unpaired'};
  return {v:DASH,s:g.baseline?comparisonNote(g):'no baseline'};
 }
