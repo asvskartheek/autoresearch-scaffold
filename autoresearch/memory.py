@@ -502,24 +502,6 @@ def blend(p, prof: dict, viewer: str, aliases: set | None = None) -> dict:
         return prof
 
 
-def order(p, cs: list[dict], viewer: str) -> list[dict]:
-    """The Brief's concept tiles with what memory knows of each (`mem`: state, strength, due), due ones first."""
-    try:
-        key = projects.key_for(p.root)
-        who = person(viewer)
-        if not who or not key:
-            return cs
-        sync(key, p.root)
-        ks = {k["id"]: k for k in knowledge(who)}
-        rank = dict(due=0, shaky=1, untested=2, known=3)
-        for c in cs:
-            k = ks.get(f"hill:{key}/{c['hill']}" if c.get("hill") else c["id"])
-            c["mem"] = dict(state=k["state"], strength=k["strength"], due=k["due"]) if k else dict(state="new")
-        return sorted(cs, key=lambda c: rank.get(c["mem"]["state"], 2))
-    except Exception:  # noqa: BLE001
-        return cs
-
-
 def view(p, viewer: str, now: float | None = None, others: bool = True) -> dict:
     now = now or time.time()
     key = projects.key_for(p.root) or ""

@@ -113,10 +113,6 @@ class Memory(unittest.TestCase):
         self.assertIn("ladder", {k["id"] for k in d["concepts"]})
         anon = json.loads(_feature(features.GET, self.p, "/api/memory", dict(viewer="anon"))[1])
         self.assertIsNone(anon["person"]); self.assertEqual(anon["concepts"], [])
-        b = learn.brief(self.p, 0, "p-00aa11bb")
-        ci = next(c for c in b["concepts"] if c["id"] == "ci")
-        self.assertEqual(ci["mem"]["state"], "shaky")
-        self.assertEqual(b["concepts"][0]["mem"]["state"], "shaky")  # weak ones lead, nothing is due yet
 
     def test_methods_carry_across_projects(self):
         with memory.db() as con:
