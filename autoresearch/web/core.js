@@ -47,6 +47,11 @@ const grp=x=>Math.abs(x)>=100?Math.round(x).toLocaleString('en-US'):(+x.toPrecis
 const sv=(s,v,n)=>{if(v==null||!isFinite(v))return '—';if(isCont(s)){const x=negSlice(s)?-v:v;return (grp(x)+' '+unitOf(s)).trim()}
  n=n??sliceOf(s).n;return n?`${Math.round(v*n).toLocaleString('en-US')} of ${n.toLocaleString('en-US')}`:pct(v)};
 const sd=(s,d)=>{if(d==null||!isFinite(d))return '—';if(isCont(s)){const x=negSlice(s)?-d:d;return ((x>0?'+':x<0?'−':'')+grp(Math.abs(x))+' '+unitOf(s)).trim()}return pts(d)+' pts'};
+// a pooled score whose runs errored on a real share of examples: a few words beside it ("1,227 errored"). Reads the
+// server's pooled count and share (`errors` / `error_share`, or with a side prefix, `cand_` / `base_`); without the
+// share it adds nothing
+const errWarn=(o,pre='')=>{const sh=o?.[pre+'error_share'],k=o?.[pre+'errors'];
+ return typeof sh==='number'&&sh>=.1&&k?` <span class="${sh>=.5?'neg':'warn'} errw" title="${esc(`${Math.round(100*sh)}% of the pooled examples errored`)}">${Number(k).toLocaleString('en-US')} errored</span>`:''};
 const firstLine=t=>String(t||'').split(/(?<=\.)\s/)[0];
 
 // ---------- ledger queries

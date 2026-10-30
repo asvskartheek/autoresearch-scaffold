@@ -109,10 +109,10 @@ function gateTable(name,g,base='Matched champion'){
    const pooled=c.cand_runs>1||c.base_runs>1?` · runs ${c.cand_runs??1} / ${c.base_runs??1}`:'';
    const go=c.cand_task?`onclick="if(!event.target.closest('a,button,details'))location.hash='task/${enc(c.cand_task)}'"`:'';
    rows.push(`<tr class="${c.cand_task?'click':''} ${i===r.checks.length-1?'':'md-in'}" ${go}>${i?'':head}
-    <td class="${i?"md-c1":""}"><div class="two"><a class="mono md-sl ln" href="#slices/${enc(c.slice)}">${slw(c.slice)}</a><span class="sub" ${pooled?'title="Complete runs pooled per example: this model / champion"':''}>${n!=null?'n '+n.toLocaleString():'n —'}${pooled}${bin(c.slice)?'':' · mean'}${errorNote}</span><details class="md-mobile-evidence"><summary>Rule and compared values</summary><div>${rule(c)}</div><div>This model: ${score(c.cand,c.slice,c.n)}</div><div>Matched champion: ${score(c.base,c.slice,c.n)}</div>${c.base_task?`<a href="#task/${enc(c.base_task)}">Champion run / setup</a>`:''}</details></div></td>
+    <td class="${i?"md-c1":""}"><div class="two"><a class="mono md-sl ln" href="#slices/${enc(c.slice)}">${slw(c.slice)}</a><span class="sub" ${pooled?'title="Complete runs pooled per example: this model / champion"':''}>${n!=null?'n '+n.toLocaleString():'n —'}${pooled}${bin(c.slice)?'':' · mean'}${errorNote}</span><details class="md-mobile-evidence"><summary>Rule and compared values</summary><div>${rule(c)}</div><div>This model: ${score(c.cand,c.slice,c.n)}${errWarn(c,'cand_')}</div><div>Matched champion: ${score(c.base,c.slice,c.n)}${errWarn(c,'base_')}</div>${c.base_task?`<a href="#task/${enc(c.base_task)}">Champion run / setup</a>`:''}</details></div></td>
     <td class="sub md-rule md-hm">${rule(c)}</td>
-    <td class="num md-hs">${ran?(c.cand_task?`<a href="#task/${enc(c.cand_task)}">${score(c.cand,c.slice,c.n)}</a>`:score(c.cand,c.slice,c.n)):DASH}</td>
-    <td class="num md-hs">${ran?(c.base_task?`<a href="#task/${enc(c.base_task)}">${score(c.base,c.slice,c.n)}</a>`:score(c.base,c.slice,c.n)):DASH}</td>
+    <td class="num md-hs">${ran?(c.cand_task?`<a href="#task/${enc(c.cand_task)}">${score(c.cand,c.slice,c.n)}</a>`:score(c.cand,c.slice,c.n))+errWarn(c,'cand_'):DASH}</td>
+    <td class="num md-hs">${ran?(c.base_task?`<a href="#task/${enc(c.base_task)}">${score(c.base,c.slice,c.n)}</a>`:score(c.base,c.slice,c.n))+errWarn(c,'base_'):DASH}</td>
     <td class="num"><span class="${!ran?'':c.delta>0?'pos':c.delta<0?'neg':'sub'}">${ran?diff(c.delta,c.slice):DASH}</span></td>
     <td class="md-ci">${ran?(bin(c.slice)?ciBar(c):'')+`<div class="sub md-cil">${ciText(c,c.slice)}</div>`:DASH}</td>
     <td class="num md-hw">${c.wins!=null?`<span class="pos">${c.wins}</span> / <span class="${c.losses?'neg':''}">${c.losses}</span>`:DASH}</td>
@@ -187,7 +187,7 @@ VIEWS.model=(name)=>{
  const f=fullScore(name),fullKey=L.config.primary_dataset+'/full';
  const meta=[st(m.status,m.status[0].toUpperCase()+m.status.slice(1))+(m.phase?' '+pill(m.phase):''),titled||label(name)!==name?`<span class="md-idc"><span class="mono md-id">${esc(name)}</span>${copyBtn(name)}</span>`:'',m.parent&&m.parent!==name?`<span title="The model this one was built from">built on ${mlink(m.parent)}${L.models[m.parent]?.status==='champion'?' (champion)':''}</span>`:'',
   m.hill?`<span>hill <a class="ln" href="#hill/${enc(m.hill)}">${esc(hill?.title||m.hill)}</a></span>`:'',m.created?`<span>registered ${stamp(m.created)}</span>`:'',
-  f?`<span>${f.task?`<a href="#task/${enc(f.task)}">${score(f.score,fullKey,f.n)}</a>`:score(f.score,fullKey,f.n)} on ${esc(short(fullKey))}, n ${f.n.toLocaleString()}</span>`:''].filter(Boolean).join('<span class="sep">·</span>');
+  f?`<span>${f.task?`<a href="#task/${enc(f.task)}">${score(f.score,fullKey,f.n)}</a>`:score(f.score,fullKey,f.n)} on ${esc(short(fullKey))}, n ${f.n.toLocaleString()}${errWarn(f)}</span>`:''].filter(Boolean).join('<span class="sep">·</span>');
  const lad=v.rej?ladder(v.rej):g&&!g.error&&!v.viz?ladder(g):'';  // a candidate's ladder already leads the page
  h.push(`<section class="card md-obj"><div class="md-top"><div class="md-meta">${meta}</div>${lad?`<div class="md-lad">${lad}</div>`:''}</div>
   <dl class="md-dl">
@@ -210,7 +210,7 @@ VIEWS.model=(name)=>{
   h.push(promotion(name,m));
   // a champion with no hill may have no ladder slice at all: then no table, not a header with no rows
   const lsRows=(g.rungs||[]).flatMap(r=>(r.checks||[]).map((c,i)=>{const s=L.leaderboard[c.slice]?.[name],n=s?.n??L.slices[c.slice]?.n;
-   return `<tr><td>${i?'':esc(r.rung)}</td><td><a class="mono md-sl ln" href="#slices/${enc(c.slice)}">${slw(c.slice)}</a></td><td class="num">${n!=null?n.toLocaleString():DASH}</td><td class="num">${s?(s.task?`<a href="#task/${enc(s.task)}">${score(s.score,c.slice,s.n)}</a>`:score(s.score,c.slice,s.n)):DASH}</td></tr>`}));
+   return `<tr><td>${i?'':esc(r.rung)}</td><td><a class="mono md-sl ln" href="#slices/${enc(c.slice)}">${slw(c.slice)}</a></td><td class="num">${n!=null?n.toLocaleString():DASH}</td><td class="num">${s?(s.task?`<a href="#task/${enc(s.task)}">${score(s.score,c.slice,s.n)}</a>`:score(s.score,c.slice,s.n))+errWarn(s):DASH}</td></tr>`}));
   if(lsRows.length)h.push(panel('Ladder slices',table(['Rung','Slice',['n','num'],['Score','num']],lsRows),{meta:'the scores candidates are paired against',cls:'section'}));
  }
 
