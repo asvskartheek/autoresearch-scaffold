@@ -960,8 +960,10 @@ def goal_evidence_status(status, baseline_exists):
         value = frozen.get("value")
         status["met"] = value is not None and sign * (value - status["target"]) >= 0
         status["gap"] = None if value is None else sign * (status["target"] - value)
-    if status.get("model") == status.get("baseline"):
+    if status.get("model") and status.get("model") == status.get("baseline"):
         status["comparison_state"] = "same_model"
+    elif status.get("kpi", "score") != "score":
+        status["comparison_state"] = "unpaired"  # cost and latency are per-run summaries: nothing to pair
     elif status.get("vs_baseline", None) and status["vs_baseline"].get("n"):
         status["comparison_state"] = "paired"
     elif not baseline_exists:
