@@ -58,7 +58,7 @@ function sessionOf([a,b]){
 // "… Pre-declared: X" → [what changed, what it should move]
 const split=c=>{const s=String(c||''),i=s.search(/pre-?declared\s*:?/i);return i<0?[s,'']:[s.slice(0,i).trim().replace(/[.;,]$/,''),s.slice(i).replace(/^pre-?declared\s*:?\s*/i,'')]};
 const evScore=t=>{const sm=t.summary||{};if(emptyEval(t))return 'no results';if(sm.score==null)return '';
- if(partialEval(t))return `partial ${sm.n||0}/${t.progress?.total||((sm.n||0)+(sm.missing||0))}, unranked`;
+ if(partialEval(t))return `partial ${(sm.n||0).toLocaleString()}/${(t.progress?.total||((sm.n||0)+(sm.missing||0))).toLocaleString()}, unranked`;
  return S.state.slices[t.slice]?.scale==='continuous'?sv(t.slice,sm.score,sm.n):sm.n?`${Math.round(sm.score*sm.n).toLocaleString()}/${sm.n.toLocaleString()}`:pct(sm.score)};
 const verdict=(m,ds)=>{const d=ds.filter(x=>x.model===m&&/^(rejected|promote|champion)$/.test(x.kind)).at(-1),M=S.state.models[m]||{};
  if(d)return [d.kind==='rejected'?'Rejected':'Promoted',d.kind==='rejected'?'neg':'pos',d.reason||M.reason||''];
