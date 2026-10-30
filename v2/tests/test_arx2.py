@@ -553,3 +553,37 @@ def test_init_writes_the_rules(proj):
     rules = (proj / ".arx2" / "RULES.md").read_text()
     assert "Prevalence is backed by ids" in rules and "arx2 verify" in rules
     assert cli(proj, "rules").stdout == rules
+
+
+WEB = ROOT / "arx2" / "web"
+
+
+def _ui_prose(src, limit=12):
+    """Text runs in UI code that read as prose and run past `limit` words.
+
+    Every string literal, and the text between tags anywhere in the file, is split at its block tags (inline tags are
+    dropped); a ${...} counts as one word. A run is code, not prose, when it holds braces, arrows, operators, calls or property access.
+    """
+    import re
+    lits = re.findall(r'"(?:[^"\\\n]|\\.)*"|\'(?:[^\'\\\n]|\\.)*\'|`(?:[^`\\]|\\.)*`', src)
+    lits += re.findall(r">([^<>`]+)<", src)
+    out = set()
+    for lit in lits:
+        lit = re.sub(r"</?(?:b|i|a|em|strong|span|code)\b[^<>]*>", " ", lit.strip("\"'`"))  # inline tags join a sentence
+        for run in re.split(r"<[^>]*>", lit):
+            text = re.sub(r"\$\{[^{}]*\}", " X ", run)
+            if re.search(r"[<>{}]|=>|&&|\|\||==|\?\.|\w\.\w|\w\(|;\s*$|\\n", text):
+                continue
+            words = [w for w in text.split() if re.search(r"[A-Za-z]", w)]
+            if len(words) > limit:
+                out.add(" ".join(words))
+    return sorted(out)
+
+
+def test_dashboard_text_stays_short():
+    bad = []
+    for f in ["pages.js", "ui.js", "index.html"]:
+        src = (WEB / f).read_text()
+        bad += [f"{f}: {t}" for t in _ui_prose(src)]
+        bad += [f"{f}: {c}" for c in ('class="sub"', 'class="hint"') if c in src]
+    assert not bad, "UI prose over 12 words (use a label, a figure or a title attribute):\n" + "\n".join(bad)

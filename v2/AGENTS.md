@@ -26,6 +26,10 @@ Every command prints compact text with a `help[]` block of next steps; errors pr
 - Write cards for facts a person must not forget: `arx2 card add --front ... --back ...`. Papers: `arx2 doc add <key> --kind paper --audience internal|external` (see Papers below).
 - Read `arx2 learner` now and then: it says which names the person keeps hovering and which cards they miss. Make those clearer.
 
+## UI
+
+- Dashboard text: labels of at most three words, no sentences about data; the test enforces it.
+
 ## Papers
 
 A paper is published only when it is complete, self-contained and backed by the ledger. `arx2 doc add --kind paper`
