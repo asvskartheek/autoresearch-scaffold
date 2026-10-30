@@ -128,10 +128,11 @@ function pn(t,p,lead){
  const f=p.fmt==='num'&&p.key?wbFmt(p.key):p.fmt,quiet=Math.max(t.health?.silent_s??0,t.status==='stalled'?now()-t.heartbeat:0);
  if(p.id==='eta'){lb='Done by';const left=p.value-now(),d=p.drift_s||0;
   big=t.status==='stalled'?`<span class="neg">none</span><small>last said ${wbClock(p.value)}</small>`:`${wbClock(p.value)}<small>${left>0?`in ${span(left)}`:'any moment'}</small>`;
-  sub=Math.abs(d)<60?'steady':`${span(Math.abs(d))} ${d<0?'sooner':'later'} than 5 min ago`}
+  const win=(t.eta||kidOf(t)?.eta)?.window_s||300,young=now()-t.created<win;
+  sub=Math.abs(d)<60?'steady':`${span(Math.abs(d))} ${d<0?'sooner':'later'} than ${young?'first estimated':span(win)+' ago'}`}
  else if(p.id==='gpu'){big=`${Math.round(p.value)}%${p.mem?.[0]!=null?`<small>${p.mem[0].toFixed(1)} of ${p.mem[1]?.toFixed(0)} GB</small>`:''}`;sub=p.gpus>1?`${p.gpus} GPUs`:'';
   if(p.mem?.[1])extra=`<div class="wb-mem">${meter(p.mem[0]/p.mem[1],{cls:'mem'})}</div>`}
- else if(p.id==='pair'){const dl=p.delta??p.value/(p.n||1);big=`<span class="${dl>0?'pos':dl<0?'neg':''}">${sd(t.slice,dl)}</span><small>90% CI ${pts(p.ci[0])} to ${pts(p.ci[1])}</small>`;sub=`${p.won} won · ${p.lost} lost`}
+ else if(p.id==='pair'){const dl=p.delta??p.value/(p.n||1);big=`<span class="${dl>0?'pos':dl<0?'neg':''}">${sd(t.slice,dl)}</span><small>90% CI ${pts(p.ci[0])} to ${pts(p.ci[1])}</small>`;sub=`${p.won} won · ${p.lost} lost${p.n?` of ${n0(p.n)}`:''}`}
  else if(p.id==='lat'){big=`${p.value.toFixed(1)} s<small>95th ${p.p95.toFixed(1)} s</small>`;sub='median'}
  else if((p.id==='tps'||p.id==='rate')&&quiet>=60){big=`<span class="neg">none</span><small>no progress for ${span(quiet)}</small>`}
  else if(p.id==='tps'){big=`${n0(p.value)}${p.step_time?`<small>${p.step_time.toFixed(1)} s a step</small>`:''}`}
