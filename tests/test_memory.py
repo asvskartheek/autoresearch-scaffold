@@ -1,9 +1,9 @@
 """Learner memory (memory.py): the schema, backfill idempotence, the spaced-repetition schedule, live writes through
-the Brief's routes, and GET /api/memory."""
+the Brief's routes (teach phases, 101 course checks), and GET /api/memory."""
 import json, os, sqlite3, tempfile, unittest
 
 os.environ["ARX_HOME"] = tempfile.mkdtemp()  # never touch the real ~/.arx
-from autoresearch import features, learn, memory, projects, teach
+from autoresearch import course, features, learn, memory, projects, teach
 from autoresearch.server import _feature
 from tests.test_learn import ledger, run
 
@@ -90,6 +90,27 @@ class Memory(unittest.TestCase):
         self.assertNotIn("Something goes wrong", dump); self.assertNotIn("Hill one", dump)
         self.assertNotIn(c["q"], dump)
         self.assertIn(f"hill:{self.key}/h1", dump)
+
+    def test_course_checks_map_onto_concepts(self):
+        for item, hit, how in (("paired-delta", True, "lesson"), ("gate", False, "primer"), ("project-hills", True, "review"),
+                               ("interval", True, "lesson")):
+            self.assertEqual(self.post("/api/course", dict(viewer="p-00aa11bb", item=item, hit=hit, how=how))["memory"]["n"], 1)
+        self.post("/api/course", dict(viewer="anon", item="gate", hit=True))  # no one's
+        with memory.db() as con:
+            ev = [dict(r) for r in con.execute("SELECT kind, ref, hit FROM events ORDER BY t")]
+            titles = dict(con.execute("SELECT id, title FROM concepts").fetchall())
+        self.assertEqual([(e["kind"], e["ref"], e["hit"]) for e in ev],
+                         [("check", "course:paired-delta", 1), ("check", "course:gate", 0), ("check", "course:project-hills", 1),
+                          ("check", "course:interval", 1)])
+        ks = {k["id"]: k for k in memory.knowledge("p-00aa11bb")}
+        self.assertEqual(set(ks), {"paired", "ci", "lesson:gate", f"lesson:{self.key}/project-hills"})
+        self.assertEqual({i: k["lesson"] for i, k in ks.items()},
+                         {"paired": "paired-delta", "ci": "interval", "lesson:gate": "gate", f"lesson:{self.key}/project-hills": "project-hills"})
+        self.assertEqual((ks["lesson:gate"]["project"], ks[f"lesson:{self.key}/project-hills"]["project"]), ("", self.key))
+        self.assertEqual(titles["lesson:gate"], "Gate"); self.assertEqual(ks["lesson:gate"]["state"], "shaky")
+        mem = course.memory(course.rows(self.p, "p-00aa11bb"))  # the course's own schedule reads the same rows
+        self.assertEqual(set(mem), {"paired-delta", "gate", "project-hills", "interval"})
+        self.assertEqual(memory.sync_all("backfill", full=True)["added"][self.key], 0)
 
     def test_backfill_is_idempotent(self):
         learn.predict(self.p, dict(viewer="ann", card=self.gate["id"], guess="Fail", conf=0.6))

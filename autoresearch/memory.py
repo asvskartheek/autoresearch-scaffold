@@ -13,11 +13,17 @@ Read from each project's `.research/`:
   comments.jsonl       dashboard comments           -> comment / reply / thread_seen (person's own, no body)
   papers/*/thread.jsonl paper threads               -> the same, on a paper
   questions.json       questions people asked       -> question
+  course.jsonl         101 checks (course.py)       -> check (lesson, review or Brief primer)
 Never stored: card questions, option labels, comment bodies, hill examples, or any other project text (some projects
 hold client data). Kept: ids, categories, numbers, and the person's own typed answers (code lines, explanations).
 
 Concepts: general ones with stable ids (`paired`, `ci`, `ladder`, `hill`, `goal`) and per-project ones
 (`hill:<project>/<name>`, `model:<project>/<name>`, `goal:<project>/<name>`). An event touches one or more.
+A 101 lesson is the general concept it teaches where there is one (paired-delta -> paired, interval -> ci, ladder,
+hill, goal), else `lesson:<id>` (champion, gate, ...) or, for a lesson about this project, `lesson:<project>/<id>`.
+
+The course keeps its own fixed review schedule per project (course.memory, read from course.jsonl); memory reads the
+same rows into its cross-project schedule. course.jsonl is the one record of both; neither writes the other's state.
 
 Knowledge (per person and concept) is rebuilt from that person's events whenever they change, so it never drifts:
   graded events (a hit or a miss) drive a spaced-repetition schedule: stability S in days (the gap after which recall
@@ -25,7 +31,8 @@ Knowledge (per person and concept) is rebuilt from that person's events whenever
   a hit after a real gap multiplies S by 2.5 (hard methods 3), a hit while crammed by 1.3; a miss cuts S to 35%.
   strength now = m * 0.9 ** (days since review / S). Exposures (seen, read, skip, comment) only update last seen.
 
-  GET /api/memory?viewer=<person id>   {person, name, now, concepts, due, methods, changed, projects}
+  GET /api/memory?viewer=<person id>   {person, name, now, project, concepts (each with its 101 `lesson` or null), due, methods,
+                                        changed, timeline, people}
   arx memory [show|due|changed|backfill] [--viewer ID]
 """
 from __future__ import annotations
@@ -43,6 +50,7 @@ from . import features, projects
 
 DAY = 86400.0
 GENERAL = dict(paired="Paired delta", ci="Interval crosses zero", ladder="The gate ladder", hill="Hills", goal="Goals")
+TO_GENERAL = {"paired-delta": "paired", "interval": "ci", "ladder": "ladder", "hill": "hill", "goal": "goal"}  # 101 lessons
 HARD = {"code", "explain", "prototype"}
 GRADED = ("predict", "attempt", "self", "step", "check")
 SCHEMA = [
@@ -153,10 +161,31 @@ def route_concepts(key: str, route: str) -> list[str]:
     return [kind, f"{kind}:{key}/{name}"] if kind in ("hill", "goal") and name else [f"model:{key}/{name}"] if kind == "model" and name else []
 
 
+def lesson_concept(key: str, item: str) -> list[str]:
+    """The concept a 101 lesson (course.IDS) teaches."""
+    from . import course
+    if item not in course.IDS:
+        return []
+    if item in TO_GENERAL:
+        return [TO_GENERAL[item]]
+    return [f"lesson:{key}/{item}" if item in course.PROJECT else f"lesson:{item}"]
+
+
+def lesson_of(cid: str) -> str | None:
+    """The 101 lesson that teaches a concept, for a link to #course/<id>."""
+    if cid in GENERAL:
+        return next(k for k, v in TO_GENERAL.items() if v == cid)
+    return cid[7:].rpartition("/")[2] if cid.startswith("lesson:") else None
+
+
 def _title(cid: str) -> tuple[str, str, str, str | None]:
     """(project, kind, title, parent) of a concept id."""
     if cid in GENERAL:
         return "", "general", GENERAL[cid], None
+    if cid.startswith("lesson:"):
+        from . import course
+        key, _, item = cid[7:].rpartition("/")
+        return key, "lesson", course.TITLE.get(item, item), None
     kind, _, rest = cid.partition(":")
     key, _, name = rest.partition("/")
     return key, kind, name, kind if kind in ("hill", "goal") else None
@@ -220,6 +249,12 @@ def _events_from(key: str, name: str, r: dict, ctx: dict) -> list[tuple[dict, li
         if chk and r.get("ok") is not None and doc.startswith("concept:"):
             return [(dict(t=t, person=who, kind="check", ref=str(chk), hit=_hit(r.get("ok")), ms=_num(r.get("ms"))), cs)]
         return [(dict(t=t, person=who, kind="read", ref=f"{doc}#{step}" if step is not None else doc, ms=_num(r.get("ms"))), cs)]
+    if name == "course.jsonl":  # {t, viewer, item, hit, how}: a lesson's check, a review, or a Brief primer
+        who = person(r.get("viewer"), roster)
+        cs = lesson_concept(key, str(r.get("item") or ""))
+        if not who or not cs or not isinstance(r.get("hit"), bool):
+            return []
+        return [(dict(t=t, person=who, kind="check", ref=f"course:{r['item']}", hit=_hit(r["hit"])), cs)]
     # comments: the dashboard's (anchor.route) and a paper's thread (the paper's hill or goal)
     k = r.get("kind")
     who = person(r.get("by"), roster) if r.get("by") else None
@@ -259,7 +294,7 @@ def _paper_concepts(key: str, root: Path) -> dict:
 
 def _files(root: Path) -> list[str]:
     d = root / ".research"
-    fs = ["predictions.jsonl", "teach.jsonl", "understanding.jsonl", "comments.jsonl"]
+    fs = ["predictions.jsonl", "teach.jsonl", "understanding.jsonl", "course.jsonl", "comments.jsonl"]
     pd = d / "papers"
     fs += [f"papers/{x.name}/thread.jsonl" for x in sorted(pd.iterdir())] if pd.is_dir() else []
     return [f for f in fs if (d / f).exists()]
@@ -426,7 +461,7 @@ def knowledge(who: str, now: float | None = None) -> list[dict]:
     for r in rows:
         k = dict(r)
         rc = recall(k, now)
-        k |= dict(id=k.pop("concept"), recall=rc, strength=None if rc is None else round(rc * (k["mastery"] or 0), 3), state=state_of(k, now))
+        k |= dict(lesson=lesson_of(k["concept"]), id=k.pop("concept"), recall=rc, strength=None if rc is None else round(rc * (k["mastery"] or 0), 3), state=state_of(k, now))
         out.append(k)
     return sorted(out, key=lambda k: (k["project"] != "", k["project"], k["id"]))
 
@@ -548,7 +583,7 @@ def _get(p, path, q):
 # ---------------------------------------------------------------- live writes
 # The Brief's own routes stay as they are; after one of them writes its ledger, memory reads the new lines. The typed
 # answer of a code step or an explain answer is not in teach.jsonl, so it is taken from the request (the person's own words).
-WATCH = ("/api/teach", "/api/predictions", "/api/understanding", "/api/comments")
+WATCH = ("/api/teach", "/api/predictions", "/api/understanding", "/api/course", "/api/comments")
 
 
 def after_post(p, path: str, body, res) -> None:

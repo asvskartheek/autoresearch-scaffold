@@ -1,7 +1,7 @@
 'use strict';
 // What you know: the learner memory (autoresearch/memory.py, GET api/memory) for the person in this browser, across
 // every project. Each concept is a ring: the arc is its strength now (mastery × recall), the colour its state.
-// Due ones lead and link to the Brief of the project they live in.
+// Due ones lead and link to their 101 lesson, or to the Brief of the project they live in.
 {
 const M={d:null,at:0,busy:false,err:null,who:null};
 const me=()=>window.ARXP?ARXP.me().id:'';
@@ -14,7 +14,7 @@ async function load(force){
 }
 const ST={known:'Known',shaky:'Shaky',due:'Due',untested:'Seen, not tested'};
 const COL={known:'var(--positive)',shaky:'var(--negative)',due:'var(--warning)',untested:'var(--faint)'};
-const NAMES={predict:'Predict',sketch:'Sketch',spot:'Spot the error',prototype:'Prototype',code:'Code',explain:'Explain back'};
+const NAMES={predict:'Predict',sketch:'Sketch',explain:'Say it',code:'Write the line',ndrag:'Drag n',spot:'Spot the error',prototype:'Prototype'};
 // a ring: the track, the strength arc, hits of n in the middle
 function ring(k,r){
  const c=2*Math.PI*r,f=Math.max(0,Math.min(1,k.strength||0)),col=COL[k.state]||COL.untested,sz=2*r+10;
@@ -25,7 +25,8 @@ function ring(k,r){
 }
 const when=t=>{if(!t)return '';const d=t-M.d.now;return Math.abs(d)<3600?'now':d>0?'in '+span(d):span(-d)+' ago'};
 const tip=k=>[k.title||k.id,ST[k.state],k.n?`${k.hits} of ${k.n} right`:'',k.strength!=null?`strength ${Math.round(100*k.strength)}%`:'',k.due?`review ${when(k.due)}`:'',k.last_seen?`seen ${when(k.last_seen)}`:''].filter(Boolean).join(' · ');
-const brief=k=>(k.project&&k.project!==M.d.project?`/p/${enc(k.project)}/`:'')+'#learn';
+// a concept a 101 lesson teaches opens that lesson; the rest open the Brief of their project
+const brief=k=>(k.project&&k.project!==M.d.project?`/p/${enc(k.project)}/`:'')+(k.lesson?'#course/'+enc(k.lesson):'#learn');
 function node(k,r){
  const kind=k.kind==='model'?'model':k.kind==='hill'?'hill':k.kind==='goal'?'goal':'';
  return `<a class="mk-node ${k.state}" href="${brief(k)}" title="${esc(tip(k))}">${ring(k,r)}<span class="mk-l">${kind?`<i class="mk-kind">${kind}</i>`:''}${esc(k.title||k.id)}</span></a>`;
