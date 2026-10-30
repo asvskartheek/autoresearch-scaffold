@@ -599,17 +599,25 @@ section("results", () => {
 section("gates", () => {
   const L = D.ladder;
   if (!L.length) return `<div class="empty">research.json has no gate ladder.</div>`;
-  const rule = c => c.rule === "better" ? `better > ${pts(c.threshold, 0).replace("+", "")} pts` : c.rule === "manual" ? "signed off by a person" : `not worse ≥ ${pts(c.threshold, 0)} pts`;
+  // on a continuous slice margin / tolerance are a fraction of the champion's mean (core.gate): once paired the
+  // threshold is in the slice's unit, "not worse by more than 8.2 MB (5% of the champion's mean)"
+  const cont = c => c.scale === "continuous" || !!c.relative;
+  const frac = c => +(100 * Math.abs(c.relative && c.base ? c.threshold / c.base : c.threshold)).toPrecision(2) + "% of the champion's mean";
+  const rule = c => c.rule === "manual" ? "signed off by a person"
+    : !cont(c) ? (c.rule === "better" ? `better > ${pts(c.threshold, 0).replace("+", "")} pts` : `not worse ≥ ${pts(c.threshold, 0)} pts`)
+    : !c.threshold ? (c.rule === "better" ? "better" : "not worse")
+    : `${c.rule === "better" ? "better" : "not worse"} by more than ${c.relative ? `${grp(Math.abs(c.threshold))}${c.unit ? " " + c.unit : ""} (${frac(c)})` : frac(c)}`;
   const mini = c => {
     if (c.delta == null) return "";
-    const ext = Math.max(4, Math.abs(c.threshold * 100) + 2, Math.abs((c.lo ?? c.delta) * 100), Math.abs((c.hi ?? c.delta) * 100)), X = v => .03 + (v + ext) / (2 * ext) * .94, thr = c.threshold * 100;
-    const ok = c.state === "pass", k = ok ? "c-pos" : "c-neg";
-    return trk([tLine(), `<i class="tzone" style="left:0;width:${pc(X(thr))}"></i>`, tMark(X(0), "c-faint", true), tMark(X(thr), "c-neg"), c.lo != null ? tBar(X(c.lo * 100), X(c.hi * 100), k, 3) : "", tDot(X(c.delta * 100), k, 4.5)], 26);
+    const k = cont(c) ? 1 : 100, ends = [Math.abs(c.threshold * k), Math.abs((c.lo ?? c.delta) * k), Math.abs((c.hi ?? c.delta) * k)];
+    const ext = cont(c) ? Math.max(...ends) * 1.15 || 1 : Math.max(4, ends[0] + 2, ends[1], ends[2]), X = v => .03 + (v + ext) / (2 * ext) * .94, thr = c.threshold * k;
+    const ok = c.state === "pass";
+    return trk([tLine(), `<i class="tzone" style="left:0;width:${pc(X(thr))}"></i>`, tMark(X(0), "c-faint", true), tMark(X(thr), "c-neg"), c.lo != null ? tBar(X(c.lo * k), X(c.hi * k), ok ? "c-pos" : "c-neg", 3) : "", tDot(X(c.delta * k), ok ? "c-pos" : "c-neg", 4.5)], 26);
   };
   const stateTxt = { need_run: `${mnt(CH)} not run`, need_baseline: `${PV ? mnt(PV) : "comparator"} not run`, no_comparator: "no comparator", needs_review: "needs a person" };
   const rungs = L.map((rg, i) => {
     const checks = rg.checks.map(c => {
-      const r = RS[c.slice] || { slice: c.slice, scale: "binary", n: c.n };
+      const r = RS[c.slice] || { slice: c.slice, scale: c.scale || "binary", n: c.n, unit: c.unit, metric: c.metric };
       const e = { label: `${rg.rung} · ${c.slice}`, slice: c.slice, n: c.n, src: `ladder rule ${c.ref}`, note: c.delta != null ? `${rule(c)} · observed ${dl(c.delta, r)} · CI ${ciTxt(c, r)} · ${c.wins} better / ${c.losses} worse${c.cand_runs ? ` · ${c.cand_runs} vs ${c.base_runs ?? "?"} runs pooled` : ""}` : stateTxt[c.state] || c.state, runs: [c.cand_task, c.base_task].filter(Boolean).length ? [c.cand_task, c.base_task].filter(Boolean) : RS[c.slice] ? runIds(RS[c.slice]) : [] };
       return `<div class="chk"><div class="rl">${esc(short(c.slice))} · ${rule(c)}</div>
       <div class="ob">${c.delta != null ? `${isBin(r) && c.cand != null ? ev(NC(c.cand * c.n) + " vs " + NC(c.base * c.n), e) + " · " : ""}<b class="${c.state === "pass" ? "pos" : "neg"}">${ev(dl(c.delta, r), e)}</b> ${c.state === "pass" ? '<span class="pos">✓</span>' : '<span class="neg">✗</span>'}${c.noisy ? ' <span class="warn">noisy</span>' : ""}` : `<span class="warn">${esc(stateTxt[c.state] || c.state)}</span>`}</div>${mini(c)}</div>`;

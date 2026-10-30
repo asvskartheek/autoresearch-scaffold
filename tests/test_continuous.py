@@ -40,6 +40,19 @@ class Continuous(unittest.TestCase):
     def test_binary_errors_still_score_zero(self):
         self.assertAlmostEqual(summarize([dict(id="a", score=1), dict(id="b", score=1, error="x")])["score"], 0.5)
 
+    def test_reference_gates_keep_continuous_units(self):
+        from autoresearch import reference
+        p = ledger()
+        p.add_model("v0", status="champion")
+        p.add_model("v1", parent="v0")
+        run(p, "v0", [-160.0] * 12)
+        run(p, "v1", [-150.0] * 12)
+        d = reference.build(p, "v1", cache=False)
+        c = d["ladder"][0]["checks"][0]
+        # the paper writes the threshold in MB, as a fraction of the champion's mean, never in pts
+        self.assertEqual((c["scale"], c["unit"], c["relative"]), ("continuous", "MB", True))
+        self.assertAlmostEqual(c["threshold"], -8.0)
+
     def test_tolerance_is_a_fraction_of_the_champion(self):
         p = ledger()
         p.add_model("v0", status="champion")
