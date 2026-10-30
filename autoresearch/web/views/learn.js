@@ -57,7 +57,7 @@ addEventListener('pagehide',()=>leaveCard({beacon:true}));
 // an axis step near span/k on the 1-2-5 ladder
 const nstep=(span,k)=>{const raw=span/k,mag=10**Math.floor(Math.log10(raw||1));return [1,2,5,10].map(m=>m*mag).find(m=>m>=raw)};
 // a signed amount in a viz's unit: "+5.2 pts" (0/1 slice) or "−1,071 ms" (continuous); 0/1 values come in points
-const lamt=(u,x)=>(x=u==='pts'&&+Math.abs(x).toFixed(2)===0?0:x,(x>0?'+':x<0?'−':''))+(u==='pts'?(+Math.abs(x).toFixed(2)).toString():grp(Math.abs(x)))+(u?' '+(u==='pts'&&+Math.abs(x).toFixed(2)===1?'pt':u):'');
+const lamt=(u,x)=>(x=(u==='pts'?+Math.abs(x).toFixed(2):+grp(Math.abs(x)).replace(/,/g,''))===0?0:x,(x>0?'+':x<0?'−':''))+(u==='pts'?(+Math.abs(x).toFixed(2)).toString():grp(Math.abs(x)))+(u?' '+(u==='pts'&&+Math.abs(x).toFixed(2)===1?'pt':u):'');
 function vizCI(v){
  const u=v.unit==null?'pts':v.unit,k=v.unit==null?100:1;  // older payloads carry fractions
  const d=k*v.delta,lo=k*v.lo,hi=k*v.hi,bar=v.bar!=null?k*v.bar:null,W=LW(),H=136,Lx=16,R=W-16;
@@ -106,7 +106,7 @@ function numberLine(c,guess,truth){
  const W=LW(),H=76,Lx=16,R=W-16,x=v=>Lx+(v-c.min)/(c.max-c.min)*(R-Lx),span=c.max-c.min;
  const raw=span/(W<420?7:12),mag=10**Math.floor(Math.log10(raw)),stp=[1,2,5,10].map(m=>m*mag).find(m=>m>=raw);
  let s=`<line x1="${Lx}" x2="${R}" y1="36" y2="36" stroke="var(--control)" stroke-width="2"/>`;
- for(let v=Math.ceil(c.min/stp)*stp;v<=c.max+1e-9;v+=stp)s+=`<line x1="${x(v)}" x2="${x(v)}" y1="31" y2="41" stroke="var(--control)"/><text x="${x(v)}" y="58" text-anchor="middle">${c.unit==='pts'&&v>0?'+':''}${(+v.toFixed(2)).toLocaleString()}</text>`;
+ for(let v=Math.ceil(c.min/stp)*stp;v<=c.max+1e-9;v+=stp)s+=`<line x1="${x(v)}" x2="${x(v)}" y1="31" y2="41" stroke="var(--control)"/><text x="${x(v)}" y="58" text-anchor="middle">${c.unit==='pts'&&v>0?'+':v<0?'−':''}${(+Math.abs(v).toFixed(2)).toLocaleString()}</text>`;
  if(c.unit==='pts')s+=`<line x1="${x(0)}" x2="${x(0)}" y1="24" y2="48" stroke="var(--text)"/>`;
  const g0=Math.max(c.min,guess-c.tol),g1=Math.min(c.max,guess+c.tol);
  s+=`<rect x="${x(g0)}" y="28" width="${Math.max(2,x(g1)-x(g0))}" height="16" rx="3" fill="var(--accent)" opacity=".18"/>`;
