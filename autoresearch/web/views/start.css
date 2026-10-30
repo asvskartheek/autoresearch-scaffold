@@ -2,7 +2,7 @@
 .sx{display:grid;gap:var(--gap);grid-template-columns:minmax(0,3fr) minmax(0,2fr);grid-template-areas:"a b" "n c" "d d" "e e";align-items:start}
 .sx-a{grid-area:a}.sx-b{grid-area:b}.sx-n{grid-area:n}.sx-c{grid-area:c}.sx-d{grid-area:d}.sx-e{grid-area:e}
 .sx>div>.card{height:100%}
-@media (max-width:900px){.sx{grid-template-columns:minmax(0,1fr);grid-template-areas:"a" "c" "n" "b" "d" "e"}}
+@media (max-width:900px){.sx{grid-template-columns:minmax(0,1fr);grid-template-areas:"a" "c" "n" "b" "d" "e"}.sx.calm{grid-template-areas:"a" "n" "b" "c" "d" "e"}}
 .sx .ph h2{display:flex;align-items:center;gap:8px}
 a.sx-go{display:inline-flex;align-items:center;gap:2px;color:var(--muted)}
 a.sx-go:hover{color:var(--accent)}
@@ -130,3 +130,4 @@ a.sx-tile.rej b{color:var(--muted)}
 .sx-catch{height:32px}
 @media (max-width:600px){a.sx-tile{padding:8px 10px}}
 @media (max-width:600px){.sx-gt{flex-wrap:wrap;row-gap:2px;padding-right:0}.sx-gt .ell{flex-basis:100%}}
+.sx-gs{font-weight:400;font-size:12px}

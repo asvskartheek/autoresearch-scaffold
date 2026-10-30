@@ -49,7 +49,7 @@ const ovGoal=g=>{
  const now=g.value==null?DASH:`${U.gu(g,g.value)}${U.ofP(g)}`;
  const base=P.b!=null&&P.mode==='rel'?`<span>Baseline ${U.gu(g,P.b)}</span>`:'<span></span>';
  return `<a class="ov-goal ${U.isMain(g)?'':'ov-sub'}" href="#goal/${enc(g.name)}">
-  <span class="ov-gh"><span class="ell ov-gt">${esc(g.title||g.name)}</span><span class="ov-gd num">${fig}</span></span>
+  <span class="ov-gh"><span class="ell ov-gt">${esc(g.title||g.name)}<span class="faint ov-gs"> · ${esc(g.slice)}</span></span><span class="ov-gd num">${fig}</span></span>
   <span class="ov-gb"><span class="ov-trk ${met?'met':''}"><i style="width:${(100*f).toFixed(1)}%"></i>${mark!=null?`<b style="left:${(100*mark).toFixed(1)}%"></b>`:''}</span>${ovSpark(g)}</span>
   <span class="ov-ge num">${base}<span>Now <b>${now}</b></span><span>Target ${U.cmpSym(g)}&nbsp;${U.gt(g)}</span></span></a>`;
 };
@@ -111,8 +111,8 @@ VIEWS.overview=()=>{
  const GU=window.GoalUnits,gs=GU?Object.values(st.goals||{}).filter(g=>g.status==='open').sort((a,b)=>GU.isMain(b)-GU.isMain(a)||(a.created||0)-(b.created||0)):[];
  const cg=!cf&&champ&&gs.find(g=>GU.isMain(g)&&g.model===champ&&g.value!=null);
  h+=`<div class="ov-kpis">${kpis([
-  ['Champion',cf?sv(fullKey,cf.score,cf.n):cg?`${GU.gu(cg,cg.value)}${GU.ofP(cg)}`:DASH,champ?`<a href="#model/${enc(champ)}" class="ov-cn" title="${mnt(champ)}">${mn(champ)}</a>${cf?` · ${esc(short(fullKey))}`:cg?` · ${esc(short(cg.slice))}`:''}`:'No champion yet'],
-  ['Candidates',String(cands.length),(promotable.length?`<span class="pos">${promotable.length} ready to promote</span>`:cands.length?`${onWay.length} passed a rung · ${failed.length} failed`:'None')+(sup?` · ${sup} superseded`:''),'#models'],
+  ['Champion',cf?sv(fullKey,cf.score,cf.n):cg?`${GU.gu(cg,cg.value)}${GU.ofP(cg)}`:DASH,champ?`${cf?`<span class="faint">${esc(fullKey)}</span> · ${cf.errors?`<span class="neg">${cf.errors.toLocaleString()} ${cf.errors===1?'error':'errors'}${cf.runs>1?` over ${cf.runs} runs`:''}</span> · `:''}`:cg?`<span class="faint">${esc(cg.slice)}</span> · `:''}<a href="#model/${enc(champ)}" class="ov-cn" title="${mnt(champ)}">${mn(champ)}</a>`:'No champion yet'],
+  ['Candidates',String(cands.length),(promotable.length?`<span class="pos">${promotable.length} ready to promote</span>`:cands.length?`${onWay.length} passed a rung · ${failed.length} failed`:'None'),'#models'],
   ['Running',String(running.length),stalled.length?`<span class="neg">${stalled.length} stalled</span>`:running.length?'All reporting':'Nothing running','#workbench'],
   ['Open hills',String(open),`${climbed} climbed`,'#hills'],
  ])}</div>`;
@@ -147,7 +147,9 @@ VIEWS.overview=()=>{
  // the champion's baseline: the slices it has no run on yet, as chips
  if(champ&&bl?.need?.length){
   const nr=Object.keys(bl.roles).length;
-  h+=panel(`${term('champion','Champion')} baseline`,`<div class="ov-bchips">${bl.need.map(s=>`<a class="ov-bchip ${ovRunning(champ,s)?'run':''}" href="#slices/${enc(s)}" title="${esc(s)}">${esc(short(s))}<span class="faint"> ${ovN(st.slices[s]?.n)}</span></a>`).join('')}</div>`,
+  // a short name two slices share (full in every dataset) names its dataset too
+  const lab=s=>bl.need.filter(x=>short(x)===short(s)).length>1?s:short(s);
+  h+=panel(`${term('champion','Champion')} baseline`,`<div class="ov-bchips">${bl.need.map(s=>`<a class="ov-bchip ${ovRunning(champ,s)?'run':''}" href="#slices/${enc(s)}" title="${esc(s)}">${esc(lab(s))}<span class="faint"> ${ovN(st.slices[s]?.n)}</span></a>`).join('')}</div>`,
    {meta:`${bl.need.length} of ${plural(nr,'slice')} not run`,cls:'section ov-base'});
  }
 
@@ -193,7 +195,7 @@ VIEWS.overview=()=>{
  const meta=cur?`${esc(ovKind[cur.kind]||cur.kind)} · ${ovN(cur.n)} examples${cs==null&&champ&&board.length?' · no champion run here':''}`:'';
  h+=`<section class="card section ov-lb" id="ov-lb"><div class="ph"><h2>Leaderboard</h2><span class="meta">${meta}</span>${cur?`<span class="r"><a class="more" href="#slices/${enc(cur.name)}">View slice</a></span>`:''}</div>${tabs}<div class="ov-pick">${sl.length?pick:''}</div>
   ${board.length?table(head,rows)+(board.length>LB?`<button class="btn ov-all" onclick="S.ovLbAll=!S.ovLbAll;render()">${S.ovLbAll?'Show top '+LB:'Show all '+board.length+' models'}</button>`:'')
-  :empty(sl.length?'No complete runs on this slice':'No slices in this dataset','')}</section>`;
+  :empty(sl.length?'No complete runs on this slice':ds.length?'No slices in this dataset':'No slices yet','')}</section>`;
  if(S.ovJump){S.ovJump=false;setTimeout(()=>document.getElementById('ov-lb')?.scrollIntoView({block:'start'}),0)}
  return h;
 };

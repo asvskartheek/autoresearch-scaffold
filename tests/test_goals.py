@@ -180,6 +180,13 @@ class Routes(unittest.TestCase):
         for bad in ("/p/nope/api/state", "/p/..%2F..%2Fetc/api/state", f"/p/{self.kb}/papers/..%2F/raw"):
             self.assertEqual(self.req(bad)[0], 404, bad)
 
+    def test_unknown_project_page_links_the_registered_ones(self):
+        code, body = self.req("/p/nope/")
+        self.assertEqual(code, 404)
+        self.assertIn(b"No project <code>nope</code>", body)
+        self.assertIn(f'href="/p/{self.kb}/"'.encode(), body)
+        self.assertIn(b">beta<", body)
+
     def test_bare_key_redirects(self):
         import http.client
         c = http.client.HTTPConnection(self.base.split("//")[1]); c.request("GET", f"/p/{self.kb}")

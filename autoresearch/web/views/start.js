@@ -76,7 +76,7 @@ function goalsBlock(){
   const tip=`Now ${nowv}${u.ofP(g)} · target ${tgt}${P.b!=null?' · baseline '+u.gu(g,P.b):''}`.replace(/&nbsp;/g,' ');
   const pos=f==null?0:f/OVER;
   return `<a class="sx-g ${u.isMain(g)?'':'sub'}" href="#goal/${enc(g.name)}" title="${esc(tip)}" data-item>
-   <span class="sx-gt"><span class="ell">${esc(g.title||g.name)}</span><span class="sx-tg num">${tgt}</span></span>
+   <span class="sx-gt"><span class="ell">${esc(g.title||g.name)}<span class="faint sx-gs"> · ${esc(g.slice)}</span></span><span class="sx-tg num">${tgt}</span></span>
    <span class="sx-rail ${g.met?'met':''} ${f==null?'none':''}">${b0}${f!=null?`<i style="width:${pc(f)}"></i><b style="left:${pc(f)}" class="${pos<.12?'lo':pos>.88?'hi':''}"><span class="num">${nowv}</span></b>`:''}</span>
    <span class="sx-gd num">${fig}</span></a>`}).join('');
  const axis=`<div class="sx-axis sx-gax"><span>baseline</span><span class="sx-at">${term('goal','target')}</span></div>`;
@@ -102,20 +102,33 @@ function nowBlock(){
 const rungOf=(g,slice)=>g?.rungs?.find(r=>(r.checks||[]).some(c=>c.slice===slice))?.rung;
 function nextSteps(){
  const st=S.state,out=[],gates=st.gates||{},goals=Object.values(st.goals||{}).filter(g=>g.status==='open');
+ // a new project: the eval set, then the model to beat, then the goal
+ const sls=Object.keys(st.slices||{}),full=sls.find(x=>/\/full$/.test(x));
+ if(!sls.length)out.push({h:'#slices',t:'Register the eval set: its full slice and random samples',c:'arx dataset add <name> --ids-file <ids.txt>'});
  if(!st.champion){
   const g=goals[0];
   out.push({h:g?`#goal/${enc(g.name)}`:'#models',t:`Name a ${term('champion')}: register the model to beat${g?` and run it on <b>${esc(short(g.slice))}</b>`:''}`,c:'arx model add <name> --champion'});
  }
+ if(!goals.length)out.push({h:'#goals',t:`Open a ${term('goal')}: the target KPI on one slice`,c:`arx goal open <goal> --title "<title>" --slice ${full||'<slice>'} --target <target>`});
  for(const g of goals)if(g.value==null&&st.champion)
   out.push({h:`#goal/${enc(g.name)}`,t:`Measure the goal: run ${mn(st.champion)} on <b>${esc(g.slice)}</b>${st.config.baseline_cmd?'':' — no harness configured; record its output rows'}`,c:goalMeasureCmd(g)});
+ // the champion's baseline (`arx baseline`): slices it has no run on, which the gates and hills compare against
+ const bl=st.baseline,need=(st.champion&&bl?.model===st.champion?bl.need||[]:[])
+  .filter(x=>!active().some(t=>t.kind==='eval'&&t.model===st.champion&&t.slice===x));
+ const lab=x=>need.filter(y=>short(y)===short(x)).length>1?x:short(x);
+ if(need.length){const nm=need.slice(0,2).map(x=>`<b>${esc(lab(x))}</b>`).join(', ')+(need.length>2?` and ${need.length-2} more`:'');
+  out.push({h:'#overview',t:`Baseline ${term('champion')} ${mn(st.champion)} on ${plural(need.length,'slice')} it has no run on: ${nm}`,c:'arx baseline'})}
  // candidates nearest promotion first: most rungs passed
  const cands=Object.entries(gates).filter(([m,g])=>st.models[m]?.status==='candidate'&&!g.error)
   .map(([m,g])=>[m,g,(g.rungs||[]).filter(r=>r.status==='pass').length]).sort((a,b)=>b[2]-a[2]);
- for(const [m] of cands.filter(([,g])=>g.promotable))
-  out.push({h:`#model/${enc(m)}`,t:`Promote ${distinctModel(m)}: it cleared every ${term('rung')} of the ${term('gate')}`,c:`arx promote ${m}`});
+ // several cleared the gate: promote the one with the largest gain on the last rung's first check; the rest are
+ // gated again against the new champion, so they are one row, not one each
+ const gain=g=>g.rungs?.at(-1)?.checks?.[0]?.delta??0;
+ const prom=cands.filter(([,g])=>g.promotable).sort((a,b)=>gain(b[1])-gain(a[1]));
+ if(prom.length)out.push({h:`#model/${enc(prom[0][0])}`,t:`Promote ${distinctModel(prom[0][0])}: it cleared every ${term('rung')} of the ${term('gate')}${prom.length>1?` <span class="faint">· ${prom.length-1} more cleared it, with a smaller gain</span>`:''}`,c:`arx promote ${prom[0][0]}`});
  for(const [m,g] of cands){
   const nx=(g.next||[]).filter(n=>n.model===m);if(!nx.length)continue;
-  const n=nx.find(n=>!n.running)||nx[0],rt=n.running&&byId(n.running),r=rungOf(g,n.slice);
+  const n=nx.find(n=>n.running&&byId(n.running)?.status==='stalled')||nx.find(n=>!n.running)||nx[0],rt=n.running&&byId(n.running),r=rungOf(g,n.slice);
   const sn=short(n.slice),where=`<b>${esc(sn)}</b>${r&&r!==sn?` (${esc(r)} ${term('rung')})`:r?' '+term('rung'):''}`;
   if(rt&&rt.status==='stalled')out.push({h:`#task/${enc(rt.id)}`,t:`Rerun ${distinctModel(m)} on ${where}: its run went silent ${span(quietFor(rt))} ago`,c:`arx gate ${m}`,bad:1});
   else if(!n.running)out.push({h:`#model/${enc(m)}`,t:`Run ${term('candidate')} ${distinctModel(m)} on ${where}`,c:`arx gate ${m}`});
@@ -132,6 +145,7 @@ function nextBlock(){
 
 // (4) what waits on you: flagged questions, threads with news for you, comments the agent failed to answer, jobs that
 // failed or went silent, goals nobody has measured. One row per thing, or one row for a group of the same kind
+let calm=false;  // nothing waits on you: on a phone, Next comes first
 function needsBlock(){
  const st=S.state,me=window.ARXP?ARXP.me().id:'',items=[],{t0}=win();
  const loading=!ready()||!X.q||!X.c;
@@ -157,9 +171,10 @@ function needsBlock(){
   group(failed,t=>t.status==='budget'?'out of time':'failed',n=>`${n} jobs failed since ${since&&since<=t0+1?'you looked':stamp(t0).split(',')[0]}`,'failed','#archive');
  }
  for(const g of Object.values(st.goals||{}))if(g.status==='open'&&g.value==null)
-  items.push(['bad',`#goal/${enc(g.name)}`,ICON.goals,`${esc(g.title||g.name)}: ${mn(g.model||st.champion)} has no complete measurement`,'champion unmeasured']);
+  items.push(['bad',`#goal/${enc(g.name)}`,ICON.goals,`${esc(g.title||g.name)}: ${g.model||st.champion?`${mn(g.model||st.champion)} has no complete run on ${esc(g.slice)}`:'no champion to measure'}`,'unmeasured']);
  const body=items.length?`<div class="sx-needs">${items.map(([k,h,ic,txt,tag])=>`<a class="sx-need ${k}" href="${h}" data-item>${ic}<span class="ell">${txt}</span><span class="sx-tag">${tag}</span></a>`).join('')}</div>`
   :loading?`<div class="sx-none">Checking…</div>`:`<div class="sx-none ok">${OKI}Nothing waits on you</div>`;
+ calm=!loading&&!items.length;
  return panel('Needs you',body,{meta:loading?'…':items.length?String(items.length):'',cls:items.length?'sx-hot':''});
 }
 
@@ -233,13 +248,13 @@ function mapBlock(){
 
 VIEWS.start=()=>{
  fetchExtras();
- const st=S.state;
+ const st=S.state,needs=needsBlock();
  return page({title:st.config?.name||'Start',crumbs:[['Start']]})+
-  `<div class="sx">
+  `<div class="sx ${calm?'calm':''}">
    <div class="sx-a">${goalsBlock()}</div>
    <div class="sx-b">${nowBlock()}</div>
    <div class="sx-n">${nextBlock()}</div>
-   <div class="sx-c">${needsBlock()}</div>
+   <div class="sx-c">${needs}</div>
    <div class="sx-d">${sinceBlock()}</div>
    <div class="sx-e">${mapBlock()}</div>
   </div>`;
