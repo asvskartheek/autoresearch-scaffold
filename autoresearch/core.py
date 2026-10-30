@@ -399,16 +399,16 @@ class Project:
         """Finished, complete eval tasks only; partial runs never count."""
         return [t for t in self.tasks() if t.get("kind") == "eval" and t.get("status") == "done" and t.get("complete")]
 
-    def _slice_hash(self, slice_name: str) -> str | None:
-        """Read without copying every slice's ids: comparisons call this hundreds of times per request."""
+    def _slice_field(self, slice_name: str, field: str):
+        """One field of a slice, read without copying every slice's ids: comparisons ask hundreds of times a request."""
         try:
-            return (_cached(self.dir / "slices.json", json.loads).get(slice_name) or {}).get("hash")
+            return (_cached(self.dir / "slices.json", json.loads).get(slice_name) or {}).get(field)
         except (OSError, ValueError):
             return None
 
     def slice_evals(self, model: str, slice_name: str) -> list[dict]:
         """Every complete run of the model on the slice's current version, oldest first."""
-        h = self._slice_hash(slice_name)
+        h = self._slice_field(slice_name, "hash")
         c = [t for t in self.evals() if t.get("model") == model and t.get("slice") == slice_name and t.get("slice_hash") == h
              and not t.get("superseded_by")]
         return sorted(c, key=lambda t: t.get("ended", 0))
@@ -440,7 +440,7 @@ class Project:
                       continuous=self.is_continuous(slice_name))
 
     def is_continuous(self, slice_name: str) -> bool:
-        return (self.slices().get(slice_name) or {}).get("scale") == "continuous"
+        return self._slice_field(slice_name, "scale") == "continuous"
 
     # gates -----------------------------------------------------------------------------
     def _resolve(self, ref: str, model: dict) -> list[str]:
