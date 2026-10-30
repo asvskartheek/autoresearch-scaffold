@@ -88,3 +88,17 @@ get skipped.
 - Never paste client text, questions or model outputs into an answer; ids, counts and your own words only.
 
 The person saves good answers as a note, card or paper; they then show on the entity's page and in the Library.
+
+## Directives (@orchestrator)
+
+A message that starts with `@orchestrator` (in the Ask box or under any answer) is a directive for the agent running
+the research, not a question: "@orchestrator open a goal to hill climb on dev41". It is an `ask` event with
+`to: "orchestrator"` and the same anchor. `arx2 ask poll` never hands it out; the orchestrating agent does:
+
+```
+arx2 orchestrator poll                         # blocks, claims the next directive, prints it with its anchor
+arx2 orchestrator ack <id> --text "Opened goal dev41: #/goal/dev41"   # what you did or will do; at most 60 words
+arx2 orchestrator list [--all]
+```
+
+A directive stays open until acked; a follow-up in its thread opens it again. `arx2` lists open directives first.

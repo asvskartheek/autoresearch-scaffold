@@ -48,6 +48,9 @@ def cmd_home(a):
     champ = s["candidates"].get(s["champion"] or "", {})
     blocks = [f"project: {pr.get('name')} ({p.root})", f"task: {pr.get('task')}",
               f"champion: {champ.get('name', '-')} [{s['champion']}]"]
+    orders = [k for k, q in s["asks"].items() if q.get("to") == asks.ORCH and q["status"] != "answered"]
+    if orders:  # the person's directions come before everything else
+        blocks.append(f"directives: {len(orders)} open (arx2 orchestrator poll)")
     goals = []
     for gk, g in s["goals"].items():
         if g["status"] != "open":
@@ -83,6 +86,8 @@ def cmd_home(a):
                         f'(or arx2 hill close {k0} --status closed --reason "<why>")')
     if sm["errors"]:
         hints.insert(0, f"arx2 verify  (fix {sm['errors']} error{'s' if sm['errors'] != 1 else ''} before reporting)")
+    if orders:
+        hints.insert(0, "arx2 orchestrator poll")
     if any(t["stale"] for t in running):
         hints.insert(0, "arx2 task end <id> --status failed --result \"<why it stalled>\"")
     emit(*blocks, help=hints)
@@ -555,13 +560,13 @@ class Part(argparse.Action):
         ns.parts = [*(getattr(ns, "parts", None) or []), (self.dest, values)]
 
 
-def _wait_open(p, timeout, skip=(), interval=1.0, agent=None):
+def _wait_open(p, timeout, skip=(), interval=1.0, agent=None, to=None):
     t0, seen, s = time.time(), None, None
     while True:
         m = p.events_path.stat().st_mtime if p.events_path.exists() else 0
         if m != seen:
             seen, s = m, p.state()
-        a = asks.next_open(s, skip, agent=agent)
+        a = asks.next_open(s, skip, agent=agent, to=to)
         if a:
             return a
         if timeout and time.time() - t0 >= timeout:
@@ -596,7 +601,7 @@ def cmd_ask_list(a):
     rows = [{"key": k, "status": q["status"], "age": _ago(q["created"]), "turns": len(q["thread"]), "on": q.get("what"),
              "question": asks.latest(q)[:80],
              "saved": ",".join(x["as"] for x in q["saved"]) or None}
-            for k, q in s["asks"].items() if a.all or q["status"] != "answered"]
+            for k, q in s["asks"].items() if not q.get("to") and (a.all or q["status"] != "answered")]
     emit(table("asks", rows[-a.limit:], ["key", "status", "age", "turns", "on", "question", "saved"], total=len(rows)),
          help=["arx2 ask poll", "arx2 ask list --all"])
 
@@ -643,6 +648,32 @@ def cmd_ask_watch(a):
             busy.add(q["key"])
         p.append("ask.claim", key=q["key"], agent=f"{base}/{q['key']}")
         threading.Thread(target=run, args=(q,), daemon=True).start()
+
+
+# ---- directives: '@orchestrator ...' on the dashboard, for the agent running the research ----
+
+def cmd_orch_poll(a):
+    p = P()
+    q = _wait_open(p, a.timeout, agent=a.agent, to=asks.ORCH)
+    if not q:
+        emit(f"noop: no open directive after {a.timeout:g}s", help=["arx2 orchestrator poll"])
+        return
+    p.append("ask.claim", key=q["key"], agent=a.agent)
+    emit(asks.describe(p, q), help=[f'arx2 orchestrator ack {q["key"]} --text "<what you did or will do>"', "arx2 orchestrator poll"])
+
+
+def cmd_orch_ack(a):
+    asks.ack(P(), a.key, a.text, agent=a.agent)
+    emit(f"acked: {a.key}", help=["arx2 orchestrator poll"])
+
+
+def cmd_orch_list(a):
+    s = P().state()
+    rows = [{"key": k, "status": "acked" if q["status"] == "answered" else q["status"], "age": _ago(q["created"]),
+             "turns": len(q["thread"]), "on": q.get("what"), "directive": asks.latest(q)[:80]}
+            for k, q in s["asks"].items() if q.get("to") == asks.ORCH and (a.all or q["status"] != "answered")]
+    emit(table("directives", rows, ["key", "status", "age", "turns", "on", "directive"]),
+         help=["arx2 orchestrator poll", "arx2 orchestrator list --all"])
 
 
 ASK_GUIDE = """A person clicked the thing above on the arx2 dashboard and asked the question. Answer with
@@ -817,6 +848,14 @@ def build() -> argparse.ArgumentParser:
     y.add_argument("--exec", required=True, help="shell command, one per question; gets $ARX2_ASK, $ARX2_ASK_FILE, "
                    "$ARX2_ASK_TURN and $ARX2_ASK_SESSION (stable per question)")
     y.add_argument("--agent"); y.add_argument("--jobs", type=int, default=4, help="questions answered at once")
+
+    x = cmd("orchestrator", None, "directives people give the orchestrating agent (@orchestrator on the dashboard)")
+    osp = x.add_subparsers(dest="sub")
+    y = osp.add_parser("poll", help="wait for an open directive, claim it and print it"); y.set_defaults(fn=cmd_orch_poll)
+    y.add_argument("--timeout", type=float, default=0, help="seconds; 0 waits forever"); y.add_argument("--agent", default=asks.ORCH)
+    y = osp.add_parser("ack", help="say what you did or will do; closes the directive"); y.set_defaults(fn=cmd_orch_ack)
+    y.add_argument("key"); y.add_argument("--text", required=True); y.add_argument("--agent", default=asks.ORCH)
+    y = osp.add_parser("list"); y.set_defaults(fn=cmd_orch_list); y.add_argument("--all", action="store_true")
 
     x = cmd("serve", cmd_serve, "run the dashboard in the foreground")
     x.add_argument("--port", type=int, default=8790); x.add_argument("--host", default="127.0.0.1")
