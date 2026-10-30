@@ -123,28 +123,36 @@ def _link_for(c: Ctx, kind: str, key: str) -> str | None:
 
 # ---- checks ------------------------------------------------------------------
 
+def group(level, check_, kind, keys, one, many, fix) -> dict:
+    """One finding for many entities that fail the same way; `one(key)` and `many(keys)` word it."""
+    f = finding(level, check_, one(keys[0]) if len(keys) == 1 else many(keys), f"{kind}:{','.join(keys)}", fix)
+    f["entities"] = [f"{kind}:{k}" for k in keys]
+    return f
+
+
 @check("hill_evidence")
 def hill_evidence(c: Ctx):
-    out = []
+    out, lacking = [], {}  # what is missing -> hills missing it
     for hk, h in c.s["hills"].items():
         if h.get("status") == "closed":
             continue
-        if h.get("evidence_waived"):
-            out.append(finding("info", "hill_evidence", f"Hill {h['name']} has no evidence by choice: {h['evidence_waived']}",
-                               f"hill:{hk}", "none needed"))
-            continue
         e = c.v.hill_evidence(hk)
-        if not e["ok"]:
-            out.append(finding("error", "hill_evidence",
-                               f"Hill {h['name']} names no failing item: {', '.join(e['missing'])}",
-                               f"hill:{hk}", f"freeze the failing ids as a symptom set (arx2 set add {hk}-symptom --role symptom ...) "
-                                             "and attach it, or list them on the pattern"))
+        waived = e.get("waived") or h.get("evidence_waived")
+        if waived:
+            out.append(finding("info", "hill_evidence", f"Hill {h['name']} has no evidence by choice: {waived}", f"hill:{hk}", "none needed"))
+        elif not e["ok"]:
+            lacking.setdefault(", ".join(e["missing"]), []).append(hk)
+    for why, hks in lacking.items():
+        out.append(group("error", "hill_evidence", "hill", hks,
+                         lambda k, why=why: f"Hill {c.name('hill', k)} has no evidence: {why}",
+                         lambda ks, why=why: f"{len(ks)} live hills have no evidence ({why}): " + ", ".join(c.name("hill", k) for k in ks),
+                         "freeze the champion's failing ids as a symptom set and reopen the hill on it, or close the hill"))
     return out
 
 
 @check("prevalence")
 def prevalence(c: Ctx):
-    out = []
+    bad = {"error": [], "warn": []}
     for pk, pat in c.s["patterns"].items():
         count = pat.get("count")
         if not count:
@@ -153,12 +161,20 @@ def prevalence(c: Ctx):
         backed = {str(i) for i in pat.get("items") or []}
         for sk in [pat.get("set")] + [h.get("symptom_set") for h in hills]:
             backed |= {str(i) for i in c.s["sets"].get(sk or "", {}).get("ids") or []}
-        if count <= len(backed):
+        if count > len(backed):
+            live = not hills or any(h.get("status") != "closed" for h in hills)
+            bad["error" if live else "warn"].append((pk, f"{pat['name']} {count} of {pat.get('of')}", len(backed)))
+    out = []
+    for level, items in bad.items():
+        if not items:
             continue
-        live = not hills or any(h.get("status") != "closed" for h in hills)
-        out.append(finding("error" if live else "warn", "prevalence",
-                           f"Pattern {pat['name']} claims {count} of {pat.get('of')} but lists {len(backed)} item ids",
-                           f"pattern:{pk}", f"arx2 pattern add {pk} ... --items <the {count} ids> (or lower --count to what the ids show)"))
+        said = {pk: (txt, n) for pk, txt, n in items}
+        word = "live" if level == "error" else "closed"
+        out.append(group(level, "prevalence", "pattern", [pk for pk, _, _ in items],
+                         lambda k: f"Pattern {said[k][0]} lists only {_n(said[k][1], 'item id')}",
+                         lambda ks: f"{len(ks)} {word} patterns claim counts their ids do not back: "
+                                    + ", ".join(said[k][0] + (f" ({said[k][1]} ids)" if said[k][1] else "") for k in ks),
+                         "list the counted ids on the pattern (arx2 pattern add <key> ... --items <ids> --set <set>), or lower the count"))
     return out
 
 
@@ -293,7 +309,7 @@ def goals(c: Ctx):
 
 @check("predictions")
 def predictions(c: Ctx):
-    out = []
+    out, late = [], {}
     seeds = {e["key"] for e in c.events if e["type"] == "champion" and not e.get("previous")}
     for ck, cd in c.s["candidates"].items():
         if ck in seeds:
@@ -303,13 +319,15 @@ def predictions(c: Ctx):
         if not runs:
             continue
         if not (cd.get("predict") or "").strip():
-            why = "with no prediction"
+            late.setdefault("with no prediction", []).append(ck)
         elif cd["created"] > min(runs):
-            why = "with a prediction written after its first run"
-        else:
-            continue
-        out.append(finding("warn", "predictions", f"{cd['name']} ran the ladder {why}", f"candidate:{ck}",
-                           f'arx2 cand add <key> ... --predict "<what should move, by how much>" before the first run'))
+            late.setdefault("with a prediction written after the first run", []).append(ck)
+    for why, cks in late.items():
+        out.append(group("warn", "predictions", "candidate", cks,
+                         lambda k, why=why: f"{c.name('candidate', k)} ran the ladder {why}",
+                         lambda ks, why=why: f"{len(ks)} candidates ran the ladder {why}: " + ", ".join(c.name("candidate", k) for k in ks[:6])
+                                             + (f" and {len(ks) - 6} more" if len(ks) > 6 else ""),
+                         'arx2 cand add <key> ... --predict "<what should move, by how much>" before the first run'))
     return out
 
 
@@ -317,22 +335,27 @@ def predictions(c: Ctx):
 def splits(c: Ctx):
     sc = c.v.split_check()
     out = []
+    pairs: dict = {}  # hill -> overlapping pairs
     for x in sc["pairs"]:
         if x["shared"]:
-            out.append(finding("error", "splits",
-                               f"Hill {c.name('hill', x['hill'])}: {x['ra']} set {c.name('set', x['a'])} and {x['rb']} set "
-                               f"{c.name('set', x['b'])} share {_n(x['shared'], 'item')}", f"hill:{x['hill']}",
-                               "make disjoint sets with new names and reopen the hill"))
+            pairs.setdefault(x["hill"], []).append(f"{c.name('set', x['a'])} and {c.name('set', x['b'])} share {_n(x['shared'], 'item')}")
+    if pairs:
+        out.append(group("error", "splits", "hill", list(pairs),
+                         lambda k: f"Hill {c.name('hill', k)}: {'; '.join(pairs[k])}",
+                         lambda ks: f"{len(ks)} hills score on sets that must be separate but share items: "
+                                    + "; ".join(f"{c.name('hill', k)} ({', '.join(pairs[k])})" for k in ks),
+                         "make disjoint sets with new names and reopen each hill on them"))
     shared: dict = {}  # hill -> {other hill: items shared}
     for x in sc["cross"]:
         for a, b in ((x["a_hill"], x["b_hill"]), (x["b_hill"], x["a_hill"])):
             shared.setdefault(a, {})[b] = shared.get(a, {}).get(b, 0) + x["shared"]
-    for hk, others in shared.items():
-        top = sorted(others.items(), key=lambda kv: -kv[1])
-        out.append(finding("warn", "splits",
-                           f"Hill {c.name('hill', hk)} scores on items that {len(top)} other live hills also score on: "
-                           + ", ".join(f"{c.name('hill', o)} ({n})" for o, n in top[:4]) + (" and more" if len(top) > 4 else ""),
-                           f"hill:{hk}", "a fix to one moves the others; give each hill its own items"))
+    if shared:
+        n_pairs = len(sc["cross"])
+        out.append(group("warn", "splits", "hill", list(shared),
+                         lambda k: f"Hill {c.name('hill', k)} scores on items another live hill also scores on",
+                         lambda ks: f"{len(ks)} live hills score on overlapping items ({_n(n_pairs, 'set pair')}), so one fix moves several: "
+                                    + ", ".join(c.name("hill", k) for k in ks),
+                         "give each hill its own items"))
     return out
 
 
@@ -417,9 +440,10 @@ def audit(p: Project, only: str | list | None = None, v: Views | None = None) ->
         if n not in CHECKS:
             raise KeyError(n)
         for f in CHECKS[n](c):
+            f.setdefault("entities", [f["entity"]])
             if f["link"] is None:
                 kind, _, key = f["entity"].partition(":")
-                f["link"] = _link_for(c, kind, key)
+                f["link"] = _link_for(c, kind, key) if len(f["entities"]) == 1 else {"hill": "hills", "pattern": "hills"}.get(kind)
             out.append(f)
     order = {"error": 0, "warn": 1, "info": 2}
     return sorted(out, key=lambda f: order[f["level"]])
@@ -460,7 +484,7 @@ def guard(p: Project, action: str, key: str) -> list[dict]:
     else:
         raise KeyError(action)
     for n in checks:
-        out += [f for f in CHECKS[n](c) if f["level"] == "error" and f["entity"] in ents]
+        out += [f for f in CHECKS[n](c) if f["level"] == "error" and ents & set(f.get("entities") or [f["entity"]])]
     return out
 
 

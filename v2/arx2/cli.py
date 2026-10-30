@@ -130,8 +130,11 @@ def cmd_verify(a):
         emit(as_json={**sm, "findings": fs})
     else:
         line = f"verify: {sm['errors']} errors, {sm['warnings']} warnings across {sm['checks']} checks"
-        shown = [f for f in fs if a.all or f["level"] != "info"]
-        fixes = list(dict.fromkeys(f"fix: {f['entity']}: {f['fix']}" for f in fs if f["level"] == "error"))
+        def short(f):  # a grouped finding names its entities in `what`; the column just counts them
+            ents = f.get("entities") or [f["entity"]]
+            return f["entity"] if len(ents) == 1 else f"{f['entity'].split(':')[0]}s[{len(ents)}]"
+        shown = [{**f, "entity": short(f)} for f in fs if a.all or f["level"] != "info"]
+        fixes = list(dict.fromkeys(f"fix: {short(f)}: {f['fix']}" for f in fs if f["level"] == "error"))
         emit(line, table("findings", shown, ["level", "check", "entity", "what"]) if shown else "", *fixes,
              help=["arx2 verify --check <name>", "arx2 rules"] + (["arx2 verify --all  (adds info lines)"] if not a.all else []))
     if sm["errors"]:
