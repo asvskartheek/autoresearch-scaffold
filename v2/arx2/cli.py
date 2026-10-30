@@ -57,6 +57,12 @@ def cmd_home(a):
     blocks.append(table("goals", goals, ["key", "name", "now", "target", "met"]))
     hills = [{"key": k, "name": h["name"], "status": h["status"]} for k, h in s["hills"].items() if h["status"] == "open"]
     blocks.append(table("open_hills", hills, ["key", "name", "status"]))
+    unproven = []
+    for h in hills:
+        e = v.hill_evidence(h["key"])
+        if not e["ok"] and not e.get("waived"):
+            unproven.append({"key": h["key"], "name": h["name"], "missing": "; ".join(e["missing"])})
+    blocks.append(table("hills_without_evidence", unproven, ["key", "name", "missing"]) if unproven else "")
     running = [v.task_view(k) for k, t in s["tasks"].items() if t["status"] == "running"]
     blocks.append(table("running", [{**t, "beat": _ago(t["beat"]), "stale": t["stale"]} for t in running],
                         ["id", "name", "done", "total", "beat", "stale"]))
@@ -69,6 +75,10 @@ def cmd_home(a):
                 break
     blocks.append(table("next_gates", nexts, ["cand", "rung", "set", "state"]))
     hints = ['arx2 task start --name "<two words>" --about "<what and why>"', "arx2 gate <cand>"]
+    if unproven:
+        k0 = unproven[0]["key"]
+        hints.insert(0, f'arx2 set add {k0}-symptom --name "<two words>" --dataset <d> --role symptom --ids-file <champion failures>.txt '
+                        f'(or arx2 hill close {k0} --status closed --reason "<why>")')
     if any(t["stale"] for t in running):
         hints.insert(0, "arx2 task end <id> --status failed --result \"<why it stalled>\"")
     emit(*blocks, help=hints)
@@ -250,7 +260,12 @@ def cmd_cand_add(a):
     parent = a.parent or s["champion"]
     p.append("candidate", key=a.key, name=check_name(a.name, "candidate name"), parent=parent, hill=a.hill,
              change=a.change, predict=a.predict)
-    emit(f"candidate: {a.key} (parent {parent})", help=[f"arx2 gate {a.key}"])
+    warn = ""
+    if a.hill in s["hills"]:
+        e = Views(p).hill_evidence(a.hill)
+        if not e["ok"] and not e.get("waived"):
+            warn = f"warning: hill {a.hill} has no evidence ({', '.join(e['missing'])}); a gain on it may fix nothing real"
+    emit(f"candidate: {a.key} (parent {parent})", warn, help=[f"arx2 gate {a.key}"])
 
 
 def cmd_gate(a):
