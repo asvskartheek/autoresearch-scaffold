@@ -108,6 +108,12 @@ function nextSteps(){
  }
  for(const g of goals)if(g.value==null&&st.champion)
   out.push({h:`#goal/${enc(g.name)}`,t:`Measure the goal: run ${mn(st.champion)} on <b>${esc(g.slice)}</b>${st.config.baseline_cmd?'':' — no harness configured; record its output rows'}`,c:goalMeasureCmd(g)});
+ // the champion's baseline (`arx baseline`): slices it has no run on, which the gates and hills compare against
+ const bl=st.baseline,need=(st.champion&&bl?.model===st.champion?bl.need||[]:[])
+  .filter(x=>!active().some(t=>t.kind==='eval'&&t.model===st.champion&&t.slice===x));
+ const lab=x=>need.filter(y=>short(y)===short(x)).length>1?x:short(x);
+ if(need.length){const nm=need.slice(0,2).map(x=>`<b>${esc(lab(x))}</b>`).join(', ')+(need.length>2?` and ${need.length-2} more`:'');
+  out.push({h:'#overview',t:`Baseline ${term('champion')} ${mn(st.champion)} on ${plural(need.length,'slice')} it has no run on: ${nm}`,c:'arx baseline'})}
  // candidates nearest promotion first: most rungs passed
  const cands=Object.entries(gates).filter(([m,g])=>st.models[m]?.status==='candidate'&&!g.error)
   .map(([m,g])=>[m,g,(g.rungs||[]).filter(r=>r.status==='pass').length]).sort((a,b)=>b[2]-a[2]);
