@@ -146,5 +146,16 @@ class UnpairedRelativeTolerance(unittest.TestCase):
         self.assertEqual((c["state"], c["relative"], c["threshold_fraction"]), ("need_run", True, -0.05))
 
 
+class StatusGoalTarget(unittest.TestCase):
+    def test_status_rounds_the_target_count_up(self):
+        p = project([])
+        p.add_slice("qa/n5", [f"x{i}" for i in range(5)], kind="full")
+        p.add_model("v0", status="champion")
+        run(p, "v0", "qa/n5", [1, 1, 0, 0, 0])
+        p.open_goal("half", "Half right", "qa/n5", 0.5)  # 2.5 of 5: two misses it (round() gives 2), three meets it
+        out = arx(p, "status")
+        self.assertIn("2/5 (40.0%) / 3/5 (50.0%) on qa/n5", out)
+
+
 if __name__ == "__main__":
     unittest.main()
