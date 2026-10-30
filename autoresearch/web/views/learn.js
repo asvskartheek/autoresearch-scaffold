@@ -178,7 +178,7 @@ function knowHTML(){
 function conceptsHTML(){
  const cs=L.b.course;if(!cs)return '';return `<section class="strip"><div class="hd"><h2>101</h2><a href="#course">All lessons</a></div><div class="crs-grid">${cs.lessons.map(x=>`<a class="crs-tile" href="#course/${enc(x.id)}" data-item><b>${esc(x.t)}</b>${cs.due.includes(x.id)?'<span class="muted">Review due</span>':''}</a>`).join('')}</div></section>`;
 }
-function primerFor(c){if(!c||c.pred||typeof COURSE==='undefined')return null;COURSE.ensure();if(!COURSE.data())return null;return (c.needs||[]).find(id=>COURSE.lesson(id)&&!L.primers?.[id]&&(COURSE.primed(id)||COURSE.state(id)!=='learned'))||null}
+function primerFor(c){if(!c||c.pred||typeof COURSE==='undefined')return null;COURSE.ensure();if(!COURSE.data())return null;return (c.needs||[]).find(id=>COURSE.askable(id)&&!L.primers?.[id]&&(COURSE.primed(id)||COURSE.state(id)!=='learned'))||null}
 function primerHTML(id){const x=COURSE.lesson(id);return `<div class="crs crs-one" data-primer="${esc(id)}"><div class="kind">Before this result · ${esc(x.t)}</div>${COURSE.primer(id)}${COURSE.primed(id)?`<button class="btn primary" data-l="primer-next" data-id="${esc(id)}">Continue</button>`:''}</div>`}
 
 VIEWS.learn=()=>{

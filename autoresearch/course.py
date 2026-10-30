@@ -97,11 +97,14 @@ def summary(p: Project, viewer: str, aliases: set | None = None) -> dict:
 
 
 # ---------------------------------------------------------------- the lessons
-def _check(q, o, a, why=""):
-    """A multiple-choice check; numbers read with thousands separators, repeats and negatives dropped."""
+def _check(q, o, a, why="", live=False):
+    """A multiple-choice check; numbers read with thousands separators, repeats and negatives dropped. `live` marks a
+    check built from recorded results, which a Brief primer must not ask: it would give away the card's answer."""
     fmt = lambda x: f"{x:,}" if isinstance(x, int) else str(x)
     o = list(dict.fromkeys(fmt(x) for x in o if not (isinstance(x, int) and x < 0)))
-    return dict(q=q, o=o, a=fmt(a), why=why) if fmt(a) in o and len(o) >= 2 else None
+    if fmt(a) not in o or len(o) < 2:
+        return None
+    return dict(q=q, o=o, a=fmt(a), why=why, live=True) if live else dict(q=q, o=o, a=fmt(a), why=why)
 
 
 def _count(a: int, near: list, lo: int, hi: int, k: int = 3) -> list[int]:
@@ -227,9 +230,9 @@ def lesson_goal(p, L, learn):
             if left > 1 and have:  # the figure prints the gap; ask it after a candidate also breaks some
                 cs.append(_check(f"{head} A candidate fixes {_n(left)} of the champion's wrong answers but breaks {_n(b)} it had right. How many more does it still need?",
                                  _count(b, [0, left, left - b, 2 * b], 0, n), b,
-                                 f"{_n(have)} + {_n(left)} − {_n(b)} = {_n(have + left - b)}, so {_n(need - have - left + b)} short of {_n(need)}. Broken answers cancel fixed ones."))
+                                 f"{_n(have)} + {_n(left)} − {_n(b)} = {_n(have + left - b)}, so {_n(need - have - left + b)} short of {_n(need)}. Broken answers cancel fixed ones.", live=True))
             elif left > 0:  # a met goal has nothing to count; its evidence check stands alone
-                cs.append(_check(f"{head} How many more?", _count(left, [need, n - have, have], 0, n), left, f"{_n(need)} − {_n(have)} = {_n(left)}."))
+                cs.append(_check(f"{head} How many more?", _count(left, [need, n - have, have], 0, n), left, f"{_n(need)} − {_n(have)} = {_n(left)}.", live=True))
         else:
             fig = dict(kind="goals", rows=[_goal_row(p, g, learn)])
         return dict(say="This goal fixes the measurement and target for the project's claim; development results are evidence toward it, not substitutes for it.",
@@ -272,13 +275,13 @@ def lesson_champion(p, L, learn):
         a, b = round(champ["v"] * n), round(nxt["v"] * n)
         cs.insert(0, _check(f"On {sl}, how many more examples does the champion get right than {nxt['label']}?",
                             _count(a - b, [a, b, n - a, 2 * (a - b)], 0, n), a - b,
-                            f"{_n(a)} − {_n(b)} = {_n(a - b)} of the same {_n(n)} examples."))
+                            f"{_n(a)} − {_n(b)} = {_n(a - b)} of the same {_n(n)} examples.", live=True))
     elif champ and nxt and n and not cont:
         a, b = round(champ["v"] * n), round(nxt["v"] * n)
         ans = "No: only a recorded promotion changes the champion"
         cs.insert(0, _check(f"On {sl}, {nxt['label']} gets {_n(b)} of {_n(n)} right, more than the champion's {_n(a)}. Is it the champion now?",
                             [ans, "Yes: the highest score is the champion", "Yes, once it is measured on the full slice"], ans,
-                            "A candidate becomes the champion when it passes its gates and the promotion is recorded, not by a single higher score."))
+                            "A candidate becomes the champion when it passes its gates and the promotion is recorded, not by a single higher score.", live=True))
     return dict(say="The champion is the registered reference system. A fair candidate comparison uses the same examples and a compatible evaluation setup.", fig=fig, checks=cs)
 
 
@@ -296,7 +299,7 @@ def lesson_candidate(p, L, learn):
     rej = sum(v.get("status") == "rejected" for v in L["models"].values())
     if rej:
         cs.append(_check("How many candidates have been rejected in this project so far?", _count(rej, [rej + 1, rej - 1, rej * 2], 0, len(L["models"])), rej,
-                         "Rejected candidates stay in the ledger with their reason. Negative results are results."))
+                         "Rejected candidates stay in the ledger with their reason. Negative results are results.", live=True))
     return dict(say="A candidate tests a proposed change. Its gates can make it ready for promotion; the recorded promotion is a separate decision.",
                 fig=dict(kind="list", rows=rows_), checks=cs)
 
@@ -353,7 +356,7 @@ def lesson_paired(p, L, learn):
                 fig=dict(kind="paired", fixed=w, broken=l, n=n, example=ex, provenance="Frozen promotion evidence" if not ex else ""),
                 checks=[_check(f"{w:,} fixed, {l:,} broken, n = {n:,}. If {k} of the fixed examples had broken instead, what would the paired Δ be?",
                                [_amt("pts", 100 * x / n) for x in (w2 - l2, w2 - l, w - l, l2 - w2)], right,
-                               f"{w2:,} fixed and {l2:,} broken: ({w2:,} − {l2:,}) / {n:,} = {right}. Each one moves from fixed to broken, so Δ falls twice as fast."),
+                               f"{w2:,} fixed and {l2:,} broken: ({w2:,} − {l2:,}) / {n:,} = {right}. Each one moves from fixed to broken, so Δ falls twice as fast.", live=not ex),
                         _check(f"On the same {n:,} examples, one extra case changes from correct under the baseline to wrong under the candidate. Fixed cases do not change. What happens to paired Δ?",
                                [f"It falls by {100 / n:.3g} points", f"It rises by {100 / n:.3g} points", "It stays unchanged"], f"It falls by {100 / n:.3g} points",
                                "The broken count increases by one while n and the fixed count stay constant."),
@@ -384,7 +387,7 @@ def _reach_zero(fig):
                   "Holding the effect fixed, at about what n does the interval's edge reach zero?",
                   [_about(at), _about(n * r), _about(at * 4), _about(at / 4)], _about(at),
                   f"The width shrinks as 1/√n: n × ({_amt(fig['unit'], half).lstrip('+')} / {_amt(fig['unit'], d).lstrip('+')})² ≈ {at:,.0f}. "
-                  + ("More examples than that make it clear zero." if fig["lo"] <= 0 <= fig["hi"] else "Fewer than that and it would cross zero."))
+                  + ("More examples than that make it clear zero." if fig["lo"] <= 0 <= fig["hi"] else "Fewer than that and it would cross zero."), live=not fig.get("example"))
 
 
 def lesson_interval(p, L, learn):
@@ -420,7 +423,7 @@ def lesson_gate(p, L, learn):
     q = f"{rule} Same rule, but say the Δ had been {_amt(fig['unit'], other)}. Pass or fail?"
     direction = "below" if fig.get("better", 1) < 0 else "above"
     return dict(say=f"For this metric, improvement moves Δ {direction} zero. The configured gate compares Δ with its declared bar; uncertainty is shown separately.", fig=fig,
-                checks=[_check(q, ["Pass", "Fail"], "Pass" if ok else "Fail", f"The bar is {_amt(fig['unit'], bar)}; pass when Δ is on the good side of it."),
+                checks=[_check(q, ["Pass", "Fail"], "Pass" if ok else "Fail", f"The bar is {_amt(fig['unit'], bar)}; pass when Δ is on the good side of it.", live=not fig.get("example")),
                         _check("Say a candidate passes this comparison, but the next run uses a changed harness. Can the old gate result establish that the new run passes?",
                                ["No; obtain a compatible baseline and apply the declared rule", "Yes; the model name is unchanged", "Yes; a prior pass applies to every harness"],
                                "No; obtain a compatible baseline and apply the declared rule", "A gate result belongs to its measured scope and evaluation setup; it is not a permanent property of a model.")])
@@ -624,6 +627,9 @@ BUILD = {"goal": lesson_goal, "champion": lesson_champion, "candidate": lesson_c
          "project-data": lesson_project_data, "project-champion": lesson_project_champion, "project-hills": lesson_project_hills}
 
 
+LIVE = {"goal", "champion", "candidate", "hill", "brief", "project-goal", "project-champion", "project-hills"}
+
+
 def lessons(p: Project) -> list[dict]:
     from . import learn
     p._gates = getattr(p, "_gates", None) or {}
@@ -638,6 +644,8 @@ def lessons(p: Project) -> list[dict]:
             if not x:
                 continue
             x["checks"] = [c for c in x["checks"] if c]
+            # a figure drawn from recorded results: a Brief primer leaves it out so it cannot give away the card
+            x["live"] = i in LIVE or (i in ("paired-delta", "interval", "gate") and not x["fig"].get("example"))
             out.append(dict(id=i, t=TITLE[i], group="basics" if i in BASICS else "project", **x))
         return out
 

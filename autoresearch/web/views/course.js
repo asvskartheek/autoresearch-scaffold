@@ -101,7 +101,8 @@ document.addEventListener('click',e=>{const b=e.target.closest('#main button[dat
  else if(p==='fail')s.fail=s.fail===v?-1:v;else if(p==='reset'){s.at=0;s.fail=-1}else if(p==='shown')s.shown=true;redraw(id)});
 
 // ---------- the check that ends a lesson (or opens a review): options in a stable shuffle, ✓ / ✗ and why
-const which=(x,how)=>{const key=x.id+'|'+how;if(!x.checks.length)return null;return C.checks[key]||(C.checks[key]=x.checks[how==='review'?(mem(x.id)?.n||0)%x.checks.length:0])};
+// a primer sits right before a Brief card, so it never asks from recorded results (that would give the card away)
+const which=(x,how)=>{const key=x.id+'|'+how,cs=how==='primer'?x.checks.filter(c=>!c.live):x.checks;if(!cs.length)return null;return C.checks[key]||(C.checks[key]=cs[how==='review'?(mem(x.id)?.n||0)%cs.length:0])};
 function checkHTML(x,how,key){
  const c=which(x,how);if(!c)return '';const a=C.ans[key],o=shuf(x.id+'#'+c.q,c.o);
  return `<div class="crs-check" data-key="${esc(key)}"><p class="crs-q">${esc(c.q)}</p><div class="opts" style="--n:${o.length>3?2:o.length}">${o.map((t,i)=>{let cl=a!=null?(t===c.a?' truth':t===a?' wrong':''):'';
@@ -149,7 +150,7 @@ document.addEventListener('keydown',e=>{
  if((e.key===' '||e.key==='Enter')&&!(t&&t.tagName==='BUTTON')){const a=document.querySelector('#main [data-next]')||(!route().arg&&document.querySelector('#main .acts .btn.primary'));if(a){a.click();e.preventDefault()}}
 });
 // a small version for the Brief: the figure, the sentence and one check, recorded as a primer
-function primer(id){const x=lesson(id);if(!x)return '';const key=id+'|primer';return `${fig(x)}<p class="crs-say">${esc(x.say)}</p>${checkHTML(x,'primer',key)}`}
-const primed=id=>C.ans[id+'|primer']!=null;
-return {ensure,lesson,state,mem,primer,primed,answer,record,data:()=>C.d};
+function primer(id){const x=lesson(id);if(!x)return '';const key=id+'|primer';return `${x.live?'':fig(x)}<p class="crs-say">${esc(x.say)}</p>${checkHTML(x,'primer',key)}`}
+const primed=id=>C.ans[id+'|primer']!=null,askable=id=>!!lesson(id)?.checks.some(c=>!c.live);
+return {ensure,lesson,state,mem,primer,primed,askable,answer,record,data:()=>C.d};
 })();

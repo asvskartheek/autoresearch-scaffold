@@ -124,6 +124,15 @@ class Course(unittest.TestCase):
         above = course.lesson_champion(self.p, course._ledger(self.p), learn)["checks"][0]
         self.assertIn("30 of 40", above["q"]); self.assertEqual(above["a"], "No: only a recorded promotion changes the champion")
 
+    def test_primers_can_skip_what_a_card_would_reveal(self):
+        ls = {x["id"]: x for x in course.lessons(self.p)}
+        self.assertTrue(ls["goal"]["live"]); self.assertTrue(ls["goal"]["checks"][0].get("live"))  # 28 of 40 is the goal card's answer
+        self.assertTrue(ls["gate"]["live"]); self.assertTrue(ls["gate"]["checks"][0].get("live"))  # cand's own dev check
+        self.assertFalse(ls["paired-delta"]["live"])  # no promotion yet: the example is safe to show
+        self.assertFalse(ls["rung"]["live"])
+        for i in set(sum(course.NEEDS.values(), [])):
+            self.assertTrue([c for c in ls[i]["checks"] if not c.get("live")], i)  # every primer still has a check to ask
+
     def test_cards_name_the_lessons_they_need(self):
         self.assertEqual(course.needs("promote|x"), ["champion", "paired-delta", "interval"])
         self.assertEqual(course.needs("nope|x"), [])
