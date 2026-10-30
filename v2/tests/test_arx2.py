@@ -120,3 +120,27 @@ def test_replay_shows_the_past(proj):
     t_mid = p.events()[-1]["t"]
     cli(proj, "cand", "add", "b", "--name", "Second Try", "--change", "y")
     assert set(p.state(until=t_mid)["candidates"]) == {"a"}
+
+
+def test_ask_answer_save_folds(proj):
+    from arx2 import asks
+    p = Project(proj)
+    cli(proj, "cand", "add", "a", "--name", "First Try", "--change", "x")
+    q = asks.ask(p, "Why did it fail here?", "candidate", "a", "ladder cell: First Try × Hill target", route="ladder", loc="[data-ask]")
+    s = p.state()
+    assert s["asks"][q["key"]]["status"] == "open" and asks.next_open(s)["key"] == q["key"]
+    p.append("ask.claim", key=q["key"], agent="t")
+    assert asks.next_open(p.state()) is None  # a fresh claim hides it from other agents
+    with pytest.raises(LedgerError):
+        asks.save(p, q["key"], "note", "Why Failed")  # nothing to save before an answer
+    asks.answer(p, q["key"], [("text", "One item: **3**.\n\n- then the aggregate")])
+    a = p.state()["asks"][q["key"]]
+    assert a["status"] == "answered" and a["answers"][0]["parts"][0]["type"] == "md"
+    asks.save(p, q["key"], "note", "Why Failed")
+    asks.save(p, q["key"], "card", "")
+    s = p.state()
+    doc = s["docs"][f"note-{q['key']}"]
+    assert doc["about"] == "a" and doc["kind"] == "note" and doc["ask"] == q["key"]
+    assert "<b>3</b>" in (p.dir / "docs" / doc["file"]).read_text()
+    assert s["cards"][f"ask-{q['key']}"]["front"] == "Why did it fail here?"
+    assert [x["as"] for x in s["asks"][q["key"]]["saved"]] == ["note", "card"]
