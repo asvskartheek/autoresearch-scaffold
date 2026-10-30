@@ -447,6 +447,21 @@ HUMAN_KINDS = ("comment", "reply", "resolve", "reopen", "edit", "delete", "seen"
 
 
 LEARNING_WRITES = ("/api/course", "/api/teach", "/api/predictions", "/api/understanding")
+LEARNING_READS = LEARNING_WRITES + ("/api/brief", "/api/memory")
+
+
+def _guest_viewer(viewer) -> bool:
+    """A learner ID a share-link guest may act as: a browser ID, never a person made on this machine."""
+    if not isinstance(viewer, str) or not people.ID.fullmatch(viewer):
+        return False
+    cur = people.roster().get(viewer)
+    return not cur or bool(cur.get("remote"))
+
+
+def guest_learning_read_allowed(path: str, q: dict) -> bool:
+    """A guest reads only their own learning record: a route that would answer for someone else, or for everyone
+    (no viewer), is refused, like the writes in guest_learning_allowed."""
+    return not path.startswith(LEARNING_READS) or _guest_viewer(q.get("viewer"))
 
 
 def guest_learning_allowed(path: str, body) -> bool:
@@ -459,14 +474,7 @@ def guest_learning_allowed(path: str, body) -> bool:
     rows = body.get("events") if path.startswith("/api/understanding") and "events" in body else [body]
     if not isinstance(rows, list):
         return False
-    roster = people.roster()
-    for row in rows:
-        viewer = row.get("viewer") if isinstance(row, dict) else None
-        if not isinstance(viewer, str) or not people.ID.fullmatch(viewer):
-            return False
-        if viewer in roster and not roster[viewer].get("remote"):
-            return False
-    return True
+    return all(isinstance(row, dict) and _guest_viewer(row.get("viewer")) for row in rows)
 
 
 def human_event(p: Project, name: str, kind: str, d: dict) -> dict | None:
@@ -650,7 +658,14 @@ def serve(port: int = 8890, root=None):
                     return self._send(200, json.dumps(p.gate(path.rsplit("/", 1)[1]), default=str).encode(), "application/json")
                 if path == "/api/papers":
                     return self._send(200, json.dumps(papers.papers(p), default=str).encode(), "application/json")
-                r = _feature(features.GET, p, path, dict(parse_qsl(urlsplit(self.path).query), _port=str(self.server.server_port)))
+                q = dict(parse_qsl(urlsplit(self.path).query), _port=str(self.server.server_port))
+                if remote and not guest_learning_read_allowed(path, q):
+                    return self._send(403, b'{"error":"use your guest learner ID"}', "application/json")
+                features.REQUEST.remote = remote
+                try:
+                    r = _feature(features.GET, p, path, q)
+                finally:
+                    features.REQUEST.remote = False
                 if r:
                     return self._send(*r[:3], r[3] if len(r) > 3 else None)
                 parts = [unquote(x) for x in path.strip("/").split("/")]

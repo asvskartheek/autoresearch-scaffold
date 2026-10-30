@@ -577,7 +577,10 @@ def view(p, viewer: str, now: float | None = None, others: bool = True) -> dict:
 
 @features.get("/api/memory")
 def _get(p, path, q):
-    return 200, view(p, str(q.get("viewer") or ""), others=q.get("others") != "0")
+    v = view(p, str(q.get("viewer") or ""), others=q.get("others") != "0")
+    if getattr(features.REQUEST, "remote", False):  # a share-link guest sees their own record, not who else learns here
+        v["people"] = [x for x in v["people"] if x["id"] == v["person"]]
+    return 200, v
 
 
 # ---------------------------------------------------------------- live writes

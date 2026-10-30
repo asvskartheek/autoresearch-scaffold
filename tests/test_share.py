@@ -175,6 +175,24 @@ class Remote(unittest.TestCase):
             dict(viewer=owner, kind="active", doc="brief", ms=100)]), cookie=token, origin=origin)
         self.assertEqual(code, 403)
 
+    def test_guest_reads_only_own_learning(self):
+        from autoresearch import course, people
+        owner, guest = "p-5555cafe", "p-6666cafe"
+        people.remember(owner, "Local reader", self.ka)
+        people.remember(guest, "Remote reader", self.ka, remote=True)
+        course.record(self.a, dict(viewer=owner, item="goal", hit=True))
+        base = f"/p/{self.ka}/api/"
+        for route in ("course", "brief", "teach", "predictions", "understanding", "memory"):
+            for q in (f"?viewer={owner}", "?viewer=Local%20reader", "?viewer=anon", ""):
+                self.assertEqual(self.req(base + route + q, cookie=self.tok)[0], 403, (route, q))
+            code, body, _ = self.req(base + route + f"?viewer={guest}", cookie=self.tok)
+            self.assertEqual(code, 200, (route, body))
+        self.assertEqual(json.loads(self.req(base + f"course?viewer={guest}", cookie=self.tok)[1])["memory"], {})
+        mem = json.loads(self.req(base + f"memory?viewer={guest}", cookie=self.tok)[1])
+        self.assertTrue(all(x["id"] == guest for x in mem["people"]))
+        local = json.loads(self.req(base + f"course?viewer={owner}", host="127.0.0.1")[1])
+        self.assertIn("goal", local["memory"])  # loopback still reads anyone's
+
     def test_guest_cannot_rename(self):
         from autoresearch import people
         people.remember("p-0000aaaa", "Owner", self.ka)
