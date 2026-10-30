@@ -175,7 +175,7 @@ Review loop:
 
 - Compare only on identical ID sets. Gates use paired deltas on the same IDs, never scores from different slices.
 - Errors, crashes and timeouts score 0. A partial run is never ranked.
-- A pooled side whose rows are at least 20% errors is flagged (`arx gate`, `arx goal status`, the dashboard): the
+- A pooled side whose rows are at least 10% errors is flagged (`arx gate`, `arx goal status`, the dashboard): the
   number still counts, but it mostly measures the harness. Fix the harness and re-run before reading it.
 - Report n, the paired delta and its 90% bootstrap interval. A delta whose interval spans 0 is shown as *noisy*;
   on 20–50 examples most deltas are. That is why the ladder widens before the claim does.

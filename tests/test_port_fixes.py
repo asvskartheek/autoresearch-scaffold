@@ -247,7 +247,7 @@ class PooledErrorShare(unittest.TestCase):
 
     def test_goal_status_serves_the_pooled_error_share(self):
         st = self.p.goal_status("all")
-        self.assertEqual((st["pooled_rows"], st["pooled_errors"]), (20, 8))
+        self.assertEqual((st["pooled_rows"], st["pooled_errors"], st["errors"]), (20, 8, 8))
         self.assertAlmostEqual(st["error_share"], 0.4)
         self.assertIn("warning: 8 of 20 pooled rows of v0 are errors (40%)", arx(self.p, "goal", "status"))
 
@@ -265,9 +265,15 @@ class PooledErrorShare(unittest.TestCase):
         from autoresearch import server
         st = server._state(self.p)
         e = st["leaderboard"]["qa/full"]["v0"]
-        self.assertEqual((e["pooled_rows"], e["pooled_errors"]), (20, 8))
-        self.assertEqual(st["error_share_warn"], 0.2)
+        self.assertEqual((e["pooled_rows"], e["pooled_errors"], e["errors"]), (20, 8, 8))
+        self.assertAlmostEqual(e["error_share"], 0.4)
+        self.assertEqual(st["error_share_warn"], 0.1)
         self.assertEqual(st["goals"]["all"]["pooled_errors"], 8)
+
+    def test_the_warning_starts_at_ten_percent(self):
+        from autoresearch import cli
+        self.assertIsNone(cli._error_warning("v0", 1, 11))
+        self.assertIn("1 of 10 pooled rows", cli._error_warning("v0", 1, 10))
 
     def test_a_clean_pool_prints_no_warning(self):
         p = project([])

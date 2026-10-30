@@ -117,7 +117,7 @@ def summarize(rows: list[dict], continuous: bool = False) -> dict:
                 latency_p50=pct(0.5), latency_p95=pct(0.95), latency_mean=statistics.mean(lat) if lat else None)
 
 
-ERROR_SHARE_WARN = 0.2  # a pooled side with at least this share of errored rows is flagged (PROTOCOL.md § Rules of evidence)
+ERROR_SHARE_WARN = 0.1  # a pooled side with at least this share of errored rows is flagged (PROTOCOL.md § Rules of evidence)
 
 
 def pool_errors(rows: list[dict]) -> dict:
@@ -321,7 +321,7 @@ class Project:
         hills = {k: h.get("status") for k, h in self.hills().items() if h.get("goal") == name}
         errs = pool_errors([r for t in self.score_runs(model, sl) for r in self.rows(t["id"])]) if model and ev else \
             dict(pooled_rows=0, pooled_errors=0, error_share=None)
-        status = dict(g, name=name, model=model, value=value, task=ev["id"] if ev else None, **errs,
+        status = dict(g, name=name, model=model, value=value, task=ev["id"] if ev else None, **errs, errors=errs["pooled_errors"],
                     runs=len(self.score_runs(model, sl)) if model else 0,
                     met=value is not None and sign * (value - g["target"]) >= 0,
                     gap=None if value is None else sign * (g["target"] - value), vs_baseline=vs, hills=hills,
