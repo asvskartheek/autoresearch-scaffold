@@ -11,6 +11,7 @@ function askToggle(on = !A.on) {
 }
 
 function onKey(e) {
+  if (e.key === "Escape" && e.target.closest?.("#askbox")) return closeDraft();
   if (e.target.closest?.("input, textarea, select, [contenteditable]")) return;
   if (e.key === "a" && !e.metaKey && !e.ctrlKey && !e.altKey) { askToggle(); e.preventDefault(); }
   if (e.key === "Escape") {
@@ -26,10 +27,14 @@ let hl = null;
 function hlOff() { hl?.classList.remove("ask-hl"); hl = null; }
 const docBody = () => $("#app iframe.doc")?.contentDocument?.body || null;
 const rootOf = (el) => el.ownerDocument === document ? $("#app") : el.ownerDocument.body;
+// Something a person can point at: never an empty spacer. Climb to the nearest element with text, a figure or a chart.
+const meaningful = (el) => clean(el.textContent) || el.closest("svg, figure, .waffle") || /^(IMG|CANVAS|VIDEO|IFRAME)$/.test(el.tagName);
 function pickable(el) {
   const root = el?.closest && rootOf(el);
   if (!root || el === root || !root.contains(el)) return null;
-  return el.closest("[data-ask]") || el;
+  el = el.closest("[data-ask]") || el;
+  while (el && el !== root && !meaningful(el)) el = el.parentElement;
+  return el === root ? null : el;
 }
 function onOver(e) {
   if (!A.on || A.draft) return;
@@ -39,19 +44,63 @@ function onOver(e) {
   if (el) { hl = el; el.classList.add("ask-hl"); }
 }
 function onPick(e) {
-  if (!A.on || e.target.closest?.("#askbox, #pins, #top")) return;
+  if (!A.on || e.target.closest?.("#askbox, #pins, #top, #askpick")) return;
+  if (!e.target.ownerDocument.getSelection().isCollapsed) return; // a drag selected text: onSelect handles it
   const el = pickable(e.target);
   if (!el) return;
   e.preventDefault(); e.stopPropagation();
   openDraft(el, e);
 }
 document.addEventListener("mouseover", onOver);
+document.addEventListener("mousedown", (e) => {  // clicking away closes an empty question box
+  if (A.draft && !e.target.closest("#askbox") && !$("#askbox textarea")?.value.trim()) closeDraft();
+});
 document.addEventListener("click", onPick, true);
+document.addEventListener("mouseup", onSelect);
 function askFrame(d) {
   d.addEventListener("mouseover", onOver);
   d.addEventListener("click", onPick, true);
+  d.addEventListener("mouseup", onSelect);
   d.addEventListener("keydown", onKey);
   d.documentElement.classList.toggle("asking", A.on);
+}
+
+// ---- selecting text: any span of text, in the page or the paper -------------------------
+function selected(d) {
+  const sel = d.getSelection(), text = sel?.toString() || "";
+  if (!sel || sel.isCollapsed || clean(text).length < 2) return null;
+  const r = sel.getRangeAt(0);
+  let el = r.commonAncestorContainer;
+  if (el.nodeType !== 1) el = el.parentElement;
+  const root = el.closest && rootOf(el);
+  if (!root || !root.contains(el) || el.closest("#askbox, #pins")) return null;
+  const pre = d.createRange();
+  pre.setStart(el, 0); pre.setEnd(r.startContainer, r.startOffset);
+  const t = el.textContent;  // a drag that starts or ends mid-word takes the whole word
+  let a = pre.toString().length, b = a + text.length;
+  while (a > 0 && /\w/.test(t[a - 1])) a--;
+  while (b < t.length && /\w/.test(t[b])) b++;
+  return { el, at: a, text: t.slice(a, b) };
+}
+function onSelect(e) {
+  if (e.target.closest?.("#askbox, #askpick, #pins") || !S.key || S.until) return;
+  setTimeout(() => {
+    const s = selected(e.target.ownerDocument || document), pick = $("#askpick");
+    if (!s) { pick.hidden = true; return; }
+    if (A.on) return openSelection(s);
+    const r = boxOf(selLoc(s), "");
+    pick.hidden = false;
+    pick.style.left = `${Math.min(r.right + scrollX + 4, scrollX + innerWidth - 60)}px`;
+    pick.style.top = `${r.bottom + scrollY + 4}px`;
+    pick.onclick = () => { pick.hidden = true; openSelection(s); };
+  });
+}
+const selLoc = (s) => `${s.el.ownerDocument === document ? "" : "doc:"}${pathOf(s.el)}@${s.at}:${s.text.length}`;
+function openSelection(s) {
+  const base = anchorOf(s.el);
+  const head = clean(s.el.closest(".sheet, .section, section")?.querySelector("h2, h3")?.textContent, 50);
+  openDraft(s.el, null, { ...base, kind: s.el.ownerDocument === document ? base.kind : "doc", key: s.el.ownerDocument === document ? base.key : S.route[1],
+    what: `“${clean(s.text, 180)}”${head ? ` in “${head}”` : ""}`, loc: selLoc(s) });
 }
 
 const clean = (s, n = 90) => (s || "").replace(/\s+/g, " ").trim().slice(0, n);
@@ -91,7 +140,7 @@ function describe(el, sentence) {
   const cell = el.closest("td, th");
   if (cell) return `table cell “${clean(cell.textContent, 60)}”${where}`;
   const t = clean(el.textContent);
-  return t ? `“${t}”${where}` : `${el.tagName.toLowerCase()}${where}`;
+  return t ? `“${t}”${where}` : `${{ IMG: "image", CANVAS: "chart", VIDEO: "video", IFRAME: "embedded page" }[el.tagName] || "figure"}${where}`;
 }
 
 // A sentence ends at . ! or ? (and closing quotes) before a space, so "0.9 s" stays whole.
@@ -105,9 +154,9 @@ function sentenceAt(el, e) {
   const at = r.toString().length, i = Math.max(0, ss.findIndex(([, b]) => at < b));
   return { i, text: el.textContent.slice(...ss[i]) };
 }
-function sentenceRange(el, i) {
-  const s = sentencesOf(el)[i], d = el.ownerDocument;
-  if (!s) return null;
+const sentenceRange = (el, i) => sentencesOf(el)[i] && rangeOf(el, ...sentencesOf(el)[i]);
+function rangeOf(el, a, b) {
+  const s = [a, b], d = el.ownerDocument;
   const r = d.createRange(), walk = d.createTreeWalker(el, NodeFilter.SHOW_TEXT);
   for (let n, pos = 0, started = false; (n = walk.nextNode()); pos += n.length) {
     if (!started && s[0] < pos + n.length) { r.setStart(n, s[0] - pos); started = true; }
@@ -128,19 +177,27 @@ function findLoc(loc, what) {
   if (loc.startsWith("[")) return $(loc, $("#app"));
   const root = loc.startsWith("doc:") ? docBody() : $("#app");
   let el = root;
-  for (const i of loc.replace(/^doc:/, "").split("~")[0].split(".")) el = el?.children[+i];
+  const path = loc.replace(/^doc:/, "").split(/[~@]/)[0];
+  if (path) for (const i of path.split(".")) el = el?.children[+i];
   const [, want, head] = (what || "").match(/“([^”]+)”(?: in “([^”]+)”)?/) || [];
-  if (!want || loc.includes("~") || (el && clean(el.textContent).startsWith(want.slice(0, 40)))) return el || null;
+  if (!want || loc.includes("~") || (el && clean(el.textContent, 1e4).includes(want.slice(0, 40)))) return el || null;
   const scope = (head && [...(root?.querySelectorAll(".sheet, .section") || [])].find((x) => clean(x.querySelector("h2, h3")?.textContent, 50) === head)) || root;
-  const hits = [...(scope?.querySelectorAll("*") || [])].filter((x) => clean(x.textContent) === want);
+  const sel = loc.includes("@"), hits = [...(scope?.querySelectorAll("*") || [])].filter((x) => sel ? clean(x.textContent, 1e4).includes(want) : clean(x.textContent) === want);
   return hits.find((x) => !hits.some((y) => y !== x && x.contains(y))) || el || null;
 }
 // Where a loc is, in this page's viewport. A sentence runs from its first line's left to its last line's right.
 function boxOf(loc, what) {
   const el = findLoc(loc, what);
   if (!el) return null;
-  const n = loc.match(/~(\d+)$/)?.[1];
-  const rs = [...((n != null && sentenceRange(el, +n)) || el).getClientRects()].filter((r) => r.width);
+  const n = loc.match(/~(\d+)$/)?.[1], m = loc.match(/@(\d+):(\d+)$/);
+  let at = m && +m[1];
+  const want = what?.match(/“([^”]+)”/)?.[1];  // the text moved within the element: find it again
+  if (m && want && !clean(el.textContent.slice(at, at + +m[2])).startsWith(want.slice(0, 40))) {
+    const i = el.textContent.indexOf(want.slice(0, 40));
+    if (i >= 0) at = i;
+  }
+  const range = m ? rangeOf(el, at, at + +m[2]) : n != null && sentenceRange(el, +n);
+  const rs = [...(range || el).getClientRects()].filter((r) => r.width);
   if (!rs.length) return null;
   const f = el.ownerDocument.defaultView.frameElement?.getBoundingClientRect() || { left: 0, top: 0 };
   const a = rs[0], b = rs[rs.length - 1];
@@ -148,17 +205,17 @@ function boxOf(loc, what) {
 }
 
 // ---- the question box ------------------------------------------------------
-function openDraft(el, e) {
+function openDraft(el, e, anchor) {
   hlOff();
-  A.draft = { ...anchorOf(el, e), route: S.route.join("/") };
-  const r = boxOf(A.draft.loc) || el.getBoundingClientRect();
+  A.draft = { ...(anchor || anchorOf(el, e)), route: S.route.join("/") };
+  const r = boxOf(A.draft.loc, A.draft.what) || el.getBoundingClientRect();
   const box = $("#askbox");
   box.innerHTML = `<textarea rows="3" placeholder="What do you want to understand?"></textarea>
     <div class="spread"><span class="small mute">${esc(A.draft.what)}</span><button class="primary" onclick="sendAsk()">Ask</button></div>`;
   box.hidden = false;
   box.style.left = `${Math.max(8, Math.min(r.left + scrollX, scrollX + innerWidth - 400))}px`;
   box.style.top = `${r.bottom + scrollY + 8}px`;
-  el.classList.add("ask-hl"); hl = el;
+  if (!anchor) { el.classList.add("ask-hl"); hl = el; }
   const ta = $("textarea", box);
   ta.focus();
   ta.onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAsk(); } };

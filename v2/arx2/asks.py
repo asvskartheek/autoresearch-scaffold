@@ -35,7 +35,7 @@ def ask(p: Project, text: str, kind: str, key: str, what: str, route: str = "", 
     if not text:
         raise LedgerError("the question is empty", fix="type what you want to understand")
     return p.append("ask", actor="person", key=new_key(), text=text[:2000], kind=kind, entity=key,
-                    what=(what or "")[:200], route=route, loc=loc)
+                    what=(what or "")[:300], route=route, loc=loc)
 
 
 def reply(p: Project, key: str, text: str) -> dict:

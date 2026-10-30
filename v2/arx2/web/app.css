@@ -159,3 +159,4 @@ hr.soft { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
 .askpop textarea.reply { width: 100%; margin-top: 10px; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; resize: vertical; }
 .askpop .q + .q, .md + .q, .fig + .q, p + .q { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
 #theme { padding: 5px 9px; }
+#askpick { position: absolute; z-index: 32; padding: 3px 10px; font-size: 12px; font-weight: 600; background: var(--live); color: #fff; border-color: var(--live); box-shadow: 0 4px 14px rgba(0,0,0,.2); }
