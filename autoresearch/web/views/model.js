@@ -6,6 +6,9 @@
 const errors=c=>(c.base_errors||0)+(c.cand_errors||0);
 const STATE={pass:['pass','Passed'],fail:['fail','Failed'],need_run:['ghost','Not run yet'],need_baseline:['warn','Champion not run'],champion:['champion','Champion'],no_champion:['ghost','No champion'],needs_review:['warn','Needs review'],rejected:['rejected','Rejected'],historical:['ghost','Historical'],planned:['ghost','Planned']};
 const statePill=s=>{const [c,l]=STATE[s]||['',String(s||'').replace(/_/g,' ')];return pill(l,c)};
+// the champion ran the slice, only under another harness: runs never pool across harnesses, so it needs one under this
+const harnessPill=c=>`<span title="${esc(`The champion has ${c.champion_runs_other_harness?plural(c.champion_runs_other_harness,'run'):'runs'} on this slice, none under this model's harness${c.baseline_contract?' ('+String(c.baseline_contract).slice(0,12)+')':''}. Runs never pool across harnesses.`)}">${pill('Champion not run on this harness','warn')}</span>`;
+const resPill=c=>c.state==='need_baseline'&&c.harness_mismatch?harnessPill(c):statePill(c.state);
 // the real CLI: rows from any harness are recorded with `arx eval record`, then `arx gate` re-reads the ladder
 const runCmd=n=>`arx eval record --model ${n.model} --slice ${n.slice} --rows <rows.jsonl>`;
 // a threshold is in the slice's score units: "2.0 pts" on 0/1 slices, "0.05 MB" on continuous ones
@@ -52,7 +55,7 @@ function rewalk(name,m){
    if(vs===undefined){wait=true;if(!C.want.has(own.task)){C.want.add(own.task);
     fetch('api/task/'+enc(own.task),{cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{C.vs[own.task]=d?.vs_champion||null;render()}).catch(()=>{C.vs[own.task]=null;render()})}
     return {...c,state:'need_run'}}
-   if(!vs||vs.delta==null)return {...c,state:'need_baseline'};
+   if(!vs||vs.delta==null)return {...c,state:'need_baseline',harness_mismatch:true};
    if(isCont(sl)&&vs.base!=null){c.threshold*=Math.abs(vs.base);c.relative=true}
    const ok=k.rule==='better'?vs.delta>c.threshold:vs.delta>=c.threshold;
    return {...c,...vs,state:ok?'pass':'fail',noisy:vs.lo<0&&0<vs.hi,cand_task:own.task,base_task:vs.task,base_runs:vs.runs,
@@ -68,7 +71,8 @@ function verdict(name,m,g){
   // the figure below carries the evidence; the line names the check that failed, by how much, against what rule
   const w=rewalk(name,m),fr=w?.rungs.find(r=>r.status==='fail'),c=fr?.checks.find(c=>c.state==='fail');
   if(c)return {text:`Rejected: fails the ${esc(fr.rung)} rung on ${esc(short(c.slice))}, ${score(c.cand,c.slice,c.n)} against the champion’s ${score(c.base,c.slice,c.n)}, ${vsWords(c.slice,c.delta)} where the rule is “${(r=>r[0].toLowerCase()+r.slice(1))(rule(c))}”.`,cls:'neg',rej:w};
-  return {text:w?.wait?'Rejected.':w&&w.rungs.some(r=>r.status==='pass')?'Rejected by hand: no check it ran fails against the champion now.':'Rejected.',cls:'neg',rej:w};
+  const hm=w&&!w.wait&&w.rungs.some(r=>r.checks.some(c=>c.harness_mismatch));
+  return {text:w?.wait?'Rejected.':w&&w.rungs.some(r=>r.status==='pass')?'Rejected by hand: no check it ran fails against the champion now.':hm?'Rejected. Its runs used a harness the champion has no run under, so they cannot be paired with it now.':'Rejected.',cls:'neg',rej:w};
  }
  if(!g)return {text:m.status==='planned'?`Planned, not on the ladder yet. Register it as a candidate with <code>arx model add ${esc(name)}</code> when it is ready to run.`:`${esc(m.status[0].toUpperCase()+m.status.slice(1))} model, kept for the record and not on the ladder.${m.reason?' '+reasonHTML(m.reason):''}`};
  if(g.error)return {text:`The gate could not be read: ${esc(g.error)}`,cls:'neg'};
@@ -79,7 +83,7 @@ function verdict(name,m,g){
  if(g.promotable)return {text:`Ready to promote: it passed every rung against ${mlink(g.champion)}.${tail}`,cls:'pos',ready:true};
  const fail=g.rungs.find(r=>r.status==='fail');
  if(fail){const c=fail.checks.find(c=>c.state==='fail');
-  if(c&&isCont(c.slice)&&errors(c))return {text:`Failed a gate check. ${c.cand_errors||0} candidate and ${c.base_errors||0} champion examples errored and scored 0.`,cls:'warn',evidenceReview:true};
+  if(c&&isCont(c.slice)&&errors(c))return {text:`Failed a gate check. ${c.cand_errors||0} candidate and ${c.base_errors||0} champion examples errored; on this continuous slice they are left out of the pairing, not scored 0.`,cls:'warn',evidenceReview:true};
   return {text:`Cannot be promoted: it failed the ${esc(fail.rung)} rung${c?`, ${vsWords(c.slice,c.delta)} the champion on ${esc(short(c.slice))} (n ${c.n}) where the rule is “${(r=>r[0].toLowerCase()+r.slice(1))(rule(c))}”`:''}.${passed.length?` It had passed ${list(passed)}.`:''}`,cls:'neg',failed:true};}
  // in progress: the ladder itself is the verdict; one chip says who runs what next (people skip the sentence)
  // a next run already in progress shows as one live chip per task (a union pass covers several slices); the Next chip
@@ -100,7 +104,8 @@ function gateTable(name,g,base='Matched champion'){
   if(!r.checks.length){rows.push(`<tr class="md-locked">${head}<td colspan="8" class="sub">${r.status==='locked'?'Opens once the rung above passes':'No checks on this rung'}</td></tr>`);continue}
   r.checks.forEach((c,i)=>{
    const n=c.n??L.slices[c.slice]?.n,ran=c.delta!=null;
-   const errorNote=errors(c)?` · ${c.cand_errors||0} / ${c.base_errors||0} errors, scored 0`:'';
+   // core.per_id: an errored row scores 0 on a 0/1 slice, and is left out of the pairing on a continuous one
+   const errorNote=errors(c)?` · ${c.cand_errors||0} / ${c.base_errors||0} errors, ${bin(c.slice)?'scored 0':'left out'}`:'';
    const pooled=c.cand_runs>1||c.base_runs>1?` · runs ${c.cand_runs??1} / ${c.base_runs??1}`:'';
    const go=c.cand_task?`onclick="if(!event.target.closest('a,button,details'))location.hash='task/${enc(c.cand_task)}'"`:'';
    rows.push(`<tr class="${c.cand_task?'click':''} ${i===r.checks.length-1?'':'md-in'}" ${go}>${i?'':head}
@@ -111,7 +116,7 @@ function gateTable(name,g,base='Matched champion'){
     <td class="num"><span class="${!ran?'':c.delta>0?'pos':c.delta<0?'neg':'sub'}">${ran?diff(c.delta,c.slice):DASH}</span></td>
     <td class="md-ci">${ran?(bin(c.slice)?ciBar(c):'')+`<div class="sub md-cil">${ciText(c,c.slice)}</div>`:DASH}</td>
     <td class="num md-hw">${c.wins!=null?`<span class="pos">${c.wins}</span> / <span class="${c.losses?'neg':''}">${c.losses}</span>`:DASH}</td>
-    <td class="md-res"><span class="row">${(c.state==='need_run'||c.state==='need_baseline')&&live(c)?runChip(live(c)):statePill(c.state)}${c.noisy?pill('Noisy','noisy'):''}</span></td></tr>`);
+    <td class="md-res"><span class="row">${(c.state==='need_run'||c.state==='need_baseline')&&live(c)?runChip(live(c)):resPill(c)}${c.noisy?pill('Noisy','noisy'):''}</span></td></tr>`);
   });
  }
  return `<div class="tbl md-gate"><table><thead><tr><th>${term('rung','Rung')}</th><th>${term('slice','Slice')}</th><th class="md-hm">Rule</th><th class="num md-hs">This model</th><th class="num md-hs">${base}</th><th class="num">${term('paired-delta','Δ')}</th><th>${term('interval','90% CI')}</th><th class="num md-hw">Wins / losses</th><th class="md-res">Result</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;

@@ -182,6 +182,20 @@ Review loop:
 - Never show gold answers, gold sources or judge rationale to the system being evaluated.
 - Primary KPIs travel together: score, cost per example, latency p50/p95. A win that triples cost is reported as such.
 
+## Harness contracts
+
+A run can declare the harness it was made with: `arx.evaluate(..., config={"baseline_contract": "<hash>"})`, where
+the hash covers what must match for two runs to be compared (inference engine and version, prompt, decoding, token
+budget, scorer). It lets a project change its harness without superseding older runs.
+
+- **Pooling.** Repeats of one model on one slice are pooled per example only when they declare the same contract.
+  A run that declares none pools only with runs that declare none.
+- **Gate.** Both sides use the candidate's latest contract: its runs under that contract, and the champion's runs
+  under the same one, never the champion's newest run under another harness.
+- **Mismatch.** If the champion has no run under the candidate's contract, the check is `need_baseline` and
+  `arx gate` names the champion run to do. The dashboard shows "Champion not run on this harness"; lists that
+  compare latest runs show "Different harness" instead of a delta.
+
 ## Why "not worse" on the middle rungs
 
 A hill fix (robustness to *please*) often should not move a random slice at all. Requiring "better" on 50 and

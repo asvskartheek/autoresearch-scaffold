@@ -104,7 +104,9 @@ const ROUTES=[['start','Start'],['overview','Overview'],['learn','Brief'],['cour
 const PKEY=(location.pathname.match(/^\/p\/([^/]+)/)||[])[1]&&decodeURIComponent(location.pathname.split('/')[2]);
 // a model reads by its title; an untitled a+b+c+d id reads as its last two changes (…+c+d); the id stays in the URL
 const mnt=k=>{const t=S.state?.models?.[k]?.title;if(t)return esc(t);const s=String(k||'—');return esc(s.split('+').length>3?'…+'+s.split('+').slice(-2).join('+'):s)};  // plain text, for attributes
-const mn=k=>{const t=S.state?.models?.[k]?.title;if(t)return esc(t);const s=String(k||'—');return s.split('+').length>3?`<span title="${esc(s)}">…+${esc(s.split('+').slice(-2).join('+'))}</span>`:esc(s)};
+// two models with one title read as "title · id" (as learn._title does), so lists never show the same name twice
+const dupTitles=M=>{if(dupTitles.M!==M){dupTitles.M=M;const c={};for(const m of Object.values(M||{}))if(m?.title)c[m.title]=(c[m.title]||0)+1;dupTitles.s=new Set(Object.keys(c).filter(t=>c[t]>1))}return dupTitles.s};
+const mn=k=>{const t=S.state?.models?.[k]?.title;if(t)return esc(t)+(dupTitles(S.state.models).has(t)?` <span class="sub">· ${esc(k)}</span>`:'');const s=String(k||'—');return s.split('+').length>3?`<span title="${esc(s)}">…+${esc(s.split('+').slice(-2).join('+'))}</span>`:esc(s)};
 const paperOf=key=>{const ps=S.state.papers||{};return ps[key]||Object.values(ps).find(p=>p.hill===key)};
 const paperUrl=p=>'papers/'+enc(p.name);  // relative, so /p/<key>/ serves another project's papers
 const goalPaper=g=>Object.values(S.state.papers||{}).find(p=>p.goal===g);

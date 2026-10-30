@@ -64,7 +64,7 @@ function hPair(x,runs){
 // signed count / value change vs a reference, coloured good or bad; time reads as seconds faster (−) or slower (+)
 function hDelta(r,base,U,sl,model){
  if(!r||!base)return DASH;
- if(boardHarnessMismatch(r,base))return `<span class="faint">Different harness</span>${model?` · <a class="ln" href="#model/${enc(model)}">Inspect matched gate</a>`:''}`;
+ if(boardHarnessMismatch(r,base))return model?`<a class="ln faint" href="#model/${enc(model)}" title="Not paired: the champion's latest run used another harness. The model page pairs it under its own harness" onclick="event.stopPropagation()">Different harness</a>`:'<span class="faint">Different harness</span>';
  if(isRate(r,sl)&&isRate(base,sl)){const k=solved(r)-solved(base);return k===0?'<span class="faint">0</span>':`<span class="${better(k,0)?'pos':'neg'}">${k>0?'+':'−'}${Math.abs(k)}</span>`}
  const d=r.score-base.score;if(Math.abs(d)<1e-9)return '<span class="faint">0</span>';
  return `<span class="${better(d,0)?'pos':'neg'}">${cDelta(d,sl,U)}</span>`;
@@ -73,9 +73,11 @@ function hDelta(r,base,U,sl,model){
 // else the same computation (mean per-example difference, 2000 seeded resamples) on the hill's per-example rows
 const PAIR={};
 function hPaired(m,slice,a,b){
- if(boardHarnessMismatch(S.state.leaderboard[slice]?.[m],S.state.leaderboard[slice]?.[S.state.champion]))return null;
+ // the gate pairs the champion's runs under this model's own harness, so its check stands even when the two
+ // models' latest runs (the leaderboard) used different harnesses
  const g=S.state.gates?.[m],c=g&&!g.error&&g.champion===S.state.champion?g.rungs.flatMap(r=>r.checks).find(c=>c.slice===slice&&c.delta!=null):null;
  if(c)return {delta:c.delta,lo:c.lo,hi:c.hi,n:c.n};
+ if(boardHarnessMismatch(S.state.leaderboard[slice]?.[m],S.state.leaderboard[slice]?.[S.state.champion]))return null;
  return pairedRows(m+'\u0000'+slice,a,b);
 }
 // the gate's paired statistic on per-example rows (core.paired): mean difference and a seeded 90% bootstrap interval.
@@ -248,17 +250,19 @@ function hAttempts(x,runs,U){
  const about=(sl.description?`<p class="hdesc">${esc(sl.description)}</p>`:'')+(x.measure||sl.metric?`<p class="hmeas"><span>Scoring</span>${esc(x.measure||sl.metric)}</p>`:'');
  const body=about?`<div class="habout">${about}</div>`:'';
  if(!runs.length)return panel('Attempts on the dev set',body+empty('No runs on this dev set yet',''),{meta,right:`<span class="hright">${right}</span>`,cls:'hdev'});
+ // the solved-share meter only reads on 0/1 slices; a continuous dev set drops the column instead of leaving it blank
+ const rate=runs.some(o=>isRate(o.r,sl));
  const rows=runs.map(o=>{
   const me=o.m===ch,fl=!me&&!boardHarnessMismatch(o.r,now?.r)&&cr&&T.runs[o.m]?hFlips(T.runs[o.m],cr,bin):null,mod=L.models[o.m]||{};
   const tag=me?pill('champion','champion'):o.m===x.climbed_by?pill('climbed it','climbed'):mod.status==='rejected'?`<span class="htag" title="${esc(mod.reason||'')}">rejected</span>`:'';
   const run=(r,f)=>r?.task?`<a class="hrun" href="#task/${enc(r.task)}" onclick="event.stopPropagation()" title="Open this run">${f}</a>`:f;
   return `<tr class="click${mod.status==='rejected'?' rej':''}" onclick="location.hash='#model/${enc(o.m)}'"><td class="hm"><div class="two"><a href="#model/${enc(o.m)}" title="${esc(o.m)}"><b>${mn(o.m)}</b></a>${mod.change?`<span class="sub ell" title="${esc(mod.change)}">${esc(mod.change)}</span>`:''}${mod.status==='rejected'&&mod.reason?`<span class="sub ell hrej" title="${esc(mod.reason)}">${esc(firstLine(mod.reason))}</span>`:''}</div></td>
    <td class="htg">${tag}</td>
-   <td class="num fig">${run(o.r,pFig(o.r,U,sl,T,o.m))}</td><td class="hbar">${isRate(o.r,sl)?meter(o.r.score,{mark:!me&&now&&!boardHarnessMismatch(o.r,now.r)&&isRate(now.r,sl)?now.r.score:null,cls:me?'muted':''}):''}</td>
+   <td class="num fig">${run(o.r,pFig(o.r,U,sl,T,o.m))}</td>${rate?`<td class="hbar">${isRate(o.r,sl)?meter(o.r.score,{mark:!me&&now&&!boardHarnessMismatch(o.r,now.r)&&isRate(now.r,sl)?now.r.score:null,cls:me?'muted':''}):''}</td>`:''}
    ${now?`<td class="num fig hdl">${me?DASH:(p=>p?pairCell(p,x.target):hDelta(o.r,now.r,U,sl,o.m))(hPaired(o.m,x.target,T?.runs?.[o.m],cr))}</td>`:''}
    ${cr?`<td class="num fig hfl">${fl?`<span class="${fl.f?'pos':'faint'}">+${fl.f}</span><span class="faint"> / </span><span class="${fl.k?'neg':'faint'}">−${fl.k}</span>`:DASH}</td>`:''}
    ${ctl?`<td class="num fig">${o.c?run(o.c,pFig(o.c,false,ctl,D?.control,o.m)):'<span class="faint">not run</span>'}</td>${now?`<td class="num fig hdc">${me||!o.c?DASH:(p=>p?pairCell(p,x.control):hDelta(o.c,now.c,false,ctl,o.m))(hPaired(o.m,x.control,D?.control?.runs?.[o.m],D?.control?.runs?.[ch]))}</td>`:''}`:''}</tr>`});
- const head=[['Model'],[''],[isRate(runs[0].r,sl)?'Solved':isTime(sl,U)?'Mean time':'Mean','num'],['']];
+ const head=[['Model'],[''],[isRate(runs[0].r,sl)?'Solved':isTime(sl,U)?'Mean time':'Mean','num'],...(rate?[['','hbar']]:[])];
  if(now)head.push([`${term('paired-delta','Δ')} vs ${term('champion')}`,'num hdl']);
  if(cr)head.push(bin?['<span title="Examples the champion got wrong and this got right / right and this got wrong">Fixed / broke</span>','num hfl']
   :[`<span title="Examples where this scored more than 10% ${isTime(sl,U)?'faster':'better'} / ${isTime(sl,U)?'slower':'worse'} than the champion">${isTime(sl,U)?'Faster / slower':'Better / worse'}</span>`,'num hfl']);
