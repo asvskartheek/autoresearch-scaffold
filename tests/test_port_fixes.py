@@ -305,5 +305,21 @@ class LeaderboardPairsUnderTheRowsHarness(unittest.TestCase):
         self.assertIsNone(board["v0"]["vs_champion"])
 
 
+class GoalPairingOnContinuousSlices(unittest.TestCase):
+    def test_errored_rows_do_not_inflate_the_goal_delta(self):
+        from autoresearch import reference
+        p = project([])
+        sl = continuous_slice(p, "lat/n6", unit="ms")
+        p.add_model("v0", status="champion")
+        run(p, "v0", sl, [-100.0] * 6)
+        p.open_goal("fast", "Under 50 ms", sl, -50.0)
+        p.add_model("v1", parent="v0")
+        run(p, "v1", sl, [-90.0] * 6, errors={0, 1})  # two timeouts: never "0 ms", a perfect score
+        p.promote("v1", force=True, baseline=False)
+        for vs in (p.goal_status("fast")["vs_baseline"], reference.build(p, "v1", cache=False)["goals"][0]["vs_baseline"]):
+            self.assertEqual(vs["n"], 4)
+            self.assertAlmostEqual(vs["delta"], 10.0)
+
+
 if __name__ == "__main__":
     unittest.main()

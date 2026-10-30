@@ -316,8 +316,9 @@ class Project:
         vs = None
         if kpi == "score" and model and g.get("baseline") and g["baseline"] != model and self.latest_eval(g["baseline"], sl):
             mine, theirs = latest_shared(self.slice_evals(model, sl), self.slice_evals(g["baseline"], sl))
-            vs = paired(per_id([r for t in mine for r in self.rows(t["id"])]),
-                        per_id([r for t in theirs for r in self.rows(t["id"])]), sign)
+            cont = self.is_continuous(sl)  # an errored row is never a perfect "minus ms" score
+            vs = paired(per_id([r for t in mine for r in self.rows(t["id"])], cont),
+                        per_id([r for t in theirs for r in self.rows(t["id"])], cont), sign)
         hills = {k: h.get("status") for k, h in self.hills().items() if h.get("goal") == name}
         errs = pool_errors([r for t in self.score_runs(model, sl) for r in self.rows(t["id"])]) if model and ev else \
             dict(pooled_rows=0, pooled_errors=0, error_share=None)
