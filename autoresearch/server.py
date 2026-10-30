@@ -363,7 +363,8 @@ def project_list(default: Project) -> list[dict]:
 
 
 _CHECK = ("slice", "rule", "state", "threshold", "noisy", "n", "delta", "lo", "hi", "wins", "losses", "cand", "base",
-          "cand_runs", "base_runs", "cand_task", "base_task", "baseline_contract", "relative")
+          "cand_runs", "base_runs", "cand_task", "base_task", "baseline_contract", "relative", "harness_mismatch",
+          "champion_runs_other_harness")
 
 
 def _slim_gate(g) -> dict | None:

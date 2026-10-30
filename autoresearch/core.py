@@ -482,6 +482,10 @@ class Project:
                         c["state"] = "no_champion"
                     elif not be:
                         c["state"] = "need_baseline"
+                        # the champion ran this slice, only under another harness: say so, never "not run"
+                        other = len(self.slice_evals(champ, sl))
+                        if other:
+                            c["harness_mismatch"], c["champion_runs_other_harness"] = True, other
                         next_runs.append((champ, sl))
                     elif not ce:
                         c["state"] = "need_run"
