@@ -587,3 +587,56 @@ def test_dashboard_text_stays_short():
         bad += [f"{f}: {t}" for t in _ui_prose(src)]
         bad += [f"{f}: {c}" for c in ('class="sub"', 'class="hint"') if c in src]
     assert not bad, "UI prose over 12 words (use a label, a figure or a title attribute):\n" + "\n".join(bad)
+
+
+def test_directive_is_stored_with_its_anchor(proj):
+    from arx2 import asks
+    p = Project(proj)
+    d = asks.ask(p, "@orchestrator create a new goal to hill climb on dev41", "set", "all", "item square: 7",
+                 route="set/all", loc="0.2.1")
+    a = p.state()["asks"][d["key"]]
+    assert a["to"] == "orchestrator" and a["text"] == "create a new goal to hill climb on dev41"
+    assert (a["kind"], a["entity"], a["what"], a["route"], a["loc"], a["status"]) == ("set", "all", "item square: 7", "set/all", "0.2.1", "open")
+    with pytest.raises(LedgerError):
+        asks.ask(p, "@orchestrator  ", "set", "all", "x")
+    assert "to" not in asks.ask(p, "Why is @orchestrator here?", "set", "all", "x")  # only a leading mention directs
+
+
+def test_ask_poll_skips_directives_and_orchestrator_poll_gets_them(proj):
+    from arx2 import asks
+    p = Project(proj)
+    d = asks.ask(p, "@orchestrator rerun the dev set", "set", "all", "item square: 7", route="set/all")
+    assert asks.next_open(p.state()) is None
+    assert "noop" in cli(proj, "ask", "poll", "--timeout", "0.5").stdout
+    assert d["key"] not in cli(proj, "ask", "list", "--all").stdout
+    q = asks.ask(p, "What is this?", "set", "all", "item square: 8")
+    out = cli(proj, "ask", "poll", "--timeout", "2", "--agent", "t").stdout
+    assert q["key"] in out and d["key"] not in out
+    out = cli(proj, "orchestrator", "poll", "--timeout", "5").stdout
+    assert f"directive: {d['key']}" in out and "rerun the dev set" in out and "clicked: item square: 7" in out
+    assert "arx2 orchestrator ack" in out and p.state()["asks"][d["key"]]["status"] == "claimed"
+    assert "noop" in cli(proj, "orchestrator", "poll", "--timeout", "0.5").stdout  # claimed: not handed out twice
+
+
+def test_ack_closes_a_directive_and_a_follow_up_reopens_it(proj):
+    from arx2 import asks
+    p = Project(proj)
+    d = asks.ask(p, "@orchestrator open a goal on dev41", "project", "toy", "heading “Goals”")
+    assert d["key"] in cli(proj, "orchestrator", "list").stdout
+    assert "directives: 1 open" in cli(proj).stdout  # the home screen points at it
+    cli(proj, "orchestrator", "ack", d["key"], "--text", "Opened goal dev41.")
+    a = p.state()["asks"][d["key"]]
+    assert a["status"] == "answered" and a["thread"][-1]["parts"][0]["body"] == "Opened goal dev41."
+    assert d["key"] not in cli(proj, "orchestrator", "list").stdout
+    assert "noop" in cli(proj, "orchestrator", "poll", "--timeout", "0.5").stdout
+    asks.reply(p, d["key"], "@orchestrator target 0.9 please")
+    a = p.state()["asks"][d["key"]]
+    assert a["status"] == "open" and a["thread"][-1]["text"] == "target 0.9 please"
+    assert asks.next_open(p.state(), agent="orchestrator", to="orchestrator")["key"] == d["key"] and asks.next_open(p.state()) is None
+    q = asks.ask(p, "Why?", "set", "all", "item square: 7", route="set/all", loc="1.2")
+    e = asks.reply(p, q["key"], "@orchestrator fix this one")  # under a question: a new directive on the same anchor
+    n = p.state()["asks"][e["key"]]
+    assert e["key"] != q["key"] and n["to"] == "orchestrator" and n["after"] == q["key"] and (n["loc"], n["what"]) == ("1.2", "item square: 7")
+    q2 = asks.ask(p, "Not a directive", "set", "all", "x")
+    with pytest.raises(LedgerError):
+        asks.ack(p, q2["key"], "done")
