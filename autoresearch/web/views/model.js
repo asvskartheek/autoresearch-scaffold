@@ -83,7 +83,7 @@ function verdict(name,m,g){
  if(g.promotable)return {text:`Ready to promote: it passed every rung against ${mlink(g.champion)}.${tail}`,cls:'pos',ready:true};
  const fail=g.rungs.find(r=>r.status==='fail');
  if(fail){const c=fail.checks.find(c=>c.state==='fail');
-  if(c&&isCont(c.slice)&&errors(c))return {text:`Failed a gate check. ${c.cand_errors||0} candidate and ${c.base_errors||0} champion examples errored and scored 0.`,cls:'warn',evidenceReview:true};
+  if(c&&isCont(c.slice)&&errors(c))return {text:`Failed a gate check. ${c.cand_errors||0} candidate and ${c.base_errors||0} champion examples errored; on this continuous slice they are left out of the pairing, not scored 0.`,cls:'warn',evidenceReview:true};
   return {text:`Cannot be promoted: it failed the ${esc(fail.rung)} rung${c?`, ${vsWords(c.slice,c.delta)} the champion on ${esc(short(c.slice))} (n ${c.n}) where the rule is “${(r=>r[0].toLowerCase()+r.slice(1))(rule(c))}”`:''}.${passed.length?` It had passed ${list(passed)}.`:''}`,cls:'neg',failed:true};}
  // in progress: the ladder itself is the verdict; one chip says who runs what next (people skip the sentence)
  // a next run already in progress shows as one live chip per task (a union pass covers several slices); the Next chip
@@ -104,7 +104,8 @@ function gateTable(name,g,base='Matched champion'){
   if(!r.checks.length){rows.push(`<tr class="md-locked">${head}<td colspan="8" class="sub">${r.status==='locked'?'Opens once the rung above passes':'No checks on this rung'}</td></tr>`);continue}
   r.checks.forEach((c,i)=>{
    const n=c.n??L.slices[c.slice]?.n,ran=c.delta!=null;
-   const errorNote=errors(c)?` · ${c.cand_errors||0} / ${c.base_errors||0} errors, scored 0`:'';
+   // core.per_id: an errored row scores 0 on a 0/1 slice, and is left out of the pairing on a continuous one
+   const errorNote=errors(c)?` · ${c.cand_errors||0} / ${c.base_errors||0} errors, ${bin(c.slice)?'scored 0':'left out'}`:'';
    const pooled=c.cand_runs>1||c.base_runs>1?` · runs ${c.cand_runs??1} / ${c.base_runs??1}`:'';
    const go=c.cand_task?`onclick="if(!event.target.closest('a,button,details'))location.hash='task/${enc(c.cand_task)}'"`:'';
    rows.push(`<tr class="${c.cand_task?'click':''} ${i===r.checks.length-1?'':'md-in'}" ${go}>${i?'':head}
