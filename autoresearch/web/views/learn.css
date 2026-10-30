@@ -47,7 +47,7 @@
 .lrn svg text.mono{font-family:var(--mono)}
 .lrn svg text.strong{fill:var(--text);font-weight:500}
 .lrn .lv{width:100%;height:auto;display:block}
-.lrn .nl{width:100%;height:auto;touch-action:none;cursor:pointer;display:block}
+.lrn .nl{width:100%;height:auto;touch-action:none;cursor:pointer;display:block;overflow:visible}
 .lrn .nl text,.lrn .lv text{font-size:12px}
 
 .lrn .lside{display:flex;flex-direction:column;gap:16px;min-width:0}
