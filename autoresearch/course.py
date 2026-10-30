@@ -340,14 +340,25 @@ def lesson_gate(p, L, learn):
                                "No; obtain a compatible baseline and apply the declared rule", "A gate result belongs to its measured scope and evaluation setup; it is not a permanent property of a model.")])
 
 
-def _ladder(p):
-    """Resolve scope before turning a stored tolerance into a display quantity."""
+def _ladder_model(p):
+    """The model the ladder lessons show: the candidate climbing most recently (its newest complete run, else its
+    registration), else the champion. Never the first candidate in dict order, which is often a stale one."""
+    models, runs = p.models(), {}
+    for t in p.evals():
+        runs[t.get("model")] = max(runs.get(t.get("model"), 0), t.get("ended") or 0)
+    cands = [k for k, m in models.items() if m.get("status") == "candidate"]
+    return max(cands, key=lambda k: (runs.get(k, 0), models[k].get("created") or 0), default=None) or p.champion()
+
+
+def _ladder(p, chosen=None):
+    """The declared ladder resolved for one model exactly as the gate resolves it (`Project._resolve`): a hill check
+    on a model with no hill stays unresolved, never borrowed from the project's only hill. Bars are in the slice's units; on a continuous slice the gate reads margin and
+    tolerance as a fraction of the champion's mean, so the bar is that fraction of it (or a percent while the
+    champion has no runs there)."""
     from . import learn
     models = p.models()
-    chosen = next((name for name, model in models.items() if model.get("status") == "candidate"), p.champion())
-    model = models.get(chosen) or {}
-    if not model.get("hill") and len(p.hills()) == 1:
-        model = dict(model, hill=next(iter(p.hills())))
+    chosen = chosen or _ladder_model(p)
+    model, champ = models.get(chosen) or {}, p.champion()
     out = []
     for rung in p.config.get("ladder", []):
         if not rung.get("rung"):
@@ -369,10 +380,17 @@ def _ladder(p):
                 if learn._cont(p, scope):
                     factor = -1 if learn._neg(p, scope) else 1
                     unit = learn._unit(p, scope)
+                    base = p.pooled_scores(champ, scope, reference_model=chosen) if champ and raw else {}
+                    if base:
+                        display = factor * raw * abs(sum(base.values()) / len(base))
+                    elif raw:
+                        display, unit = factor * 100 * raw, "% of the champion"
+                    else:
+                        display = 0
                 else:
-                    factor, unit = 100, "pts"
+                    display, unit, factor = 100 * raw, "pts", 100
                 checks.append(dict(slice=scope, source_ref=ref, rule=rule, bar=raw,
-                                   display_bar=factor * raw, unit=unit, better=-1 if factor < 0 else 1, resolved=True))
+                                   display_bar=display, unit=unit, better=-1 if factor < 0 else 1, resolved=True))
         out.append(dict(rung=rung["rung"], checks=checks, model=learn._title(p, chosen) if chosen else None))
     return out
 
@@ -393,9 +411,10 @@ def lesson_rung(p, L, learn):
 
 
 def lesson_ladder(p, L, learn):
-    lad = _ladder(p) or [dict(rung=x, checks=[]) for x in ("dev", "random100", "full")]
+    lad = _ladder(p) or [dict(rung=x, checks=[]) for x in ("dev", "random100", "full")]  # the same model as below
     names = [r["rung"] for r in lad]
-    cand = next((m for m, v in L["models"].items() if v.get("status") == "candidate"), None)
+    cand = _ladder_model(p)
+    cand = cand if (p.models().get(cand) or {}).get("status") == "candidate" else None
     status = []
     if cand:
         try:

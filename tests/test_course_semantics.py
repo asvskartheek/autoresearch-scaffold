@@ -117,7 +117,33 @@ class CourseSemantics(unittest.TestCase):
         (p.root/'research.json').write_text(json.dumps(config))
         lesson=course.lesson_rung(p,{},learn)
         check=next(c for c in lesson['fig']['checks'] if c['source_ref']=='@hill.control')
-        self.assertEqual((check['slice'],check['unit'],check['display_bar'],check['better']),('mem/n4','MB',.05,-1))
+        # the gate reads a continuous tolerance as a fraction of the champion's mean: with no champion run, a percent
+        self.assertEqual((check['slice'],check['unit'],check['display_bar'],check['better']),('mem/n4','% of the champion',5.0,-1))
+        from autoresearch.core import Task
+        t=Task(p,'eval','base on mem/n4',model='base',slice='mem/n4')
+        for i in range(4):t.add_row(dict(id=str(i),score=-160.0))
+        t.finish()
+        check=next(c for c in course.lesson_rung(p,{},learn)['fig']['checks'] if c['source_ref']=='@hill.control')
+        self.assertEqual((check['unit'],round(check['display_bar'],6)),('MB',8.0))  # 5% of 160 MB, as `arx gate` reads it
+
+    def test_ladder_lessons_show_the_latest_candidate_on_its_own_hill(self):
+        from tests.test_goal_units import ledger
+        from autoresearch.core import Task
+        p=ledger();p.add_dataset('d',list(range(4)))
+        p.add_slice('t/a',list(range(4)));p.add_slice('t/b',list(range(4)))
+        p.open_hill('ha','A','t/a');p.open_hill('hb','B','t/b')
+        p.add_model('base',status='champion');p.add_model('old',parent='base',hill='ha');p.add_model('new',parent='base',hill='hb')
+        p.add_model('nohill',parent='base')
+        t=Task(p,'eval','new on t/b',model='new',slice='t/b')
+        for i in range(4):t.add_row(dict(id=str(i),score=1))
+        t.finish()
+        config=p.config;config['ladder']=[{'rung':'dev','checks':[{'slice':'@hill.target','rule':'better'}]}]
+        (p.root/'research.json').write_text(json.dumps(config))
+        self.assertEqual(course._ladder_model(p),'new')
+        self.assertEqual(course._ladder(p)[0]['checks'][0]['slice'],'t/b')
+        # a model with no hill never borrows one, even when the project has a single hill
+        hills=p.hills();hills.pop('ha');p.hills=lambda:hills
+        self.assertFalse(course._ladder(p,'nohill')[0]['checks'][0]['resolved'])
 
     def test_unresolved_symbolic_rung_has_no_invented_numeric_unit(self):
         from tests.test_learn import ledger
