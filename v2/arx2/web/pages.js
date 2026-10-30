@@ -33,7 +33,7 @@ function evidenceLine(e) {
 }
 
 function findingLine(f) {
-  return `<a href="#/p/${S.key}/${f.link || ""}" data-check="${esc(f.check)}">${esc(f.what)}.</a>`;
+  return `<a href="#/p/${S.key}/${f.link || ""}" data-check="${esc(f.check)}">${esc(f.what.replace(/\.?$/, "."))}</a>`;
 }
 
 function needsYou() {

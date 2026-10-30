@@ -443,7 +443,7 @@ def audit(p: Project, only: str | list | None = None, v: Views | None = None) ->
             f.setdefault("entities", [f["entity"]])
             if f["link"] is None:
                 kind, _, key = f["entity"].partition(":")
-                f["link"] = _link_for(c, kind, key) if len(f["entities"]) == 1 else {"hill": "hills", "pattern": "hills"}.get(kind)
+                f["link"] = _link_for(c, kind, key) if len(f["entities"]) == 1 else {"hill": "hills", "pattern": "hills", "candidate": "ladder"}.get(kind)
             out.append(f)
     order = {"error": 0, "warn": 1, "info": 2}
     return sorted(out, key=lambda f: order[f["level"]])
