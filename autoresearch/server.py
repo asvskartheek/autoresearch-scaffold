@@ -658,12 +658,9 @@ def serve(port: int = 8890, root=None):
                     return self._send(200, json.dumps(p.gate(path.rsplit("/", 1)[1]), default=str).encode(), "application/json")
                 if path == "/api/papers":
                     return self._send(200, json.dumps(papers.papers(p), default=str).encode(), "application/json")
-                q = dict(parse_qsl(urlsplit(self.path).query), _port=str(self.server.server_port))
-                if remote and not guest_learning_read_allowed(path, q):
-                    return self._send(403, b'{"error":"use your guest learner ID"}', "application/json")
-                features.REQUEST.remote = remote
+                features.REQUEST.remote = remote  # a feature may answer a share-link guest with less (memory.py)
                 try:
-                    r = _feature(features.GET, p, path, q)
+                    r = _feature(features.GET, p, path, dict(parse_qsl(urlsplit(self.path).query), _port=str(self.server.server_port)))
                 finally:
                     features.REQUEST.remote = False
                 if r:
