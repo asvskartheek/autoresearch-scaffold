@@ -77,7 +77,8 @@ function hPaired(m,slice,a,b){
  // models' latest runs (the leaderboard) used different harnesses
  const g=S.state.gates?.[m],c=g&&!g.error&&g.champion===S.state.champion?g.rungs.flatMap(r=>r.checks).find(c=>c.slice===slice&&c.delta!=null):null;
  if(c)return {delta:c.delta,lo:c.lo,hi:c.hi,n:c.n};
- if(boardHarnessMismatch(S.state.leaderboard[slice]?.[m],S.state.leaderboard[slice]?.[S.state.champion]))return null;
+ // under another harness than the champion's latest run: the server's pairing under this model's own harness, if sent
+ if(boardHarnessMismatch(S.state.leaderboard[slice]?.[m],S.state.leaderboard[slice]?.[S.state.champion]))return ownPair(S.state.leaderboard[slice]?.[m]);
  return pairedRows(m+'\u0000'+slice,a,b);
 }
 // the gate's paired statistic on per-example rows (core.paired): mean difference and a seeded 90% bootstrap interval.
@@ -100,7 +101,7 @@ function pairCell(p,slice){
  if(!p)return DASH;
  const k=slice,neg=negSlice(k),noisy=p.lo<0&&0<p.hi,cls=noisy?'sub':p.delta>0?'pos':p.delta<0?'neg':'sub';
  const [x,y]=neg?[p.hi,p.lo]:[p.lo,p.hi],ci=`${esc(sd(k,x).replace(/ \S+$/,''))} to ${esc(sd(k,y))}`;
- return `<div class="hpd"><span class="${cls}">${esc(sd(k,p.delta))}</span>${noisy?pill('Noisy','noisy'):''}</div><div class="sub hci" title="90% interval of the paired difference, n ${p.n}">${ci}</div>`;
+ return `<div class="hpd"><span class="${cls}">${esc(sd(k,p.delta))}</span>${noisy?pill('Noisy','noisy'):''}</div>${p.lo!=null&&p.hi!=null?`<div class="sub hci" title="90% interval of the paired difference, n ${p.n}">${ci}</div>`:''}`;
 }
 // per-example flips vs a reference. Pass/fail: f fixed (reference wrong, this right), k broke.
 // Continuous: f better than the reference on that example, k worse (level within 10% counts as neither).

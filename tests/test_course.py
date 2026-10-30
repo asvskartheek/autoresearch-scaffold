@@ -3,6 +3,7 @@ import json, os, tempfile, unittest
 
 os.environ["ARX_HOME"] = tempfile.mkdtemp()  # never touch the real ~/.arx
 from autoresearch import course, learn
+from autoresearch.core import Project
 from tests.test_learn import ledger, run
 
 DAY = course.DAY
@@ -46,6 +47,20 @@ class Course(unittest.TestCase):
         self.assertTrue(ls["paired-delta"]["fig"]["example"])
         self.assertEqual(ls["goal"]["fig"]["rows"], [])
         self.assertIn("No goal", ls["goal"]["say"])
+
+    def test_gate_example_reads_in_a_continuous_ladders_unit(self):
+        d = tempfile.mkdtemp()
+        with open(os.path.join(d, "research.json"), "w") as f:
+            f.write(json.dumps(dict(name="speed", primary_dataset="gen", ladder=[
+                dict(rung="random50", checks=[dict(slice="random50", rule="not_worse", tolerance=0.05)])])))
+        p = Project(d)
+        p.add_slice("gen/random50", list(range(50)), kind="random", scale="continuous", unit="tok/s")
+        p.add_model("base", status="champion")
+        run(p, "base", [40] * 50, "gen/random50")
+        g = {x["id"]: x for x in course.lessons(p)}["gate"]
+        self.assertTrue(g["fig"]["example"])
+        self.assertEqual((g["fig"]["unit"], g["fig"]["bar"]), ("tok/s", -2.0))  # 5% of the champion's 40 tok/s
+        self.assertIn("at most 2 tok/s", g["checks"][0]["q"]); self.assertNotIn("pts", g["checks"][0]["q"])
 
     def test_spaced_review(self):
         t0 = 1_000_000.0

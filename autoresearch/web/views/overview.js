@@ -53,7 +53,7 @@ const ovGoal=g=>{
  return `<a class="ov-goal ${U.isMain(g)?'':'ov-sub'}" href="#goal/${enc(g.name)}">
   <span class="ov-gh"><span class="ell ov-gt">${esc(g.title||g.name)}<span class="faint ov-gs"> · ${esc(g.slice)}</span></span><span class="ov-gd num">${fig}</span></span>
   <span class="ov-gb"><span class="ov-trk ${met?'met':''}"><i style="width:${(100*f).toFixed(1)}%"></i>${mark!=null?`<b style="left:${(100*mark).toFixed(1)}%"></b>`:''}</span>${ovSpark(g)}</span>
-  <span class="ov-ge num">${base}<span>Now <b>${now}</b></span><span>Target ${U.cmpSym(g)}&nbsp;${U.gt(g)}</span></span></a>`;
+  <span class="ov-ge num">${base}<span>Now <b>${now}</b></span><span>Target ${U.cmpSym(g)}&nbsp;${U.gt(g)}${U.ofP(g)}</span></span></a>`;
 };
 // the best run on the goal slice over time, as a step, with the target dashed
 const ovSpark=g=>{
@@ -156,12 +156,14 @@ VIEWS.overview=()=>{
  }
 
  // leaderboard: dataset tabs, slice control, paired deltas vs the champion on the same slice
- // a project with no full set (synthetic benches) opens on the dataset of the goal the champion reads by
- if(!S.lbDataset||!ds.includes(S.lbDataset))S.lbDataset=(!st.slices[fullKey]&&cg&&st.slices[cg.slice]?.dataset)||(ds.includes(prim)?prim:ds[0]);
+ // a project with no full set (synthetic benches) opens on the goal's slice: the one the champion reads by, else the
+ // first open goal's
+ const gsl=!st.slices[fullKey]&&GU?(cg||gs.find(GU.isMain)||gs[0])?.slice:null,gSl=gsl&&st.slices[gsl]?gsl:null;
+ if(!S.lbDataset||!ds.includes(S.lbDataset))S.lbDataset=(gSl&&st.slices[gSl].dataset)||(ds.includes(prim)?prim:ds[0]);
  const sl=Object.values(st.slices).filter(s=>s.dataset===S.lbDataset);
  const order={full:0,random:1,control:2,dev:3,synthetic:4};
  sl.sort((a,b)=>((order[a.kind]??9)-(order[b.kind]??9))||(b.n-a.n)||a.name.localeCompare(b.name));
- if(!S.lbSlice||!sl.some(s=>s.name===S.lbSlice))S.lbSlice=(sl.find(s=>st.leaderboard[s.name])||sl[0])?.name;
+ if(!S.lbSlice||!sl.some(s=>s.name===S.lbSlice))S.lbSlice=(sl.find(s=>s.name===gSl)||sl.find(s=>st.leaderboard[s.name])||sl[0])?.name;
  const entries=Object.entries(st.leaderboard[S.lbSlice]||{});
  const rank=new Map([...entries].sort((a,b)=>(hib?-1:1)*((a[1].score??-1)-(b[1].score??-1))).map(([m],i)=>[m,i+1]));
  const so=S.ovSort||{k:'score',d:-1},key={score:r=>r.score,delta:r=>r.score,errors:r=>r.errors??0,cost:r=>r.cost,p50:r=>r.latency_p50,p95:r=>r.latency_p95,n:r=>r.n,ended:r=>r.ended}[so.k]||(r=>r.score);
@@ -178,16 +180,17 @@ VIEWS.overview=()=>{
  const pick=sl.length>7?sel:`<div class="ov-pick-s">${sel}</div><div class="seg ov-hide-s" role="tablist" aria-label="Slice">${sl.map(s=>`<button role="tab" aria-selected="${s.name===S.lbSlice}" class="${s.name===S.lbSlice?'on':''}" onclick="ovPickSlice(${esc(JSON.stringify(s.name))})">${esc(short(s.name))}<small>${ovN(s.n)}</small></button>`).join('')}</div>`;
  const sh=(label,k,cls)=>[`<button class="ov-sort ${so.k===k?'on':''}" onclick="ovSortBy('${k}')" aria-label="Sort by ${esc(label.replace(/<span class="ov-show-s">[^<]*<\/span>/g,'').replace(/<[^>]+>/g,''))}">${label}${so.k===k?`<span class="ov-arr">${so.d<0?'↓':'↑'}</span>`:''}</button>`,cls];
  const rows=shown.map(([m,r])=>{
-  const mismatch=boardHarnessMismatch(r,st.leaderboard[S.lbSlice]?.[champ]);
-  const d=!mismatch&&cs!=null&&r.score!=null?r.score-cs:null;
-  const good=d!=null&&d!==0&&(hib?d>0:d<0)?'pos':'';
+  // under another harness than the champion's latest run: the server's paired Δ under this model's own harness
+  const mismatch=boardHarnessMismatch(r,st.leaderboard[S.lbSlice]?.[champ]),own=mismatch?ownPair(r):null;
+  const d=own?own.delta:!mismatch&&cs!=null&&r.score!=null?r.score-cs:null;
+  const good=d!=null&&d!==0&&(own?d>0:hib?d>0:d<0)?'pos':'';
   const about=ovAbout(m,st.models[m]),rej=st.models[m]?.status==='rejected';
   return `<tr class="click${rej?' ov-rej':''}" title="${rej?esc('Rejected: '+firstLine(st.models[m].reason||'')):''}" onclick="location.hash='task/${enc(r.task)}'"><td class="num faint ov-rank">${rank.get(m)}</td>
    <td class="ov-id"><div class="two"><span class="row"><a class="ell ov-nm" href="#model/${enc(m)}" onclick="event.stopPropagation()" title="${esc(m)}">${mn(m)}</a>${m===champ?`<span class="ov-hide-s">${pill('champion','champion')}</span>`:rej?pill('rejected','rejected'):''}</span><span class="sub ell ov-show-s">${m===champ?'Champion · ':''}n ${ovN(r.n)}${r.errors?' · '+plural(r.errors,'error'):''}</span></div></td>
    ${bin?`<td class="ov-bar ov-hide-s">${meter(r.score,{cls:m===champ?'':'muted'})}</td>`:''}
    <td class="num"><b class="ov-sc">${cur?sv(cur.name,r.score,r.n):ovScore(r.score,cur)}</b></td>
    <td class="num ov-hide-s">${ovN(r.n)}</td>
-   <td class="num ${good} ${d===0||d==null?'faint':''}">${mismatch?'Different harness':d==null?DASH:d===0?'0':cur?sd(cur.name,d):ovDelta(d,cur)}</td>
+   <td class="num ${good} ${d===0||d==null?'faint':''}">${mismatch&&!own?'Different harness':d==null?DASH:d===0?'0':cur?sd(cur.name,d):ovDelta(d,cur)}</td>
    <td class="num ov-hide-s ${r.errors?'':'faint'}">${ovN(r.errors??0)}</td>
    ${hasCost?`<td class="num ov-hide-m">${r.cost==null?DASH:money(r.cost)}</td>`:''}
    ${hasLat?`<td class="num ov-hide-m">${r.latency_p50==null?DASH:secs(r.latency_p50)}</td>`:''}${hasP95?`<td class="num ov-hide-m">${r.latency_p95==null?DASH:secs(r.latency_p95)}</td>`:''}

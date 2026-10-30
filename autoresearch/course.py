@@ -404,6 +404,23 @@ def lesson_interval(p, L, learn):
                                "The 1/√n approximation assumes independent observations; repeating identical data does not add independent evidence.")])
 
 
+def _cont_example(p, learn):
+    """An illustrative gate check in a continuous ladder slice's own unit (a tolerance on ~42 tok/s reads in tok/s,
+    not pts), or None when the ladder has no continuous check. The bar is the declared fraction of the champion's mean,
+    or of 100 units while the champion has no run there."""
+    cs = [c for r in _ladder(p) for c in r["checks"] if c.get("resolved") and c["rule"] in ("better", "not_worse")
+          and learn._cont(p, c["slice"])]
+    if not cs:
+        return None
+    c = next((c for c in cs if c.get("display_bar")), cs[0])  # a declared tolerance teaches more than a bar at zero
+    unit, better = learn._unit(p, c["slice"]) or "", c.get("better") or 1
+    bar = float(f"{c['display_bar']:.3g}")
+    delta = float(f"{0.4 * bar:.3g}") if bar else better * 1.0  # inside the allowed side, like the 0/1 example
+    rung = next((r["rung"] for r in _ladder(p) if c in r["checks"]), "")
+    return dict(kind="gate", rule=c["rule"], bar=bar, delta=delta, unit=unit, slice=learn._short(c["slice"]),
+                model="Example", rung=rung, better=better, example=True)
+
+
 def lesson_gate(p, L, learn):
     c = next((c for c in L["checks"] if c.get("rule") in ("better", "not_worse")), None)
     if c:
@@ -412,6 +429,12 @@ def lesson_gate(p, L, learn):
         fig = dict(kind="gate", rule=c["rule"], bar=k * (c.get("threshold") or 0), delta=v["delta"], unit=v["unit"],
                    slice=learn._short(c["slice"]), model=learn._title(p, c["model"]), rung=c["rung"], better=-1 if k < 0 else 1)
         rule = f"{fig['model']} on {c['slice']}: it {learn._rule_text(p, c)}. It measured Δ {learn.sd(p, c['slice'], c['delta'])}."
+    elif ex := _cont_example(p, learn):
+        fig = ex
+        bar, d, u = fig["bar"], fig["delta"], fig["unit"]
+        rule = (f"It may lose at most {_amt(u, abs(bar)).lstrip('+')}." if fig["rule"] == "not_worse" else
+                f"It must improve by more than {_amt(u, abs(bar)).lstrip('+')}." if bar else "It must improve on the champion.")
+        rule += f" It measured Δ {_amt(u, d)}."
     else:
         fig = dict(kind="gate", rule="not_worse", bar=-1.0, delta=-0.4, unit="pts", slice="random100", model="Example", rung="random100", example=True)
         rule = "It may lose at most 1 pt. It measured Δ −0.4 pts."
