@@ -4,7 +4,7 @@ from __future__ import annotations
 import ast, copy, gzip, hashlib, json, mimetypes, os, re, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qsl, unquote, urlencode, urlsplit
+from urllib.parse import parse_qsl, quote, unquote, urlencode, urlsplit
 
 from . import features, papers, people, projects, share
 from .core import Project, _read, contract_of, paired, per_id, same_contract, summarize
@@ -343,6 +343,30 @@ def _asks(q: Project) -> int:
     return sum(1 for n in qs.values() if isinstance(n, dict) and n.get("needs_human") and n.get("status") in ("open", "agent"))
 
 
+def no_project_page(key: str, remote: bool) -> bytes:
+    """A /p/<key>/ link to a project this dashboard does not serve (renamed, removed, a typo): say so and link the
+    registered ones, instead of a bare JSON error. Someone on another machine gets only the way back."""
+    import html
+    links = "" if remote else "".join(
+        f'<li><a href="/p/{quote(k)}/">{html.escape(r.get("name") or k)}</a> <code>{html.escape(k)}</code></li>'
+        for k, r in ((k, _name_of(v)) for k, v in projects.registry().items()))
+    return (f'<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+            f'<title>No project here · arx</title><link rel="stylesheet" href="/ui-base.css">'
+            "<script>try{var t=localStorage.getItem('arx-theme');if(t==='dark'||!t&&matchMedia('(prefers-color-scheme: dark)').matches)"
+            "document.documentElement.dataset.theme='dark'}catch(e){}</script><style>a{color:var(--ring)}</style>"
+            f'<body style="max-width:560px;margin:48px auto;padding:0 16px">'
+            f'<h1>No project <code>{html.escape(key)}</code></h1>'
+            f'<p>This dashboard does not serve a project with that key. <code>arx projects</code> lists them.</p>'
+            f'<ul>{links}</ul><p><a href="/">Open the dashboard</a></p>').encode()
+
+
+def _name_of(entry: dict) -> dict:
+    try:
+        return {"name": _read(Path(entry["root"]) / "research.json", {}).get("name")}
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
+
+
 def project_list(default: Project) -> list[dict]:
     """Every registered project for the sidebar: name, running and stalled jobs, comments and questions waiting, and
     each goal's status as recorded. Cheap on purpose (no gates or goal scoring): it is fetched on every page load. The served one comes first."""
@@ -668,6 +692,8 @@ def serve(port: int = 8890, root=None):
                                 threads=papers.threads(papers.thread(p, parts[2]), published=papers.version(p, parts[2])))
                     return self._send(200, json.dumps(body, default=str).encode(), "application/json")
             except (KeyError, SystemExit, OSError, ValueError):
+                if full.startswith("/p/") and full.split("/", 3)[3:] in ([""], ["index.html"]):
+                    return self._send(404, no_project_page(unquote(full.split("/")[2]), remote), "text/html; charset=utf-8")
                 return self._send(404, b'{"error":"not found"}', "application/json")
             self._send(404, b"not found", "text/plain")
 
