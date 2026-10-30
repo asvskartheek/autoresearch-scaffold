@@ -143,8 +143,8 @@ body.asking #app, body.asking #app * { cursor: crosshair !important; }
 .pin.st-open, .pin.st-claimed { background: var(--live); color: #fff; animation: pulse 1.4s ease-in-out infinite; }
 .askpop, #askbox { position: absolute; z-index: 31; width: 460px; max-width: calc(100vw - 16px); background: var(--sheet); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; box-shadow: 0 10px 34px rgba(0,0,0,.16); }
 .askpop { overflow: auto; overscroll-behavior: contain; }
-#askbox { width: 380px; }
-#askbox textarea { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; resize: vertical; margin-bottom: 8px; }
+#askbox { width: 340px; padding: 8px; }
+#askbox textarea { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; resize: vertical; margin: 0; display: block; }
 .askpop .q, .saved .q { font-weight: 600; margin: 4px 0 10px; }
 .md p, .md ul { margin: 0 0 8px; } .md ul { padding-left: 18px; } .md h3 { margin-top: 6px; }
 .md code, .q code, .askpop code { font: 12px var(--mono); background: var(--soft); padding: 1px 4px; border-radius: 4px; }
@@ -160,3 +160,4 @@ hr.soft { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
 .askpop .q + .q, .md + .q, .fig + .q, p + .q { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
 #theme { padding: 5px 9px; }
 #askpick { position: absolute; z-index: 32; padding: 3px 10px; font-size: 12px; font-weight: 600; background: var(--live); color: #fff; border-color: var(--live); box-shadow: 0 4px 14px rgba(0,0,0,.2); }
+.md.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }

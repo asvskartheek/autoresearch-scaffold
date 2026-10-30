@@ -210,8 +210,7 @@ function openDraft(el, e, anchor) {
   A.draft = { ...(anchor || anchorOf(el, e)), route: S.route.join("/") };
   const r = boxOf(A.draft.loc, A.draft.what) || el.getBoundingClientRect();
   const box = $("#askbox");
-  box.innerHTML = `<textarea rows="3" placeholder="What do you want to understand?"></textarea>
-    <div class="spread"><span class="small mute">${esc(A.draft.what)}</span><button class="primary" onclick="sendAsk()">Ask</button></div>`;
+  box.innerHTML = `<textarea rows="2" placeholder="What do you want to understand?"></textarea>`;  // Enter sends; the highlight shows what
   box.hidden = false;
   box.style.left = `${Math.max(8, Math.min(r.left + scrollX, scrollX + innerWidth - 400))}px`;
   box.style.top = `${r.bottom + scrollY + 8}px`;
@@ -255,7 +254,7 @@ const cleanSVG = (s) => String(s).replace(/<script[\s\S]*?<\/script>/gi, "").rep
 const fileURL = (f) => `/api/p/${S.key}/answer/${encodeURIComponent(f)}`;
 
 function partHTML(x) {
-  if (x.type === "md" || x.type === "text") return `<div class="md">${mdHTML(x.body)}</div>`;
+  if (x.type === "md" || x.type === "text") return `<div class="md clamp" onclick="this.classList.remove('clamp')">${mdHTML(x.body)}</div>`;
   if (x.type === "svg") return `<div class="fig">${cleanSVG(x.body)}</div>`;
   if (x.type === "png") return `<img class="fig" src="${fileURL(x.file)}" alt="">`;
   if (x.type === "html") return `<iframe class="fig" sandbox="allow-scripts allow-same-origin" src="${fileURL(x.file)}"></iframe>`;
@@ -266,9 +265,8 @@ function partHTML(x) {
 const threadHTML = (a) => a.thread.map((x) => x.who === "person" ? `<p class="q">${esc(x.text)}</p>` : x.parts.map(partHTML).join("")).join("");
 
 function waitWord(a) {
-  if (a.status === "claimed") return '<p class="small live">An agent is working on it…</p>';
-  return Date.now() / 1000 - a.created > 45 ? '<p class="small mute">No agent is listening. Run <code>arx2 ask poll</code>.</p>'
-    : '<p class="small mute">Waiting for an agent…</p>';
+  if (a.status === "claimed") return '<p class="small live">Working…</p>';
+  return Date.now() / 1000 - a.created > 45 ? '<p class="small mute">No agent · <code>arx2 ask poll</code></p>' : '<p class="small mute">Waiting…</p>';
 }
 
 function saveHTML(a) {
@@ -312,7 +310,7 @@ function placePins() {
   if (!box) return;
   const list = pageAsks();
   const html = list.map((a, i) => `<button class="pin st-${a.status}" data-ask-pin="${a.key}" onclick="A.open=A.open==='${a.key}'?null:'${a.key}';A.saving=null;placePins()">${i + 1}</button>
-    ${A.open === a.key ? `<div class="askpop" data-pop="${a.key}"><div class="small mute">${esc(a.what)}</div>${threadHTML(a)}
+    ${A.open === a.key ? `<div class="askpop" data-pop="${a.key}">${threadHTML(a)}
       ${a.status === "answered" ? saveHTML(a) + `<textarea class="reply" rows="2" placeholder="Ask more" onkeydown="replyKey(event,'${a.key}')"></textarea>` : waitWord(a)}</div>` : ""}`).join("");
   const top = $(".askpop", box)?.scrollTop || 0;
   if (html !== A.html) {
