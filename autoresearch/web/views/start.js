@@ -145,6 +145,7 @@ function nextBlock(){
 
 // (4) what waits on you: flagged questions, threads with news for you, comments the agent failed to answer, jobs that
 // failed or went silent, goals nobody has measured. One row per thing, or one row for a group of the same kind
+let calm=false;  // nothing waits on you: on a phone, Next comes first
 function needsBlock(){
  const st=S.state,me=window.ARXP?ARXP.me().id:'',items=[],{t0}=win();
  const loading=!ready()||!X.q||!X.c;
@@ -173,6 +174,7 @@ function needsBlock(){
   items.push(['bad',`#goal/${enc(g.name)}`,ICON.goals,`${esc(g.title||g.name)}: ${g.model||st.champion?`${mn(g.model||st.champion)} has no complete run on ${esc(g.slice)}`:'no champion to measure'}`,'unmeasured']);
  const body=items.length?`<div class="sx-needs">${items.map(([k,h,ic,txt,tag])=>`<a class="sx-need ${k}" href="${h}" data-item>${ic}<span class="ell">${txt}</span><span class="sx-tag">${tag}</span></a>`).join('')}</div>`
   :loading?`<div class="sx-none">Checking…</div>`:`<div class="sx-none ok">${OKI}Nothing waits on you</div>`;
+ calm=!loading&&!items.length;
  return panel('Needs you',body,{meta:loading?'…':items.length?String(items.length):'',cls:items.length?'sx-hot':''});
 }
 
@@ -246,13 +248,13 @@ function mapBlock(){
 
 VIEWS.start=()=>{
  fetchExtras();
- const st=S.state;
+ const st=S.state,needs=needsBlock();
  return page({title:st.config?.name||'Start',crumbs:[['Start']]})+
-  `<div class="sx">
+  `<div class="sx ${calm?'calm':''}">
    <div class="sx-a">${goalsBlock()}</div>
    <div class="sx-b">${nowBlock()}</div>
    <div class="sx-n">${nextBlock()}</div>
-   <div class="sx-c">${needsBlock()}</div>
+   <div class="sx-c">${needs}</div>
    <div class="sx-d">${sinceBlock()}</div>
    <div class="sx-e">${mapBlock()}</div>
   </div>`;
