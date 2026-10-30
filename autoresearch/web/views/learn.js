@@ -57,7 +57,7 @@ addEventListener('pagehide',()=>leaveCard({beacon:true}));
 // an axis step near span/k on the 1-2-5 ladder
 const nstep=(span,k)=>{const raw=span/k,mag=10**Math.floor(Math.log10(raw||1));return [1,2,5,10].map(m=>m*mag).find(m=>m>=raw)};
 // a signed amount in a viz's unit: "+5.2 pts" (0/1 slice) or "−1,071 ms" (continuous); 0/1 values come in points
-const lamt=(u,x)=>(x=u==='pts'&&+Math.abs(x).toFixed(2)===0?0:x,(x>0?'+':x<0?'−':''))+(u==='pts'?(+Math.abs(x).toFixed(2)).toString():grp(Math.abs(x)))+(u?' '+(u==='pts'&&Math.abs(x)===1?'pt':u):'');
+const lamt=(u,x)=>(x=u==='pts'&&+Math.abs(x).toFixed(2)===0?0:x,(x>0?'+':x<0?'−':''))+(u==='pts'?(+Math.abs(x).toFixed(2)).toString():grp(Math.abs(x)))+(u?' '+(u==='pts'&&+Math.abs(x).toFixed(2)===1?'pt':u):'');
 function vizCI(v){
  const u=v.unit==null?'pts':v.unit,k=v.unit==null?100:1;  // older payloads carry fractions
  const d=k*v.delta,lo=k*v.lo,hi=k*v.hi,bar=v.bar!=null?k*v.bar:null,W=LW(),H=136,Lx=16,R=W-16;
