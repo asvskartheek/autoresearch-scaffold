@@ -38,6 +38,19 @@ class AnswerProvenance(unittest.TestCase):
         self.assertEqual(node['ev'][0]['c'], 2)
         self.assertEqual(len(node['ev'][0]['task_ids']), 2)
 
+    def test_settle_writes_once_without_rebuilding_the_tree(self):
+        from unittest import mock
+        q = questions.add(self.p, 'What did the baseline score?')
+        real_save, real_tree = questions._save, questions.tree
+        with mock.patch.object(questions, '_save', side_effect=real_save) as save, \
+             mock.patch.object(questions, 'tree', side_effect=real_tree) as tree:
+            saved = questions.settle(self.p, q['id'], 'answered', 'Three of four.', evidence=[dict(model='base', slice='ds/full')])
+        self.assertEqual(save.call_count, 1)
+        self.assertTrue(all(c.kwargs.get('full') is False or (len(c.args) > 1 and c.args[1] is False) for c in tree.call_args_list))
+        node = next(n for n in questions.tree(self.p)['nodes'] if n['id'] == q['id'])
+        self.assertEqual(saved['evidence_snapshot'], node['ev'])
+        self.assertEqual(questions.stored(self.p)[q['id']]['evidence_snapshot'], node['ev'])
+
     def test_retry_preserves_failure_and_does_not_duplicate_active_request(self):
         q = questions.add(self.p, 'Why did the answer fail?')
         questions._save(self.p, q['id'], questions.stored(self.p)[q['id']] | {'error':'No answer returned'})
