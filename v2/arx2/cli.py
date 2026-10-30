@@ -9,7 +9,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import api, asks, stats
+from . import api, asks, paper, stats
 from .axi import clip, emit, fail, kv, table
 from .store import LedgerError, Project, check_name, find_root, ids_hash, register, registry, slug
 from .view import Views
@@ -405,15 +405,87 @@ def cmd_check(a):
 DOC_KINDS = ["paper", "report", "note", "diagram", "card"]
 
 
+def _paper_issues(issues: list[dict], head: str) -> str:
+    errs = paper.errors(issues)
+    out = [f"{head}: {len(errs)} errors, {len(issues) - len(errs)} warnings"]
+    if issues:
+        out.append(table("issues", [{"n": i + 1, **x} for i, x in enumerate(issues)], ["n", "level", "what"]))
+        out += [f"fix: {i + 1}. {x['fix']}" for i, x in enumerate(issues)]
+    return "\n".join(out)
+
+
 def cmd_doc(a):
     p = P()
+    if a.key == "add":  # `arx2 doc add <key>` and `arx2 doc <key>` are the same command
+        if not a.rest:
+            fail("no doc key", fix="arx2 doc add <key> --kind paper --name \"<two words>\" --file paper.html")
+        a.key = a.rest[0]
     src = Path(a.file)
+    if not src.exists():
+        fail(f"no file {a.file}", fix="pass --file <path>")
+    check_name(a.name, "doc name")
+    draft = False
+    if a.kind == "paper":
+        if src.suffix.lower() not in (".html", ".htm"):
+            fail("a paper is one self-contained html page", fix=f"arx2 paper new {a.key} --about <goal-or-hill>")
+        page = src.read_text()
+        issues = paper.check(p, page, a.audience, a.about, draft=a.draft)
+        if a.draft and "draft" not in paper.title_of(page).lower():
+            issues.insert(0, {"level": "error", "what": "--draft needs Draft in the <title>",
+                              "fix": "start the <title> with Draft:"})
+        head = f"paper {a.key} ({a.audience}, about {a.about or '-'})"
+        if paper.errors(issues):
+            print(_paper_issues(issues, head + ": refused"))
+            sys.exit(1)
+        if issues:
+            print(_paper_issues(issues, head))
+        draft = bool(a.draft)
+    elif a.draft:
+        fail("--draft is for papers", fix="drop --draft")
     dst = p.dir / "docs" / (a.key + src.suffix)
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_bytes(src.read_bytes())
     p.append("doc", key=a.key, kind=a.kind, name=check_name(a.name, "doc name"), file=dst.name,
-             about=a.about, audience=a.audience)
-    emit(f"doc: {a.key} ({a.kind}, {a.audience})", help=["arx2 up"])
+             about=a.about, audience=a.audience, draft=draft)
+    emit(f"doc: {a.key} ({a.kind}, {a.audience}{', draft' if draft else ''})", help=["arx2 up"])
+
+
+def _audience(p: Project, a) -> str:
+    if a.audience:
+        return a.audience
+    return "external" if a.about and a.about in p.state()["goals"] else "internal"
+
+
+def cmd_paper_check(a):
+    p = P()
+    src = Path(a.file)
+    if not src.exists():
+        fail(f"no file {a.file}", fix="pass the path of the paper's html")
+    aud = _audience(p, a)
+    issues = paper.check(p, src.read_text(), aud, a.about)
+    print(_paper_issues(issues, f"paper {src.name} ({aud}, about {a.about or '-'})"))
+    if paper.errors(issues):
+        sys.exit(1)
+    emit("", help=[f'arx2 doc add {src.stem} --kind paper --name "<two words>" --file {a.file} --audience {aud}'
+                   + (f" --about {a.about}" if a.about else "")])
+
+
+def cmd_paper_new(a):
+    p = P()
+    s = p.state()
+    if a.about not in s["goals"] and a.about not in s["hills"]:
+        fail(f"{a.about!r} is not a goal or a hill", fix="arx2")
+    aud = _audience(p, a)
+    out = Path(a.out or f"{a.key}.html")
+    if out.exists() and not a.force:
+        fail(f"{out} exists", fix="pass --out <path> or --force")
+    out.write_text(paper.template(p, a.about, aud, a.title))
+    N = paper.numbers(p, a.about)
+    emit(kv({"paper": str(out), "audience": aud, "about": a.about, "set": N["set"], "n": N["n"], "run": N.get("run"),
+             "score": N.get("score"), "delta": (N.get("delta") or {}).get("delta"), "goal_met": N.get("met")}),
+         help=["write the prose: replace every TODO, keep numbers inside data-claim elements",
+               f"arx2 paper check {out} --about {a.about} --audience {aud}",
+               f'arx2 doc add {a.key} --kind paper --name "<two words>" --file {out} --about {a.about} --audience {aud}'])
 
 
 def cmd_card(a):
@@ -672,9 +744,17 @@ def build() -> argparse.ArgumentParser:
     x.add_argument("--name")
     cmd("check", cmd_check, "verify split disjointness and set hashes")
 
-    x = cmd("doc", cmd_doc, "add a paper, note or diagram")
-    x.add_argument("key"); x.add_argument("--kind", choices=DOC_KINDS, required=True); x.add_argument("--name", required=True)
+    x = cmd("doc", cmd_doc, "add a paper, note or diagram (papers must pass `arx2 paper check`)")
+    x.add_argument("key"); x.add_argument("rest", nargs="*"); x.add_argument("--kind", choices=DOC_KINDS, required=True)
+    x.add_argument("--name", required=True)
     x.add_argument("--file", required=True); x.add_argument("--about"); x.add_argument("--audience", choices=["internal", "external"], default="internal")
+    x.add_argument("--draft", action="store_true", help="let an incomplete paper through; its <title> must say Draft")
+    x = cmd("paper", None, "write and check papers"); psp = x.add_subparsers(dest="sub")
+    y = psp.add_parser("check", help="run the paper gate without publishing"); y.set_defaults(fn=cmd_paper_check)
+    y.add_argument("file"); y.add_argument("--about"); y.add_argument("--audience", choices=["internal", "external"])
+    y = psp.add_parser("new", help="a skeleton with every section and the champion's numbers"); y.set_defaults(fn=cmd_paper_new)
+    y.add_argument("key"); y.add_argument("--about", required=True); y.add_argument("--audience", choices=["internal", "external"])
+    y.add_argument("--out"); y.add_argument("--title"); y.add_argument("--force", action="store_true")
     x = cmd("card", cmd_card, "add a flash card")
     x.add_argument("--front", required=True); x.add_argument("--back", required=True); x.add_argument("--about"); x.add_argument("--key")
     cmd("learner", cmd_learner, "how the person uses the dashboard (to improve it)")
