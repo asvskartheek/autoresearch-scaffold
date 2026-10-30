@@ -1,3 +1,5 @@
+'use strict';
+/* overview: where the research stands, at a glance: the goals as distance to target, the ladder, what runs, the board */
 // A concrete measurement command names the requested slice, even outside the gate ladder.
 const goalMeasureCmd=g=>{
  const quote=x=>"'"+String(x).replaceAll("'", "'\"'\"'")+"'";
@@ -6,8 +8,6 @@ const goalMeasureCmd=g=>{
  `arx eval record --model ${quote(g.model||S.state.champion)} --slice ${quote(g.slice)} --rows <rows.jsonl>`;
 };
 const distinctModel=k=>{const title=S.state.models[k]?.title;return mn(k)+(title&&Object.values(S.state.models).filter(m=>m.title===title).length>1?` <span class="sub">(${esc(k)})</span>`:'')};
-'use strict';
-/* overview: where the research stands, at a glance: the goals as distance to target, the ladder, what runs, the board */
 const boardHarnessMismatch=(a,b)=>a?.baseline_contract!=null&&b?.baseline_contract!=null&&JSON.stringify(a.baseline_contract)!==JSON.stringify(b.baseline_contract);
 const ovPassed=g=>(g?.rungs||[]).filter(r=>r.status==='pass').length;
 const ovFailedAt=g=>(g?.rungs||[]).find(r=>r.status==='fail')?.rung;
