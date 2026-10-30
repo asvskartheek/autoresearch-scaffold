@@ -285,7 +285,9 @@ class Project:
         value, ev = self._kpi(model, sl, kpi)
         vs = None
         if kpi == "score" and model and g.get("baseline") and g["baseline"] != model and self.latest_eval(g["baseline"], sl):
-            vs = paired(self.pooled_scores(model, sl), self.pooled_scores(g["baseline"], sl, reference_model=model), sign)
+            mine, theirs = latest_shared(self.slice_evals(model, sl), self.slice_evals(g["baseline"], sl))
+            vs = paired(per_id([r for t in mine for r in self.rows(t["id"])]),
+                        per_id([r for t in theirs for r in self.rows(t["id"])]), sign)
         hills = {k: h.get("status") for k, h in self.hills().items() if h.get("goal") == name}
         status = dict(g, name=name, model=model, value=value, task=ev["id"] if ev else None,
                     runs=len(self.score_runs(model, sl)) if model else 0,
@@ -932,6 +934,18 @@ def same_contract(runs: list[dict], reference: dict | None) -> list[dict]:
         return runs
     c = contract_of(reference)
     return [t for t in runs if contract_of(t) == c]
+
+
+def latest_shared(mine: list[dict], theirs: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Both sides' runs under the most recent declared harness they both ran (newest of `mine` first), for a
+    comparison that is not a gate: a goal's champion vs its baseline. ([], []) when they share none."""
+    key = lambda t: json.dumps(contract_of(t), sort_keys=True, default=str)
+    have = {key(t) for t in theirs}
+    for t in reversed(mine):
+        if key(t) in have:
+            k = key(t)
+            return [x for x in mine if key(x) == k], [x for x in theirs if key(x) == k]
+    return [], []
 
 
 def goal_evidence_status(status, baseline_exists):

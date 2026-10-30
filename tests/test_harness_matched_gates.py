@@ -79,4 +79,20 @@ class HarnessMatchedGates(unittest.TestCase):
         self.assertEqual(check['delta'],.0)
         self.assertNotIn('baseline_contract',check)
 
+    def test_goal_pairs_on_the_latest_harness_both_sides_ran(self):
+        # the champion's latest run (B) has no baseline run under B; both ran A, so the goal pairs on A
+        from autoresearch import reference
+        self.p.open_goal('g','Goal','d/full',1.0,baseline='cand')
+        st=self.p.goal_status('g')
+        self.assertEqual(st['comparison_state'],'paired')
+        self.assertEqual((st['vs_baseline']['n'],st['vs_baseline']['delta']),(4,-.25))
+        self.assertEqual((st['value'],st['runs']),(1.0,1))  # the headline stays the champion's latest harness
+        ix=reference._Index(self.p)
+        self.assertEqual(reference._goal_status(self.p,ix,'g',self.p.goals()['g'],'base')['vs_baseline']['delta'],-.25)
+
+    def test_goal_without_a_shared_harness_is_unpaired(self):
+        self.runs=self.runs[1:];self.p.open_goal('g','Goal','d/full',1.0,baseline='cand')
+        st=self.p.goal_status('g')
+        self.assertEqual((st['comparison_state'],st['vs_baseline']['n']),('different_harness',0))
+
 if __name__=='__main__':unittest.main()

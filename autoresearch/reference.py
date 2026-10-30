@@ -23,7 +23,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from . import features
-from .core import goal_evidence_status, per_id, same_contract
+from .core import goal_evidence_status, latest_shared, per_id, same_contract
 from .readable import readable
 
 WEB = Path(__file__).with_name("web")
@@ -330,7 +330,12 @@ def _goal_status(p, ix, name, g, champ):
             value = (ev.get("summary") or {}).get(kpi)
     vs = None
     if kpi == "score" and model and g.get("baseline") and g["baseline"] != model and ix.has(g["baseline"], sl):
-        vs = _pair(ix, model, g["baseline"], sl, sign)
+        mine, theirs = latest_shared(ix.runs.get((model, sl), []), ix.runs[(g["baseline"], sl)])
+        key = (str(ix.p.root), sl, sign, "goal", tuple(t["id"] for t in mine), tuple(t["id"] for t in theirs))
+        if key not in _PAIRS:
+            _PAIRS[key] = fast_paired(per_id([r for t in mine for r in ix.rows(t["id"])]),
+                                      per_id([r for t in theirs for r in ix.rows(t["id"])]), sign)
+        vs = dict(_PAIRS[key])
     slr = ix.slices.get(sl) or {}
     cur = slr.get("hash")
     status = dict(g, name=name, model=model, value=value, task=ev["id"] if ev else None,
