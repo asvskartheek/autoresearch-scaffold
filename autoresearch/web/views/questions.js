@@ -150,13 +150,13 @@ function qPanel(id,ix){
   h+=`<div class="q-claim agent${idle?' idle':''}">${esc(line)}${L.task?` <a class="q-tl" href="#task/${enc(L.task)}">${esc(L.task)}</a>`:''}${f!=null?`<div class="pb"><i style="width:${(100*f).toFixed(1)}%"></i></div>`:''}</div>`;
  }else if(n.claim)h+=`<div class="q-claim ${cls}">${qLinky(n.claim)}${n.settled_by&&!['agent','you'].includes(n.settled_by)?`<span class="q-by">${esc(n.settled_by)}</span>`:''}</div>`;
  if(n.error&&n.status!=='agent')h+=`<div class="q-claim human" role="status">Answer attempt failed: ${esc(n.error)} <button class="btn" data-qact="retry">Retry answer</button></div>`;
- if(w&&(!n.why||!n.choices?.length))h+=`<div class="q-why">This older handoff lacks decision context or choices. Time and cost are not recorded. <button class="btn" data-qact="retry">Request decision context</button></div>`;
+ if(w&&(!n.why||!n.choices?.length))h+=`<div class="q-acts"><button class="btn" data-qact="retry">Request decision context</button></div>`;
  if(n.why&&n.status!=='answered'&&n.status!=='dead')h+=`<div class="q-why">${qLinky(n.why)}</div>`;
  if(n.doc)h+=qDocCard(n.doc,n.fig);
  if(n.quote)h+=`<div class="q-quote"><mark>${esc(n.quote)}</mark></div>`;
  if(n.claim&&(!n.seeded||n.edited)){
   const stamp=n.settled||n.created, snap=n.evidence_snapshot;
-  h+=`<div class="q-why">Authored answer${stamp?' · '+esc(new Date(stamp*1000).toLocaleString()):''}. ${snap?'Evidence saved with this answer.':'No evidence snapshot was saved; numeric claims need verification.'} <button class="btn" data-qact="retry">Refresh answer</button></div>`;
+  h+=`<div class="q-why">${stamp?'Answered '+esc(new Date(stamp*1000).toLocaleString())+' ':''}<button class="btn" data-qact="retry">Refresh answer</button></div>`;
   if(snap)h+=qEvidence({...n,ev:snap});
   if(n.ev?.length)h+=`<details class="q-more"><summary>Current ledger evidence${snap&&JSON.stringify(snap)!==JSON.stringify(n.ev)?' · changed since this answer':''}</summary>${qEvidence(n)}</details>`;
  }else h+=qEvidence(n);
