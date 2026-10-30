@@ -20,6 +20,8 @@ INLINE = ("svg", "md", "text")  # small text parts live in the event; html and i
 CLAIM_S = 600
 MAX_WORDS, BARE_WORDS = 60, 30  # people read answers in a small box by what they clicked  # a claim older than this is taken to be abandoned
 SAVE_AS = ("note", "card", "paper")
+ORCH = "orchestrator"
+MENTION = re.compile(r"^\s*@orchestrator\b[\s:,]*", re.I)  # a message that starts with it is a directive, not a question
 
 
 def new_key() -> str:
@@ -31,21 +33,35 @@ def project_key(p: Project) -> str | None:
     return next((k for k, v in registry().items() if v["root"] == root), None)
 
 
-def ask(p: Project, text: str, kind: str, key: str, what: str, route: str = "", loc: str = "") -> dict:
+def directive(text: str) -> tuple[str, str | None]:
+    """'@orchestrator do X' -> ('do X', 'orchestrator'); anything else is a question for an answer agent."""
     text = (text or "").strip()
+    m = MENTION.match(text)
+    return (text[m.end():].strip(), ORCH) if m else (text, None)
+
+
+def ask(p: Project, text: str, kind: str, key: str, what: str, route: str = "", loc: str = "", **extra) -> dict:
+    text, to = directive(text)
     if not text:
-        raise LedgerError("the question is empty", fix="type what you want to understand")
+        raise LedgerError("the directive is empty" if to else "the question is empty", fix="type what you want")
+    if to:
+        extra["to"] = to
     return p.append("ask", actor="person", key=new_key(), text=text[:2000], kind=kind, entity=key,
-                    what=(what or "")[:300], route=route, loc=loc)
+                    what=(what or "")[:300], route=route, loc=loc, **extra)
 
 
 def reply(p: Project, key: str, text: str) -> dict:
-    """A follow-up in the same thread: the question opens again, with everything said so far."""
-    text = (text or "").strip()
-    if key not in p.state()["asks"]:
+    """A follow-up in the same thread: the question opens again, with everything said so far.
+    '@orchestrator ...' under a question starts a directive on the same anchor instead."""
+    a = p.state()["asks"].get(key)
+    if not a:
         raise LedgerError(f"no question {key}", fix="arx2 ask list")
+    text, to = directive(text)
     if not text:
-        raise LedgerError("the follow-up is empty", fix="type what you want to understand")
+        raise LedgerError("the follow-up is empty", fix="type what you want")
+    if to and not a.get("to"):
+        return ask(p, "@orchestrator " + text, a.get("kind"), a.get("entity"), a.get("what"), a.get("route") or "",
+                   a.get("loc") or "", after=key)
     return p.append("ask.reply", actor="person", key=key, text=text[:2000])
 
 
@@ -66,14 +82,15 @@ def owner(a: dict) -> str | None:
     return next((x.get("agent") for x in reversed(a["thread"]) if x["who"] == "agent"), None)
 
 
-def next_open(s: dict, skip=(), now: float | None = None, agent: str | None = None) -> dict | None:
+def next_open(s: dict, skip=(), now: float | None = None, agent: str | None = None, to: str | None = None) -> dict | None:
+    """The next thread for this agent. Answer agents (to=None) never get directives; the orchestrator gets only those."""
     now = now or time.time()
 
     def mine(a):  # a follow-up waits for the agent that owns the thread, unless that agent has gone quiet
         o = owner(a)
         return not o or agent and (o == agent or o.startswith(agent + "/")) or now - s["agents"].get(o, 0) > CLAIM_S
 
-    waiting = [a for a in s["asks"].values() if a["key"] not in skip and mine(a) and
+    waiting = [a for a in s["asks"].values() if a["key"] not in skip and a.get("to") == to and mine(a) and
                (a["status"] == "open" or a["status"] == "claimed" and now - a.get("claimed", 0) > CLAIM_S)]
     return min(waiting, key=lambda a: (owner(a) != agent or not agent, a["created"])) if waiting else None
 
@@ -121,6 +138,20 @@ def answer(p: Project, key: str, parts: list[tuple[str, str]], agent: str | None
         else:
             out.append(parse_link(val))
     return p.append("answer", key=key, parts=out, agent=agent)
+
+
+def ack(p: Project, key: str, text: str, agent: str | None = None) -> dict:
+    """The orchestrator's reply to a directive: what it did or will do. Closes the directive until the person says more."""
+    a = p.state()["asks"].get(key)
+    if not a or a.get("to") != ORCH:
+        raise LedgerError(f"no directive {key}", fix="arx2 orchestrator list")
+    text = (text or "").strip()
+    if not text:
+        raise LedgerError("the ack is empty", fix='--text "<what you did or will do>"')
+    words = len(text.split())
+    if words > MAX_WORDS:
+        raise LedgerError(f"{words} words; an ack has at most {MAX_WORDS}", fix="say what you did, with links, not how")
+    return p.append("answer", key=key, parts=[{"type": "md", "body": text}], agent=agent or ORCH)
 
 
 # ---- what the agent is told about the clicked thing ---------------------------
@@ -184,7 +215,8 @@ def describe(p: Project, a: dict, base_url: str = os.environ.get("ARX2_URL", "ht
     v = Views(p)
     pk = project_key(p)
     turns = a["thread"]
-    lines = [f"ask: {a['key']}", f"question: {latest(a)}" + (" (follow-up)" if len(turns) > 1 else ""),
+    word = "directive" if a.get("to") == ORCH else "question"
+    lines = [f"{'directive' if a.get('to') else 'ask'}: {a['key']}", f"{word}: {latest(a)}" + (" (follow-up)" if len(turns) > 1 else ""),
              f"clicked: {a.get('what') or '-'}", f"entity: {a.get('kind')} {a.get('entity')}"]
     if pk:
         lines.append(f"page: {base_url}#/p/{pk}/{a.get('route') or ''}")
