@@ -1,0 +1,19 @@
+[project]
+name = "arx2"
+version = "2.0.0"
+description = "A research bridge: agents log work through an AXI command line, people understand it on one dashboard"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+arx2 = "arx2.cli:main"
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["arx2"]
+
+[tool.setuptools.package-data]
+arx2 = ["web/*"]
