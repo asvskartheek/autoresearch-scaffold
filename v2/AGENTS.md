@@ -31,7 +31,7 @@ People press `A` (or **Ask**) on the dashboard, click anything and type a questi
 anchored to what they clicked. Keep one agent listening while people use the dashboard:
 
 ```
-while true; do arx2 ask poll; done            # in an agent session: poll, answer, poll again
+arx2 ask poll                                 # in an agent session: answer it, then poll again
 arx2 ask watch --exec 'claude -p "$(cat "$ARX2_ASK_FILE")" --allowedTools Bash'   # headless, always on
 ```
 
