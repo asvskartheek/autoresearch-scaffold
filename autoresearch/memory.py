@@ -677,19 +677,21 @@ def cmd_memory(a):
         ds = due(who, now)
         print(f"{name}: {len(ds)} due")
         for k in ds:
-            print(f"  {k['title'] or k['id']:<34} {k['project'] or 'all projects':<28} due {_when(k['due'], now)}")
+            print(f"  {(k['title'] or k['id'])[:34]:<34} {(k['project'] or 'all projects')[:28]:<28} due {_when(k['due'], now)}")
         return
     if a.what == "changed":
         from .learn import _since
         since = _since(a.since or "1w")
         for r in changed(who, since):
-            print(f"  {r['concept']:<50} {r['n']:>3} events, {r['hits']} of {r['graded']} right, {_when(r['t'], now)}")
+            proj, _, title, _ = _title(r["concept"])
+            res = f"{r['hits']} of {r['graded']} right" if r["graded"] else f"seen {r['n']}x"
+            print(f"  {title[:34]:<34} {(proj or 'all projects')[:28]:<28} {res}, {_when(r['t'], now)}")
         return
     ks = knowledge(who, now)
     print(f"{name} ({who}): {len(ks)} concepts, {sum(k['state'] == 'due' for k in ks)} due")
     for k in ks:
-        print(f"  {_bar(k['strength'])} {k['state']:<8} {(k['title'] or k['id'])[:34]:<34} {k['project'] or 'all':<24}"
-              f" {k['hits']} of {k['n']} right" + (f", due {_when(k['due'], now)}" if k.get("due") else ""))
+        print(f"  {_bar(k['strength'])} {k['state']:<8} {(k['title'] or k['id'])[:34]:<34} {(k['project'] or 'all')[:24]:<24}"
+              f" {k['hits']} of {k['n']} right" + (f", due {_when(k['due'], now)}" if k.get("due") and k["kind"] != "model" else ""))
     ms = methods(who)
     if ms:
         print("  methods: " + ", ".join(f"{m} {s['hits']}/{s['n']}" + (f" ({s['skips']} skipped)" if s["skips"] else "") for m, s in ms.items()))
