@@ -16,7 +16,8 @@ const score=t=>t.summary?.score??null;
 const mt=t=>t.model?S.state.models[t.model]?.title||t.model:'';
 // a continuous slice scores a mean (with its unit), not a share solved
 const cont=t=>S.state.slices[t.slice]?.scale==='continuous';
-const cv=(v,t)=>{const a=Math.abs(v),u=S.state.slices[t.slice]?.unit;return (v<0?'−':'')+(a>=10?a.toFixed(1):num(a,3))+(u?'&nbsp;'+esc(u):'')};
+// the shared formatter (core sv): a "minus ms" metric reads as the plain amount, 387 ms, as on every other page
+const cv=(v,t)=>esc(sv(t.slice,v)).replace(/ (?=\S+$)/,'&nbsp;');
 const KEYS={title:t=>String(t.title||'').toLowerCase(),model:t=>String(mt(t)||'~').toLowerCase(),state:t=>wbState(t)[0],score,took,ended:when};
 const match=(t,q)=>!q||[t.title,t.model,mt(t),t.slice,t.id,t.agent].some(v=>v&&String(v).toLowerCase().includes(q));
 const SEARCH=I('<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>',15);
