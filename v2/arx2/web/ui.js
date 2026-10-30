@@ -39,7 +39,18 @@ function metricVal(metric, v) {
   if (metric === "cost") return `$${num(v, 3)}`;
   return num(v, 3);
 }
-const METRIC_WORDS = { score: "share judged correct", latency_p50: "median answer time", latency_p95: "slowest 5% answer time", cost: "cost per question" };
+const METRIC_WORDS = { score: "score", latency_p50: "median time", latency_p95: "p95 time", cost: "cost per item" };
+
+// Long ledger text (symptoms, notes, reasons) shows two lines, or one; hover shows all, a click opens it.
+function clamp(text, { lines = 2, tag = "p", cls = "" } = {}) {
+  if (!text) return "";
+  return `<${tag} class="clamp${lines === 1 ? " c1" : ""} ${cls}" title="${esc(text)}">${esc(text)}</${tag}>`;
+}
+document.addEventListener("click", (e) => {
+  const c = e.target.closest?.(".clamp");
+  if (!c || document.body.classList.contains("asking") || e.target.closest("a")) return;
+  c.classList.toggle("open");
+});
 
 // ---- names: never show a key where a name exists -------------------------
 function ent(kind, key, label) {
@@ -85,8 +96,8 @@ function hoverHTML(kind, key) {
 }
 
 function goalSentence(g) {
-  const op = g.direction === "min" ? "at most" : "at least";
-  return `The champion's <b>${METRIC_WORDS[g.metric] || g.metric}</b> on ${ent("set", g.set)} (${g.n} items) is ${op} <b>${metricVal(g.metric, g.target)}</b>.`;
+  const op = g.direction === "min" ? "≤" : "≥";
+  return `${METRIC_WORDS[g.metric] || g.metric} ${op} <b>${metricVal(g.metric, g.target)}</b> on ${ent("set", g.set)} <span class="mute">(${g.n})</span>`;
 }
 
 let hoverTimer = null;
@@ -152,7 +163,7 @@ function sparkline(values, { w = 120, h = 26, color = "var(--ink2)" } = {}) {
 
 function lineChart(series, { w = chartW(), h = 200, xlab = "step" } = {}) {
   const pts = series.flatMap((s) => s.points);
-  if (pts.length < 2) return '<div class="empty">Not enough points yet.</div>';
+  if (pts.length < 2) return '<div class="empty">Too few points</div>';
   const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
   const x = scale(Math.min(...xs), Math.max(...xs), 40, w - 70), y = scale(Math.min(...ys), Math.max(...ys), h - 22, 10);
   const lines = series.map((s, i) => {
@@ -219,7 +230,7 @@ async function render(soft) {
     renderReplay();
     PAGES._after?.();
   } catch (e) {
-    $("#app").innerHTML = `<div class="sheet"><h3>Could not draw this page</h3><p class="mono">${esc(e.stack || e)}</p></div>`;
+    $("#app").innerHTML = `<div class="sheet"><h3>Draw error</h3><p class="mono">${esc(e.stack || e)}</p></div>`;
   }
   if (soft) scrollTo(0, y);
   $("#clock").textContent = S.state && !S.until ? `live · ${S.state.n_events} events` : "";
@@ -240,6 +251,18 @@ async function replayTo(t) {
   await loadState();
   render(true);
 }
+
+// ---- theme: follow the system, or pin light or dark. Answer frames and saved notes follow it too. -----
+const THEMES = { auto: "◐", light: "☀", dark: "☾" };
+function theme() { return document.documentElement.dataset.theme || "auto"; }
+function showTheme() { const b = $("#theme"); if (b) { b.textContent = THEMES[theme()]; b.title = `Theme: ${theme()}`; } }
+function cycleTheme() {
+  const next = { auto: "light", light: "dark", dark: "auto" }[theme()];
+  if (next === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = next;
+  try { localStorage.setItem("arx2.theme", next); } catch (e) {}
+  showTheme(); docTheme();
+}
+addEventListener("DOMContentLoaded", showTheme);
 
 addEventListener("hashchange", route);
 addEventListener("DOMContentLoaded", route);

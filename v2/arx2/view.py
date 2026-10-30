@@ -162,6 +162,73 @@ class Views:
         return {"checked": time.time(), "pairs": checks, "cross": cross,
                 "ok": all(c["shared"] == 0 for c in checks), "hash_ok": hashes}
 
+    # ---- hill evidence -------------------------------------------------
+    def hill_evidence(self, hk: str) -> dict:
+        """Is the hill's problem shown on real items? Derived on read, never stored.
+
+        Evidence = items named by the symptom set, the pattern or the example, AND a run of the champion
+        (or of the model the hill was found on) where at least one of those items is wrong.
+        `waived` holds the reason when the hill was opened with --no-evidence; `ok` stays False.
+        """
+        s = self.s
+        h = s["hills"][hk]
+        pat = s["patterns"].get(h.get("pattern") or "", {})
+        ex = h.get("example") if isinstance(h.get("example"), dict) else None
+        claimed: dict[str, str | None] = {}  # item id -> dataset (None when unknown)
+        sym = s["sets"].get(h.get("symptom_set") or "")
+        if sym:
+            for i in sym["ids"]:
+                claimed[str(i)] = sym.get("dataset")
+        pset = s["sets"].get(pat.get("set") or "", {})
+        for i in pat.get("items") or []:
+            claimed.setdefault(str(i), pset.get("dataset"))
+        ex_item = (ex or {}).get("item") or (ex or {}).get("id")
+        if ex_item is not None:
+            claimed.setdefault(str(ex_item), None)
+
+        out = {"ok": False, "items": len(claimed), "failing": 0, "checked": 0, "run": None, "model": None, "missing": [],
+               "waived": h.get("evidence_waived")}
+        if not claimed:
+            out["missing"] = ["no symptom set",
+                              "pattern lists no items" if h.get("pattern") else "no pattern",
+                              "the example names no item" if ex else "no example"]
+            return out
+
+        # Models whose runs count: the champion, the hill's parent, the model it was found on,
+        # and the champion when the hill was opened.
+        models = [s["champion"], h.get("parent"), h.get("found_in")]
+        at_open = [c["key"] for c in s["champions"] if c.get("t", 0) <= h.get("created", 0)]
+        models.append(at_open[-1] if at_open else None)
+        models = [m for m in dict.fromkeys(models) if m and m in s["candidates"]]
+        binary = measure_of(s)["scale"] == "binary"
+        best = None
+        for m in models:
+            latest: dict[str, tuple[float, dict, str]] = {}
+            for rk, r in s["runs"].items():
+                if r["candidate"] != m:
+                    continue
+                ds = s["sets"].get(r["set"], {}).get("dataset")
+                for row in self.rows(rk):
+                    i = str(row.get("id"))
+                    if i in claimed and claimed[i] in (None, ds):
+                        if i not in latest or r["created"] >= latest[i][0]:
+                            latest[i] = (r["created"], row, rk)
+            if not latest:
+                continue
+            bad = [rk for _, row, rk in latest.values()
+                   if row.get("error") or (binary and stats.score_of(row) < 1.0)]
+            cand = {"model": m, "checked": len(latest), "failing": len(bad),
+                    "run": max(bad or [x[2] for x in latest.values()], key=lambda k: s["runs"][k]["created"])}
+            if best is None or (cand["failing"], cand["checked"]) > (best["failing"], best["checked"]):
+                best = cand
+        if best:
+            out.update(best)
+        out["ok"] = out["failing"] > 0
+        if not out["ok"]:
+            out["missing"] = ["no champion run covers these items" if not out["checked"]
+                              else "no champion run shows these items failing"]
+        return out
+
     # ---- goals ---------------------------------------------------------
     def goal_track(self, gk: str) -> dict:
         g = self.s["goals"][gk]

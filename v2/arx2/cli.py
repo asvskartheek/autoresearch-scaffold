@@ -9,7 +9,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import api, stats
+from . import api, asks, paper, stats, verify
 from .axi import clip, emit, fail, kv, table
 from .store import LedgerError, Project, check_name, find_root, ids_hash, register, registry, slug
 from .view import Views
@@ -57,6 +57,12 @@ def cmd_home(a):
     blocks.append(table("goals", goals, ["key", "name", "now", "target", "met"]))
     hills = [{"key": k, "name": h["name"], "status": h["status"]} for k, h in s["hills"].items() if h["status"] == "open"]
     blocks.append(table("open_hills", hills, ["key", "name", "status"]))
+    unproven = []
+    for h in hills:
+        e = v.hill_evidence(h["key"])
+        if not e["ok"] and not e.get("waived"):
+            unproven.append({"key": h["key"], "name": h["name"], "missing": "; ".join(e["missing"])})
+    blocks.append(table("hills_without_evidence", unproven, ["key", "name", "missing"]) if unproven else "")
     running = [v.task_view(k) for k, t in s["tasks"].items() if t["status"] == "running"]
     blocks.append(table("running", [{**t, "beat": _ago(t["beat"]), "stale": t["stale"]} for t in running],
                         ["id", "name", "done", "total", "beat", "stale"]))
@@ -68,7 +74,15 @@ def cmd_home(a):
                 nexts.append({"cand": ck, "rung": r["name"], "set": r["set"], "state": r["v"]["state"]})
                 break
     blocks.append(table("next_gates", nexts, ["cand", "rung", "set", "state"]))
+    sm = verify.summary(verify.audit(p, v=v))
+    blocks.append(f"verify: {sm['errors']} errors, {sm['warnings']} warnings")
     hints = ['arx2 task start --name "<two words>" --about "<what and why>"', "arx2 gate <cand>"]
+    if unproven:
+        k0 = unproven[0]["key"]
+        hints.insert(0, f'arx2 set add {k0}-symptom --name "<two words>" --dataset <d> --role symptom --ids-file <champion failures>.txt '
+                        f'(or arx2 hill close {k0} --status closed --reason "<why>")')
+    if sm["errors"]:
+        hints.insert(0, f"arx2 verify  (fix {sm['errors']} error{'s' if sm['errors'] != 1 else ''} before reporting)")
     if any(t["stale"] for t in running):
         hints.insert(0, "arx2 task end <id> --status failed --result \"<why it stalled>\"")
     emit(*blocks, help=hints)
@@ -86,9 +100,45 @@ def cmd_init(a):
     p.append("project", name=name, task=a.task,
              measure={"name": a.measure, "scale": a.scale, "direction": a.direction, "unit": a.unit})
     register(a.key or slug(name), root)
+    (p.dir / "RULES.md").write_text(verify.RULES)
     emit(f"created: {p.dir}", help=['arx2 set add <key> --name "<two words>" --dataset <d> --role eval --ids-file ids.txt',
                                    'arx2 goal open <key> --name "<two words>" --vague "<the wish>" --set <set> --target 0.9',
-                                   "arx2 up"])
+                                   "arx2 up", "arx2 rules"])
+
+
+def cmd_rules(a):
+    try:
+        f = P().dir / "RULES.md"
+        print(f.read_text() if f.exists() else verify.RULES, end="")
+    except LedgerError:
+        print(verify.RULES, end="")
+
+
+def _refuse(errs, what):
+    emit(table("verify", errs, ["check", "entity", "what"]), *[f"fix: {e['fix']}" for e in errs[:5]])
+    fail(f"{what}: {len(errs)} error{'s' if len(errs) != 1 else ''} in the ledger bear on it", fix="arx2 verify")
+
+
+def cmd_verify(a):
+    p = P()
+    try:
+        fs = verify.audit(p, a.check)
+    except KeyError:
+        fail(f"no check {a.check!r}", fix="arx2 verify --check " + "|".join(verify.CHECKS))
+    sm = verify.summary(fs, 1 if a.check else None)
+    if a.json:
+        emit(as_json={**sm, "findings": fs})
+    else:
+        line = f"verify: {sm['errors']} errors, {sm['warnings']} warnings across {sm['checks']} checks"
+        def short(f):  # a grouped finding names its entities in `what`; the column just counts them
+            ents = f.get("entities") or [f["entity"]]
+            return f["entity"] if len(ents) == 1 else f"{f['entity'].split(':')[0]}s[{len(ents)}]"
+        shown = [{**f, "entity": short(f)} for f in fs if a.all or f["level"] != "info"]
+        fixes = list(dict.fromkeys(f"fix: {short(f)}: {f['fix']}" for f in fs if f["level"] == "error"))
+        emit(line, table("findings", shown, ["level", "check", "entity", "what"]) if shown else "", *fixes,
+             help=["arx2 verify --check <name>", "arx2 rules"] + (["arx2 verify --all  (adds info lines)"] if not a.all else []))
+    if sm["errors"]:
+        sys.exit(1)
 
 
 def cmd_projects(a):
@@ -151,6 +201,9 @@ def cmd_goal_close(a):
         tr = Views(p).goal_track(a.key)
         if not tr["met"]:
             fail(f"the champion is at {tr['current']} on {g['set']}, target {g['target']}", fix="keep climbing; a goal is achieved by the ledger, not by hand")
+        errs = verify.guard(p, "goal_close", a.key)
+        if errs:
+            _refuse(errs, f"goal {a.key} cannot be closed as achieved")
     p.append("goal.status", key=a.key, status=a.status, reason=a.reason)
     emit(f"goal {a.key}: {a.status}")
 
@@ -167,7 +220,22 @@ def cmd_annotate(a):
 
 def cmd_pattern_add(a):
     p = P()
-    items = [i for i in a.items.split(",") if i]
+    s = p.state()
+    items = [i for i in (a.items or "").split(",") if i]
+    if a.items_file:
+        items += [l.strip() for l in open(a.items_file) if l.strip()]
+    items = list(dict.fromkeys(items))
+    if not items:
+        fail("a pattern needs the items it was seen on", fix=f"arx2 pattern add {a.key} ... --items 3,7,9 (or --items-file ids.txt)")
+    if a.count and a.count > len(items):
+        fail(f"--count {a.count} but only {len(items)} items listed; prevalence must be backed by ids",
+             fix=f"arx2 pattern add {a.key} ... --items-file ids.txt --set <set> (at least {a.count} ids), or drop --count")
+    if a.count:
+        frozen = s["sets"][a.set]["ids"] if a.set in s["sets"] else [i for st in s["sets"].values() for i in st["ids"]]
+        unknown = [i for i in items if i not in {str(x) for x in frozen}]
+        if unknown:
+            fail(f"{len(unknown)} listed items are in no frozen set{' ' + a.set if a.set else ''} (e.g. {unknown[0]})",
+                 fix="arx2 set add <key> ... --ids-file ids.txt, then list items from it")
     p.append("pattern", key=a.key, name=check_name(a.name, "pattern name"), cause=a.cause, items=items,
              count=a.count or len(items), of=a.of, of_what=a.of_what, set=a.set)
     emit(f"pattern: {a.key} ({len(items)} items)", help=[f"arx2 hill open <key> --pattern {a.key} --goal <goal> ..."])
@@ -184,14 +252,31 @@ def cmd_hill_open(a):
     for k in ev + tr + [a.symptom_set, a.control]:
         if k and k not in s["sets"]:
             fail(f"no set {k!r}", fix="arx2 set add ...")
-    p.append("hill", key=a.key, name=check_name(a.name, "hill name"), goal=a.goal, pattern=a.pattern,
-             symptom=a.symptom, measure=a.measure_text, example=json.loads(a.example) if a.example else None,
-             predict=a.predict, symptom_set=a.symptom_set, eval_sets=ev, train_sets=tr, control=a.control)
+    hill = dict(key=a.key, name=check_name(a.name, "hill name"), goal=a.goal, pattern=a.pattern,
+                symptom=a.symptom, measure=a.measure_text, example=json.loads(a.example) if a.example else None,
+                predict=a.predict, symptom_set=a.symptom_set, eval_sets=ev, train_sets=tr, control=a.control)
+    if a.no_evidence:
+        hill["evidence_waived"] = a.no_evidence
+    else:
+        e = _would_be_evidence(p, hill)
+        if not a.symptom_set or not e["ok"]:
+            why = "no symptom set" if not a.symptom_set else e["missing"][0]
+            fail(f"hill {a.key} has no evidence: {why}",
+                 fix=f'arx2 set add {a.key}-symptom --name "<two words>" --dataset <d> --role symptom --ids-file <champion failures>.txt, '
+                     f'then rerun with --symptom-set {a.key}-symptom (or --no-evidence "<why this hill exists without observed failures>")')
+    p.append("hill", **hill)
     chk = [c for c in Views(p).split_check()["pairs"] if c["hill"] == a.key and c["shared"]]
     if chk:
         emit(table("overlaps", chk, ["a", "b", "shared"]))
         fail("the hill's sets share items", fix="make disjoint sets with new names, then reopen the hill")
     emit(f"hill: {a.key} open; splits disjoint", help=['arx2 cand add <key> --name "<two words>" --hill ' + a.key + ' --change "..." --predict "..."'])
+
+
+def _would_be_evidence(p: Project, hill: dict) -> dict:
+    """Evidence for a hill before it is written: fold it into the state in memory, then derive."""
+    v = Views(p)
+    v.s["hills"][hill["key"]] = {"status": "open", **hill, "created": time.time()}
+    return v.hill_evidence(hill["key"])
 
 
 def cmd_hill_close(a):
@@ -218,7 +303,12 @@ def cmd_cand_add(a):
     parent = a.parent or s["champion"]
     p.append("candidate", key=a.key, name=check_name(a.name, "candidate name"), parent=parent, hill=a.hill,
              change=a.change, predict=a.predict)
-    emit(f"candidate: {a.key} (parent {parent})", help=[f"arx2 gate {a.key}"])
+    warn = ""
+    if a.hill in s["hills"]:
+        e = Views(p).hill_evidence(a.hill)
+        if not e["ok"] and not e.get("waived"):
+            warn = f"warning: hill {a.hill} has no evidence ({', '.join(e['missing'])}); a gain on it may fix nothing real"
+    emit(f"candidate: {a.key} (parent {parent})", warn, help=[f"arx2 gate {a.key}"])
 
 
 def cmd_gate(a):
@@ -257,6 +347,9 @@ def cmd_cand_status(a, status):
         if s["champion"] == a.key:
             emit(f"noop: {a.key} is already champion")
             return
+        errs = verify.guard(p, "promote", a.key)
+        if errs:
+            _refuse(errs, f"{a.key} cannot be promoted")
         p.append("champion", key=a.key, reason=a.reason, previous=s["champion"])
     else:
         p.append("candidate.status", key=a.key, status=status, reason=a.reason)
@@ -358,15 +451,87 @@ def cmd_check(a):
 DOC_KINDS = ["paper", "report", "note", "diagram", "card"]
 
 
+def _paper_issues(issues: list[dict], head: str) -> str:
+    errs = paper.errors(issues)
+    out = [f"{head}: {len(errs)} errors, {len(issues) - len(errs)} warnings"]
+    if issues:
+        out.append(table("issues", [{"n": i + 1, **x} for i, x in enumerate(issues)], ["n", "level", "what"]))
+        out += [f"fix: {i + 1}. {x['fix']}" for i, x in enumerate(issues)]
+    return "\n".join(out)
+
+
 def cmd_doc(a):
     p = P()
+    if a.key == "add":  # `arx2 doc add <key>` and `arx2 doc <key>` are the same command
+        if not a.rest:
+            fail("no doc key", fix="arx2 doc add <key> --kind paper --name \"<two words>\" --file paper.html")
+        a.key = a.rest[0]
     src = Path(a.file)
+    if not src.exists():
+        fail(f"no file {a.file}", fix="pass --file <path>")
+    check_name(a.name, "doc name")
+    draft = False
+    if a.kind == "paper":
+        if src.suffix.lower() not in (".html", ".htm"):
+            fail("a paper is one self-contained html page", fix=f"arx2 paper new {a.key} --about <goal-or-hill>")
+        page = src.read_text()
+        issues = paper.check(p, page, a.audience, a.about, draft=a.draft)
+        if a.draft and "draft" not in paper.title_of(page).lower():
+            issues.insert(0, {"level": "error", "what": "--draft needs Draft in the <title>",
+                              "fix": "start the <title> with Draft:"})
+        head = f"paper {a.key} ({a.audience}, about {a.about or '-'})"
+        if paper.errors(issues):
+            print(_paper_issues(issues, head + ": refused"))
+            sys.exit(1)
+        if issues:
+            print(_paper_issues(issues, head))
+        draft = bool(a.draft)
+    elif a.draft:
+        fail("--draft is for papers", fix="drop --draft")
     dst = p.dir / "docs" / (a.key + src.suffix)
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_bytes(src.read_bytes())
     p.append("doc", key=a.key, kind=a.kind, name=check_name(a.name, "doc name"), file=dst.name,
-             about=a.about, audience=a.audience)
-    emit(f"doc: {a.key} ({a.kind}, {a.audience})", help=["arx2 up"])
+             about=a.about, audience=a.audience, draft=draft)
+    emit(f"doc: {a.key} ({a.kind}, {a.audience}{', draft' if draft else ''})", help=["arx2 up"])
+
+
+def _audience(p: Project, a) -> str:
+    if a.audience:
+        return a.audience
+    return "external" if a.about and a.about in p.state()["goals"] else "internal"
+
+
+def cmd_paper_check(a):
+    p = P()
+    src = Path(a.file)
+    if not src.exists():
+        fail(f"no file {a.file}", fix="pass the path of the paper's html")
+    aud = _audience(p, a)
+    issues = paper.check(p, src.read_text(), aud, a.about)
+    print(_paper_issues(issues, f"paper {src.name} ({aud}, about {a.about or '-'})"))
+    if paper.errors(issues):
+        sys.exit(1)
+    emit("", help=[f'arx2 doc add {src.stem} --kind paper --name "<two words>" --file {a.file} --audience {aud}'
+                   + (f" --about {a.about}" if a.about else "")])
+
+
+def cmd_paper_new(a):
+    p = P()
+    s = p.state()
+    if a.about not in s["goals"] and a.about not in s["hills"]:
+        fail(f"{a.about!r} is not a goal or a hill", fix="arx2")
+    aud = _audience(p, a)
+    out = Path(a.out or f"{a.key}.html")
+    if out.exists() and not a.force:
+        fail(f"{out} exists", fix="pass --out <path> or --force")
+    out.write_text(paper.template(p, a.about, aud, a.title))
+    N = paper.numbers(p, a.about)
+    emit(kv({"paper": str(out), "audience": aud, "about": a.about, "set": N["set"], "n": N["n"], "run": N.get("run"),
+             "score": N.get("score"), "delta": (N.get("delta") or {}).get("delta"), "goal_met": N.get("met")}),
+         help=["write the prose: replace every TODO, keep numbers inside data-claim elements",
+               f"arx2 paper check {out} --about {a.about} --audience {aud}",
+               f'arx2 doc add {a.key} --kind paper --name "<two words>" --file {out} --about {a.about} --audience {aud}'])
 
 
 def cmd_card(a):
@@ -379,6 +544,111 @@ def cmd_card(a):
 def cmd_learner(a):
     from .learner import report
     emit(report(P()))
+
+
+# ---- asks: questions people click on the dashboard -------------------------
+
+class Part(argparse.Action):
+    """Keeps --text, --file and --link in the order they were given: one answer, many parts."""
+
+    def __call__(self, ap, ns, values, opt=None):
+        ns.parts = [*(getattr(ns, "parts", None) or []), (self.dest, values)]
+
+
+def _wait_open(p, timeout, skip=(), interval=1.0, agent=None):
+    t0, seen, s = time.time(), None, None
+    while True:
+        m = p.events_path.stat().st_mtime if p.events_path.exists() else 0
+        if m != seen:
+            seen, s = m, p.state()
+        a = asks.next_open(s, skip, agent=agent)
+        if a:
+            return a
+        if timeout and time.time() - t0 >= timeout:
+            return None
+        time.sleep(interval)
+
+
+def cmd_ask_poll(a):
+    p = P()
+    q = _wait_open(p, a.timeout, agent=a.agent)
+    if not q:
+        emit(f"noop: no open question after {a.timeout:g}s", help=["arx2 ask poll"])
+        return
+    p.append("ask.claim", key=q["key"], agent=a.agent)
+    emit(asks.describe(p, q), help=[f'arx2 ask answer {q["key"]} --file figure.svg --text "<one real item; the aggregate with set and n; ~60 words>" '
+                                    f'[--link "Label=#/hill/<key>"]', "arx2 ask poll"])
+
+
+def cmd_ask_answer(a):
+    p = P()
+    asks.answer(p, a.key, a.parts, agent=a.agent or os.environ.get("ARX2_AGENT"))
+    emit(f"answered: {a.key} ({len(a.parts)} part{'s' if len(a.parts) != 1 else ''})", help=["arx2 ask poll"])
+
+
+def cmd_ask_reply(a):
+    asks.reply(P(), a.key, a.text)
+    emit(f"reopened: {a.key}", help=["arx2 ask poll"])
+
+
+def cmd_ask_list(a):
+    s = P().state()
+    rows = [{"key": k, "status": q["status"], "age": _ago(q["created"]), "turns": len(q["thread"]), "on": q.get("what"),
+             "question": asks.latest(q)[:80],
+             "saved": ",".join(x["as"] for x in q["saved"]) or None}
+            for k, q in s["asks"].items() if a.all or q["status"] != "answered"]
+    emit(table("asks", rows[-a.limit:], ["key", "status", "age", "turns", "on", "question", "saved"], total=len(rows)),
+         help=["arx2 ask poll", "arx2 ask list --all"])
+
+
+def cmd_ask_watch(a):
+    """Always on: each question gets its own agent, run in parallel; a follow-up goes back to that question's agent."""
+    import threading
+    import uuid
+    p = P()
+    base = a.agent or "watch"
+    busy, failed, lock = set(), {}, threading.Lock()
+
+    def say(msg):
+        with lock:
+            print(msg, flush=True)
+
+    def run(q):
+        key, sub = q["key"], f"{base}/{q['key']}"
+        turn = sum(1 for x in q["thread"] if x["who"] == "person")
+        f = p.dir / "asks" / f"{key}.txt"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(asks.describe(p, q) + "\n\n" + ASK_GUIDE.format(key=key))
+        say(f"ask {key} turn {turn}: {asks.latest(q)[:80]}")
+        env = {**os.environ, "ARX2_ASK": key, "ARX2_ASK_FILE": str(f), "ARX2_AGENT": sub, "ARX2_ASK_TURN": str(turn),
+               "ARX2_ASK_SESSION": str(uuid.uuid5(uuid.NAMESPACE_URL, f"arx2-ask:{p.root}:{key}"))}
+        rc = subprocess.call(a.exec, shell=True, cwd=p.root, env=env)
+        if p.state()["asks"][key]["status"] == "answered":
+            say(f"  {key}: answered")
+        else:
+            failed[key] = failed.get(key, 0) + 1
+            p.append("ask.release", key=key, agent=sub)
+            say(f"  {key}: not answered (exit {rc}); released")
+        with lock:
+            busy.discard(key)
+
+    say(f"watching {p.root} for questions, up to {a.jobs} at once (ctrl-c stops)")
+    while True:
+        while len(busy) >= a.jobs:
+            time.sleep(0.5)
+        with lock:
+            skip = busy | {k for k, n in failed.items() if n >= 2}
+        q = _wait_open(p, 0, skip=skip, interval=0.5, agent=base)
+        with lock:
+            busy.add(q["key"])
+        p.append("ask.claim", key=q["key"], agent=f"{base}/{q['key']}")
+        threading.Thread(target=run, args=(q,), daemon=True).start()
+
+
+ASK_GUIDE = """A person clicked the thing above on the arx2 dashboard and asked the question. Answer with
+  arx2 ask answer {key} --text "..." [--file x.svg|x.png|x.html|x.md] [--link "Label=#/hill/<key>"]
+Follow "Answering questions" in v2/AGENTS.md: lead with one figure (SVG or HTML) drawn from the ledger rows, then at
+most three short lines (one real item, the aggregate with set and n, the takeaway). About 60 words in all."""
 
 
 # ---- server --------------------------------------------------------------
@@ -447,6 +717,10 @@ def build() -> argparse.ArgumentParser:
     x.add_argument("--direction", choices=["max", "min"], default="max")
     x.add_argument("--unit", default=""); x.add_argument("--key"); x.add_argument("--root")
     cmd("projects", cmd_projects, "list registered projects")
+    cmd("rules", cmd_rules, "the practices arx2 enforces, and why")
+    x = cmd("verify", cmd_verify, "audit the ledger: every claim backed by its own rows")
+    x.add_argument("--json", action="store_true"); x.add_argument("--check", help="run one check")
+    x.add_argument("--all", action="store_true", help="also show info lines")
 
     x = cmd("set", None, "frozen item lists"); ssp = x.add_subparsers(dest="sub")
     y = ssp.add_parser("add"); y.set_defaults(fn=cmd_set_add)
@@ -468,7 +742,7 @@ def build() -> argparse.ArgumentParser:
 
     x = cmd("pattern", None, "group annotations"); psp = x.add_subparsers(dest="sub")
     y = psp.add_parser("add"); y.set_defaults(fn=cmd_pattern_add)
-    y.add_argument("key"); y.add_argument("--name", required=True); y.add_argument("--items", required=True)
+    y.add_argument("key"); y.add_argument("--name", required=True); y.add_argument("--items"); y.add_argument("--items-file")
     y.add_argument("--cause", required=True); y.add_argument("--count", type=int); y.add_argument("--of", type=int)
     y.add_argument("--of-what"); y.add_argument("--set")
 
@@ -479,6 +753,7 @@ def build() -> argparse.ArgumentParser:
     y.add_argument("--example", help='json {"input","wrong","right","why"}'); y.add_argument("--predict")
     y.add_argument("--symptom-set"); y.add_argument("--eval-sets", required=True); y.add_argument("--train-sets")
     y.add_argument("--control")
+    y.add_argument("--no-evidence", metavar="WHY", help="open without a symptom set the champion fails; say why")
     y = hsp.add_parser("close"); y.set_defaults(fn=cmd_hill_close)
     y.add_argument("key"); y.add_argument("--status", choices=["climbed", "closed"], required=True); y.add_argument("--reason", required=True)
 
@@ -512,12 +787,36 @@ def build() -> argparse.ArgumentParser:
     x.add_argument("--name")
     cmd("check", cmd_check, "verify split disjointness and set hashes")
 
-    x = cmd("doc", cmd_doc, "add a paper, note or diagram")
-    x.add_argument("key"); x.add_argument("--kind", choices=DOC_KINDS, required=True); x.add_argument("--name", required=True)
+    x = cmd("doc", cmd_doc, "add a paper, note or diagram (papers must pass `arx2 paper check`)")
+    x.add_argument("key"); x.add_argument("rest", nargs="*"); x.add_argument("--kind", choices=DOC_KINDS, required=True)
+    x.add_argument("--name", required=True)
     x.add_argument("--file", required=True); x.add_argument("--about"); x.add_argument("--audience", choices=["internal", "external"], default="internal")
+    x.add_argument("--draft", action="store_true", help="let an incomplete paper through; its <title> must say Draft")
+    x = cmd("paper", None, "write and check papers"); psp = x.add_subparsers(dest="sub")
+    y = psp.add_parser("check", help="run the paper gate without publishing"); y.set_defaults(fn=cmd_paper_check)
+    y.add_argument("file"); y.add_argument("--about"); y.add_argument("--audience", choices=["internal", "external"])
+    y = psp.add_parser("new", help="a skeleton with every section and the champion's numbers"); y.set_defaults(fn=cmd_paper_new)
+    y.add_argument("key"); y.add_argument("--about", required=True); y.add_argument("--audience", choices=["internal", "external"])
+    y.add_argument("--out"); y.add_argument("--title"); y.add_argument("--force", action="store_true")
     x = cmd("card", cmd_card, "add a flash card")
     x.add_argument("--front", required=True); x.add_argument("--back", required=True); x.add_argument("--about"); x.add_argument("--key")
     cmd("learner", cmd_learner, "how the person uses the dashboard (to improve it)")
+
+    x = cmd("ask", None, "questions people ask by clicking the dashboard"); qsp = x.add_subparsers(dest="sub")
+    y = qsp.add_parser("poll", help="wait for an open question, claim it and print it"); y.set_defaults(fn=cmd_ask_poll)
+    y.add_argument("--timeout", type=float, default=0, help="seconds; 0 waits forever"); y.add_argument("--agent")
+    y = qsp.add_parser("answer", help="answer in parts: --text, --file and --link, in order"); y.set_defaults(fn=cmd_ask_answer, parts=[])
+    y.add_argument("key"); y.add_argument("--agent")
+    for f, h in (("--text", "markdown"), ("--file", "svg, png, html or md"), ("--link", "label=#/hill/<key> or an url")):
+        y.add_argument(f, action=Part, help=h)
+    y = qsp.add_parser("reply", help="a follow-up in the same thread"); y.set_defaults(fn=cmd_ask_reply)
+    y.add_argument("key"); y.add_argument("--text", required=True)
+    y = qsp.add_parser("list"); y.set_defaults(fn=cmd_ask_list)
+    y.add_argument("--all", action="store_true"); y.add_argument("--limit", type=int, default=30)
+    y = qsp.add_parser("watch", help="always on: run an agent command for every question"); y.set_defaults(fn=cmd_ask_watch)
+    y.add_argument("--exec", required=True, help="shell command, one per question; gets $ARX2_ASK, $ARX2_ASK_FILE, "
+                   "$ARX2_ASK_TURN and $ARX2_ASK_SESSION (stable per question)")
+    y.add_argument("--agent"); y.add_argument("--jobs", type=int, default=4, help="questions answered at once")
 
     x = cmd("serve", cmd_serve, "run the dashboard in the foreground")
     x.add_argument("--port", type=int, default=8790); x.add_argument("--host", default="127.0.0.1")

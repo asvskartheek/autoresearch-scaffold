@@ -9,8 +9,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import learner, stats
-from .store import Project, registry
+from . import asks, learner, stats, verify
+from .store import LedgerError, Project, registry
 from .view import METRICS, Views, measure_of
 
 WEB = Path(__file__).parent / "web"
@@ -65,14 +65,17 @@ def build_state(p: Project, until: float | None = None) -> dict:
     timeline = [{"t": e["t"], "type": e["type"], "key": e.get("key") or e.get("id"), "status": e.get("status")}
                 for e in s["log"] if e["type"] in ("champion", "candidate.status", "goal", "goal.status", "hill", "hill.status", "run", "set")]
     m = memory_state(p, v)
+    findings = verify.audit(p, v=v)
     return {
         "key": None, "project": s["project"], "measure": measure_of(s), "champion": champ,
         "champions": s["champions"], "sets": {k: _slim_set(k, x) for k, x in s["sets"].items()},
         "goals": goals, "hills": s["hills"], "patterns": s["patterns"], "annotations": s["annotations"][-200:],
         "ladder": s["ladders"].get("main", {"rungs": []}), "candidates": cands, "runs": runs, "tasks": tasks,
-        "docs": s["docs"], "split": v.split_check(), "timeline": timeline,
+        "docs": s["docs"], "split": v.split_check(), "evidence": {hk: v.hill_evidence(hk) for hk in s["hills"]},
+        "timeline": timeline,
         "span": [s["log"][0]["t"], s["log"][-1]["t"]] if s["log"] else [0, 0], "until": until,
-        "n_events": len(s["log"]), "learner": m,
+        "n_events": len(s["log"]), "learner": m, "asks": s["asks"],
+        "audit": {**verify.summary(findings), "findings": findings},
     }
 
 
@@ -110,6 +113,7 @@ def project_card(key: str, root: str) -> dict:
                                                       "metric": g.get("metric"), "now": g["track"]["current"], "met": g["track"]["met"],
                                                       "status": g["status"]} for k, g in st["goals"].items()],
             "running": len(running), "stale": sum(1 for t in running if t["stale"]), "split_ok": st["split"]["ok"],
+            "errors": st["audit"]["errors"],
             "last": last, "n_candidates": len(st["candidates"]), "n_due": st["learner"]["n_due"]}
 
 
@@ -212,6 +216,13 @@ class H(BaseHTTPRequestHandler):
                     d = p.state()["docs"][rest[1]]
                     f = p.dir / "docs" / d["file"]
                     return self._send(200, f.read_bytes(), mimetypes.guess_type(str(f))[0] or "text/plain")
+                if rest[:1] == ["answer"]:
+                    f = (p.dir / "answers" / rest[1]).resolve()
+                    if f.parent != (p.dir / "answers").resolve() or not f.exists():
+                        return self._send(404, {"error": "not found"})
+                    if f.suffix in (".html", ".htm"):
+                        return self._send(200, asks.themed(f.read_text()), "text/html; charset=utf-8")
+                    return self._send(200, f.read_bytes(), mimetypes.guess_type(str(f))[0] or "text/plain")
                 if rest == ["events"]:
                     return self._stream(p)
             return self._send(404, {"error": "not found"})
@@ -249,6 +260,21 @@ class H(BaseHTTPRequestHandler):
                 e.setdefault("t", time.time())
                 p.learner(e)
             return self._send(200, {"ok": True})
+        try:
+            if parts[:2] == ["api", "p"] and parts[3:] == ["ask"]:
+                ev = asks.ask(project(parts[2]), body.get("text"), body.get("kind") or "project", body.get("key") or parts[2],
+                              body.get("what"), route=body.get("route") or "", loc=body.get("loc") or "")
+                return self._send(200, {"key": ev["key"]})
+            if parts[:2] == ["api", "p"] and parts[3:] == ["reply"]:
+                ev = asks.reply(project(parts[2]), body.get("ask"), body.get("text"))
+                return self._send(200, {"key": ev["key"]})
+            if parts[:2] == ["api", "p"] and parts[3:] == ["save"]:
+                ev = asks.save(project(parts[2]), body.get("ask"), body.get("as"), body.get("name") or "")
+                return self._send(200, {"key": ev["key"]})
+        except LedgerError as e:
+            return self._send(400, {"error": str(e), "fix": e.fix})
+        except KeyError as e:
+            return self._send(404, {"error": f"unknown {e}"})
         return self._send(404, {"error": "not found"})
 
 

@@ -126,7 +126,7 @@ def empty_state() -> dict:
     return {
         "project": {}, "sets": {}, "goals": {}, "annotations": [], "patterns": {}, "hills": {},
         "ladders": {}, "candidates": {}, "champion": None, "champions": [], "tasks": {}, "runs": {},
-        "docs": {}, "cards": {}, "log": [],
+        "docs": {}, "cards": {}, "asks": {}, "agents": {}, "log": [],
     }
 
 
@@ -204,9 +204,41 @@ def apply(s: dict, ev: dict) -> None:
         s["runs"][d["key"]] = {**d, "created": t}
     elif ty == "doc":
         s["docs"][d["key"]] = {**s["docs"].get(d["key"], {}), **d, "updated": t}
+        _saved(s, d, d.get("kind"))
     elif ty == "card":
         s["cards"][d["key"]] = d
+        _saved(s, d, "card")
+    elif ty == "ask":
+        s["asks"][d["key"]] = {"status": "open", **d, "created": t, "answers": [], "saved": [],
+                               "thread": [{"who": "person", "t": t, "text": d["text"]}]}
+    elif ty == "ask.reply":
+        a = s["asks"].get(d["key"])
+        if a:
+            a["thread"].append({"who": "person", "t": t, "text": d["text"]})
+            a["status"] = "open"
+    elif ty in ("ask.claim", "ask.release"):
+        if d.get("agent"):
+            s["agents"][d["agent"]] = t
+        a = s["asks"].get(d["key"])
+        if a and a["status"] != "answered":
+            a["status"] = "claimed" if ty == "ask.claim" else "open"
+            a["claimed"], a["agent"] = t, d.get("agent")
+    elif ty == "answer":
+        if d.get("agent"):
+            s["agents"][d["agent"]] = t
+        a = s["asks"].get(d["key"])
+        if a:
+            a["answers"].append({"t": t, "parts": d["parts"], "agent": d.get("agent")})
+            a["thread"].append({"who": "agent", "t": t, "parts": d["parts"], "agent": d.get("agent")})
+            a["status"] = "answered"
     s["log"].append(ev)
+
+
+def _saved(s: dict, d: dict, kind) -> None:
+    """A doc or card saved from an answer is listed on the question it came from."""
+    a = s["asks"].get(d.get("ask") or "")
+    if a and not any(x["key"] == d["key"] for x in a["saved"]):
+        a["saved"].append({"as": kind, "key": d["key"]})
 
 
 # ---- registry ----------------------------------------------------------
