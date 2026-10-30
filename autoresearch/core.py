@@ -399,9 +399,16 @@ class Project:
         """Finished, complete eval tasks only; partial runs never count."""
         return [t for t in self.tasks() if t.get("kind") == "eval" and t.get("status") == "done" and t.get("complete")]
 
+    def _slice_hash(self, slice_name: str) -> str | None:
+        """Read without copying every slice's ids: comparisons call this hundreds of times per request."""
+        try:
+            return (_cached(self.dir / "slices.json", json.loads).get(slice_name) or {}).get("hash")
+        except (OSError, ValueError):
+            return None
+
     def slice_evals(self, model: str, slice_name: str) -> list[dict]:
         """Every complete run of the model on the slice's current version, oldest first."""
-        h = self.slices().get(slice_name, {}).get("hash")
+        h = self._slice_hash(slice_name)
         c = [t for t in self.evals() if t.get("model") == model and t.get("slice") == slice_name and t.get("slice_hash") == h
              and not t.get("superseded_by")]
         return sorted(c, key=lambda t: t.get("ended", 0))
