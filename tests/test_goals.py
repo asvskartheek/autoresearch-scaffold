@@ -127,6 +127,16 @@ class GoalPaper(unittest.TestCase):
         self.assertIn("no final-result", " ".join(self.errs("<section data-block=\"x\"></section>")))
         self.assertEqual(self.errs(html, hills={"time-rate": "open"}), [])  # a hill without a paper needs no link
 
+    def test_continuous_goal_is_checked_in_its_unit(self):
+        # a "minus ms" goal: the paper writes 1,000 ms, 387 ms and 1,071 ms faster, never -100000% or +107100.0 pts
+        st = dict(slice="cold/n24", n=24, target=-1000.0, value=-387.2, scale="continuous", unit="ms",
+                  metric="minus ms to paint", vs_baseline=dict(delta=1071.0, lo=1012.0, hi=1169.0, n=24), hills={})
+        res = ('<section data-block="result"><p>Target 1,000 ms on cold/n24, n = 24. percent-base-1024-v1 at 387 ms, '
+               '1,071 ms faster than qwen3-4b-rl-fresh-v1 (90% CI 1,012 to 1,169 ms). Draft.</p></section>')
+        errs = [e for e in self.errs(res, **st) if "system" not in e and "draft" not in e]
+        self.assertEqual(errs, [])
+        self.assertIn("paired delta 1,071 ms", " ".join(self.errs(res.replace("1,071 ms faster", "faster"), **st)))
+
 
 class Registry(unittest.TestCase):
     def test_register_is_idempotent_and_unique(self):

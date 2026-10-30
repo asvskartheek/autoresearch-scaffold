@@ -372,8 +372,17 @@ def check(html: str, slices=()) -> list[tuple[str, str]]:
     return out
 
 
-def _kpi_text(kpi: str, v: float) -> list[str]:
-    """How a KPI value may be written: 0.928 -> 92.8%, 92.8 % ; a target 0.96 -> 96%."""
+def _amount_text(v: float) -> list[str]:
+    """How a plain amount may be written: 1458.125 -> 1458, 1,458, 1458.1; 0.3832 -> 0.383."""
+    r = round(v)
+    return list(dict.fromkeys([f"{r:,d}", f"{r:d}", f"{v:,.1f}", f"{v:.1f}", f"{v:g}", f"{v:.4g}", f"{v:.3g}"]))
+
+
+def _kpi_text(kpi: str, v: float, st: dict | None = None) -> list[str]:
+    """How a KPI value may be written: 0.928 -> 92.8%, 92.8 % ; a target 0.96 -> 96%. A score on a continuous slice
+    is an amount in the slice's unit, and a "minus ms" one is written as the plain amount: -1000 -> 1,000."""
+    if kpi == "score" and (st or {}).get("scale") == "continuous":
+        return _amount_text(-v if re.match(r"\s*minus\b", str(st.get("metric") or ""), re.I) else v)
     if kpi != "score":
         return [f"{v:g}", f"{v:.3g}", f"{v:.2f}"]
     return list(dict.fromkeys([f"{100 * v:g}%", f"{100 * v:.1f}%", f"{100 * v:.0f}%", f"{100 * v:.1f} %"]))
@@ -407,17 +416,21 @@ def check_goal(html: str, st: dict, hill_papers=(), titles: dict | None = None) 
             out.append(("error", f"result section does not name the goal slice {st['slice']}"))
         if not re.search(rf"\bn\s*=\s*{st['n']}\b", text):
             out.append(("error", f"result section does not give n = {st['n']}"))
-        if not any(t in text for t in _kpi_text(st["kpi"], st["target"])):
-            out.append(("error", f"result section does not state the target ({_kpi_text(st['kpi'], st['target'])[0]})"))
-        if st.get("value") is not None and not any(t in text for t in _kpi_text(st["kpi"], st["value"])):
-            out.append(("error", f"result section does not state the ledger value {_kpi_text(st['kpi'], st['value'])[1]} "
+        if not any(t in text for t in _kpi_text(st["kpi"], st["target"], st)):
+            out.append(("error", f"result section does not state the target ({_kpi_text(st['kpi'], st['target'], st)[0]})"))
+        if st.get("value") is not None and not any(t in text for t in _kpi_text(st["kpi"], st["value"], st)):
+            out.append(("error", f"result section does not state the ledger value {_kpi_text(st['kpi'], st['value'], st)[1]} "
                                  f"({st['model']}); numbers come from the ledger"))
         vs = st.get("vs_baseline")
         if vs and vs.get("delta") is not None:
             if st.get("baseline") and not _says(text, st["baseline"], titles):
                 out.append(("error", f"result section does not name the starting champion "
                                      f"({' or '.join(map(repr, _names(st['baseline'], titles)[::2]))})"))
-            if f"{100 * vs['delta']:+.1f}" not in text:
+            if st.get("scale") == "continuous":  # in the slice's unit, signed as the reader prefers ("1,071 ms faster")
+                if not any(t in text for t in _amount_text(abs(vs["delta"]))):
+                    out.append(("error", f"result section does not give the paired delta {_amount_text(abs(vs['delta']))[0]}"
+                                         f"{' ' + st['unit'] if st.get('unit') else ''} vs the start"))
+            elif f"{100 * vs['delta']:+.1f}" not in text:
                 out.append(("error", f"result section does not give the paired delta {100 * vs['delta']:+.1f} pts vs the start"))
             if not re.search(r"90% CI|interval", text):
                 out.append(("error", "result section gives no 90% interval for the paired delta"))
