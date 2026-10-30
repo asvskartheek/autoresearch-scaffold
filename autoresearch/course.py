@@ -424,7 +424,7 @@ def lesson_gate(p, L, learn):
     direction = "below" if fig.get("better", 1) < 0 else "above"
     return dict(say=f"For this metric, improvement moves Δ {direction} zero. The configured gate compares Δ with its declared bar; uncertainty is shown separately.", fig=fig,
                 checks=[_check(q, ["Pass", "Fail"], "Pass" if ok else "Fail", f"The bar is {_amt(fig['unit'], bar)}; pass when Δ is on the good side of it.", live=not fig.get("example")),
-                        _check("Say a candidate passes this comparison, but the next run uses a changed harness. Can the old gate result establish that the new run passes?",
+                        _check("Say a candidate passes a gate check, but the next run uses a changed harness. Can the old gate result establish that the new run passes?",
                                ["No; obtain a compatible baseline and apply the declared rule", "Yes; the model name is unchanged", "Yes; a prior pass applies to every harness"],
                                "No; obtain a compatible baseline and apply the declared rule", "A gate result belongs to its measured scope and evaluation setup; it is not a permanent property of a model.")])
 
