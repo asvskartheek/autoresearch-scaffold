@@ -86,10 +86,12 @@ function kpiStrip(t,d){
  const pr=t.progress||{},sm=t.summary||{},vc=d?.vs_champion,live=isLive(t),[bt,bc]=budgetLine(t);
  const items=[];
  if(t.kind==='eval'&&(sm.n||pr.total)){
-  const sc=sm.score??runScore(t),n=sm.n??pr.done,sl=slOf(t),c=isCont(sl),partial=partialEval(t);
-  if(partial)items.push(['Coverage',`${n.toLocaleString()}<small>of ${(pr.total||(n+(sm.missing||0))).toLocaleString()}</small>`,'Unranked partial observations']);
+  // a live eval is partial by nature: Progress says how far it got; Coverage is for one that ended short
+  const sc=sm.score??runScore(t),n=sm.n??pr.done,sl=slOf(t),c=isCont(sl),partial=partialEval(t)&&!live;
+  if(partial)items.push(['Coverage',`${n.toLocaleString()}<small>of ${(pr.total||(n+(sm.missing||0))).toLocaleString()}</small>`,'incomplete, so gates skip it']);
   const mt=c&&timedSl(sl);
   items.push([partial?'Observed subset':live?(mt?'Mean time so far':c?'Mean so far':'Score so far'):(mt?'Mean time':c?'Mean score':'Score'),scoreOf(sc,sl),sc!=null?(c?`over ${n.toLocaleString()}`:`${Math.round(sc*n).toLocaleString()} of ${n.toLocaleString()}`):'']);
+  if(!partial&&!vc&&d?.champion_other_harness)items.push(['Against the champion',DASH,'champion ran another harness']);
   if(!partial&&vc&&vc.delta!=null)items.push(['Against the champion',c?`<span class="${tone(vc)}">${cDelta(vc.delta,sl)}</span>`:`<span class="${tone(vc)}">${pts(vc.delta)}</span><small>pts</small>`,c?`${cNum(vc.lo)} to ${cNum(vc.hi)}, 90% CI`:`${pts(vc.lo)} to ${pts(vc.hi)}, 90% CI`]);
   if(live)items.push(['Progress',pr.total?`${pr.done.toLocaleString()}<small>of ${pr.total.toLocaleString()}</small>`:DASH,pr.total?(100*pr.done/pr.total).toFixed(0)+'%':'']);
   if(sm.cost!=null)items.push(['Cost per example',money(sm.cost),sm.cost_total!=null?money(sm.cost_total)+' in all':'']);

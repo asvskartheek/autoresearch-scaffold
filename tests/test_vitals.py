@@ -128,6 +128,7 @@ class Vitals(unittest.TestCase):
             return tt
 
         tt = live({})
+        self.assertTrue(server.task_detail(self.p, tt["id"]).get("champion_other_harness"))
         self.assertIsNone(tt["champ_ref"])
         self.assertIsNone(next((p for p in tt["vitals"] if p["id"] == "pair"), None))
         tt = live(dict(baseline_contract="h1"))

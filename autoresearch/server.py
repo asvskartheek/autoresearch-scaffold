@@ -436,8 +436,11 @@ def task_detail(p: Project, tid: str) -> dict:
         rows = p.rows(tid)
         out["rows"] = [dict(id=r["id"], score=r.get("score"), error=bool(r.get("error")), latency_s=r.get("latency_s"), cost=r.get("cost")) for r in rows]
         champ = p.champion()
-        bases = same_contract(p.slice_evals(champ, t["slice"]), t) if champ and champ != t.get("model") else []
+        theirs = p.slice_evals(champ, t["slice"]) if champ and champ != t.get("model") else []
+        bases = same_contract(theirs, t)
         cont = p.is_continuous(t["slice"])
+        if theirs and not bases:
+            out["champion_other_harness"] = True  # the champion ran this slice, but never under this run's harness
         if bases:
             out["vs_champion"] = dict(model=champ, task=bases[-1]["id"], runs=len(bases), baseline_contract=contract_of(t),
                                       **paired(per_id(rows, cont), per_id([r for b in bases for r in p.rows(b["id"])], cont),
