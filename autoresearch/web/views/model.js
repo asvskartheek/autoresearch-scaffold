@@ -205,8 +205,10 @@ VIEWS.model=(name)=>{
   h.push(panel(term('gate','Gate'),gateTable(name,g),{meta:g.champion?`paired against ${mlink(g.champion)} on the same examples`:'no champion to pair against yet',cls:'section flush md-gp'}));
  }else if(m.status==='champion'&&g&&!g.error){
   h.push(promotion(name,m));
-  h.push(panel('Ladder slices',table(['Rung','Slice',['n','num'],['Score','num']],g.rungs.flatMap(r=>r.checks.map((c,i)=>{const s=L.leaderboard[c.slice]?.[name],n=s?.n??L.slices[c.slice]?.n;
-   return `<tr><td>${i?'':esc(r.rung)}</td><td><a class="mono md-sl ln" href="#slices/${enc(c.slice)}">${slw(c.slice)}</a></td><td class="num">${n!=null?n.toLocaleString():DASH}</td><td class="num">${s?(s.task?`<a href="#task/${enc(s.task)}">${score(s.score,c.slice,s.n)}</a>`:score(s.score,c.slice,s.n)):DASH}</td></tr>`}))),{meta:'the scores candidates are paired against',cls:'section'}));
+  // a champion with no hill may have no ladder slice at all: then no table, not a header with no rows
+  const lsRows=(g.rungs||[]).flatMap(r=>(r.checks||[]).map((c,i)=>{const s=L.leaderboard[c.slice]?.[name],n=s?.n??L.slices[c.slice]?.n;
+   return `<tr><td>${i?'':esc(r.rung)}</td><td><a class="mono md-sl ln" href="#slices/${enc(c.slice)}">${slw(c.slice)}</a></td><td class="num">${n!=null?n.toLocaleString():DASH}</td><td class="num">${s?(s.task?`<a href="#task/${enc(s.task)}">${score(s.score,c.slice,s.n)}</a>`:score(s.score,c.slice,s.n)):DASH}</td></tr>`}));
+  if(lsRows.length)h.push(panel('Ladder slices',table(['Rung','Slice',['n','num'],['Score','num']],lsRows),{meta:'the scores candidates are paired against',cls:'section'}));
  }
 
  if(v.rej)h.push(panel(`${term('gate','Gate')}, walked again`,v.rej.wait&&!v.rej.rungs.some(r=>r.checks.some(c=>c.delta!=null))?'<div class="sub">Reading its runs…</div>':gateTable(name,v.rej),{meta:`its runs paired against ${mlink(v.rej.champion)}, the champion now, on the same examples`,cls:'section flush md-gp'}));
