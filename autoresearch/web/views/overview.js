@@ -147,7 +147,9 @@ VIEWS.overview=()=>{
  // the champion's baseline: the slices it has no run on yet, as chips
  if(champ&&bl?.need?.length){
   const nr=Object.keys(bl.roles).length;
-  h+=panel(`${term('champion','Champion')} baseline`,`<div class="ov-bchips">${bl.need.map(s=>`<a class="ov-bchip ${ovRunning(champ,s)?'run':''}" href="#slices/${enc(s)}" title="${esc(s)}">${esc(short(s))}<span class="faint"> ${ovN(st.slices[s]?.n)}</span></a>`).join('')}</div>`,
+  // a short name two slices share (full in every dataset) names its dataset too
+  const lab=s=>bl.need.filter(x=>short(x)===short(s)).length>1?s:short(s);
+  h+=panel(`${term('champion','Champion')} baseline`,`<div class="ov-bchips">${bl.need.map(s=>`<a class="ov-bchip ${ovRunning(champ,s)?'run':''}" href="#slices/${enc(s)}" title="${esc(s)}">${esc(lab(s))}<span class="faint"> ${ovN(st.slices[s]?.n)}</span></a>`).join('')}</div>`,
    {meta:`${bl.need.length} of ${plural(nr,'slice')} not run`,cls:'section ov-base'});
  }
 
