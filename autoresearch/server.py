@@ -223,6 +223,12 @@ def _state(p: Project) -> dict:
         board.setdefault(sl, {})[model] = dict(task=latest["id"], ended=latest["ended"], runs=len(runs),
                                               baseline_contract=contract_of(latest), **summary)
     fp = _fp(p)
+    # each row's paired delta vs the champion under the row's own harness (as the gate pairs it), so lists that
+    # compare latest runs can show a delta where a matched pool exists instead of "Different harness"
+    vs = _memo("versus", p, fp, lambda: {sl: {m: p.versus_champion(m, sl) for m in ms} for sl, ms in board.items()})
+    for sl, ms in board.items():
+        for m, e in ms.items():
+            e["vs_champion"] = (vs.get(sl) or {}).get(m)
     gates = _memo("gates", p, fp, lambda: _gates(p, models))
     gl = _memo("goals", p, fp, lambda: goals(p))
     infer_parents(tasks)

@@ -278,5 +278,26 @@ class PooledErrorShare(unittest.TestCase):
         self.assertNotIn("warning", arx(p, "goal", "status"))
 
 
+class LeaderboardPairsUnderTheRowsHarness(unittest.TestCase):
+    def test_rows_carry_the_matched_delta(self):
+        from autoresearch import server
+        p = project([])
+        p.add_slice("qa/full", [f"x{i}" for i in range(4)], kind="full")
+        p.add_model("v0", status="champion")
+        p.add_model("old", parent="v0")
+        p.add_model("lone", parent="v0")
+        run(p, "v0", "qa/full", [1, 0, 0, 0], contract="A")
+        run(p, "v0", "qa/full", [1, 1, 1, 0], contract="B")  # the champion's latest run: another harness
+        run(p, "old", "qa/full", [1, 1, 0, 0], contract="A")
+        run(p, "lone", "qa/full", [1, 1, 0, 0], contract="C")
+        board = server._state(p)["leaderboard"]["qa/full"]
+        self.assertNotEqual(board["old"]["baseline_contract"], board["v0"]["baseline_contract"])
+        v = board["old"]["vs_champion"]
+        self.assertEqual((v["state"], v["baseline_contract"], v["n"], v["cand_runs"], v["base_runs"]), ("paired", "A", 4, 1, 1))
+        self.assertAlmostEqual(v["delta"], 0.25)  # vs the champion's run under A, not its newer B run
+        self.assertEqual(board["lone"]["vs_champion"]["state"], "champion_other_harness")
+        self.assertIsNone(board["v0"]["vs_champion"])
+
+
 if __name__ == "__main__":
     unittest.main()

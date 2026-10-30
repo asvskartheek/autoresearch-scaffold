@@ -491,6 +491,29 @@ class Project:
                 return scale
         return "binary"
 
+    def versus_champion(self, model: str, slice_name: str) -> dict | None:
+        """The model's paired delta vs the champion on one slice under the model's own latest harness, as the gate
+        pairs it: its runs under that contract against the champion's runs under the same one. None for the champion
+        itself or a model with no run; `state` "paired" (with paired()'s fields, runs and errors on each side),
+        "champion_other_harness" (the champion ran the slice, never under this harness) or "no_champion_run"."""
+        champ = self.champion()
+        mine = self.score_runs(model, slice_name)
+        if not champ or champ == model or not mine:
+            return None
+        theirs = self.score_runs(champ, slice_name, reference_model=model)
+        out = dict(champion=champ, baseline_contract=contract_of(mine[-1]), cand_runs=len(mine), base_runs=len(theirs))
+        if not theirs:
+            return out | dict(state="champion_other_harness" if self.slice_evals(champ, slice_name) else "no_champion_run")
+        cont = self.is_continuous(slice_name)
+        crows = [r for t in mine for r in self.rows(t["id"])]
+        brows = [r for t in theirs for r in self.rows(t["id"])]
+        ce, be = pool_errors(crows), pool_errors(brows)
+        sign = 1 if self.config.get("higher_is_better", True) else -1
+        return out | dict(state="paired", cand_task=mine[-1]["id"], base_task=theirs[-1]["id"],
+                          cand_errors=ce["pooled_errors"], base_errors=be["pooled_errors"],
+                          cand_error_share=ce["error_share"], base_error_share=be["error_share"],
+                          **paired(per_id(crows, cont), per_id(brows, cont), sign))
+
     def is_continuous(self, slice_name: str, tasks: list[dict] | None = None) -> bool:
         return self.slice_scale(slice_name, tasks) == "continuous"
 
