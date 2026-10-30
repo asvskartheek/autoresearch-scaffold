@@ -104,6 +104,23 @@ def _check(q, o, a, why=""):
     return dict(q=q, o=o, a=fmt(a), why=why) if fmt(a) in o and len(o) >= 2 else None
 
 
+def _count(a: int, near: list, lo: int, hi: int, k: int = 3) -> list[int]:
+    """`a` and up to `k` wrong counts a learner could reach: the slips in `near` first, then neighbours of `a`, all
+    distinct and inside [lo, hi] (no "13" on a 3-example slice)."""
+    out = [a]
+    for x in list(near) + [a + d for d in (1, -1, 2, -2, 5, -5)]:
+        if len(out) > k:
+            break
+        if isinstance(x, (int, float)) and lo <= int(x) <= hi and int(x) not in out:
+            out.append(int(x))
+    return out
+
+
+def _others(a: str, pool, k: int = 2) -> list[str]:
+    """`a` and up to `k` other names from `pool`, none equal to `a`."""
+    return [a] + [x for x in dict.fromkeys(pool) if x and x != a][:k]
+
+
 def _n(x) -> str:
     return f"{int(round(x)):,}"
 
@@ -199,12 +216,24 @@ def lesson_goal(p, L, learn):
     goals = L.get("goals") or _goals(p)
     if goals:
         g = goals[0]
+        cs = []
         if g.get("value") is not None and g.get("kpi", "score") == "score" and g.get("n") and not learn._cont(p, g["slice"]):
             n = int(g["n"])
-            fig = dict(kind="goal", N=n, have=round(g["value"] * n), need=math.ceil(g["target"] * n - 1e-9), slice=g["slice"], title=g.get("title") or g["name"])
+            have, need = round(g["value"] * n), math.ceil(g["target"] * n - 1e-9)
+            fig = dict(kind="goal", N=n, have=have, need=need, slice=g["slice"], title=g.get("title") or g["name"])
+            left = need - have
+            head = f"On {g['slice']} the champion gets {_n(have)} of {_n(n)} right. The goal needs {_n(need)}."
+            b = max(1, min(have, left // 4))
+            if left > 1 and have:  # the figure prints the gap; ask it after a candidate also breaks some
+                cs.append(_check(f"{head} A candidate fixes {_n(left)} of the champion's wrong answers but breaks {_n(b)} it had right. How many more does it still need?",
+                                 _count(b, [0, left, left - b, 2 * b], 0, n), b,
+                                 f"{_n(have)} + {_n(left)} − {_n(b)} = {_n(have + left - b)}, so {_n(need - have - left + b)} short of {_n(need)}. Broken answers cancel fixed ones."))
+            elif left > 0:  # a met goal has nothing to count; its evidence check stands alone
+                cs.append(_check(f"{head} How many more?", _count(left, [need, n - have, have], 0, n), left, f"{_n(need)} − {_n(have)} = {_n(left)}."))
         else:
             fig = dict(kind="goals", rows=[_goal_row(p, g, learn)])
-        return dict(say="This goal fixes the measurement and target for the project's claim; development results are evidence toward it, not substitutes for it.", fig=fig, checks=_goal_checks(p, g, learn))
+        return dict(say="This goal fixes the measurement and target for the project's claim; development results are evidence toward it, not substitutes for it.",
+                    fig=fig, checks=cs + _goal_checks(p, g, learn))
     return dict(say="No goal is registered yet. Define a measurement, a frozen slice and a target before claiming progress.",
                 fig=dict(kind="goals", rows=[]), checks=[_check("What makes a research goal testable?",
                      ["A named metric, frozen slice and target", "A model name alone", "A deadline alone"], "A named metric, frozen slice and target",
@@ -238,6 +267,18 @@ def lesson_champion(p, L, learn):
     champ = next((r for r in rs if r["champ"]), None)
     cs = [_check("A new idea is measured against what?", ["The champion, on the same examples", "Its own earlier run", "Nothing"],
                  "The champion, on the same examples", "Use the same examples and compatible evaluation setup; a changed judge or harness can confound the comparison.")]
+    nxt = next((r for r in rs if not r["champ"]), None)
+    if champ and nxt and n and not cont and champ["v"] >= nxt["v"]:
+        a, b = round(champ["v"] * n), round(nxt["v"] * n)
+        cs.insert(0, _check(f"On {sl}, how many more examples does the champion get right than {nxt['label']}?",
+                            _count(a - b, [a, b, n - a, 2 * (a - b)], 0, n), a - b,
+                            f"{_n(a)} − {_n(b)} = {_n(a - b)} of the same {_n(n)} examples."))
+    elif champ and nxt and n and not cont:
+        a, b = round(champ["v"] * n), round(nxt["v"] * n)
+        ans = "No: only a recorded promotion changes the champion"
+        cs.insert(0, _check(f"On {sl}, {nxt['label']} gets {_n(b)} of {_n(n)} right, more than the champion's {_n(a)}. Is it the champion now?",
+                            [ans, "Yes: the highest score is the champion", "Yes, once it is measured on the full slice"], ans,
+                            "A candidate becomes the champion when it passes its gates and the promotion is recorded, not by a single higher score."))
     return dict(say="The champion is the registered reference system. A fair candidate comparison uses the same examples and a compatible evaluation setup.", fig=fig, checks=cs)
 
 
@@ -252,6 +293,10 @@ def lesson_candidate(p, L, learn):
     cs = [_check("A candidate passes every required rung, but no promotion has been recorded. What is its status?",
                  ["Ready for promotion; still a candidate", "Already the champion", "Rejected until retrained"],
                  "Ready for promotion; still a candidate", "Passing gates makes promotion eligible. The registered champion changes only when promotion is recorded.")]
+    rej = sum(v.get("status") == "rejected" for v in L["models"].values())
+    if rej:
+        cs.append(_check("How many candidates have been rejected in this project so far?", _count(rej, [rej + 1, rej - 1, rej * 2], 0, len(L["models"])), rej,
+                         "Rejected candidates stay in the ledger with their reason. Negative results are results."))
     return dict(say="A candidate tests a proposed change. Its gates can make it ready for promotion; the recorded promotion is a separate decision.",
                 fig=dict(kind="list", rows=rows_), checks=cs)
 
@@ -276,9 +321,19 @@ def _slice_rows(p, learn, only=None):
 def lesson_slice(p, L, learn):
     rs = _slice_rows(p, learn, p.config.get("primary_dataset") or None)
     picked = rs[0]["id"] if rs else "a frozen slice"
+    cs = []
+    shown = rs[:8]
+    # a 0/1 slice smaller than the largest, so its own denominator and the bigger one differ
+    pick = next((r for r in shown if r["n"] and r["n"] < shown[0]["n"] and not learn._cont(p, r["id"])), None) if shown else None
+    if pick:
+        big = pick["dataset_n"] or shown[0]["n"]
+        one = lambda m: _amt("pts", 100 / m)
+        cs.append(_check(f"One more right answer on {pick['id']} moves a model's score on it by how much?",
+                         [one(pick["n"]), one(big), "+1 pt", one(pick["n"] / 2)], one(pick["n"]),
+                         f"{pick['id']} has {_n(pick['n'])} examples, so one is 100 / {_n(pick['n'])} = {one(pick['n'])}. Each slice is its own denominator."))
     return dict(say="A slice fixes which examples are measured. Its size is not a score, and slices from different datasets do not share a denominator.",
-                fig=dict(kind="slices", scale_max=max((r["n"] for r in rs), default=1), rows=rs[:8]),
-                checks=[_check(f"One example must change in {picked}. How can earlier results remain interpretable?",
+                fig=dict(kind="slices", scale_max=max((r["n"] for r in rs), default=1), rows=shown),
+                checks=cs + [_check(f"One example must change in {picked}. How can earlier results remain interpretable?",
                                ["Create a new slice and measure both systems on it", "Edit the frozen slice and reuse the old scores", "Compare the new candidate score with any old baseline"],
                                "Create a new slice and measure both systems on it", "A changed ID set is a new measurement scope; both sides need matching evidence.")])
 
@@ -290,10 +345,16 @@ def lesson_paired(p, L, learn):
         w, l, n, ex = v["wins"], v["losses"], v["n"], False
     else:
         w, l, n, ex = 12, 5, 200, True
-    right = f"{100 * (w - l) / n:+.2f} pts"
+    # the figure already prints (fixed − broken) / n, so ask for the Δ after k of the fixed examples break instead
+    k = min(w, 10)
+    w2, l2 = w - k, l + k
+    right = _amt("pts", 100 * (w2 - l2) / n)
     return dict(say="Pair each example: fixed if the new model gets it and the champion did not, broken the other way. Δ = (fixed − broken) / n.",
                 fig=dict(kind="paired", fixed=w, broken=l, n=n, example=ex, provenance="Frozen promotion evidence" if not ex else ""),
-                checks=[_check(f"On the same {n:,} examples, one extra case changes from correct under the baseline to wrong under the candidate. Fixed cases do not change. What happens to paired Δ?",
+                checks=[_check(f"{w:,} fixed, {l:,} broken, n = {n:,}. If {k} of the fixed examples had broken instead, what would the paired Δ be?",
+                               [_amt("pts", 100 * x / n) for x in (w2 - l2, w2 - l, w - l, l2 - w2)], right,
+                               f"{w2:,} fixed and {l2:,} broken: ({w2:,} − {l2:,}) / {n:,} = {right}. Each one moves from fixed to broken, so Δ falls twice as fast."),
+                        _check(f"On the same {n:,} examples, one extra case changes from correct under the baseline to wrong under the candidate. Fixed cases do not change. What happens to paired Δ?",
                                [f"It falls by {100 / n:.3g} points", f"It rises by {100 / n:.3g} points", "It stays unchanged"], f"It falls by {100 / n:.3g} points",
                                "The broken count increases by one while n and the fixed count stay constant."),
                         _check("Two models score the same on one slice. Can their paired Δ be non-zero?", ["No", "Yes"], "No",
@@ -306,15 +367,34 @@ def _ci_of(p, learn, c):
     return dict(delta=v["delta"], lo=min(v["lo"], v["hi"]), hi=max(v["lo"], v["hi"]), n=v["n"], unit=v.get("unit") or "pts", better=v.get("better", 1))
 
 
+def _about(x: float) -> str:
+    return f"About {float(f'{x:.2g}'):,.0f}"
+
+
+def _reach_zero(fig):
+    """Holding the effect fixed, the n at which the interval's edge reaches zero: n × (half-width / |Δ|)²."""
+    d, half, n = abs(fig["delta"]), (fig["hi"] - fig["lo"]) / 2, fig["n"]
+    if d < 1e-12 or half <= 0:
+        return None
+    r = half / d
+    at = n * r * r
+    if at < 4:
+        return None
+    return _check(f"Δ {_amt(fig['unit'], fig['delta'])}, 90% interval {_amt(fig['unit'], fig['lo'])} to {_amt(fig['unit'], fig['hi'])} on n = {n:,}. "
+                  "Holding the effect fixed, at about what n does the interval's edge reach zero?",
+                  [_about(at), _about(n * r), _about(at * 4), _about(at / 4)], _about(at),
+                  f"The width shrinks as 1/√n: n × ({_amt(fig['unit'], half).lstrip('+')} / {_amt(fig['unit'], d).lstrip('+')})² ≈ {at:,.0f}. "
+                  + ("More examples than that make it clear zero." if fig["lo"] <= 0 <= fig["hi"] else "Fewer than that and it would cross zero."))
+
+
 def lesson_interval(p, L, learn):
     noisy = next((c for c in L["checks"] if c.get("noisy") and c.get("lo") is not None and abs(c.get("delta") or 0) > 1e-9), None)
     src = _ci_of(p, learn, noisy) if noisy else None
     fig = dict(kind="interval", **(src or dict(delta=1.6, lo=-0.5, hi=3.7, n=185, unit="pts")), example=src is None, source_slice=noisy.get("slice", "") if noisy else "")
-    crosses = fig["lo"] <= 0 <= fig["hi"]
-    ans = "Not yet: it crosses zero" if crosses else "Yes: it clears zero"
     return dict(say="An interval that crosses zero does not establish a direction. Holding the effect fixed, its width shrinks as 1/√n.",
                 fig=fig,
-                checks=[_check("In this fixed-effect projection, four times as many independent observations would do what to interval width?",
+                checks=[_reach_zero(fig),
+                        _check("In this fixed-effect projection, four times as many independent observations would do what to interval width?",
                                ["Halve the width", "Quarter the width", "Leave the width unchanged"], "Halve the width",
                                "Width scales as 1/√n, so multiplying n by four divides width by two. A real new sample may also change the measured effect."),
                         _check("Under this fixed-effect projection, what can reduce uncertainty?", ["More independent observations from the same population", "Recounting identical observations as new data"], "More independent observations from the same population",
@@ -328,14 +408,20 @@ def lesson_gate(p, L, learn):
         k = 100 if v["unit"] == "pts" else (-1 if learn._neg(p, c["slice"]) else 1)
         fig = dict(kind="gate", rule=c["rule"], bar=k * (c.get("threshold") or 0), delta=v["delta"], unit=v["unit"],
                    slice=learn._short(c["slice"]), model=learn._title(p, c["model"]), rung=c["rung"], better=-1 if k < 0 else 1)
-        ok = c["state"] == "pass"
-        q = f"{fig['model']} on {fig['slice']}: it {learn._rule_text(p, c)}. Δ {learn.sd(p, c['slice'], c['delta'])}. Pass or fail?"
+        rule = f"{fig['model']} on {c['slice']}: it {learn._rule_text(p, c)}. It measured Δ {learn.sd(p, c['slice'], c['delta'])}."
     else:
         fig = dict(kind="gate", rule="not_worse", bar=-1.0, delta=-0.4, unit="pts", slice="random100", model="Example", rung="random100", example=True)
-        ok, q = True, "It may lose at most 1 pt. Δ −0.4 pts. Pass or fail?"
+        rule = "It may lose at most 1 pt. It measured Δ −0.4 pts."
+    # the figure shows this run's verdict; ask for the Δ on the other side of the bar
+    sign, bar = fig.get("better", 1), fig["bar"]
+    other = 2 * bar - fig["delta"] if abs(fig["delta"] - bar) > 1e-9 else bar - sign * (1 if fig["unit"] == "pts" else abs(bar) or 1)
+    other = round(other, 1) if fig["unit"] == "pts" else float(f"{other:.3g}")  # as precise as the Δ it mirrors reads
+    ok = sign * other > sign * bar if fig["rule"] == "better" else sign * other >= sign * bar
+    q = f"{rule} Same rule, but say the Δ had been {_amt(fig['unit'], other)}. Pass or fail?"
     direction = "below" if fig.get("better", 1) < 0 else "above"
     return dict(say=f"For this metric, improvement moves Δ {direction} zero. The configured gate compares Δ with its declared bar; uncertainty is shown separately.", fig=fig,
-                checks=[_check("The candidate passes this comparison, but the next run uses a changed harness. Can the old gate result establish that the new run passes?",
+                checks=[_check(q, ["Pass", "Fail"], "Pass" if ok else "Fail", f"The bar is {_amt(fig['unit'], bar)}; pass when Δ is on the good side of it."),
+                        _check("Say a candidate passes this comparison, but the next run uses a changed harness. Can the old gate result establish that the new run passes?",
                                ["No; obtain a compatible baseline and apply the declared rule", "Yes; the model name is unchanged", "Yes; a prior pass applies to every harness"],
                                "No; obtain a compatible baseline and apply the declared rule", "A gate result belongs to its measured scope and evaluation setup; it is not a permanent property of a model.")])
 
@@ -386,7 +472,7 @@ def lesson_rung(p, L, learn):
                          ["No; required measurements and rules must be declared", "Yes; no check failed"],
                          "No; required measurements and rules must be declared", "An absence of checks is not evidence of a successful change.")])
     k = len(r["checks"])
-    cs = [_check(f"A rung has {k} required checks and one fails. Does the rung pass?", ["No", "Yes"], "No",
+    cs = [_check(f"A rung has {k} required check{'s' if k != 1 else ''} and one fails. Does the rung pass?", ["No", "Yes"], "No",
                  "Every required check on a rung must pass.")]
     return dict(say="A rung passes only when every required check on it passes.",
                 fig=dict(kind="rung", rung=r["rung"], checks=r["checks"], model=r.get("model")), checks=cs)
@@ -450,14 +536,29 @@ def lesson_brief(p, L, learn):
 def lesson_project_goal(p, L, learn):
     goals = L.get("goals") or _goals(p)
     rows_ = [_goal_row(p, g, learn) for g in goals]
+    cs = []
+    if goals and rows_[0]["measured"]:
+        g, r = goals[0], rows_[0]
+        title, sl = r["label"], g["slice"]
+        ds = sl.split("/", 1)[0]
+        pool = sorted((s for s in p.slices() if s != sl), key=lambda s: s.split("/", 1)[0] != ds)
+        if pool:
+            ans = f"No: it is measured only on {sl}"
+            cs.append(_check(f"A candidate improves on {pool[0]}. Does that alone move “{title}”?",
+                             [ans, "Yes: any slice of the dataset counts", "Yes, if the gain is large enough"], ans,
+                             f"A goal is one target on one frozen slice: {sl}" + (f", n = {_n(r['n'])}." if r.get("n") else ".")))
     return dict(say="Each goal keeps its own metric, slice and target. Unmeasured goals remain requirements, not results." if goals else "No goal has been registered.",
-                fig=dict(kind="goals", rows=rows_), checks=_goal_checks(p, goals[0], learn) if goals else [])
+                fig=dict(kind="goals", rows=rows_), checks=cs + (_goal_checks(p, goals[0], learn) if goals else []))
 
 
 def lesson_project_data(p, L, learn):
     dss = [dict(name=k, title=learn._first(v.get("title") or k, 80), n=v.get("size")) for k, v in p.datasets().items()]
     rs = _slice_rows(p, learn)
     checks = []
+    small = min(rs, key=lambda r: r["n"]) if rs else None
+    if small and sum(r["n"] == small["n"] for r in rs) == 1:
+        checks.append(_check("Which slice is the smallest?", _others(small["id"], [r["id"] for r in rs if r is not small]), small["id"],
+                             f"{small['id']}: {_n(small['n'])} examples."))
     if rs:
         selected = rs[0]
         checks.append(_check(f"A candidate is measured on {selected['id']}, but its baseline uses different example IDs. Can their score difference isolate the change?",

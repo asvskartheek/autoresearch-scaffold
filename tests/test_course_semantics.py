@@ -30,10 +30,13 @@ class CourseSemantics(unittest.TestCase):
         run(p,'base',[0,0,0],'ds/tiny');p.open_goal('g','Three-case goal','ds/tiny',1)
         lesson=course.lesson_goal(p,course._ledger(p),learn)
         self.assertEqual((lesson['fig']['N'],lesson['fig']['have'],lesson['fig']['need']),(3,0,3))
-        options=[o for c in lesson['checks'] for o in c['o']]
-        self.assertNotIn('13',options)
-        self.assertTrue(all(not o.isdigit() for o in options))
-        self.assertIn('ds/tiny',lesson['checks'][0]['q'])
+        more=lesson['checks'][0]
+        self.assertIn('0 of 3',more['q']);self.assertIn('ds/tiny',more['q'])
+        self.assertEqual(more['a'],'3')
+        self.assertNotIn('13',more['o'])
+        self.assertEqual(len(more['o']),len(set(more['o'])))
+        self.assertGreaterEqual(len(more['o']),3)
+        self.assertTrue(all(0<=int(o)<=3 for o in more['o']))  # every distractor is a count this slice can hold
 
     def test_projector_scopes_never_claim_thirteen_of_forty(self):
         p=CapturedProject('projector')
@@ -70,14 +73,19 @@ class CourseSemantics(unittest.TestCase):
         self.assertIn('no champion is registered',lesson['checks'][0]['q'])
         self.assertNotIn('80 of 100',json.dumps(lesson))
 
-    def test_real_project_goal_options_require_evidence_not_count_guessing(self):
+    def test_real_project_goal_counts_stay_inside_the_goal_slice(self):
         for key in FIXTURES:
             p=CapturedProject(key)
-            lesson=course.lesson_goal(p,{'goals':course._goals(p)},learn)
+            goals=course._goals(p)
+            lesson=course.lesson_goal(p,{'goals':goals},learn)
+            n=goals[0].get('n') if goals else None
             for check in lesson['checks']:
                 self.assertIn(check['a'],check['o'])
                 self.assertEqual(len(check['o']),len(set(check['o'])))
-                self.assertTrue(all(not o.replace(',','').isdigit() for o in check['o']))
+                nums=[int(o.replace(',','')) for o in check['o'] if o.replace(',','').isdigit()]
+                if nums:
+                    self.assertTrue(n and all(0<=x<=n for x in nums),key)
+                    self.assertEqual(len(nums),len(check['o']),key)
 
     def test_passing_candidate_is_not_automatically_promoted(self):
         p=CapturedProject('projector')
