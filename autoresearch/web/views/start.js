@@ -102,10 +102,14 @@ function nowBlock(){
 const rungOf=(g,slice)=>g?.rungs?.find(r=>(r.checks||[]).some(c=>c.slice===slice))?.rung;
 function nextSteps(){
  const st=S.state,out=[],gates=st.gates||{},goals=Object.values(st.goals||{}).filter(g=>g.status==='open');
+ // a new project: the eval set, then the model to beat, then the goal
+ const sls=Object.keys(st.slices||{}),full=sls.find(x=>/\/full$/.test(x));
+ if(!sls.length)out.push({h:'#slices',t:'Register the eval set: its full slice and random samples',c:'arx dataset add <name> --ids-file <ids.txt>'});
  if(!st.champion){
   const g=goals[0];
   out.push({h:g?`#goal/${enc(g.name)}`:'#models',t:`Name a ${term('champion')}: register the model to beat${g?` and run it on <b>${esc(short(g.slice))}</b>`:''}`,c:'arx model add <name> --champion'});
  }
+ if(!goals.length)out.push({h:'#goals',t:`Open a ${term('goal')}: the target KPI on one slice`,c:`arx goal open <goal> --title "<title>" --slice ${full||'<slice>'} --target <target>`});
  for(const g of goals)if(g.value==null&&st.champion)
   out.push({h:`#goal/${enc(g.name)}`,t:`Measure the goal: run ${mn(st.champion)} on <b>${esc(g.slice)}</b>${st.config.baseline_cmd?'':' — no harness configured; record its output rows'}`,c:goalMeasureCmd(g)});
  // the champion's baseline (`arx baseline`): slices it has no run on, which the gates and hills compare against
