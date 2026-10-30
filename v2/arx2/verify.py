@@ -462,3 +462,22 @@ def guard(p: Project, action: str, key: str) -> list[dict]:
     for n in checks:
         out += [f for f in CHECKS[n](c) if f["level"] == "error" and f["entity"] in ents]
     return out
+
+
+RULES = """# Rules arx2 enforces
+
+`arx2 verify` checks each one against the ledger. Errors block `arx2 promote` and `arx2 goal close --status achieved`.
+
+- Hills need evidence: a hill names its failing items (a symptom set or the pattern's ids), so the problem shows on real rows.
+- Prevalence is backed by ids: "15 of 57" lists at least 15 item ids; a count nobody can check is a guess.
+- Flakiness needs same-model repeats: two complete runs of one candidate on one set; different models differ for other reasons.
+- Broken runs do not count: all zeros, mostly errors or missing rows mean the harness failed, not the model.
+- Frozen sets stay frozen: every run uses its set's exact ids, so scores on one set compare.
+- Promote through the ladder: a champion passed every rung at the time it was promoted.
+- Goals are achieved by the ledger: the champion meets the target on the goal's set, now and when it was closed.
+- Predict before you run: a candidate says what should move, and by how much, before its first rung.
+- Hill sets share no items: symptom, eval, training and control sets are disjoint, or a gain is not a gain.
+- Papers pass `paper check` before they are published.
+- Answers lead with a figure: one picture of the rows, then about 60 words.
+- Verify before reporting: run `arx2 verify` before you report any result, and fix every error.
+"""

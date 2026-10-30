@@ -9,7 +9,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import api, asks, paper, stats
+from . import api, asks, paper, stats, verify
 from .axi import clip, emit, fail, kv, table
 from .store import LedgerError, Project, check_name, find_root, ids_hash, register, registry, slug
 from .view import Views
@@ -74,11 +74,15 @@ def cmd_home(a):
                 nexts.append({"cand": ck, "rung": r["name"], "set": r["set"], "state": r["v"]["state"]})
                 break
     blocks.append(table("next_gates", nexts, ["cand", "rung", "set", "state"]))
+    sm = verify.summary(verify.audit(p, v=v))
+    blocks.append(f"verify: {sm['errors']} errors, {sm['warnings']} warnings")
     hints = ['arx2 task start --name "<two words>" --about "<what and why>"', "arx2 gate <cand>"]
     if unproven:
         k0 = unproven[0]["key"]
         hints.insert(0, f'arx2 set add {k0}-symptom --name "<two words>" --dataset <d> --role symptom --ids-file <champion failures>.txt '
                         f'(or arx2 hill close {k0} --status closed --reason "<why>")')
+    if sm["errors"]:
+        hints.insert(0, f"arx2 verify  (fix {sm['errors']} error{'s' if sm['errors'] != 1 else ''} before reporting)")
     if any(t["stale"] for t in running):
         hints.insert(0, "arx2 task end <id> --status failed --result \"<why it stalled>\"")
     emit(*blocks, help=hints)
@@ -96,9 +100,42 @@ def cmd_init(a):
     p.append("project", name=name, task=a.task,
              measure={"name": a.measure, "scale": a.scale, "direction": a.direction, "unit": a.unit})
     register(a.key or slug(name), root)
+    (p.dir / "RULES.md").write_text(verify.RULES)
     emit(f"created: {p.dir}", help=['arx2 set add <key> --name "<two words>" --dataset <d> --role eval --ids-file ids.txt',
                                    'arx2 goal open <key> --name "<two words>" --vague "<the wish>" --set <set> --target 0.9',
-                                   "arx2 up"])
+                                   "arx2 up", "arx2 rules"])
+
+
+def cmd_rules(a):
+    try:
+        f = P().dir / "RULES.md"
+        print(f.read_text() if f.exists() else verify.RULES, end="")
+    except LedgerError:
+        print(verify.RULES, end="")
+
+
+def _refuse(errs, what):
+    emit(table("verify", errs, ["check", "entity", "what"]), *[f"fix: {e['fix']}" for e in errs[:5]])
+    fail(f"{what}: {len(errs)} error{'s' if len(errs) != 1 else ''} in the ledger bear on it", fix="arx2 verify")
+
+
+def cmd_verify(a):
+    p = P()
+    try:
+        fs = verify.audit(p, a.check)
+    except KeyError:
+        fail(f"no check {a.check!r}", fix="arx2 verify --check " + "|".join(verify.CHECKS))
+    sm = verify.summary(fs, 1 if a.check else None)
+    if a.json:
+        emit(as_json={**sm, "findings": fs})
+    else:
+        line = f"verify: {sm['errors']} errors, {sm['warnings']} warnings across {sm['checks']} checks"
+        shown = [f for f in fs if a.all or f["level"] != "info"]
+        fixes = list(dict.fromkeys(f"fix: {f['entity']}: {f['fix']}" for f in fs if f["level"] == "error"))
+        emit(line, table("findings", shown, ["level", "check", "entity", "what"]) if shown else "", *fixes,
+             help=["arx2 verify --check <name>", "arx2 rules"] + (["arx2 verify --all  (adds info lines)"] if not a.all else []))
+    if sm["errors"]:
+        sys.exit(1)
 
 
 def cmd_projects(a):
@@ -161,6 +198,9 @@ def cmd_goal_close(a):
         tr = Views(p).goal_track(a.key)
         if not tr["met"]:
             fail(f"the champion is at {tr['current']} on {g['set']}, target {g['target']}", fix="keep climbing; a goal is achieved by the ledger, not by hand")
+        errs = verify.guard(p, "goal_close", a.key)
+        if errs:
+            _refuse(errs, f"goal {a.key} cannot be closed as achieved")
     p.append("goal.status", key=a.key, status=a.status, reason=a.reason)
     emit(f"goal {a.key}: {a.status}")
 
@@ -304,6 +344,9 @@ def cmd_cand_status(a, status):
         if s["champion"] == a.key:
             emit(f"noop: {a.key} is already champion")
             return
+        errs = verify.guard(p, "promote", a.key)
+        if errs:
+            _refuse(errs, f"{a.key} cannot be promoted")
         p.append("champion", key=a.key, reason=a.reason, previous=s["champion"])
     else:
         p.append("candidate.status", key=a.key, status=status, reason=a.reason)
@@ -678,6 +721,10 @@ def build() -> argparse.ArgumentParser:
     x.add_argument("--direction", choices=["max", "min"], default="max")
     x.add_argument("--unit", default=""); x.add_argument("--key"); x.add_argument("--root")
     cmd("projects", cmd_projects, "list registered projects")
+    cmd("rules", cmd_rules, "the practices arx2 enforces, and why")
+    x = cmd("verify", cmd_verify, "audit the ledger: every claim backed by its own rows")
+    x.add_argument("--json", action="store_true"); x.add_argument("--check", help="run one check")
+    x.add_argument("--all", action="store_true", help="also show info lines")
 
     x = cmd("set", None, "frozen item lists"); ssp = x.add_subparsers(dest="sub")
     y = ssp.add_parser("add"); y.set_defaults(fn=cmd_set_add)
