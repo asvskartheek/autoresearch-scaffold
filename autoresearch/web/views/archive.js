@@ -149,7 +149,8 @@ VIEWS.archive=()=>{
  const row=(t,depth=0,open=false)=>{
   const [sl,sc]=wbState(t),ks=depth?[]:desc(t),nk=ks.length,tk=took(t),n=t.summary?.n,s=score(t),c=cont(t);
   const fold=nk?`<button class="arc-fold ${open?'on':''}" type="button" aria-expanded="${open}" onclick="event.stopPropagation();archiveFold('${esc(t.id)}')">${plural(nk,'sub-task')}</button>`:'';
-  const sub=[esc(wbKind(t.kind||'other')),t.agent&&'by '+esc(t.agent),t.model&&`<span class="arc-mi">${mn(t.model)}</span>`].filter(Boolean).join(' · ');
+  // the model (its own column on a wide screen) moves into this line on a narrow one, separator and all
+  const sub=[esc(wbKind(t.kind||'other')),t.agent&&'by '+esc(t.agent)].filter(Boolean).join(' · ')+(t.model?`<span class="arc-mi"> · ${mn(t.model)}</span>`:'');
   const href=`#task/${enc(t.id)}`;
   return `<tr class="click ${depth?'arc-kid':''}" onclick="if(!event.target.closest('a,button'))location.hash='${href}'">
   <td class="arc-task"><div class="two"${depth?' style="padding-left:20px"':''}><a href="${href}" class="ell"><b>${esc(t.title)}</b></a><span class="sub ell">${sub}${fold?' · '+fold:''}</span></div></td>
