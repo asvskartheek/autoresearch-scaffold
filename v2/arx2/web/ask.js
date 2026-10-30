@@ -122,16 +122,22 @@ function pathOf(el, root = rootOf(el)) {
   return out.join(".");
 }
 // loc: a [data-ask] selector, a child-index path from #app, or "doc:<path>[~sentence]" from the paper's body.
-function findLoc(loc) {
+// The path is tried first; if the page changed around it, the clicked text (quoted in `what`) finds it again.
+function findLoc(loc, what) {
   if (!loc) return null;
   if (loc.startsWith("[")) return $(loc, $("#app"));
-  let el = loc.startsWith("doc:") ? docBody() : $("#app");
+  const root = loc.startsWith("doc:") ? docBody() : $("#app");
+  let el = root;
   for (const i of loc.replace(/^doc:/, "").split("~")[0].split(".")) el = el?.children[+i];
-  return el || null;
+  const [, want, head] = (what || "").match(/“([^”]+)”(?: in “([^”]+)”)?/) || [];
+  if (!want || loc.includes("~") || (el && clean(el.textContent).startsWith(want.slice(0, 40)))) return el || null;
+  const scope = (head && [...(root?.querySelectorAll(".sheet, .section") || [])].find((x) => clean(x.querySelector("h2, h3")?.textContent, 50) === head)) || root;
+  const hits = [...(scope?.querySelectorAll("*") || [])].filter((x) => clean(x.textContent) === want);
+  return hits.find((x) => !hits.some((y) => y !== x && x.contains(y))) || el || null;
 }
 // Where a loc is, in this page's viewport. A sentence runs from its first line's left to its last line's right.
-function boxOf(loc) {
-  const el = findLoc(loc);
+function boxOf(loc, what) {
+  const el = findLoc(loc, what);
   if (!el) return null;
   const n = loc.match(/~(\d+)$/)?.[1];
   const rs = [...((n != null && sentenceRange(el, +n)) || el).getClientRects()].filter((r) => r.width);
@@ -260,7 +266,7 @@ function placePins() {
     if (nt && focused) nt.focus();
   }
   for (const a of list) {
-    const r = boxOf(a.loc) || ($("#app h1") || $("#app .tabs"))?.getBoundingClientRect() || { right: 40, top: 80 };
+    const r = boxOf(a.loc, a.what) || ($("#app h1") || $("#app .tabs"))?.getBoundingClientRect() || { right: 40, top: 80 };
     const x = Math.min(r.right + scrollX - 10, scrollX + innerWidth - 30), y = r.top + scrollY - 10;
     const pin = $(`[data-ask-pin="${a.key}"]`, box);
     pin.style.left = `${x}px`; pin.style.top = `${y}px`;
