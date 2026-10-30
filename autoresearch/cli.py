@@ -294,6 +294,9 @@ def cmd_goal(a):
               f"  {st['model'] or 'no champion'}: {_kpi_fmt(st, st['value'])} vs {op} {tgt}"
               f"{'  MET' if st['met'] else '  not met' if st['value'] is not None else ''}"
               + (f"  Δ vs {st['baseline']} {_goal_delta(st, vs)} n={vs['n']}" if vs and vs['delta'] is not None else ""))
+        warn = _error_warning(st["model"], st.get("pooled_errors"), st.get("pooled_rows"))
+        if warn:
+            print(f"  {warn}")
         for h, s in st["hills"].items():
             print(f"  hill {h} [{s}]")
 
@@ -308,6 +311,15 @@ def cmd_model(a):
 
 def cmd_reject(a):
     Project().set_model_status(a.name, "rejected", a.reason)
+
+
+def _error_warning(model, errors, rows) -> str | None:
+    """A warning line when a pooled side is mostly errors: they still score 0, so the number is not the model's."""
+    from .core import ERROR_SHARE_WARN
+    if not rows or not errors or errors / rows < ERROR_SHARE_WARN:
+        return None
+    return (f"warning: {errors:,} of {rows:,} pooled rows of {model} are errors ({100 * errors / rows:.0f}%); "
+            f"the pooled score mostly measures the harness failing")
 
 
 def _bar(p, c) -> str:
@@ -348,6 +360,10 @@ def cmd_gate(a):
                          f"W/L {c['wins']}/{c['losses']}{' noisy' if c.get('noisy') else ''}")
             bar = ("" if c["rule"] in ("recorded", "manual") else _bar(p, c) if sl in p.slices() else _fmt(c["threshold"]))
             print(f"      {c['state']:<14} {sl:<28} {c['rule']} {bar}  {extra}".rstrip())
+            for side, who in (("cand", a.model), ("base", g["champion"])):
+                warn = _error_warning(who, c.get(f"{side}_errors"), c.get(f"{side}_rows"))
+                if warn:
+                    print(f"        {warn}")
     if g["next"]:
         print("next runs:")
         for n in g["next"]:

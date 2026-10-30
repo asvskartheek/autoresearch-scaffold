@@ -81,7 +81,10 @@ class HarnessMatchedGates(unittest.TestCase):
         self.assertIsNone(reference._paired(reference._Index(self.p), "cand", "base", "d/full", 1))
 
     def test_errors_are_exposed_without_altering_gate_policy(self):
-        self.runs[0]['summary'] = {'errors': 2}
+        # two of the champion's rows errored (they score 0, as before): counted from the pooled rows
+        rows = lambda tid: [{'id': i, 'score': v, **({'error': 'timeout'} if tid == 'old' and i in 'cd' else {})}
+                            for i, v in zip('abcd', self.values[tid])]
+        self.p.rows = Mock(side_effect=rows)
         check = self.p.gate('cand')['rungs'][0]['checks'][0]
         self.assertEqual(check['base_errors'], 2)
         self.assertEqual(check['cand_errors'], 0)

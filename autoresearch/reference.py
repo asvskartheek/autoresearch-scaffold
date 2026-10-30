@@ -23,7 +23,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from . import features
-from .core import goal_evidence_status, latest_shared, per_id, same_contract
+from .core import goal_evidence_status, latest_shared, per_id, pool_errors, same_contract
 from .readable import readable
 
 WEB = Path(__file__).with_name("web")
@@ -351,7 +351,9 @@ def _goal_status(p, ix, name, g, champ):
         vs = dict(_PAIRS[key])
     slr = ix.slices.get(sl) or {}
     cur = slr.get("hash")
-    status = dict(g, name=name, model=model, value=value, task=ev["id"] if ev else None,
+    errs = pool_errors([r for t in ix.compatible(model, sl) for r in ix.rows(t["id"])]) if model and ev else \
+        dict(pooled_rows=0, pooled_errors=0, error_share=None)
+    status = dict(g, name=name, model=model, value=value, task=ev["id"] if ev else None, **errs,
                 runs=len(ix.compatible(model, sl)) if model else 0,
                 met=value is not None and sign * (value - g["target"]) >= 0,
                 gap=None if value is None else sign * (g["target"] - value), vs_baseline=vs,

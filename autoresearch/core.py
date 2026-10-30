@@ -117,6 +117,16 @@ def summarize(rows: list[dict], continuous: bool = False) -> dict:
                 latency_p50=pct(0.5), latency_p95=pct(0.95), latency_mean=statistics.mean(lat) if lat else None)
 
 
+ERROR_SHARE_WARN = 0.2  # a pooled side with at least this share of errored rows is flagged (PROTOCOL.md § Rules of evidence)
+
+
+def pool_errors(rows: list[dict]) -> dict:
+    """How much of a pooled score is errors: rows pooled, rows errored, their share. Errors still count as 0 (or drop
+    out on a continuous slice); this only makes them visible wherever the pooled score is served."""
+    n, e = len(rows), sum(bool(r.get("error")) for r in rows)
+    return dict(pooled_rows=n, pooled_errors=e, error_share=e / n if n else None)
+
+
 def scale_of_rows(rows: list[dict]) -> str | None:
     """The scale a run's scores show: "binary" when every non-errored score is 0 or 1, else "continuous"; None when
     no row has a score to read (no rows, or every row errored)."""
@@ -309,7 +319,9 @@ class Project:
             vs = paired(per_id([r for t in mine for r in self.rows(t["id"])]),
                         per_id([r for t in theirs for r in self.rows(t["id"])]), sign)
         hills = {k: h.get("status") for k, h in self.hills().items() if h.get("goal") == name}
-        status = dict(g, name=name, model=model, value=value, task=ev["id"] if ev else None,
+        errs = pool_errors([r for t in self.score_runs(model, sl) for r in self.rows(t["id"])]) if model and ev else \
+            dict(pooled_rows=0, pooled_errors=0, error_share=None)
+        status = dict(g, name=name, model=model, value=value, task=ev["id"] if ev else None, **errs,
                     runs=len(self.score_runs(model, sl)) if model else 0,
                     met=value is not None and sign * (value - g["target"]) >= 0,
                     gap=None if value is None else sign * (g["target"] - value), vs_baseline=vs, hills=hills,
@@ -545,8 +557,13 @@ class Project:
                         c["state"] = "need_run"
                         next_runs.append((model_name, sl))
                     else:
-                        p = paired(per_id([row for t in cand_runs for row in self.rows(t["id"])], cont),
-                                   per_id([row for t in base_runs for row in self.rows(t["id"])], cont), sign)
+                        crows = [row for t in cand_runs for row in self.rows(t["id"])]
+                        brows = [row for t in base_runs for row in self.rows(t["id"])]
+                        p = paired(per_id(crows, cont), per_id(brows, cont), sign)
+                        ce_, be_ = pool_errors(crows), pool_errors(brows)
+                        c |= dict(cand_rows=ce_["pooled_rows"], cand_error_share=ce_["error_share"],
+                                  base_rows=be_["pooled_rows"], base_error_share=be_["error_share"],
+                                  error_warn=any((x["error_share"] or 0) >= ERROR_SHARE_WARN for x in (ce_, be_)))
                         if cont and p.get("base") is not None:
                             # margin / tolerance are written for 0/1 slices; on a continuous one read them as a
                             # fraction of the champion's mean (0.05 on ~160 MB allows 8 MB), not as raw units
@@ -555,8 +572,7 @@ class Project:
                         c |= dict(state="pass" if ok else "fail", noisy=p["lo"] is not None and p["lo"] < 0 < p["hi"],
                                   cand_task=ce["id"], base_task=be["id"],
                                   cand_runs=len(cand_runs), base_runs=len(base_runs),
-                                  cand_errors=sum(t.get("summary", {}).get("errors", 0) for t in cand_runs),
-                                  base_errors=sum(t.get("summary", {}).get("errors", 0) for t in base_runs), **p)
+                                  cand_errors=ce_["pooled_errors"], base_errors=be_["pooled_errors"], **p)
                     checks.append(c)
             states = {c["state"] for c in checks}
             if blocked:
