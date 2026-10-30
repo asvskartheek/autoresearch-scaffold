@@ -154,8 +154,9 @@ function promotion(name,m){
   {meta:meta+' · recomputed from the hill’s rows',cls:'section flush md-gp'});
 }
 
-// with no champion: promote the newest earlier baseline kept on record, else register one
-const champCmd=name=>{const b=Object.entries(S.state.models).filter(([k,o])=>k!==name&&(o.status==='historical'||o.status==='retired')).sort((a,b)=>(b[1].created||0)-(a[1].created||0))[0];
+// with no champion: promote the newest earlier baseline kept on record that has a complete run, else register one
+const hasRuns=k=>Object.values(S.state.leaderboard||{}).some(r=>r?.[k]);
+const champCmd=name=>{const b=Object.entries(S.state.models).filter(([k,o])=>k!==name&&(o.status==='historical'||o.status==='retired')&&hasRuns(k)).sort((a,b)=>(b[1].created||0)-(a[1].created||0))[0];
  return b?`arx promote ${b[0]} --force`:'arx model add <baseline> --champion'};
 const nextRow=(lead,c)=>`<div class="md-next"><span class="md-lead">${lead}</span>${cmd(c)}</div>`;
 // the next runs: one row per run still to start, with its command; runs already in progress are one row per task,
