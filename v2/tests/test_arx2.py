@@ -600,6 +600,7 @@ def test_directive_is_stored_with_its_anchor(proj):
     with pytest.raises(LedgerError):
         asks.ask(p, "@orchestrator  ", "set", "all", "x")
     assert "to" not in asks.ask(p, "Why is @orchestrator here?", "set", "all", "x")  # only a leading mention directs
+    assert "to" not in asks.ask(p, "@orchestrator@or", "set", "all", "x")  # the mention is a whole word
 
 
 def test_ask_poll_skips_directives_and_orchestrator_poll_gets_them(proj):

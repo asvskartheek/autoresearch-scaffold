@@ -21,7 +21,7 @@ CLAIM_S = 600
 MAX_WORDS, BARE_WORDS = 60, 30  # people read answers in a small box by what they clicked  # a claim older than this is taken to be abandoned
 SAVE_AS = ("note", "card", "paper")
 ORCH = "orchestrator"
-MENTION = re.compile(r"^\s*@orchestrator\b[\s:,]*", re.I)  # a message that starts with it is a directive, not a question
+MENTION = re.compile(r"^\s*@orchestrator(?:[\s:,]+|$)", re.I)  # a message that starts with it is a directive, not a question
 
 
 def new_key() -> str:
