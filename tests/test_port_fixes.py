@@ -157,5 +157,29 @@ class StatusGoalTarget(unittest.TestCase):
         self.assertIn("2/5 (40.0%) / 3/5 (50.0%) on qa/n5", out)
 
 
+class ProjectLinks(unittest.TestCase):
+    def test_links_carry_the_project_prefix(self):
+        import socket
+        from autoresearch import cli, projects
+        p = project([])
+        key = projects.register(p.root)
+        with socket.socket() as srv:  # stands in for the shared dashboard this project started
+            srv.bind(("127.0.0.1", 0))
+            srv.listen()
+            port = srv.getsockname()[1]
+            p.dir.mkdir(exist_ok=True)
+            (p.dir / "server.json").write_text(json.dumps(dict(port=port)))
+            self.assertEqual(cli._served(p), f"http://127.0.0.1:{port}/p/{key}")
+            with mock.patch.object(cli, "_up", return_value=f"http://127.0.0.1:{port}"), \
+                    mock.patch("autoresearch.answer.spawn"):
+                self.assertEqual(arx(p, "up").split()[0], f"http://127.0.0.1:{port}/p/{key}/")
+
+    def test_paper_fallback_link_carries_the_prefix(self):
+        from autoresearch import cli, projects
+        p = project([])
+        key = projects.register(p.root)
+        self.assertEqual(cli._project_url(p.root, "http://127.0.0.1:8890"), f"http://127.0.0.1:8890/p/{key}")
+
+
 if __name__ == "__main__":
     unittest.main()

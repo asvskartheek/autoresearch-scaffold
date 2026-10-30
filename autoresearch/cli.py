@@ -50,7 +50,7 @@ def cmd_init(a):
     # Step 0: the dashboard is up and setup itself is a visible task before any other work happens.
     from .projects import register
     register(root)
-    url = _up(root, a.port) if not a.no_serve else None
+    url = _project_url(root, _up(root, a.port)) + "/" if not a.no_serve else None
     os.chdir(root)
     t = Task(Project(root), "setup", "Project setup", "Environment, model and dataset preparation. Note each step; finish when the first eval can run.")
     t.note("arx init")
@@ -65,9 +65,18 @@ def _port_open(port: int) -> bool:
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
+def _project_url(root: Path, base: str) -> str:
+    """This project's URL on a dashboard at `base`: always /p/<key>, since one server serves every registered project
+    and its bare root shows whichever project started it. The bare base only for an unregistered project."""
+    from . import projects
+    key = projects.key_for(root)
+    return f"{base}/p/{key}" if key else base
+
+
 def _served(p: Project) -> str | None:
-    """The base URL that serves this project, or None. Its own server.json first; else any running dashboard of
-    another registered project, since one server lists every registered project at /p/<key>/."""
+    """This project's URL on a running dashboard (http://127.0.0.1:<port>/p/<key>), or None. Its own server.json
+    first; else any running dashboard of another registered project, since one server lists every registered project
+    at /p/<key>/."""
     from . import projects
     import urllib.request
     own = p.dir / "server.json"
@@ -76,7 +85,7 @@ def _served(p: Project) -> str | None:
     except (ValueError, TypeError):
         port = 0
     if port and _port_open(port):
-        return f"http://127.0.0.1:{port}"
+        return _project_url(p.root, f"http://127.0.0.1:{port}")
     key = projects.key_for(p.root)
     if not key:
         return None
@@ -143,7 +152,7 @@ def cmd_up(a):
     key = register(root)
     url = _up(root, a.port, a.restart)
     from .answer import spawn; spawn(root)  # agents answer comments and inbox items
-    print(f"{url}\n{url}/p/{key}/  (this project; every registered project is listed in the sidebar)")
+    print(f"{url}/p/{key}/  (this project; every registered project is listed in the sidebar)")
 
 
 def cmd_projects(a):
@@ -166,7 +175,7 @@ def cmd_sync(a):
         raise SystemExit("this is the vendored copy itself; run the installed `arx sync`")
     shutil.rmtree(dst, ignore_errors=True)
     shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__"))
-    print(f"vendored copy updated from {src}\n{_up(root, 8890, restart=True)}")
+    print(f"vendored copy updated from {src}\n{_project_url(root, _up(root, 8890, restart=True))}/")
 
 
 def cmd_dataset(a):
@@ -441,7 +450,7 @@ def cmd_paper(a):
     p = Project()
     base = _served(p)
     if not base:  # no dashboard serves it: point at the command rather than a dead port
-        base = "http://127.0.0.1:8890"
+        base = _project_url(p.root, "http://127.0.0.1:8890")
         print("(this project's dashboard is not running: `arx up` prints where it is served)", file=sys.stderr)
     if a.verb in ("add", "edit"):  # edit = republish; open pages swap the new version in without reloading
         if not a.name or not a.file:
