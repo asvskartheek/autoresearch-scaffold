@@ -53,7 +53,7 @@ const ovGoal=g=>{
  return `<a class="ov-goal ${U.isMain(g)?'':'ov-sub'}" href="#goal/${enc(g.name)}">
   <span class="ov-gh"><span class="ell ov-gt">${esc(g.title||g.name)}<span class="faint ov-gs"> · ${esc(g.slice)}</span></span><span class="ov-gd num">${fig}</span></span>
   <span class="ov-gb"><span class="ov-trk ${met?'met':''}"><i style="width:${(100*f).toFixed(1)}%"></i>${mark!=null?`<b style="left:${(100*mark).toFixed(1)}%"></b>`:''}</span>${ovSpark(g)}</span>
-  <span class="ov-ge num">${base}<span>Now <b>${now}</b></span><span>Target ${U.cmpSym(g)}&nbsp;${U.gt(g)}</span></span></a>`;
+  <span class="ov-ge num">${base}<span>Now <b>${now}</b></span><span>Target ${U.cmpSym(g)}&nbsp;${U.gt(g)}${U.ofP(g)}</span></span></a>`;
 };
 // the best run on the goal slice over time, as a step, with the target dashed
 const ovSpark=g=>{
