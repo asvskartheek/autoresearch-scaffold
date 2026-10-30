@@ -792,7 +792,7 @@ section("unknown", () => {
   const U = D.unknown;
   const text = u => ({
     not_run: [`not run`, "", `<code>${esc(u.slice)}</code>${u.roles?.length ? " · " + esc(u.roles.join(", ")) : ""}`],
-    noisy: [`noisy`, "", `<code>${esc(short(u.slice))}</code>: 90% CI ${pts(u.lo)} to ${pts(u.hi)} pts spans 0, n ${N0(u.n)}`],
+    noisy: [`noisy`, "", `<code>${esc(short(u.slice))}</code>: 90% CI ${isBin(RS[u.slice]) ? `${pts(u.lo)} to ${pts(u.hi)} pts` : ciTxt(u, RS[u.slice])} spans 0, n ${N0(u.n)}`],
     errors: [`errors`, "neg", `<code>${esc(short(u.slice))}</code>: ${N0(u.errors)} of ${N0(u.n)} errored, scored 0`],
     no_pair: [`no pair`, "mut", `<code>${esc(short(u.slice))}</code>: no matching current harness comparison with ${mn(u.base)}`],
     need_run: [`gate`, "", `rung ${esc(u.rung)} needs a run of ${mn(CH)} on <code>${esc(short(u.slice))}</code>`],
