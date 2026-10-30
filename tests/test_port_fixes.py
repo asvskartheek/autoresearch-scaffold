@@ -190,5 +190,29 @@ class TaskStartTitle(unittest.TestCase):
         self.assertEqual(p.task(tid)["title"], "Prepare the data")
 
 
+class BaselineDryRun(unittest.TestCase):
+    def setUp(self):
+        self.p = project([], baseline_cmd="true")
+        self.p.add_slice("qa/full", [f"x{i}" for i in range(4)], kind="full")
+        self.p.add_slice("qa/random2", ["x0", "x1"], kind="random")
+        self.p.add_model("v0", status="champion")
+        run(self.p, "v0", "qa/full", [1, 1, 1, 1])
+        run(self.p, "v0", "qa/full", [0, 0, 1, 1])
+
+    def test_pooled_runs_show_the_pooled_score(self):
+        h = self.p.baseline_plan("v0")["have"]["qa/full"]
+        self.assertEqual((h["runs"], h["score"], h["latest_score"]), (2, 0.75, 0.5))
+        out = arx(self.p, "baseline", "--dry-run")
+        self.assertRegex(out, r"reused +qa/full +0\.750 .*2 runs pooled")
+
+    def test_replace_labels_runs_to_replace(self):
+        out = arx(self.p, "baseline", "--dry-run", "--replace")
+        self.assertIn("2 slices to run; the runs on 1 of them are replaced", out)
+        self.assertRegex(out, r"would replace +qa/full")
+        self.assertRegex(out, r"would run +qa/random2")
+        self.assertNotIn("already run, 2 to run", out)
+        self.assertNotRegex(out, r"missing +qa/full")
+
+
 if __name__ == "__main__":
     unittest.main()

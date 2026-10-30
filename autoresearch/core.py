@@ -596,8 +596,12 @@ class Project:
             runs = sorted((t for t in mine if t.get("slice") == sl and t.get("slice_hash") == slices[sl]["hash"]),
                           key=lambda t: t.get("ended", 0))
             if runs:
+                # the score the gates pair against: pooled over the runs under the latest run's harness
+                pool = same_contract(runs, runs[-1])
+                sc = per_id([r for t in pool for r in self.rows(t["id"])], self.is_continuous(sl))
                 s = runs[-1].get("summary") or {}
-                have[sl] = dict(task=runs[-1]["id"], score=s.get("score"), n=s.get("n"), ended=runs[-1].get("ended"), runs=len(runs))
+                have[sl] = dict(task=runs[-1]["id"], score=sum(sc.values()) / len(sc) if sc else None,
+                                latest_score=s.get("score"), n=s.get("n"), ended=runs[-1].get("ended"), runs=len(pool))
             else:
                 need.append(sl)
         return dict(model=model, have=have, need=need, roles=roles)
@@ -612,15 +616,23 @@ class Project:
         plan, cmd, slices = self.baseline_plan(model), self.config.get("baseline_cmd"), self.slices()
         rerun = rerun or replace
         todo = list(plan["roles"]) if rerun else plan["need"]
-        say(f"baseline for {model}: {len(plan['have'])} of {len(plan['roles'])} slices already run, {len(todo)} to run")
+        nh = len(plan["have"])
+        if replace:
+            say(f"baseline for {model}: {len(todo)} slices to run; the runs on {nh} of them are replaced once each fresh run completes")
+        elif rerun:
+            say(f"baseline for {model}: {len(todo)} slices to run; {nh} of them already run, pooled with the fresh runs")
+        else:
+            say(f"baseline for {model}: {nh} of {len(plan['roles'])} slices already run, {len(todo)} to run")
         what = lambda sl: ", ".join(plan["roles"][sl])
         verb = "would run" if dry and cmd else "run" if cmd else "missing"
+        again = "replace" if replace else "rerun"  # a slice that has runs is never "missing"
+        again = f"would {again}" if dry and cmd else again if cmd else f"to {again}"
         for sl, h in plan["have"].items():
             score = "—" if h["score"] is None else f"{h['score']:.3f}"
             pooled = f", {h['runs']} runs pooled" if h["runs"] > 1 else ""
-            say(f"  {verb if rerun else 'reused':<9} {sl:<28} {score}  n={h['n']}  {what(sl)}  ({h['task']}, {_ago(h['ended'])}{pooled})")
+            say(f"  {again if rerun else 'reused':<13} {sl:<28} {score}  n={h['n']}  {what(sl)}  ({h['task']}, {_ago(h['ended'])}{pooled})")
         for sl in plan["need"]:
-            say(f"  {verb:<9} {sl:<28} n={slices[sl]['n']}  {what(sl)}")
+            say(f"  {verb:<13} {sl:<28} n={slices[sl]['n']}  {what(sl)}")
         if not todo or dry:
             return plan
         if not cmd:
