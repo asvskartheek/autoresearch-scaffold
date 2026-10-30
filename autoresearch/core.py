@@ -116,6 +116,16 @@ def summarize(rows: list[dict], continuous: bool = False) -> dict:
                 latency_p50=pct(0.5), latency_p95=pct(0.95), latency_mean=statistics.mean(lat) if lat else None)
 
 
+def scale_of_rows(rows: list[dict]) -> str | None:
+    """The scale a run's scores show: "binary" when every non-errored score is 0 or 1, else "continuous"; None when
+    no row has a score to read (no rows, or every row errored)."""
+    vals = {r.get("score") for r in rows if not r.get("error")}
+    vals.discard(None)
+    if not vals:
+        return None
+    return "binary" if vals <= {0, 1} else "continuous"
+
+
 def per_id(rows: list[dict], continuous: bool = False) -> dict[str, float]:
     """Mean score per example id; repeated samples of one id are averaged. On a continuous slice errored rows are
     skipped (an id with only errors drops out of pairing) instead of scoring 0."""
@@ -304,7 +314,7 @@ class Project:
                     gap=None if value is None else sign * (g["target"] - value), vs_baseline=vs, hills=hills,
                     slice_changed=bool(cur and g.get("slice_hash") and cur != g["slice_hash"]),
                     # how the slice's score reads: 0/1 per example (counts of n) or a continuous amount in `unit`
-                    scale=slr.get("scale") or "binary", unit=slr.get("unit"), metric=slr.get("metric"))
+                    scale=self.slice_scale(sl), unit=slr.get("unit"), metric=slr.get("metric"))
 
         return goal_evidence_status(status, bool(self.latest_eval(g.get("baseline"), sl)))
 
@@ -441,8 +451,23 @@ class Project:
         return per_id([r for t in self.score_runs(model, slice_name, reference_model) for r in self.rows(t["id"])],
                       continuous=self.is_continuous(slice_name))
 
-    def is_continuous(self, slice_name: str) -> bool:
-        return self._slice_field(slice_name, "scale") == "continuous"
+    def slice_scale(self, slice_name: str, tasks: list[dict] | None = None) -> str:
+        """"continuous" or "binary". The stored `scale`; for a slice frozen before `scale` existed, read off the newest
+        complete run's scores on it (any model): every score 0 or 1 is binary, anything else continuous. The one rule
+        the CLI, the gates and the dashboard share. `tasks` is the task list to infer from (default: every eval)."""
+        stored = self._slice_field(slice_name, "scale")
+        if stored:
+            return stored
+        runs = [t for t in (self.evals() if tasks is None else tasks)
+                if t.get("kind") == "eval" and t.get("slice") == slice_name and t.get("ended") and t.get("status") == "done"]
+        for t in sorted(runs, key=lambda t: t.get("ended") or 0, reverse=True):
+            scale = scale_of_rows(self.rows(t["id"]))
+            if scale:
+                return scale
+        return "binary"
+
+    def is_continuous(self, slice_name: str, tasks: list[dict] | None = None) -> bool:
+        return self.slice_scale(slice_name, tasks) == "continuous"
 
     # gates -----------------------------------------------------------------------------
     def _resolve(self, ref: str, model: dict) -> list[str]:
@@ -859,7 +884,11 @@ class Task:
                 want = set(self.p.slice(self.meta["slice"])["ids"])
                 got = {str(r["id"]) for r in rows}
                 self.meta["complete"] = got == want
-                self.meta["summary"] = summarize(rows, self.p.is_continuous(self.meta["slice"])) | {"missing": len(want - got)}
+                sl = self.meta["slice"]
+                # a slice frozen without `scale` and never run before: its first run's own scores decide
+                cont = self.p.is_continuous(sl) if (self.p._slice_field(sl, "scale") or any(
+                    t.get("slice") == sl for t in self.p.evals())) else scale_of_rows(rows) == "continuous"
+                self.meta["summary"] = summarize(rows, cont) | {"missing": len(want - got)}
             if summary:
                 self.meta["summary"] = self.meta.get("summary", {}) | summary
             self.meta["status"], self.meta["ended"] = status, now()

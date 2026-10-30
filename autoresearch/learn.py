@@ -154,11 +154,7 @@ def _slc(p: Project, sl: str) -> dict:
     memo = p.__dict__.setdefault("_scales", {})
     if sl not in memo:
         s = dict(p.slices().get(sl) or {})
-        if not s.get("scale"):
-            ts = [t for t in p.evals() if t.get("slice") == sl and t.get("ended")]
-            t = max(ts, key=lambda t: _f(t.get("ended")), default=None)
-            vals = {r.get("score") for r in p.rows(t["id"]) if not r.get("error")} if t else set()
-            s["scale"] = "continuous" if vals and not vals <= {0, 1} else "binary"
+        s["scale"] = p.slice_scale(sl)
         memo[sl] = s
     return memo[sl]
 
