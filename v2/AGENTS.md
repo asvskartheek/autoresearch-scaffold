@@ -31,12 +31,18 @@ People press `A` (or **Ask**) on the dashboard, click anything and type a questi
 anchored to what they clicked. Keep one agent listening while people use the dashboard:
 
 ```
-arx2 ask poll                                 # in an agent session: answer it, then poll again
-arx2 ask watch --exec 'claude -p "$(cat "$ARX2_ASK_FILE")" --allowedTools Bash'   # headless, always on
+arx2 ask poll --agent <name>                  # in an agent session: answer it, then poll again
+arx2 ask watch --jobs 4 --exec 'claude -p "$(cat "$ARX2_ASK_FILE")" --allowedTools Bash \
+  $([ "$ARX2_ASK_TURN" = 1 ] && echo --session-id || echo --resume) "$ARX2_ASK_SESSION"'   # headless, always on
 ```
 
-`poll` blocks until a question is open, claims it and prints it with the clicked thing (`clicked:`), its entity and
-the facts and run keys around it. Answer with `arx2 ask answer <id>` and any mix of parts, shown in the order given:
+Every question is a thread: the person can ask more under any answer, and the question opens again. Each thread has
+its own agent. `watch` runs one agent per question, several at once, and sends a follow-up back to the same agent
+(`$ARX2_ASK_SESSION` is stable per question, `$ARX2_ASK_TURN` counts the person's turns). `poll --agent <name>` gets
+follow-ups on threads it answered first, and never takes another live agent's thread.
+
+`poll` blocks until a question is open, claims it and prints it with the clicked thing (`clicked:`), its entity,
+the earlier turns (`thread[]`) and the facts and run keys around it. Answer with `arx2 ask answer <id>` and any mix of parts, shown in the order given:
 `--text` (markdown), `--file` (svg, png, html, md) and `--link "Label=#/hill/<key>"` (a dashboard view; keys may
 contain `/`). `arx2 ask list` shows what is waiting.
 

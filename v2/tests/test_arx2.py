@@ -220,3 +220,56 @@ def test_dashboard_asks_and_saves_over_http(proj, monkeypatch):
         assert b"srcdoc" in urllib.request.urlopen(f"{base}/doc/note-{key}").read()
     finally:
         srv.shutdown()
+
+
+def test_follow_ups_keep_the_thread_and_its_agent(proj):
+    from arx2 import asks
+    p = Project(proj)
+    q = asks.ask(p, "Why is item 7 wrong?", "set", "all", "item square: 7")
+    p.append("ask.claim", key=q["key"], agent="a1")
+    asks.answer(p, q["key"], [("text", "It names the wrong sheet.")], agent="a1")
+    asks.reply(p, q["key"], "Which sheet should it name?")
+    a = p.state()["asks"][q["key"]]
+    assert a["status"] == "open" and [x["who"] for x in a["thread"]] == ["person", "agent", "person"]
+    assert asks.next_open(p.state(), agent="a2") is None  # a1 holds the context and is still around
+    out = cli(proj, "ask", "poll", "--timeout", "3", "--agent", "a1").stdout
+    assert "question: Which sheet should it name? (follow-up)" in out and "agent: It names the wrong sheet." in out
+    asks.answer(p, q["key"], [("text", "Sheet 002.")], agent="a1")
+    asks.save(p, q["key"], "note", "Sheet Choice")
+    page = (p.dir / "docs" / f"note-{q['key']}.html").read_text()
+    assert "Which sheet should it name?" in page and "Sheet 002." in page
+    assert "turns" in cli(proj, "ask", "list", "--all").stdout
+
+
+def test_watch_gives_each_question_its_own_agent(proj):
+    import time as _t
+    from arx2 import asks
+    p = Project(proj)
+    qs = [asks.ask(p, f"Question {i}?", "project", "toy", "sentence: x") for i in range(2)]
+    env = {**os.environ, "PYTHONPATH": str(ROOT), "ARX2_HOME": str(proj / ".home")}
+    agent = f'sleep 1; {sys.executable} -m arx2.cli ask answer "$ARX2_ASK" --text "turn $ARX2_ASK_TURN in $ARX2_ASK_SESSION"'
+    w = subprocess.Popen([sys.executable, "-m", "arx2.cli", "ask", "watch", "--exec", agent, "--jobs", "2"], cwd=proj, env=env,
+                         stdout=subprocess.DEVNULL)
+
+    def wait(pred):
+        for _ in range(100):
+            if pred():
+                return True
+            _t.sleep(0.1)
+
+    try:
+        t0 = _t.time()
+        assert wait(lambda: all(p.state()["asks"][q["key"]]["status"] == "answered" for q in qs))
+        assert _t.time() - t0 < 2.6  # both ran at once, not one after the other
+        s = p.state()
+        owners = {asks.owner(s["asks"][q["key"]]) for q in qs}
+        assert owners == {f"watch/{q['key']}" for q in qs}
+        first = s["asks"][qs[0]["key"]]["answers"][0]["parts"][0]["body"]
+        asks.reply(p, qs[0]["key"], "And then?")
+        assert wait(lambda: len(p.state()["asks"][qs[0]["key"]]["answers"]) == 2)
+        a = p.state()["asks"][qs[0]["key"]]
+        again = a["answers"][1]["parts"][0]["body"]
+        assert again.startswith("turn 2") and again.split(" in ")[1] == first.split(" in ")[1]  # same session resumes
+        assert asks.owner(a) == f"watch/{qs[0]['key']}"
+    finally:
+        w.kill()

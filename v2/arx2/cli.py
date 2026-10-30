@@ -390,13 +390,13 @@ class Part(argparse.Action):
         ns.parts = [*(getattr(ns, "parts", None) or []), (self.dest, values)]
 
 
-def _wait_open(p, timeout, skip=(), interval=1.0):
+def _wait_open(p, timeout, skip=(), interval=1.0, agent=None):
     t0, seen, s = time.time(), None, None
     while True:
         m = p.events_path.stat().st_mtime if p.events_path.exists() else 0
         if m != seen:
             seen, s = m, p.state()
-        a = asks.next_open(s, skip)
+        a = asks.next_open(s, skip, agent=agent)
         if a:
             return a
         if timeout and time.time() - t0 >= timeout:
@@ -406,7 +406,7 @@ def _wait_open(p, timeout, skip=(), interval=1.0):
 
 def cmd_ask_poll(a):
     p = P()
-    q = _wait_open(p, a.timeout)
+    q = _wait_open(p, a.timeout, agent=a.agent)
     if not q:
         emit(f"noop: no open question after {a.timeout:g}s", help=["arx2 ask poll"])
         return
@@ -417,39 +417,67 @@ def cmd_ask_poll(a):
 
 def cmd_ask_answer(a):
     p = P()
-    asks.answer(p, a.key, a.parts, agent=a.agent)
+    asks.answer(p, a.key, a.parts, agent=a.agent or os.environ.get("ARX2_AGENT"))
     emit(f"answered: {a.key} ({len(a.parts)} part{'s' if len(a.parts) != 1 else ''})", help=["arx2 ask poll"])
+
+
+def cmd_ask_reply(a):
+    asks.reply(P(), a.key, a.text)
+    emit(f"reopened: {a.key}", help=["arx2 ask poll"])
 
 
 def cmd_ask_list(a):
     s = P().state()
-    rows = [{"key": k, "status": q["status"], "age": _ago(q["created"]), "on": q.get("what"), "question": q["text"][:80],
+    rows = [{"key": k, "status": q["status"], "age": _ago(q["created"]), "turns": len(q["thread"]), "on": q.get("what"),
+             "question": asks.latest(q)[:80],
              "saved": ",".join(x["as"] for x in q["saved"]) or None}
             for k, q in s["asks"].items() if a.all or q["status"] != "answered"]
-    emit(table("asks", rows[-a.limit:], ["key", "status", "age", "on", "question", "saved"], total=len(rows)),
+    emit(table("asks", rows[-a.limit:], ["key", "status", "age", "turns", "on", "question", "saved"], total=len(rows)),
          help=["arx2 ask poll", "arx2 ask list --all"])
 
 
 def cmd_ask_watch(a):
-    """Always on: claim each question, hand it to an agent command, check it was answered, wait for the next."""
+    """Always on: each question gets its own agent, run in parallel; a follow-up goes back to that question's agent."""
+    import threading
+    import uuid
     p = P()
-    failed: dict[str, int] = {}
-    print(f"watching {p.root} for questions (ctrl-c stops)", flush=True)
-    while True:
-        q = _wait_open(p, 0, skip={k for k, n in failed.items() if n >= 2})
-        p.append("ask.claim", key=q["key"], agent=a.agent)
-        f = p.dir / "asks" / f"{q['key']}.txt"
+    base = a.agent or "watch"
+    busy, failed, lock = set(), {}, threading.Lock()
+
+    def say(msg):
+        with lock:
+            print(msg, flush=True)
+
+    def run(q):
+        key, sub = q["key"], f"{base}/{q['key']}"
+        turn = sum(1 for x in q["thread"] if x["who"] == "person")
+        f = p.dir / "asks" / f"{key}.txt"
         f.parent.mkdir(parents=True, exist_ok=True)
-        f.write_text(asks.describe(p, q) + "\n\n" + ASK_GUIDE.format(key=q["key"]))
-        print(f"ask {q['key']}: {q['text'][:80]}", flush=True)
-        rc = subprocess.call(a.exec, shell=True, cwd=p.root,
-                             env={**os.environ, "ARX2_ASK": q["key"], "ARX2_ASK_FILE": str(f)})
-        if p.state()["asks"][q["key"]]["status"] != "answered":
-            failed[q["key"]] = failed.get(q["key"], 0) + 1
-            p.append("ask.release", key=q["key"], agent=a.agent)
-            print(f"  not answered (exit {rc}); released", flush=True)
+        f.write_text(asks.describe(p, q) + "\n\n" + ASK_GUIDE.format(key=key))
+        say(f"ask {key} turn {turn}: {asks.latest(q)[:80]}")
+        env = {**os.environ, "ARX2_ASK": key, "ARX2_ASK_FILE": str(f), "ARX2_AGENT": sub, "ARX2_ASK_TURN": str(turn),
+               "ARX2_ASK_SESSION": str(uuid.uuid5(uuid.NAMESPACE_URL, f"arx2-ask:{p.root}:{key}"))}
+        rc = subprocess.call(a.exec, shell=True, cwd=p.root, env=env)
+        if p.state()["asks"][key]["status"] == "answered":
+            say(f"  {key}: answered")
         else:
-            print("  answered", flush=True)
+            failed[key] = failed.get(key, 0) + 1
+            p.append("ask.release", key=key, agent=sub)
+            say(f"  {key}: not answered (exit {rc}); released")
+        with lock:
+            busy.discard(key)
+
+    say(f"watching {p.root} for questions, up to {a.jobs} at once (ctrl-c stops)")
+    while True:
+        while len(busy) >= a.jobs:
+            time.sleep(0.5)
+        with lock:
+            skip = busy | {k for k, n in failed.items() if n >= 2}
+        q = _wait_open(p, 0, skip=skip, interval=0.5, agent=base)
+        with lock:
+            busy.add(q["key"])
+        p.append("ask.claim", key=q["key"], agent=f"{base}/{q['key']}")
+        threading.Thread(target=run, args=(q,), daemon=True).start()
 
 
 ASK_GUIDE = """A person clicked the thing above on the arx2 dashboard and asked the question. Answer with
@@ -603,10 +631,14 @@ def build() -> argparse.ArgumentParser:
     y.add_argument("key"); y.add_argument("--agent")
     for f, h in (("--text", "markdown"), ("--file", "svg, png, html or md"), ("--link", "label=#/hill/<key> or an url")):
         y.add_argument(f, action=Part, help=h)
+    y = qsp.add_parser("reply", help="a follow-up in the same thread"); y.set_defaults(fn=cmd_ask_reply)
+    y.add_argument("key"); y.add_argument("--text", required=True)
     y = qsp.add_parser("list"); y.set_defaults(fn=cmd_ask_list)
     y.add_argument("--all", action="store_true"); y.add_argument("--limit", type=int, default=30)
     y = qsp.add_parser("watch", help="always on: run an agent command for every question"); y.set_defaults(fn=cmd_ask_watch)
-    y.add_argument("--exec", required=True, help="shell command; gets $ARX2_ASK and $ARX2_ASK_FILE"); y.add_argument("--agent")
+    y.add_argument("--exec", required=True, help="shell command, one per question; gets $ARX2_ASK, $ARX2_ASK_FILE, "
+                   "$ARX2_ASK_TURN and $ARX2_ASK_SESSION (stable per question)")
+    y.add_argument("--agent"); y.add_argument("--jobs", type=int, default=4, help="questions answered at once")
 
     x = cmd("serve", cmd_serve, "run the dashboard in the foreground")
     x.add_argument("--port", type=int, default=8790); x.add_argument("--host", default="127.0.0.1")
