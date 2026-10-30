@@ -116,6 +116,91 @@ def test_overlap_is_caught(proj):
     assert r.returncode == 1 and "share items" in r.stdout
 
 
+def _goal_and_champion(proj, fails_on_sym=True):
+    cli(proj, "goal", "open", "acc", "--name", "Accuracy 80", "--vague", "x", "--set", "all", "--target", "0.8")
+    cli(proj, "cand", "add", "base", "--name", "Plain Prompt", "--change", "x")
+    cli(proj, "promote", "base", "--reason", "seed")
+    evaluate("base", "sym", lambda i: {"score": 0.0 if fails_on_sym and int(i) < 3 else 1.0}, project=Project(proj), workers=2)
+
+
+HILL = ["hill", "open", "units", "--name", "Unit Slips", "--goal", "acc", "--symptom", "x", "--eval-sets", "hill"]
+
+
+def test_hill_with_failing_symptom_set_is_evidenced(proj):
+    _goal_and_champion(proj)
+    cli(proj, *HILL, "--symptom-set", "sym")
+    e = Views(Project(proj)).hill_evidence("units")
+    assert e["ok"] and e["items"] == 10 and e["failing"] == 3 and e["missing"] == []
+    assert build_state(Project(proj))["evidence"]["units"]["ok"]
+    assert "hills_without_evidence" not in cli(proj).stdout
+
+
+def test_hill_open_refuses_without_symptom_set(proj):
+    _goal_and_champion(proj)
+    r = cli(proj, *HILL, ok=False)
+    assert r.returncode == 1 and "no symptom set" in r.stdout and "fix:" in r.stdout and "--no-evidence" in r.stdout
+    assert "units" not in Project(proj).state()["hills"]
+
+
+def test_hill_open_refuses_when_the_champion_passes_the_symptom_set(proj):
+    _goal_and_champion(proj, fails_on_sym=False)
+    r = cli(proj, *HILL, "--symptom-set", "sym", ok=False)
+    assert r.returncode == 1 and "no champion run shows these items failing" in r.stdout
+
+
+def test_hill_open_refuses_before_the_champion_ran_the_symptom_set(proj):
+    cli(proj, "goal", "open", "acc", "--name", "Accuracy 80", "--vague", "x", "--set", "all", "--target", "0.8")
+    r = cli(proj, *HILL, "--symptom-set", "sym", ok=False)
+    assert r.returncode == 1 and "no champion run covers these items" in r.stdout
+
+
+def test_waived_hill_opens_and_shows_its_reason(proj):
+    _goal_and_champion(proj)
+    cli(proj, *HILL, "--no-evidence", "Latency target; no item is wrong yet")
+    p = Project(proj)
+    assert p.state()["hills"]["units"]["evidence_waived"] == "Latency target; no item is wrong yet"
+    e = Views(p).hill_evidence("units")
+    assert not e["ok"] and e["waived"] and e["missing"]
+    assert "hills_without_evidence" not in cli(proj).stdout
+    assert "warning" not in cli(proj, "cand", "add", "u1", "--name", "Unit Check", "--hill", "units", "--change", "x").stdout
+
+
+def test_old_hill_without_evidence_is_flagged_with_reasons(proj):
+    # Old ledgers are not rewritten: a hill event with no symptom set, an empty pattern and an example with no item.
+    _goal_and_champion(proj)
+    p = Project(proj)
+    p.append("pattern", key="pat", name="Unit Slips", cause="x", items=[], count=4, of=183)
+    p.append("hill", key="old", name="Old Hill", goal="acc", pattern="pat", symptom="x", eval_sets=["hill"],
+             example={"input": "q", "wrong": "a", "right": "b", "why": "c"})
+    e = Views(p).hill_evidence("old")
+    assert not e["ok"] and not e["waived"]
+    assert e["missing"] == ["no symptom set", "pattern lists no items", "the example names no item"]
+    home = cli(proj).stdout
+    assert "hills_without_evidence[1]" in home and "old,Old Hill,no symptom set" in home and "arx2 set add old-symptom" in home
+    r = cli(proj, "cand", "add", "o1", "--name", "Old Fix", "--hill", "old", "--change", "x")
+    assert "warning: hill old has no evidence" in r.stdout
+
+
+def test_example_item_counts_as_evidence(proj):
+    _goal_and_champion(proj)
+    p = Project(proj)
+    p.append("hill", key="ex", name="Example Hill", goal="acc", symptom="x", eval_sets=["hill"],
+             example={"item": "1", "input": "q", "wrong": "a", "right": "b", "why": "c"})
+    assert Views(p).hill_evidence("ex")["ok"]
+
+
+def test_pattern_count_must_be_backed_by_ids(proj):
+    r = cli(proj, "pattern", "add", "p1", "--name", "Unit Slips", "--items", "3", "--cause", "x", "--count", "10", "--of", "40", ok=False)
+    assert r.returncode == 1 and "only 1 items listed" in r.stdout and "fix:" in r.stdout
+    (proj / "ghost.txt").write_text("\n".join(f"g{i}" for i in range(10)))
+    r = cli(proj, "pattern", "add", "p2", "--name", "Unit Slips", "--items-file", "ghost.txt", "--cause", "x", "--count", "10", ok=False)
+    assert r.returncode == 1 and "no frozen set" in r.stdout
+    r = cli(proj, "pattern", "add", "p3", "--name", "Unit Slips", "--cause", "x", ok=False)
+    assert r.returncode == 1 and "needs the items" in r.stdout
+    cli(proj, "pattern", "add", "p4", "--name", "Unit Slips", "--items-file", "sym.txt", "--set", "sym", "--cause", "x", "--count", "10", "--of", "40")
+    assert Project(proj).state()["patterns"]["p4"]["count"] == 10
+
+
 def test_replay_shows_the_past(proj):
     p = Project(proj)
     cli(proj, "cand", "add", "a", "--name", "First Try", "--change", "x")
