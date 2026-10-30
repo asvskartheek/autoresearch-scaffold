@@ -378,7 +378,8 @@ def climbed(proj):
     """The toy project after one promotion: champion at 65% on All 100, goal 80% not met."""
     cli(proj, "goal", "open", "acc", "--name", "Accuracy 80", "--vague", "Get better at maths", "--set", "all", "--target", "0.8")
     cli(proj, "hill", "open", "units", "--name", "Unit Slips", "--goal", "acc", "--symptom", "Converts units wrongly",
-        "--symptom-set", "sym", "--eval-sets", "hill", "--train-sets", "train", "--control", "ctl")
+        "--symptom-set", "sym", "--eval-sets", "hill", "--train-sets", "train", "--control", "ctl",
+        "--no-evidence", "Paper tests need a hill, not its evidence.")
     cli(proj, "cand", "add", "base", "--name", "Plain Prompt", "--change", "The starting prompt.")
     cli(proj, "promote", "base", "--reason", "Seeded.")
     cli(proj, "cand", "add", "v1", "--name", "Unit Check", "--hill", "units", "--change", "Restate units.")
