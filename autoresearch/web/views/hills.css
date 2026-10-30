@@ -75,7 +75,7 @@
 .hmeas{margin:0;font-size:13px;line-height:1.5}
 .hmeas span,.hctl span:first-child{color:var(--muted);margin-right:8px}
 .hdev td.hm{width:42%}
-.hdev td .two{max-width:440px}
+.hdev td .two{max-width:300px}
 .hdev td.htg{width:1%}
 .hdev td.hbar{width:110px;min-width:80px}
 .hdev td .two a:hover b{color:var(--accent)}
@@ -126,7 +126,7 @@
 .hnx .cmd{width:100%;box-sizing:border-box;justify-content:space-between}
 
 @media (max-width:1100px){
- .hdev td.hbar,.hdev th:nth-child(4){display:none}
+ .hdev td.hbar,.hdev th.hbar{display:none}
 }
 @media (max-width:900px){
  .hgrid{grid-template-columns:1fr}
