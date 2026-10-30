@@ -45,8 +45,10 @@ font:13px/1.45 var(--font,system-ui,sans-serif)}
 .kh-hd .kh-x{margin-left:auto;font-size:12px;color:var(--muted-fg,var(--muted,#5b6168))}
 .kh-gs{display:grid;grid-template-columns:1fr 1fr;gap:10px 26px}
 .kh-g h4{margin:0 0 3px;font:600 11px/1.6 var(--font,system-ui,sans-serif);color:var(--muted-fg,var(--muted,#5b6168));text-transform:uppercase;letter-spacing:.06em}
-.kh-g span{display:flex;align-items:center;gap:6px;min-width:0;padding:1px 0}.kh-g i{font-style:normal;color:var(--muted-fg,var(--muted,#5b6168));overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:4px}
+.kh-g span{display:flex;align-items:center;gap:10px;min-width:0;padding:1px 0}.kh-g i{font-style:normal;color:var(--muted-fg,var(--muted,#5b6168));overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kh-k{flex:none;display:flex;align-items:center;gap:4px;min-width:72px;font-weight:inherit}
 .kh-ov kbd{all:unset;flex:none;min-width:22px;font:500 11px/20px var(--mono,ui-monospace,Menlo,monospace);color:var(--text,var(--foreground,#131416))}
+.kh-ov kbd.sym{font:400 14px/20px system-ui,sans-serif;text-align:center}
 .kh-ov button{all:unset;flex:none;min-width:22px;padding:0 5px;border-radius:4px;cursor:pointer;text-align:center;font:500 11px/20px var(--mono,ui-monospace,Menlo,monospace);
 color:var(--text,var(--foreground,#131416));box-shadow:inset 0 0 0 1px var(--border,#e3e7eb)}
 .kh-ov button:hover,.kh-ov button.on{box-shadow:inset 0 0 0 1px var(--ring,var(--accent,#1b6c80))}
@@ -177,7 +179,7 @@ const label=a=>{const c=a.cloneNode(true);c.querySelectorAll('.count,.kn,.pdot')
 function pages(){const out=new Map(),extra=[];
  for(const a of document.querySelectorAll('aside#nav a.nav:not(.proj),#rail a[href]')){const href=a.getAttribute('href')||'';
   const r=(href.split('#')[1]||'').split('/')[0],k=PAGES[r];
-  if(k){if(!out.has(k))out.set(k,{el:a,name:NAMES[k],go:()=>a.click()})}else if(r)extra.push(a)}
+  if(k){if(!out.has(k))out.set(k,{el:a,name:label(a)||NAMES[k],go:()=>a.click()})}else if(r)extra.push(a)}
  // a page this file does not know yet takes the first free letter of its name
  for(const a of extra){const k=[...label(a).toLowerCase()].find(c=>/[a-z]/.test(c)&&c!=='g'&&!out.has(c)&&!Object.values(PAGES).includes(c));if(k)out.set(k,{el:a,name:label(a),go:()=>a.click()})}
  // the pages this page's nav does not show (the paper's rail has no Start, Brief or Questions): by URL
@@ -265,8 +267,8 @@ function closeSheet(){if(!ov)return;ov.remove();ov=null;listen=null;msg='';if(ov
 function drawSheet(){if(!ov)return;
  const had=ov.contains(document.activeElement)?document.activeElement.dataset.id:null;
  const groups={Move:[],Act:[],Comments:[],'Go to':[],'This page':[]};
- const kb=t=>{const k=document.createElement('kbd');k.textContent=t;return k};
- const row=(g,keys,l)=>{const s=document.createElement('span'),i=document.createElement('i');i.textContent=l;s.append(...keys,i);groups[g].push(s)};
+ const kb=t=>{const k=document.createElement('kbd');k.textContent=t;if(/[^\x20-\x7e]/.test(t.replace(/–/g,'')))k.className='sym';return k};
+ const row=(g,keys,l)=>{const s=document.createElement('span'),c=document.createElement('b'),i=document.createElement('i');c.className='kh-k';c.append(...keys);i.textContent=l;s.append(c,i);groups[g].push(s)};
  row('Move',[kb('gg')],items().length?'First '+thing():'Top');
  for(const a of ACTS){if(!live(a))continue;const k=keyOf(a);if(RES.has(k.toLowerCase())&&!a.alt)continue;
   const ks=[];
