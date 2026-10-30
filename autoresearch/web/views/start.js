@@ -76,7 +76,7 @@ function goalsBlock(){
   const tip=`Now ${nowv}${u.ofP(g)} · target ${tgt}${P.b!=null?' · baseline '+u.gu(g,P.b):''}`.replace(/&nbsp;/g,' ');
   const pos=f==null?0:f/OVER;
   return `<a class="sx-g ${u.isMain(g)?'':'sub'}" href="#goal/${enc(g.name)}" title="${esc(tip)}" data-item>
-   <span class="sx-gt"><span class="ell">${esc(g.title||g.name)}</span><span class="sx-tg num">${tgt}</span></span>
+   <span class="sx-gt"><span class="ell">${esc(g.title||g.name)}<span class="faint sx-gs"> · ${esc(g.slice)}</span></span><span class="sx-tg num">${tgt}</span></span>
    <span class="sx-rail ${g.met?'met':''} ${f==null?'none':''}">${b0}${f!=null?`<i style="width:${pc(f)}"></i><b style="left:${pc(f)}" class="${pos<.12?'lo':pos>.88?'hi':''}"><span class="num">${nowv}</span></b>`:''}</span>
    <span class="sx-gd num">${fig}</span></a>`}).join('');
  const axis=`<div class="sx-axis sx-gax"><span>baseline</span><span class="sx-at">${term('goal','target')}</span></div>`;

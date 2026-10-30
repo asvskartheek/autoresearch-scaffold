@@ -130,3 +130,4 @@ a.sx-tile.rej b{color:var(--muted)}
 .sx-catch{height:32px}
 @media (max-width:600px){a.sx-tile{padding:8px 10px}}
 @media (max-width:600px){.sx-gt{flex-wrap:wrap;row-gap:2px;padding-right:0}.sx-gt .ell{flex-basis:100%}}
+.sx-gs{font-weight:400;font-size:12px}

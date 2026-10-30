@@ -145,3 +145,4 @@ a.ov-pid{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;ov
 /* a rejected model on the board: its figures stay ledger-true but read as out of the running */
 .ov-lb tr.ov-rej td:not(:first-child){opacity:.62}
 .ov-lb tr.ov-rej .pill{opacity:1}
+.ov-gs{font-weight:400;font-size:12px}
