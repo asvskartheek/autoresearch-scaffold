@@ -128,7 +128,7 @@ function nextSteps(){
  if(prom.length)out.push({h:`#model/${enc(prom[0][0])}`,t:`Promote ${distinctModel(prom[0][0])}: it cleared every ${term('rung')} of the ${term('gate')}${prom.length>1?` <span class="faint">· ${prom.length-1} more cleared it, with a smaller gain</span>`:''}`,c:`arx promote ${prom[0][0]}`});
  for(const [m,g] of cands){
   const nx=(g.next||[]).filter(n=>n.model===m);if(!nx.length)continue;
-  const n=nx.find(n=>!n.running)||nx[0],rt=n.running&&byId(n.running),r=rungOf(g,n.slice);
+  const n=nx.find(n=>n.running&&byId(n.running)?.status==='stalled')||nx.find(n=>!n.running)||nx[0],rt=n.running&&byId(n.running),r=rungOf(g,n.slice);
   const sn=short(n.slice),where=`<b>${esc(sn)}</b>${r&&r!==sn?` (${esc(r)} ${term('rung')})`:r?' '+term('rung'):''}`;
   if(rt&&rt.status==='stalled')out.push({h:`#task/${enc(rt.id)}`,t:`Rerun ${distinctModel(m)} on ${where}: its run went silent ${span(quietFor(rt))} ago`,c:`arx gate ${m}`,bad:1});
   else if(!n.running)out.push({h:`#model/${enc(m)}`,t:`Run ${term('candidate')} ${distinctModel(m)} on ${where}`,c:`arx gate ${m}`});
