@@ -113,7 +113,8 @@ class _Index:
     def pooled(self, m, sl, reference_model=None):
         k = (m, sl, reference_model)
         if k not in self._pooled:
-            self._pooled[k] = per_id([r for t in self.compatible(m, sl, reference_model) for r in self.rows(t["id"])])
+            self._pooled[k] = per_id([r for t in self.compatible(m, sl, reference_model) for r in self.rows(t["id"])],
+                                     (self.slices.get(sl) or {}).get("scale") == "continuous")
         return self._pooled[k]
 
     def slices_of(self, m):
@@ -213,6 +214,9 @@ def _ladder(p, ix, model, base, sign):
                     c["state"] = "need_run"
                 else:
                     d = _paired(ix, model, base, sl, sign)
+                    if d and d.get("base") is not None and p.is_continuous(sl):
+                        thr *= abs(d["base"])  # as core.gate: a fraction of the champion's mean on a continuous slice
+                        c |= dict(threshold=thr, relative=True)
                     ok = d and (d["delta"] > thr if chk["rule"] == "better" else d["delta"] >= thr)
                     c |= dict(state="pass" if ok else "fail", **(d or {}))
                 checks.append(c)

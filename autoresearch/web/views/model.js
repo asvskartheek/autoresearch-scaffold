@@ -10,7 +10,9 @@ const statePill=s=>{const [c,l]=STATE[s]||['',String(s||'').replace(/_/g,' ')];r
 const runCmd=n=>`arx eval record --model ${n.model} --slice ${n.slice} --rows <rows.jsonl>`;
 // a threshold is in the slice's score units: "2.0 pts" on 0/1 slices, "0.05 MB" on continuous ones
 const mag=(k,t)=>esc(sd(k,Math.abs(t)).replace(/^[+−]/,''));
-const rule=c=>c.rule==='better'?(c.threshold?`Better by more than ${mag(c.slice,c.threshold)}`:'Better than champion'):c.rule==='not_worse'?(c.threshold?`Worse by at most ${mag(c.slice,c.threshold)}`:'No worse than champion'):c.rule==='manual'?'Signed off by hand':esc(c.rule);
+// on a continuous slice the gate reads margin / tolerance as a fraction of the champion's mean (relative)
+const rel=c=>c.relative&&c.base?` (${+(100*Math.abs(c.threshold/c.base)).toFixed(1)}% of the champion)`:'';
+const rule=c=>c.rule==='better'?(c.threshold?`Better by more than ${mag(c.slice,c.threshold)}${rel(c)}`:'Better than champion'):c.rule==='not_worse'?(c.threshold?`Worse by at most ${mag(c.slice,c.threshold)}${rel(c)}`:'No worse than champion'):c.rule==='manual'?'Signed off by hand':esc(c.rule);
 const list=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a.at(-1);
 // a slice name that may break only after its / and - parts on a phone, never mid-word
 const slw=k=>esc(short(k)).replace(/([\/-])/g,'$1<wbr>');
@@ -51,6 +53,7 @@ function rewalk(name,m){
     fetch('api/task/'+enc(own.task),{cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{C.vs[own.task]=d?.vs_champion||null;render()}).catch(()=>{C.vs[own.task]=null;render()})}
     return {...c,state:'need_run'}}
    if(!vs||vs.delta==null)return {...c,state:'need_baseline'};
+   if(isCont(sl)&&vs.base!=null){c.threshold*=Math.abs(vs.base);c.relative=true}
    const ok=k.rule==='better'?vs.delta>c.threshold:vs.delta>=c.threshold;
    return {...c,...vs,state:ok?'pass':'fail',noisy:vs.lo<0&&0<vs.hi,cand_task:own.task,base_task:vs.task,base_runs:vs.runs,
     cand_runs:L.tasks.filter(t=>t.kind==='eval'&&t.model===name&&t.slice===sl&&t.status==='done').length||1}}));

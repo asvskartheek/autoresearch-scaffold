@@ -216,7 +216,7 @@ def champion_base(p, slice_name: str, champ: str) -> tuple[dict, int]:
     cur = lambda name: [e for e in mine if e.get("slice") == name and e.get("slice_hash") == sls.get(name, {}).get("hash")]
     runs = cur(slice_name)
     rows = [r for e in runs for r in p.rows(e["id"])]
-    base = per_id(rows)
+    base = per_id(rows, p.is_continuous(slice_name))
     if ids and not ids <= set(base):
         for name, sl in sls.items():
             sid = set(sl.get("ids") or [])
@@ -224,7 +224,7 @@ def champion_base(p, slice_name: str, champ: str) -> tuple[dict, int]:
                 ev = cur(name)
                 runs += ev
                 rows += [r for e in ev for r in p.rows(e["id"])]
-        base = per_id(rows)
+        base = per_id(rows, p.is_continuous(slice_name))
     if ids:
         base = {k: v for k, v in base.items() if k in ids}
     return base, len(runs)

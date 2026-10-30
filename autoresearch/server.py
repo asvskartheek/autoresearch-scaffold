@@ -213,7 +213,7 @@ def _state(p: Project) -> dict:
             continue
         latest = runs[-1]
         scores = p.pooled_scores(model, sl)
-        summary = summarize([r for t in runs for r in p.rows(t["id"])])
+        summary = summarize([r for t in runs for r in p.rows(t["id"])], p.is_continuous(sl))
         summary.update(n=len(scores), score=sum(scores.values()) / len(scores) if scores else None)
         board.setdefault(sl, {})[model] = dict(task=latest["id"], ended=latest["ended"], runs=len(runs),
                                               baseline_contract=(latest.get("config") or {}).get("baseline_contract"), **summary)
@@ -363,7 +363,7 @@ def project_list(default: Project) -> list[dict]:
 
 
 _CHECK = ("slice", "rule", "state", "threshold", "noisy", "n", "delta", "lo", "hi", "wins", "losses", "cand", "base",
-          "cand_runs", "base_runs", "cand_task", "base_task", "baseline_contract")
+          "cand_runs", "base_runs", "cand_task", "base_task", "baseline_contract", "relative")
 
 
 def _slim_gate(g) -> dict | None:
