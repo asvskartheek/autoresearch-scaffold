@@ -1,6 +1,6 @@
 """Learner memory (memory.py): the schema, backfill idempotence, the spaced-repetition schedule, live writes through
 the Brief's routes (teach phases, 101 course checks), and GET /api/memory."""
-import json, os, sqlite3, tempfile, unittest
+import json, os, sqlite3, tempfile, time, unittest
 
 os.environ["ARX_HOME"] = tempfile.mkdtemp()  # never touch the real ~/.arx
 from autoresearch import course, features, learn, memory, projects, teach
@@ -171,6 +171,29 @@ class Memory(unittest.TestCase):
         self.assertIn("ladder", {k["id"] for k in d["concepts"]})
         anon = json.loads(_feature(features.GET, self.p, "/api/memory", dict(viewer="anon"))[1])
         self.assertIsNone(anon["person"]); self.assertEqual(anon["concepts"], [])
+
+    def test_a_guest_reads_only_their_own_memory_of_this_project(self):
+        from autoresearch import people
+        people.remember("p-0c0c0c0c", "Owner", self.key)
+        people.remember("p-0e0e0e0e", "Guest", self.key, remote=True)
+        with memory.db() as con:
+            for who in ("p-0c0c0c0c", "p-0e0e0e0e"):
+                for i, proj in enumerate(("elsewhere", self.key)):
+                    memory._insert(con, proj, dict(t=time.time() - 60 + i, person=who, kind="attempt", method="code", hit=1),
+                                   ["paired", f"hill:{proj}/h"], f"{who}{i}", "live")
+                memory.rebuild(con, who)
+        get = lambda v: json.loads(_feature(features.GET, self.p, "/api/memory", dict(viewer=v))[1])
+        self.assertNotIn("people", get("p-0c0c0c0c"))  # who else is in memory is no one's business here
+        self.assertIn("hill:elsewhere/h", {k["id"] for k in get("p-0c0c0c0c")["concepts"]})  # on this machine: everything
+        features.REQUEST.remote = True
+        try:
+            self.assertIsNone(get("p-0c0c0c0c")["person"])  # a person of this machine is not the guest's to read
+            g = get("p-0e0e0e0e")
+        finally:
+            features.REQUEST.remote = False
+        self.assertEqual({k["id"] for k in g["concepts"]}, {"paired", f"hill:{self.key}/h"})
+        self.assertEqual(g["methods"]["code"]["n"], 1)
+        self.assertEqual({e["project"] for e in g["timeline"]}, {self.key})
 
     def test_methods_carry_across_projects(self):
         with memory.db() as con:

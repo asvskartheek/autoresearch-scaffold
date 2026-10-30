@@ -33,7 +33,7 @@ Knowledge (per person and concept) is rebuilt from that person's events whenever
   strength now = m * 0.9 ** (days since review / S). Exposures (seen, read, skip, comment) only update last seen.
 
   GET /api/memory?viewer=<person id>   {person, name, now, project, concepts (each with its 101 `lesson` or null), due, methods,
-                                        changed, timeline, people}
+                                        changed, timeline}; a share-link guest: their own, this project only
   arx memory [show|due|changed|backfill] [--viewer ID]
 """
 from __future__ import annotations
@@ -556,9 +556,17 @@ def blend(p, prof: dict, viewer: str, aliases: set | None = None) -> dict:
         return prof
 
 
-def view(p, viewer: str, now: float | None = None, others: bool = True) -> dict:
+def view(p, viewer: str, now: float | None = None, others: bool = True, guest: bool = False) -> dict:
+    """What the Memory page shows. A share-link guest sees only a guest person's memory, and only of this project:
+    the share names one project, and a person of this machine is not theirs to read."""
     now = now or time.time()
     key = projects.key_for(p.root) or ""
+    if guest:
+        from . import people
+        cur = _roster().get(viewer)
+        if not people.ID.fullmatch(str(viewer or "")) or (cur and not cur.get("remote")):
+            viewer = ""
+        others = False
     if key:
         sync(key, p.root)
     if others:
@@ -570,17 +578,20 @@ def view(p, viewer: str, now: float | None = None, others: bool = True) -> dict:
                     pass
     who = person(viewer)
     if not who:
-        return dict(person=None, now=now, project=key, concepts=[], due=[], methods={}, changed=[], timeline=[], people=people_known())
-    ks = knowledge(who, now)
+        return dict(person=None, now=now, project=key, concepts=[], due=[], methods={}, changed=[], timeline=[])
+    ks, ch, tl = knowledge(who, now), changed(who, now - 7 * DAY), timeline(who, now - 30 * DAY)
+    if guest:
+        ks = [k for k in ks if k["project"] in ("", key)]
+        ch = [c for c in ch if _title(c["concept"])[0] in ("", key)]
+        tl = [e for e in tl if e["project"] == key]
     return dict(person=who, name=(_roster().get(who) or {}).get("name") or who, now=now, project=key, concepts=ks,
                 due=[k["id"] for k in sorted((k for k in ks if k["state"] == "due"), key=lambda k: k["due"])],
-                methods=methods(who), changed=changed(who, now - 7 * DAY), timeline=timeline(who, now - 30 * DAY),
-                people=people_known())
+                methods=methods(who, project=key if guest else None), changed=ch, timeline=tl)
 
 
 @features.get("/api/memory")
 def _get(p, path, q):
-    return 200, view(p, str(q.get("viewer") or ""), others=q.get("others") != "0")
+    return 200, view(p, str(q.get("viewer") or ""), others=q.get("others") != "0", guest=bool(getattr(features.REQUEST, "remote", False)))
 
 
 # ---------------------------------------------------------------- live writes
