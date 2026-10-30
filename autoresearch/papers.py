@@ -99,9 +99,7 @@ def health(p: Project, name: str, meta: dict = None) -> dict:
     stale = []
     if g:
         try:
-            status = p.goal_status(meta["goal"])
-            if (status.get("baseline") and status.get("model") != status.get("baseline")
-                    and not (status.get("vs_baseline") or {}).get("n")):
+            if p.goal_status(meta["goal"]).get("comparison_state") in ("different_harness", "missing_baseline", "missing_measurement"):
                 stale.append("no compatible current baseline comparison; date and link any historical claim")
         except (SystemExit, KeyError, ValueError):
             pass
