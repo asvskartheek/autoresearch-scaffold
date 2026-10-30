@@ -176,6 +176,13 @@ class Project:
 
     def datasets(self) -> dict: return self._coll("datasets")
     def slices(self) -> dict: return self._coll("slices")
+
+    def _slice_field(self, name: str, key: str):
+        """One field of one slice, read without copying every slice's id list (gates and goals ask per run)."""
+        try:
+            return ((_cached(self.dir / "slices.json", json.loads) or {}).get(name) or {}).get(key)
+        except (OSError, ValueError):
+            return None
     def hills(self) -> dict: return self._coll("hills")
     def models(self) -> dict: return self._coll("models")
     def goals(self) -> dict: return self._coll("goals")
@@ -401,7 +408,7 @@ class Project:
 
     def slice_evals(self, model: str, slice_name: str) -> list[dict]:
         """Every complete run of the model on the slice's current version, oldest first."""
-        h = self.slices().get(slice_name, {}).get("hash")
+        h = self._slice_field(slice_name, "hash")
         c = [t for t in self.evals() if t.get("model") == model and t.get("slice") == slice_name and t.get("slice_hash") == h
              and not t.get("superseded_by")]
         return sorted(c, key=lambda t: t.get("ended", 0))
@@ -433,7 +440,7 @@ class Project:
                       continuous=self.is_continuous(slice_name))
 
     def is_continuous(self, slice_name: str) -> bool:
-        return (self.slices().get(slice_name) or {}).get("scale") == "continuous"
+        return self._slice_field(slice_name, "scale") == "continuous"
 
     # gates -----------------------------------------------------------------------------
     def _resolve(self, ref: str, model: dict) -> list[str]:
