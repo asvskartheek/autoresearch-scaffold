@@ -411,14 +411,21 @@ def cmd_ask_poll(a):
         emit(f"noop: no open question after {a.timeout:g}s", help=["arx2 ask poll"])
         return
     p.append("ask.claim", key=q["key"], agent=a.agent)
-    emit(asks.describe(p, q), help=[f'arx2 ask answer {q["key"]} --text "<one real example, then the aggregate>" '
-                                    f'[--file diagram.svg] [--link "Label=#/hill/<key>"]', "arx2 ask poll"])
+    emit(asks.describe(p, q), help=[f'arx2 ask answer {q["key"]} --file figure.svg --text "<one real item; the aggregate with set and n; ~60 words>" '
+                                    f'[--link "Label=#/hill/<key>"]', "arx2 ask poll"])
 
 
 def cmd_ask_answer(a):
     p = P()
     asks.answer(p, a.key, a.parts, agent=a.agent or os.environ.get("ARX2_AGENT"))
-    emit(f"answered: {a.key} ({len(a.parts)} part{'s' if len(a.parts) != 1 else ''})", help=["arx2 ask poll"])
+    words = sum(len(v.split()) for k, v in a.parts if k == "text")
+    pictures = sum(1 for k, _ in a.parts if k == "file")
+    warn = []
+    if words > 80:
+        warn.append(f"warn: {words} words; answers read best as one figure and about 60 words")
+    if not pictures and words > 40:
+        warn.append("warn: no figure; draw the numbers (--file x.svg) instead of writing them")
+    emit(f"answered: {a.key} ({len(a.parts)} part{'s' if len(a.parts) != 1 else ''})", *warn, help=["arx2 ask poll"])
 
 
 def cmd_ask_reply(a):
@@ -482,8 +489,8 @@ def cmd_ask_watch(a):
 
 ASK_GUIDE = """A person clicked the thing above on the arx2 dashboard and asked the question. Answer with
   arx2 ask answer {key} --text "..." [--file x.svg|x.png|x.html|x.md] [--link "Label=#/hill/<key>"]
-Follow "Answering questions" in v2/AGENTS.md: one real example pulled from the ledger rows first, then the aggregate
-with its set and n. Be short. Draw an SVG when a picture is clearer than words."""
+Follow "Answering questions" in v2/AGENTS.md: lead with one figure (SVG or HTML) drawn from the ledger rows, then at
+most three short lines (one real item, the aggregate with set and n, the takeaway). About 60 words in all."""
 
 
 # ---- server --------------------------------------------------------------

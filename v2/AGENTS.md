@@ -46,14 +46,17 @@ the earlier turns (`thread[]`) and the facts and run keys around it. Answer with
 `--text` (markdown), `--file` (svg, png, html, md) and `--link "Label=#/hill/<key>"` (a dashboard view; keys may
 contain `/`). `arx2 ask list` shows what is waiting.
 
-How to answer:
-- Answer the question asked, about the thing clicked. Read the rows (`.arx2/rows/<run>.jsonl`, or `Views(p).rows(run)`)
-  before you write a number.
-- One real example first: an item id, what happened to it on each side, and why. Then the aggregate with its set and n,
-  paired against the same base, with the 90% interval.
-- If the ledger cannot back a claim, say so plainly. "The ledger does not show this" is a good answer.
-- Short: three to six sentences. Draw an SVG (item squares, a bar, a small flow) when a picture is clearer than words.
-  Use `currentColor` for text so it reads in light and dark.
+How to answer: a picture first, then a few words. People read answers next to the thing they clicked; walls of text
+get skipped.
+- Read the rows (`.arx2/rows/<run>.jsonl`, or `Views(p).rows(run)`) before you write a number.
+- Lead with one figure that carries the numbers: the real items as squares (fixed, broke, both, neither), a paired
+  delta with its interval, a small flow. SVG for a still picture, HTML when hovering or clicking shows the item ids.
+  Use `currentColor` and the dashboard tokens (`var(--ink)`, `var(--champ)`, `var(--broke)`, `var(--mute)`), so it reads
+  in light and dark.
+- Then at most three short lines: the one real example (item id, what happened on each side), the aggregate (set, n,
+  paired delta, 90% interval) and the takeaway. About 60 words in all; `ask answer` warns above 80.
+- If the ledger cannot back a claim, say so in one line. "The ledger does not show this" is a good answer.
+- Add a `--link` to the dashboard view that shows more, rather than describing it.
 - Never paste client text, questions or model outputs into an answer; ids, counts and your own words only.
 
 The person saves good answers as a note, card or paper; they then show on the entity's page and in the Library.

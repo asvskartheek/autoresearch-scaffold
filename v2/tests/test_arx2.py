@@ -274,3 +274,12 @@ def test_watch_gives_each_question_its_own_agent(proj):
         assert asks.owner(a) == f"watch/{qs[0]['key']}"
     finally:
         w.kill()
+
+
+def test_texty_answers_are_warned(proj):
+    from arx2 import asks
+    q = asks.ask(Project(proj), "Why?", "project", "toy", "x")
+    out = cli(proj, "ask", "answer", q["key"], "--text", " ".join(["word"] * 90)).stdout
+    assert "warn: 90 words" in out and "warn: no figure" in out
+    (proj / "f.svg").write_text("<svg/>")
+    assert "warn" not in cli(proj, "ask", "answer", q["key"], "--file", "f.svg", "--text", "Item 3 broke; 2 of 30 overall.").stdout
