@@ -9,7 +9,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import api, stats
+from . import api, asks, stats
 from .axi import clip, emit, fail, kv, table
 from .store import LedgerError, Project, check_name, find_root, ids_hash, register, registry, slug
 from .view import Views
@@ -381,6 +381,83 @@ def cmd_learner(a):
     emit(report(P()))
 
 
+# ---- asks: questions people click on the dashboard -------------------------
+
+class Part(argparse.Action):
+    """Keeps --text, --file and --link in the order they were given: one answer, many parts."""
+
+    def __call__(self, ap, ns, values, opt=None):
+        ns.parts = [*(getattr(ns, "parts", None) or []), (self.dest, values)]
+
+
+def _wait_open(p, timeout, skip=(), interval=1.0):
+    t0, seen, s = time.time(), None, None
+    while True:
+        m = p.events_path.stat().st_mtime if p.events_path.exists() else 0
+        if m != seen:
+            seen, s = m, p.state()
+        a = asks.next_open(s, skip)
+        if a:
+            return a
+        if timeout and time.time() - t0 >= timeout:
+            return None
+        time.sleep(interval)
+
+
+def cmd_ask_poll(a):
+    p = P()
+    q = _wait_open(p, a.timeout)
+    if not q:
+        emit(f"noop: no open question after {a.timeout:g}s", help=["arx2 ask poll"])
+        return
+    p.append("ask.claim", key=q["key"], agent=a.agent)
+    emit(asks.describe(p, q), help=[f'arx2 ask answer {q["key"]} --text "<one real example, then the aggregate>" '
+                                    f'[--file diagram.svg] [--link "Label=#/hill/<key>"]', "arx2 ask poll"])
+
+
+def cmd_ask_answer(a):
+    p = P()
+    asks.answer(p, a.key, a.parts, agent=a.agent)
+    emit(f"answered: {a.key} ({len(a.parts)} part{'s' if len(a.parts) != 1 else ''})", help=["arx2 ask poll"])
+
+
+def cmd_ask_list(a):
+    s = P().state()
+    rows = [{"key": k, "status": q["status"], "age": _ago(q["created"]), "on": q.get("what"), "question": q["text"][:80],
+             "saved": ",".join(x["as"] for x in q["saved"]) or None}
+            for k, q in s["asks"].items() if a.all or q["status"] != "answered"]
+    emit(table("asks", rows[-a.limit:], ["key", "status", "age", "on", "question", "saved"], total=len(rows)),
+         help=["arx2 ask poll", "arx2 ask list --all"])
+
+
+def cmd_ask_watch(a):
+    """Always on: claim each question, hand it to an agent command, check it was answered, wait for the next."""
+    p = P()
+    failed: dict[str, int] = {}
+    print(f"watching {p.root} for questions (ctrl-c stops)", flush=True)
+    while True:
+        q = _wait_open(p, 0, skip={k for k, n in failed.items() if n >= 2})
+        p.append("ask.claim", key=q["key"], agent=a.agent)
+        f = p.dir / "asks" / f"{q['key']}.txt"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(asks.describe(p, q) + "\n\n" + ASK_GUIDE.format(key=q["key"]))
+        print(f"ask {q['key']}: {q['text'][:80]}", flush=True)
+        rc = subprocess.call(a.exec, shell=True, cwd=p.root,
+                             env={**os.environ, "ARX2_ASK": q["key"], "ARX2_ASK_FILE": str(f)})
+        if p.state()["asks"][q["key"]]["status"] != "answered":
+            failed[q["key"]] = failed.get(q["key"], 0) + 1
+            p.append("ask.release", key=q["key"], agent=a.agent)
+            print(f"  not answered (exit {rc}); released", flush=True)
+        else:
+            print("  answered", flush=True)
+
+
+ASK_GUIDE = """A person clicked the thing above on the arx2 dashboard and asked the question. Answer with
+  arx2 ask answer {key} --text "..." [--file x.svg|x.png|x.html|x.md] [--link "Label=#/hill/<key>"]
+Follow "Answering questions" in v2/AGENTS.md: one real example pulled from the ledger rows first, then the aggregate
+with its set and n. Be short. Draw an SVG when a picture is clearer than words."""
+
+
 # ---- server --------------------------------------------------------------
 
 def cmd_serve(a):
@@ -518,6 +595,18 @@ def build() -> argparse.ArgumentParser:
     x = cmd("card", cmd_card, "add a flash card")
     x.add_argument("--front", required=True); x.add_argument("--back", required=True); x.add_argument("--about"); x.add_argument("--key")
     cmd("learner", cmd_learner, "how the person uses the dashboard (to improve it)")
+
+    x = cmd("ask", None, "questions people ask by clicking the dashboard"); qsp = x.add_subparsers(dest="sub")
+    y = qsp.add_parser("poll", help="wait for an open question, claim it and print it"); y.set_defaults(fn=cmd_ask_poll)
+    y.add_argument("--timeout", type=float, default=0, help="seconds; 0 waits forever"); y.add_argument("--agent")
+    y = qsp.add_parser("answer", help="answer in parts: --text, --file and --link, in order"); y.set_defaults(fn=cmd_ask_answer, parts=[])
+    y.add_argument("key"); y.add_argument("--agent")
+    for f, h in (("--text", "markdown"), ("--file", "svg, png, html or md"), ("--link", "label=#/hill/<key> or an url")):
+        y.add_argument(f, action=Part, help=h)
+    y = qsp.add_parser("list"); y.set_defaults(fn=cmd_ask_list)
+    y.add_argument("--all", action="store_true"); y.add_argument("--limit", type=int, default=30)
+    y = qsp.add_parser("watch", help="always on: run an agent command for every question"); y.set_defaults(fn=cmd_ask_watch)
+    y.add_argument("--exec", required=True, help="shell command; gets $ARX2_ASK and $ARX2_ASK_FILE"); y.add_argument("--agent")
 
     x = cmd("serve", cmd_serve, "run the dashboard in the foreground")
     x.add_argument("--port", type=int, default=8790); x.add_argument("--host", default="127.0.0.1")

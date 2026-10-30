@@ -144,3 +144,41 @@ def test_ask_answer_save_folds(proj):
     assert "<b>3</b>" in (p.dir / "docs" / doc["file"]).read_text()
     assert s["cards"][f"ask-{q['key']}"]["front"] == "Why did it fail here?"
     assert [x["as"] for x in s["asks"][q["key"]]["saved"]] == ["note", "card"]
+
+
+def test_ask_cli_poll_answer_list(proj):
+    from arx2 import asks
+    p = Project(proj)
+    assert "noop" in cli(proj, "ask", "poll", "--timeout", "0.5").stdout
+    cli(proj, "cand", "add", "a", "--name", "First Try", "--change", "Shorter prompt")
+    q = asks.ask(p, "What does this cell mean?", "candidate", "a", "ladder cell: First Try × Full set", route="ladder")
+    out = cli(proj, "ask", "poll", "--timeout", "5", "--agent", "t").stdout
+    assert q["key"] in out and "clicked: ladder cell" in out and "change: Shorter prompt" in out and "arx2 ask answer" in out
+    assert p.state()["asks"][q["key"]]["status"] == "claimed"
+    (proj / "d.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg"><rect width="4" height="4"/></svg>')
+    bad = cli(proj, "ask", "answer", q["key"], "--link", "javascript:alert(1)", ok=False)
+    assert bad.returncode == 1 and "fix:" in bad.stdout
+    cli(proj, "ask", "answer", q["key"], "--text", "Item 7 failed.", "--file", "d.svg", "--link", "Hill=#/hill/units", "--text", "Overall 3 of 30.")
+    parts = p.state()["asks"][q["key"]]["answers"][0]["parts"]
+    assert [x["type"] for x in parts] == ["md", "svg", "link", "md"]  # order kept across flags
+    assert "answered" in cli(proj, "ask", "list", "--all").stdout
+
+
+def test_ask_watch_runs_an_agent_per_question(proj):
+    import time as _t
+    from arx2 import asks
+    p = Project(proj)
+    q = asks.ask(p, "Why?", "project", "toy", "sentence: x")
+    env = {**os.environ, "PYTHONPATH": str(ROOT), "ARX2_HOME": str(proj / ".home")}
+    agent = f'{sys.executable} -m arx2.cli ask answer "$ARX2_ASK" --text "$(head -1 "$ARX2_ASK_FILE")"'
+    w = subprocess.Popen([sys.executable, "-m", "arx2.cli", "ask", "watch", "--exec", agent], cwd=proj, env=env,
+                         stdout=subprocess.PIPE, text=True)
+    try:
+        for _ in range(100):
+            if p.state()["asks"][q["key"]]["status"] == "answered":
+                break
+            _t.sleep(0.1)
+    finally:
+        w.kill()
+    a = p.state()["asks"][q["key"]]
+    assert a["status"] == "answered" and a["answers"][0]["parts"][0]["body"] == f"ask: {q['key']}"
