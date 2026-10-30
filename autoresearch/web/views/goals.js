@@ -165,7 +165,7 @@ const vsFig=function(g){
  const v=g.vs_baseline,P=prog(g);
  if(v&&v.delta!=null)return {v:gchg(g,v.delta),s:`${byN(g)?`of ${N(g.n)} · `:''}${gci(g,v.lo,v.hi)}`,wl:`better on ${v.wins}, worse on ${v.losses}`};
  if(g.value==null)return {v:DASH,s:'no run yet'};
- if(g.baseline&&g.model&&g.baseline===g.model)return {v:zero(g),s:'the champion is still the baseline'};
+ if(g.baseline&&g.model&&g.baseline===g.model)return {v:zero(g),s:'the champion is still the baseline',dup:!!gained(g)};
  if(P.b!=null&&g.value!=null)return {v:gchg(g,g.value-P.b,false),s:'latest runs, unpaired',dup:!!gained(g)};  // the same change Since baseline shows
  return {v:DASH,s:g.baseline?comparisonNote(g):'no baseline'};
 }
