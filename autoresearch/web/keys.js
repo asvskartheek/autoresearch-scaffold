@@ -216,7 +216,6 @@ function gKey(e){
 // ---------- the Brief, the hill and the paper keep keys of their own; the sheet lists the ones live now
 function own(){const r=[];
  if(route()==='learn'&&typeof L!=='undefined'&&L.b){
-  if(L.dlg)return [['1 – 4','Pick an answer'],['space','Next question']];
   const c=L.b.cards[L.cur];
   if(!c)r.push(['space','Start']);
   else if(c.pred)r.push(['space','Next card']);
