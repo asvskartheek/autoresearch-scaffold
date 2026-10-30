@@ -180,16 +180,17 @@ VIEWS.overview=()=>{
  const pick=sl.length>7?sel:`<div class="ov-pick-s">${sel}</div><div class="seg ov-hide-s" role="tablist" aria-label="Slice">${sl.map(s=>`<button role="tab" aria-selected="${s.name===S.lbSlice}" class="${s.name===S.lbSlice?'on':''}" onclick="ovPickSlice(${esc(JSON.stringify(s.name))})">${esc(short(s.name))}<small>${ovN(s.n)}</small></button>`).join('')}</div>`;
  const sh=(label,k,cls)=>[`<button class="ov-sort ${so.k===k?'on':''}" onclick="ovSortBy('${k}')" aria-label="Sort by ${esc(label.replace(/<span class="ov-show-s">[^<]*<\/span>/g,'').replace(/<[^>]+>/g,''))}">${label}${so.k===k?`<span class="ov-arr">${so.d<0?'↓':'↑'}</span>`:''}</button>`,cls];
  const rows=shown.map(([m,r])=>{
-  const mismatch=boardHarnessMismatch(r,st.leaderboard[S.lbSlice]?.[champ]);
-  const d=!mismatch&&cs!=null&&r.score!=null?r.score-cs:null;
-  const good=d!=null&&d!==0&&(hib?d>0:d<0)?'pos':'';
+  // under another harness than the champion's latest run: the server's paired Δ under this model's own harness
+  const mismatch=boardHarnessMismatch(r,st.leaderboard[S.lbSlice]?.[champ]),own=mismatch?ownPair(r):null;
+  const d=own?own.delta:!mismatch&&cs!=null&&r.score!=null?r.score-cs:null;
+  const good=d!=null&&d!==0&&(own?d>0:hib?d>0:d<0)?'pos':'';
   const about=ovAbout(m,st.models[m]),rej=st.models[m]?.status==='rejected';
   return `<tr class="click${rej?' ov-rej':''}" title="${rej?esc('Rejected: '+firstLine(st.models[m].reason||'')):''}" onclick="location.hash='task/${enc(r.task)}'"><td class="num faint ov-rank">${rank.get(m)}</td>
    <td class="ov-id"><div class="two"><span class="row"><a class="ell ov-nm" href="#model/${enc(m)}" onclick="event.stopPropagation()" title="${esc(m)}">${mn(m)}</a>${m===champ?`<span class="ov-hide-s">${pill('champion','champion')}</span>`:rej?pill('rejected','rejected'):''}</span><span class="sub ell ov-show-s">${m===champ?'Champion · ':''}n ${ovN(r.n)}${r.errors?' · '+plural(r.errors,'error'):''}</span></div></td>
    ${bin?`<td class="ov-bar ov-hide-s">${meter(r.score,{cls:m===champ?'':'muted'})}</td>`:''}
    <td class="num"><b class="ov-sc">${cur?sv(cur.name,r.score,r.n):ovScore(r.score,cur)}</b></td>
    <td class="num ov-hide-s">${ovN(r.n)}</td>
-   <td class="num ${good} ${d===0||d==null?'faint':''}">${mismatch?'Different harness':d==null?DASH:d===0?'0':cur?sd(cur.name,d):ovDelta(d,cur)}</td>
+   <td class="num ${good} ${d===0||d==null?'faint':''}">${mismatch&&!own?'Different harness':d==null?DASH:d===0?'0':cur?sd(cur.name,d):ovDelta(d,cur)}</td>
    <td class="num ov-hide-s ${r.errors?'':'faint'}">${ovN(r.errors??0)}</td>
    ${hasCost?`<td class="num ov-hide-m">${r.cost==null?DASH:money(r.cost)}</td>`:''}
    ${hasLat?`<td class="num ov-hide-m">${r.latency_p50==null?DASH:secs(r.latency_p50)}</td>`:''}${hasP95?`<td class="num ov-hide-m">${r.latency_p95==null?DASH:secs(r.latency_p95)}</td>`:''}
