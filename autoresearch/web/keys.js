@@ -6,7 +6,7 @@
 //   gg / G       first / last item       o, Enter  open the ringed item (follow its link, open its thread: never a
 //                write control)          O  its link in a new tab
 //   h, Backspace back in history (as a browser)     l  forward     u  up a level (the crumb above)
-//   g + letter   a page (g r Start, g o Overview, g b Brief, g c Course, g t Goals ...); g 1-9 a project, numbered in
+//   g + letter   a page (g r Start, g o Overview, g b Brief, g c 101, g t Goals ...); g 1-9 a project, numbered in
 //                registry order, the same from every project (11 or more: g 1 1); a pending g wins over a view's keys
 //   f / F        hint labels on every visible control (the paper's own too); type one to press it, F opens in a tab
 //   /            the view's search box (Enter: to the first result; Esc: leave it), else a find line over the items
@@ -21,7 +21,7 @@
 if(window.ARXK)return;
 // pages: g + this letter (gg stays "top", so Goals is g t: targets; Start is g r: root)
 const PAGES={start:'r',overview:'o',learn:'b',course:'c',workbench:'w',goals:'t',questions:'q',models:'m',hills:'h',papers:'p',slices:'s',archive:'a',memory:'y'};
-const NAMES={r:'Start',o:'Overview',b:'Brief',c:'Course',w:'Workbench',t:'Goals',q:'Questions',m:'Models',h:'Hills',p:'Papers',s:'Slices',a:'Archive',y:'Memory'};
+const NAMES={r:'Start',o:'Overview',b:'Brief',c:'101',w:'Workbench',t:'Goals',q:'Questions',m:'Models',h:'Hills',p:'Papers',s:'Slices',a:'Archive',y:'Memory'};
 // a view's items: rows, cards, tiles, comment cards; plus (below) any block-sized link in the view
 const ITEMS=['tr.click','#main tbody tr:has(a[href])','article.wb-job','a.wb-chip','.q-row','a.ov-goal','a.ov-task',
  'a.sx-g','a.sx-need','a.sx-job','a.sx-tile','a.sx-pg','a.sx-champ','a.sx-brief','a.gm-node','section.gl-card',
@@ -45,8 +45,10 @@ font:13px/1.45 var(--font,system-ui,sans-serif)}
 .kh-hd .kh-x{margin-left:auto;font-size:12px;color:var(--muted-fg,var(--muted,#5b6168))}
 .kh-gs{display:grid;grid-template-columns:1fr 1fr;gap:10px 26px}
 .kh-g h4{margin:0 0 3px;font:600 11px/1.6 var(--font,system-ui,sans-serif);color:var(--muted-fg,var(--muted,#5b6168));text-transform:uppercase;letter-spacing:.06em}
-.kh-g span{display:flex;align-items:center;gap:6px;min-width:0;padding:1px 0}.kh-g i{font-style:normal;color:var(--muted-fg,var(--muted,#5b6168));overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:4px}
+.kh-g span{display:flex;align-items:center;gap:10px;min-width:0;padding:1px 0}.kh-g i{font-style:normal;color:var(--muted-fg,var(--muted,#5b6168));overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kh-k{flex:none;display:flex;align-items:center;gap:4px;min-width:72px;font-weight:inherit}
 .kh-ov kbd{all:unset;flex:none;min-width:22px;font:500 11px/20px var(--mono,ui-monospace,Menlo,monospace);color:var(--text,var(--foreground,#131416))}
+.kh-ov kbd.sym{font:400 14px/20px system-ui,sans-serif;text-align:center}
 .kh-ov button{all:unset;flex:none;min-width:22px;padding:0 5px;border-radius:4px;cursor:pointer;text-align:center;font:500 11px/20px var(--mono,ui-monospace,Menlo,monospace);
 color:var(--text,var(--foreground,#131416));box-shadow:inset 0 0 0 1px var(--border,#e3e7eb)}
 .kh-ov button:hover,.kh-ov button.on{box-shadow:inset 0 0 0 1px var(--ring,var(--accent,#1b6c80))}
@@ -182,7 +184,7 @@ function pages(){const out=new Map(),extra=[];
  for(const a of extra){const k=[...label(a).toLowerCase()].find(c=>/[a-z]/.test(c)&&c!=='g'&&!out.has(c)&&!Object.values(PAGES).includes(c));if(k)out.set(k,{el:a,name:label(a),go:()=>a.click()})}
  // the pages this page's nav does not show (the paper's rail has no Start, Brief or Questions): by URL
  const dash=typeof VIEWS!=='undefined';
- for(const [r,k] of Object.entries(PAGES))if(!out.has(k)&&(dash?!!VIEWS[r]:r!=='memory'))
+ for(const [r,k] of Object.entries(PAGES))if(!out.has(k)&&(!dash||!!VIEWS[r]))
   out.set(k,{name:NAMES[k],go:()=>{if(dash)location.hash=r;else location.href=base()+'/#'+r}});
  return out}
 // projects, numbered in registry order (the sidebar's order), the same numbers from every project
@@ -265,8 +267,8 @@ function closeSheet(){if(!ov)return;ov.remove();ov=null;listen=null;msg='';if(ov
 function drawSheet(){if(!ov)return;
  const had=ov.contains(document.activeElement)?document.activeElement.dataset.id:null;
  const groups={Move:[],Act:[],Comments:[],'Go to':[],'This page':[]};
- const kb=t=>{const k=document.createElement('kbd');k.textContent=t;return k};
- const row=(g,keys,l)=>{const s=document.createElement('span'),i=document.createElement('i');i.textContent=l;s.append(...keys,i);groups[g].push(s)};
+ const kb=t=>{const k=document.createElement('kbd');k.textContent=t;if(/[^\x20-\x7e]/.test(t.replace(/–/g,'')))k.className='sym';return k};
+ const row=(g,keys,l)=>{const s=document.createElement('span'),c=document.createElement('b'),i=document.createElement('i');c.className='kh-k';c.append(...keys);i.textContent=l;s.append(c,i);groups[g].push(s)};
  row('Move',[kb('gg')],items().length?'First '+thing():'Top');
  for(const a of ACTS){if(!live(a))continue;const k=keyOf(a);if(RES.has(k.toLowerCase())&&!a.alt)continue;
   const ks=[];

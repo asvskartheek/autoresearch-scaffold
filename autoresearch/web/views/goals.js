@@ -504,7 +504,7 @@ const itemCard=function(i){
  return `<section class="card gi-item${working?' working':''}" id="gi-${id}"><button class="iconbtn gi-x" type="button" aria-label="Dismiss" title="Dismiss" onclick="Intake.dismiss('${id}')">×</button>${h}</section>`;
 }
 const intake=function(){
- const box=`<form class="gi-ask" onsubmit="event.preventDefault();Intake.submit()"><textarea id="gi-ask" rows="2" placeholder="New goal, in your own words" oninput="Intake.draft(this.value)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();Intake.submit()}">${esc(IN.draft)}</textarea><button class="btn primary" type="submit" ${IN.busy.ask?'disabled':''}>Go</button></form>${IN.err.ask?`<p class="neg gi-err">${esc(IN.err.ask)}</p>`:''}`;
+ const box=`<form class="gi-ask" onsubmit="event.preventDefault();Intake.submit()"><textarea id="gi-ask" rows="2" placeholder="New goal, in your own words" aria-label="New goal" oninput="Intake.draft(this.value)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();Intake.submit()}">${esc(IN.draft)}</textarea><button class="btn primary" type="submit" ${IN.busy.ask?'disabled':''}>Go</button></form>${IN.err.ask?`<p class="neg gi-err">${esc(IN.err.ask)}</p>`:''}`;
  return `<div class="gi">${panel('New goal',box,{cls:'gi-new'})}${items().map(itemCard).join('')}</div>`;
 }
 const act=async function(id,fn){

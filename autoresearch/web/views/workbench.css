@@ -32,7 +32,7 @@
 .wb-hp::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
 .wb-hp.ok{background:var(--pill-positive-bg);color:var(--pill-positive-ink)}
 .wb-hp.warn{background:var(--pill-warning-bg);color:var(--pill-warning-ink)}
-.wb-hp.bad{background:var(--negative);color:#fff}
+.wb-hp.bad{background:var(--negative);color:var(--surface)}
 .wb-bar{margin:12px 16px 0}
 .wb-bar .meter{height:6px;background:var(--active)}
 .wb-note{padding:10px 16px 0}
