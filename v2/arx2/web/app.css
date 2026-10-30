@@ -125,7 +125,8 @@ svg .lbl { fill: var(--ink); font-weight: 600; }
 .ok-banner { display: flex; gap: 12px; align-items: center; }
 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--champ); display: inline-block; }
 .dot.bad { background: var(--alarm); } .dot.live { background: var(--live); animation: pulse 1.2s infinite; }
-iframe.doc { width: 100%; height: calc(100vh - 160px); border: 1px solid var(--line); border-radius: 10px; background: var(--sheet); }
+iframe.doc { display: block; width: 100%; height: 100vh; border: 0; background: transparent; }
+.doc-alone { float: right; color: var(--mute); }
 .hint { font-size: 12px; color: var(--mute); }
 .quiz { background: var(--live-soft); border-radius: 10px; padding: 14px 16px; }
 .quiz button { margin-right: 6px; }

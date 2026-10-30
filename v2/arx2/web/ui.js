@@ -249,7 +249,7 @@ function cycleTheme() {
   const next = { auto: "light", light: "dark", dark: "auto" }[theme()];
   if (next === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = next;
   try { localStorage.setItem("arx2.theme", next); } catch (e) {}
-  showTheme();
+  showTheme(); docTheme();
 }
 addEventListener("DOMContentLoaded", showTheme);
 

@@ -574,9 +574,35 @@ PAGES.library = (tab) => {
 PAGES.doc = (k) => {
   const d = S.state.docs[k];
   if (!d) return `${projNav("library")}<p class="empty">No document.</p>`;
-  return `${projNav("library")}<div class="spread"><div><div class="small mute">${esc(d.kind)} · ${esc(d.audience || "internal")}</div><h1>${esc(d.name)}</h1><p class="sub">${esc(d.title || "")}</p></div><a href="/api/p/${S.key}/doc/${encodeURIComponent(k)}" target="_blank">Open alone ↗</a></div>
-    <iframe class="doc section" src="/api/p/${S.key}/doc/${encodeURIComponent(k)}"></iframe>`;
+  const src = `/api/p/${S.key}/doc/${encodeURIComponent(k)}`, v = `${src}@${d.updated}`;
+  const nav = projNav("library");
+  crumbs([{ label: "All projects", href: "#/" }, { label: S.state.project.name, href: `#/p/${S.key}` }, { label: d.name }]);
+  if ($("#app iframe.doc")?.dataset.v === v) return null; // same paper: keep the frame, its height and the reader's place
+  return `${nav}<a class="doc-alone small" href="${src}" target="_blank">Open alone ↗</a>
+    <iframe class="doc" data-v="${esc(v)}" src="${src}" onload="docLoaded(this)"></iframe>`;
 };
+
+// The paper sits in the page as part of it: no frame, no inner scroll, the dashboard's theme.
+const EMBED_CSS = `:root{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}html,body{background:transparent!important;overflow:hidden}
+html.arx-embedded main{padding:0 0 40px}.ask-hl{outline:2px solid #2f5bd3!important;outline-offset:2px}html.asking *{cursor:crosshair!important}`;
+function docLoaded(f) {
+  const d = f.contentDocument;
+  if (!d?.body) return;
+  d.documentElement.classList.add("arx-embedded");
+  d.head.insertAdjacentHTML("beforeend", `<style>${EMBED_CSS}</style>`);
+  docTheme();
+  const fit = () => {
+    const h = Math.ceil(d.documentElement.getBoundingClientRect().height);
+    if (Math.abs(h - f.offsetHeight) > 1) f.style.height = `${h}px`;
+    placePins();
+  };
+  new f.contentWindow.ResizeObserver(fit).observe(d.documentElement);
+}
+function docTheme() {
+  const d = $("#app iframe.doc")?.contentDocument;
+  if (d?.body) d.documentElement.dataset.theme = theme() === "auto" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : theme();
+}
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", docTheme);
 
 // ---- learn: cards, review, calibration -----------------------------------------
 let deck = null;
