@@ -6,7 +6,7 @@
 //   gg / G       first / last item       o, Enter  open the ringed item (follow its link, open its thread: never a
 //                write control)          O  its link in a new tab
 //   h, Backspace back in history (as a browser)     l  forward     u  up a level (the crumb above)
-//   g + letter   a page (g r Start, g o Overview, g b Brief, g c Course, g t Goals ...); g 1-9 a project, numbered in
+//   g + letter   a page (g r Start, g o Overview, g b Brief, g c 101, g t Goals ...); g 1-9 a project, numbered in
 //                registry order, the same from every project (11 or more: g 1 1); a pending g wins over a view's keys
 //   f / F        hint labels on every visible control (the paper's own too); type one to press it, F opens in a tab
 //   /            the view's search box (Enter: to the first result; Esc: leave it), else a find line over the items
@@ -21,7 +21,7 @@
 if(window.ARXK)return;
 // pages: g + this letter (gg stays "top", so Goals is g t: targets; Start is g r: root)
 const PAGES={start:'r',overview:'o',learn:'b',course:'c',workbench:'w',goals:'t',questions:'q',models:'m',hills:'h',papers:'p',slices:'s',archive:'a',memory:'y'};
-const NAMES={r:'Start',o:'Overview',b:'Brief',c:'Course',w:'Workbench',t:'Goals',q:'Questions',m:'Models',h:'Hills',p:'Papers',s:'Slices',a:'Archive',y:'Memory'};
+const NAMES={r:'Start',o:'Overview',b:'Brief',c:'101',w:'Workbench',t:'Goals',q:'Questions',m:'Models',h:'Hills',p:'Papers',s:'Slices',a:'Archive',y:'Memory'};
 // a view's items: rows, cards, tiles, comment cards; plus (below) any block-sized link in the view
 const ITEMS=['tr.click','#main tbody tr:has(a[href])','article.wb-job','a.wb-chip','.q-row','a.ov-goal','a.ov-task',
  'a.sx-g','a.sx-need','a.sx-job','a.sx-tile','a.sx-pg','a.sx-champ','a.sx-brief','a.gm-node','section.gl-card',
@@ -179,12 +179,12 @@ const label=a=>{const c=a.cloneNode(true);c.querySelectorAll('.count,.kn,.pdot')
 function pages(){const out=new Map(),extra=[];
  for(const a of document.querySelectorAll('aside#nav a.nav:not(.proj),#rail a[href]')){const href=a.getAttribute('href')||'';
   const r=(href.split('#')[1]||'').split('/')[0],k=PAGES[r];
-  if(k){if(!out.has(k))out.set(k,{el:a,name:label(a)||NAMES[k],go:()=>a.click()})}else if(r)extra.push(a)}
+  if(k){if(!out.has(k))out.set(k,{el:a,name:NAMES[k],go:()=>a.click()})}else if(r)extra.push(a)}
  // a page this file does not know yet takes the first free letter of its name
  for(const a of extra){const k=[...label(a).toLowerCase()].find(c=>/[a-z]/.test(c)&&c!=='g'&&!out.has(c)&&!Object.values(PAGES).includes(c));if(k)out.set(k,{el:a,name:label(a),go:()=>a.click()})}
  // the pages this page's nav does not show (the paper's rail has no Start, Brief or Questions): by URL
  const dash=typeof VIEWS!=='undefined';
- for(const [r,k] of Object.entries(PAGES))if(!out.has(k)&&(dash?!!VIEWS[r]:r!=='memory'))
+ for(const [r,k] of Object.entries(PAGES))if(!out.has(k)&&(!dash||!!VIEWS[r]))
   out.set(k,{name:NAMES[k],go:()=>{if(dash)location.hash=r;else location.href=base()+'/#'+r}});
  return out}
 // projects, numbered in registry order (the sidebar's order), the same numbers from every project
