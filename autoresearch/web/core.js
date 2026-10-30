@@ -225,10 +225,13 @@ const pill=(t,c='')=>`<span class="pill ${esc(c)}">${esc(t)}</span>`;
 const st=(s,l)=>`<span class="st ${esc(s)}">${esc(l??s)}</span>`;
 const empty=(t,hint='')=>`<div class="empty"><b>${t}</b>${hint}</div>`;
 function table(head,rows){return `<div class="tbl"><table><thead><tr>${head.map(h=>Array.isArray(h)?`<th class="${h[1]||''}">${h[0]}</th>`:`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`}
-// the gate ladder: each rung a node on one track; passed track segments turn green
+// the gate ladder: each rung a node on one track; passed track segments turn green. A champion's rung where it has no
+// run on any check slice reads as not run (hollow), not as a filled champion node
+const rungState=(g,r)=>r.status==='champion'&&g.champion&&r.checks?.length&&!r.checks.some(c=>S.state?.leaderboard?.[c.slice]?.[g.champion])?'not_run':r.status;
 function ladder(g,{compact=false}={}){
  if(!g||g.error||!g.rungs?.length)return '';
- return `<span class="ladder ${compact?'compact':''}" title="${esc(g.rungs.map(r=>r.rung+': '+r.status).join(' · '))}">${g.rungs.map((r,i)=>`${i?`<i class="tr ${g.rungs[i-1].status==='pass'?'pass':''}"></i>`:''}<span class="rg ${esc(r.status)}"><i></i><span>${esc(r.rung)}</span></span>`).join('')}</span>`;
+ g={...g,rungs:g.rungs.map(r=>({...r,status:rungState(g,r)}))};
+ return `<span class="ladder ${compact?'compact':''}" title="${esc(g.rungs.map(r=>r.rung+': '+String(r.status).replace(/_/g,' ')).join(' · '))}">${g.rungs.map((r,i)=>`${i?`<i class="tr ${g.rungs[i-1].status==='pass'?'pass':''}"></i>`:''}<span class="rg ${esc(r.status)}"><i></i><span>${esc(r.rung)}</span></span>`).join('')}</span>`;
 }
 const meter=(f,{mark=null,cls=''}={})=>`<div class="meter ${cls}"><i style="width:${(100*Math.max(0,Math.min(1,f||0))).toFixed(1)}%"></i>${mark!=null?`<b style="left:${(100*mark).toFixed(1)}%"></b>`:''}</div>`;
 function ciBar(c){
