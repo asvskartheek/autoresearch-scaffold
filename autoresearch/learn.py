@@ -312,9 +312,18 @@ def _goal_ctx(g: dict, name: str) -> str:
     return t if t and not re.search(r"\d[\d,.]*\d|\d{2,}", t) else name
 
 
+def bar_amount(p: Project, c: dict) -> str:
+    """A gate check's margin / tolerance as an amount: in the slice's units once paired; on a continuous slice not
+    paired yet it is still a fraction of the champion's mean ("5% of the champion's mean"), never "0.05 tok/s"."""
+    if c.get("relative") and c.get("delta") is None:
+        f = abs(c.get("threshold_fraction", c.get("threshold")) or 0)
+        return f"{100 * f:.3g}% of the champion's mean"
+    return sd(p, c.get("slice"), abs(c.get("threshold") or 0)).lstrip("+−")  # a "minus" metric must not read negative
+
+
 def _rule_text(p: Project, c: dict) -> str:
     thr = abs(c.get("threshold") or 0)
-    amt = sd(p, c.get("slice"), thr).lstrip("+−")  # an amount: a "minus" metric must not make it read negative
+    amt = bar_amount(p, c)
     if c.get("rule") == "better":
         return "must be better" + (f" by {amt}" if thr else "")
     return f"may lose at most {amt}" if thr else "must not be worse"

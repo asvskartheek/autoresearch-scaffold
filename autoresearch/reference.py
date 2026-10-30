@@ -210,6 +210,8 @@ def _ladder(p, ix, model, base, sign):
             for sl in targets:
                 thr = chk.get("margin", 0) if chk["rule"] == "better" else -chk.get("tolerance", 0)
                 c = dict(slice=sl, rule=chk["rule"], threshold=thr, ref=chk["slice"], **_scale_of(ix, sl))
+                if c.get("scale") == "continuous":  # a fraction of the comparator's mean until a pairing gives units
+                    c |= dict(relative=True, threshold_fraction=thr)
                 if not base:
                     c["state"] = "no_comparator"
                 elif not ix.has(base, sl):
@@ -218,9 +220,9 @@ def _ladder(p, ix, model, base, sign):
                     c["state"] = "need_run"
                 else:
                     d = _paired(ix, model, base, sl, sign)
-                    if d and d.get("base") is not None and p.is_continuous(sl):
+                    if d and d.get("base") is not None and c.get("relative"):
                         thr *= abs(d["base"])  # as core.gate: a fraction of the champion's mean on a continuous slice
-                        c |= dict(threshold=thr, relative=True)
+                        c["threshold"] = thr
                     ok = d and (d["delta"] > thr if chk["rule"] == "better" else d["delta"] >= thr)
                     c |= dict(state="pass" if ok else "fail", **(d or {}))
                 checks.append(c)

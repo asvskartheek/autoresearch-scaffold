@@ -301,6 +301,16 @@ def cmd_reject(a):
     Project().set_model_status(a.name, "rejected", a.reason)
 
 
+def _bar(p, c) -> str:
+    """The rule's bar: signed in the slice's units once paired; before a pairing on a continuous slice, a share of
+    the champion's mean (the units come from the champion's runs)."""
+    from .learn import bar_amount, sd
+    if c.get("relative") and c.get("delta") is None:
+        thr = c.get("threshold_fraction", c.get("threshold")) or 0
+        return ("by " if c["rule"] == "better" else "within ") + bar_amount(p, c) if thr else ""
+    return sd(p, c["slice"], c["threshold"])
+
+
 def cmd_gate(a):
     from .learn import sd, _neg
     p = Project()
@@ -322,7 +332,7 @@ def cmd_gate(a):
                 runs = f" runs {c['cand_runs']}/{c['base_runs']}" if c.get("cand_runs", 1) > 1 or c.get("base_runs", 1) > 1 else ""
                 extra = (f"Δ {sd(p, sl, c['delta'])} [{sd(p, sl, lo)}, {sd(p, sl, hi)}] n={c['n']}{runs} "
                          f"W/L {c['wins']}/{c['losses']}{' noisy' if c.get('noisy') else ''}")
-            bar = "" if c["rule"] in ("recorded", "manual") else sd(p, sl, c["threshold"]) if sl in p.slices() else _fmt(c["threshold"])
+            bar = ("" if c["rule"] in ("recorded", "manual") else _bar(p, c) if sl in p.slices() else _fmt(c["threshold"]))
             print(f"      {c['state']:<14} {sl:<28} {c['rule']} {bar}  {extra}".rstrip())
     if g["next"]:
         print("next runs:")

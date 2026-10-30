@@ -39,6 +39,28 @@ def run(p, model, sl, scores, errors=(), contract=None):
     return t
 
 
+def arx(p, *argv) -> str:
+    """Run the CLI in the project's folder; its stdout."""
+    from autoresearch import cli
+    out, cwd = io.StringIO(), os.getcwd()
+    os.chdir(p.root)
+    try:
+        with redirect_stdout(out):
+            try:
+                cli.main(list(argv))
+            except SystemExit as e:
+                if e.code not in (None, 0, 3):
+                    raise
+    finally:
+        os.chdir(cwd)
+    return out.getvalue()
+
+
+def continuous_slice(p, name="tps/n6", n=6, unit="tok/s"):
+    p.add_slice(name, [f"x{i}" for i in range(n)], kind="synthetic", scale="continuous", unit=unit, metric="tokens per second")
+    return name
+
+
 class LegacyContinuousScale(unittest.TestCase):
     def test_errored_row_is_left_out_on_a_legacy_continuous_slice(self):
         p = project()
@@ -93,6 +115,35 @@ class SharedDashboardScale(unittest.TestCase):
         self.assertFalse(learn._cont(p, sl))  # no run yet
         run(p, "v0", sl, [-2.5] * 6)
         self.assertTrue(learn._cont(p, sl))
+
+
+class UnpairedRelativeTolerance(unittest.TestCase):
+    def setUp(self):
+        self.p = project([dict(rung="dev", checks=[dict(slice="tps/n6", rule="not_worse", tolerance=0.05)])])
+        continuous_slice(self.p)
+        self.p.add_model("v0", status="champion")
+        self.p.add_model("v1", parent="v0")
+        run(self.p, "v0", "tps/n6", [200.0] * 6)
+
+    def test_unpaired_check_is_a_fraction_of_the_champion(self):
+        c = self.p.gate("v1")["rungs"][0]["checks"][0]
+        self.assertEqual(c["state"], "need_run")
+        self.assertEqual((c["relative"], c["threshold_fraction"], c["threshold"]), (True, -0.05, -0.05))
+        out = arx(self.p, "gate", "v1")
+        self.assertIn("within 5% of the champion's mean", out)
+        self.assertNotIn("tok/s", out)
+
+    def test_paired_check_is_in_units(self):
+        run(self.p, "v1", "tps/n6", [205.0] * 6)
+        c = self.p.gate("v1")["rungs"][0]["checks"][0]
+        self.assertEqual((c["relative"], c["threshold_fraction"]), (True, -0.05))
+        self.assertAlmostEqual(c["threshold"], -10.0)
+        self.assertIn("−10 tok/s", arx(self.p, "gate", "v1"))
+
+    def test_paper_ladder_marks_unpaired_checks_relative(self):
+        from autoresearch import reference
+        c = reference.build(self.p, "v1", cache=False)["ladder"][0]["checks"][0]
+        self.assertEqual((c["state"], c["relative"], c["threshold_fraction"]), ("need_run", True, -0.05))
 
 
 if __name__ == "__main__":

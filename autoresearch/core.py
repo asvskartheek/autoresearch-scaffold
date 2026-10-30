@@ -521,6 +521,9 @@ class Project:
                     cand_runs = self.score_runs(model_name, sl)
                     base_runs = self.score_runs(champ, sl, reference_model=model_name) if champ else []
                     ce, be = (cand_runs or [None])[-1], (base_runs or [None])[-1]
+                    cont = self.is_continuous(sl)
+                    if cont:  # margin / tolerance are a fraction of the champion's mean here, paired or not yet
+                        c |= dict(relative=True, threshold_fraction=c["threshold"])
                     if contract_of(ce) is not None:
                         c["baseline_contract"] = contract_of(ce)
                     if champ == model_name:
@@ -538,14 +541,12 @@ class Project:
                         c["state"] = "need_run"
                         next_runs.append((model_name, sl))
                     else:
-                        cont = self.is_continuous(sl)
                         p = paired(per_id([row for t in cand_runs for row in self.rows(t["id"])], cont),
                                    per_id([row for t in base_runs for row in self.rows(t["id"])], cont), sign)
                         if cont and p.get("base") is not None:
                             # margin / tolerance are written for 0/1 slices; on a continuous one read them as a
                             # fraction of the champion's mean (0.05 on ~160 MB allows 8 MB), not as raw units
                             c["threshold"] *= abs(p["base"])
-                            c["relative"] = True
                         ok = p["delta"] is not None and (p["delta"] > c["threshold"] if chk["rule"] == "better" else p["delta"] >= c["threshold"])
                         c |= dict(state="pass" if ok else "fail", noisy=p["lo"] is not None and p["lo"] < 0 < p["hi"],
                                   cand_task=ce["id"], base_task=be["id"],
