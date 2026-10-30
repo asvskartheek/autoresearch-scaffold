@@ -65,10 +65,23 @@ def _short(slice_name: str) -> str:
     return slice_name.split("/", 1)[-1] if slice_name else ""
 
 
+def _labels(p: Project) -> dict:
+    """Every model's label. Inside a brief or the course they are read once (p._labels): checking each title for
+    duplicates against every model made a brief on a 60-model ledger take seconds."""
+    cache = getattr(p, "_labels", None)
+    if cache:
+        return cache
+    out = {m: str(features.model_label(p, m)).strip() for m in p.models()}
+    if cache is not None:
+        p._labels = out
+    return out
+
+
 def _title(p: Project, model: str) -> str:
     """A model's title, qualifier kept; two models with one title read as title · id, as the dashboard does."""
-    title = str(features.model_label(p, model)).strip()
-    if any(m != model and str(features.model_label(p, m)).strip() == title for m in p.models()):
+    labels = _labels(p)
+    title = labels.get(model) or str(features.model_label(p, model)).strip()
+    if any(m != model and t == title for m, t in labels.items()):
         title += f" · {model}"
     if len(title) <= 110:
         return title
@@ -723,8 +736,15 @@ def aliases(viewer: str) -> set:
 
 
 def brief(p: Project, since: float = 0, viewer: str = "anon") -> dict:
+    p._gates, p._labels = {}, {}
+    try:
+        return _brief(p, since, viewer)
+    finally:
+        p._labels = None
+
+
+def _brief(p: Project, since: float, viewer: str) -> dict:
     from . import course, teach
-    p._gates = {}
     with p.snapshot():
         cs = cards(p, since)
         al = aliases(viewer)

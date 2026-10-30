@@ -631,8 +631,16 @@ LIVE = {"goal", "champion", "candidate", "hill", "brief", "project-goal", "proje
 
 
 def lessons(p: Project) -> list[dict]:
-    from . import learn
     p._gates = getattr(p, "_gates", None) or {}
+    outer, p._labels = getattr(p, "_labels", None), getattr(p, "_labels", None) or {}
+    try:
+        return _lessons(p)
+    finally:
+        p._labels = outer
+
+
+def _lessons(p: Project) -> list[dict]:
+    from . import learn
     with p.snapshot():
         L = _ledger(p)
         out = []

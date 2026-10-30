@@ -70,6 +70,15 @@ class Brief(unittest.TestCase):
         self.assertEqual(len(ids), 1)
         self.assertEqual(learn.card(self.p, "goal|keep")["min"], 0)
 
+    def test_titles_are_read_once_per_brief_and_never_go_stale(self):
+        learn.brief(self.p, 0, "ann")
+        self.assertIsNone(self.p._labels)  # the cache lives only while one brief is built
+        self.p.add_model("cand", parent="base", hill="h1", change="try a thing", title="Renamed")
+        self.assertEqual(learn._title(self.p, "cand"), "Renamed")
+        self.p.add_model("twin", parent="base", title="Renamed")
+        b = learn.brief(self.p, 0, "ann")
+        self.assertIn("Renamed · cand", json.dumps(b, ensure_ascii=False))  # duplicate titles still read title · id
+
     def test_rejected_why_reads_and_counts_match(self):
         self.p.add_model("bad", parent="base", hill="h1")
         run(self.p, "bad", [1] * 6 + [0] * 14, "ds/target")
