@@ -3,11 +3,15 @@
 .mk.skel{min-height:320px;background:var(--raised);border-radius:var(--radius-card)}
 .mk-ring{flex:none;display:block}
 .mk-ring text{font-size:10px;fill:var(--muted)}
-.mk-due{display:flex;flex-wrap:wrap;gap:8px}
-.mk-chip{display:flex;align-items:center;gap:8px;padding:4px 12px 4px 4px;border:1px solid var(--border);border-radius:999px;color:var(--text);text-decoration:none;max-width:100%;min-width:0}
-.mk-chip:hover{background:var(--raised)}
-.mk-chip .mk-ring text{display:none}
-.mk-chip .faint{font-size:12px;color:var(--faint)}
+.mk-list{display:flex;flex-direction:column}
+.mk-li{display:flex;align-items:center;gap:10px;padding:6px 8px;margin:0 -8px;border-radius:var(--radius-control);color:var(--text);text-decoration:none;min-width:0}
+.mk-li:hover{background:var(--raised)}
+.mk-li .mk-ring text{display:none}
+.mk-lt{display:flex;flex-direction:column;min-width:0;flex:1;font-size:13px}
+.mk-lt .faint{font-size:12px;color:var(--faint)}
+.mk-why{flex:none;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.mk-why.miss{color:var(--negative)}
+.mk-dax{display:flex;justify-content:space-between;font-size:11px;color:var(--faint);margin-top:2px}
 .mk-gen{display:flex;flex-wrap:wrap;gap:12px 20px;padding-bottom:16px;border-bottom:1px solid var(--rule)}
 .mk-node{display:flex;flex-direction:column;align-items:center;gap:4px;width:120px;color:var(--text);text-decoration:none;border-radius:var(--radius-control);padding:6px 2px}
 .mk-node:hover{background:var(--raised)}
@@ -31,6 +35,5 @@
 .mk-bar i.h{background:var(--positive)}.mk-bar i.m{background:var(--negative)}
 .mk-bar i.s{background:repeating-linear-gradient(135deg,var(--faint) 0 2px,transparent 2px 5px)}
 .mk-days{max-height:140px}
-.mk-days text{font-size:9px;fill:var(--faint)}
 .mk-cta{padding:0 0 16px;text-align:center}
 @media (max-width:560px){.mk-node{width:76px}.mk-row .mk-node{width:72px}.mk-mr{grid-template-columns:84px minmax(0,1fr) 40px}}

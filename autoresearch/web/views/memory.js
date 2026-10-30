@@ -8,10 +8,14 @@ const me=()=>window.ARXP?ARXP.me().id:'';
 async function load(force){
  if(M.busy||(!force&&M.d&&M.who===me()&&Date.now()-M.at<20000))return;
  M.busy=true;const who=me();
- try{const r=await fetch('api/memory?viewer='+enc(who),{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);M.d=await r.json();M.who=who;M.err=null;M.at=Date.now()}
+ try{const r=await fetch('api/memory?viewer='+enc(who),{cache:'no-store'});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  if(!S.projects?.length)try{S.projects=await (await fetch('/api/projects',{cache:'no-store'})).json()}catch(e){}  // project names
+  M.d=await r.json();M.who=who;M.err=null;M.at=Date.now()}
  catch(e){M.err=String(e.message||e)}
  M.busy=false;if(route().r==='memory')render(true);
 }
+addEventListener('hashchange',()=>{if(route().r==='memory')M.at=0});  // back from a lesson or the Brief: read it again
 const ST={known:'Known',shaky:'Shaky',due:'Due',untested:'Seen, not tested'};
 const COL={known:'var(--positive)',shaky:'var(--negative)',due:'var(--warning)',untested:'var(--faint)'};
 const NAMES={predict:'Predict',sketch:'Sketch',explain:'Say it',code:'Write the line',ndrag:'Drag n',spot:'Spot the error',prototype:'Prototype'};
@@ -23,17 +27,30 @@ function ring(k,r){
   ${k.n?`<circle cx="${sz/2}" cy="${sz/2}" r="${r}" fill="none" stroke="${col}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${(f*c).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${sz/2} ${sz/2})"/>`:`<circle cx="${sz/2}" cy="${sz/2}" r="${r}" fill="none" stroke="${col}" stroke-width="1.5" stroke-dasharray="3 3"/>`}
   <text x="${sz/2}" y="${sz/2+4}" text-anchor="middle" class="mono">${k.n?`${k.hits}/${k.n}`:'·'}</text></svg>`;
 }
-const when=t=>{if(!t)return '';const d=t-M.d.now;return Math.abs(d)<3600?'now':d>0?'in '+span(d):span(-d)+' ago'};
-const tip=k=>[k.title||k.id,ST[k.state],k.n?`${k.hits} of ${k.n} right`:'',k.strength!=null?`strength ${Math.round(100*k.strength)}%`:'',k.due?`review ${when(k.due)}`:'',k.last_seen?`seen ${when(k.last_seen)}`:''].filter(Boolean).join(' · ');
-// a concept a 101 lesson teaches opens that lesson; the rest open the Brief of their project
-const brief=k=>(k.project&&k.project!==M.d.project?`/p/${enc(k.project)}/`:'')+(k.lesson?'#course/'+enc(k.lesson):'#learn');
+// whole days past a day: "13 d ago", not "13 d 23 h ago"
+const dspan=s=>s>=86400?Math.round(s/86400)+' d':span(s);
+const when=t=>{if(!t)return '';const d=t-M.d.now;return Math.abs(d)<3600?'now':d>0?'in '+dspan(d):dspan(-d)+' ago'};
+const tip=k=>[label(k),ST[k.state],k.n?`${k.hits} of ${k.n} right`:'',k.strength!=null?`strength ${Math.round(100*k.strength)}%`:'',k.due?`review ${when(k.due)}`:'',k.last_seen?`seen ${when(k.last_seen)}`:''].filter(Boolean).join(' · ');
+// a concept a 101 lesson teaches opens that lesson; a hill, goal or model its page; the rest the Brief of their project
+const brief=k=>(k.project&&k.project!==M.d.project?`/p/${enc(k.project)}/`:'')+(k.lesson?'#course/'+enc(k.lesson):
+ /^(hill|goal|model)$/.test(k.kind)&&k.title?`#${k.kind}/${enc(k.title)}`:'#learn');
+const pname=key=>(S.projects||[]).find(x=>x.key===key)?.name||key;
+const label=k=>k.kind==='goal'&&(S.projects||[]).find(x=>x.key===k.project)?.goals?.[k.title]?.title||k.title||k.id;
+const why=k=>k.last_review?(k.last_hit?'right ':'missed ')+when(k.last_review):'';
 function node(k,r){
  const kind=k.kind==='model'?'model':k.kind==='hill'?'hill':k.kind==='goal'?'goal':'';
- return `<a class="mk-node ${k.state}" href="${brief(k)}" title="${esc(tip(k))}">${ring(k,r)}<span class="mk-l">${kind?`<i class="mk-kind">${kind}</i>`:''}${esc(k.title||k.id)}</span></a>`;
+ return `<a class="mk-node ${k.state}" href="${brief(k)}" title="${esc(tip(k))}">${ring(k,r)}<span class="mk-l">${kind?`<i class="mk-kind">${kind}</i>`:''}${esc(label(k))}</span></a>`;
 }
+// most in need first: what was missed, then the weakest now
 function dueHTML(ks){
- if(!ks.length)return '';
- return `<div class="mk-due">${ks.map(k=>`<a class="mk-chip" href="${brief(k)}" title="${esc(tip(k))}">${ring(k,9)}<span class="ell">${esc(k.title||k.id)}</span><span class="faint">${esc(k.project||'')}</span></a>`).join('')}</div>`;
+ const xs=ks.slice().sort((a,b)=>(a.last_hit-b.last_hit)||(a.strength||0)-(b.strength||0));
+ return `<div class="mk-list">${xs.map(k=>`<a class="mk-li" href="${brief(k)}" title="${esc(tip(k))}">${ring(k,9)}<span class="mk-lt"><span class="ell">${esc(label(k))}</span>${k.project?`<span class="faint ell">${esc(pname(k.project))}</span>`:''}</span><span class="mk-why${k.last_hit?'':' miss'}">${esc(why(k))}</span></a>`).join('')}</div>`;
+}
+// what moved in the last 7 days, newest first
+function weekHTML(ch,ks){
+ const by=Object.fromEntries(ks.map(k=>[k.id,k])),xs=ch.filter(c=>by[c.concept]).slice(0,8);
+ if(!xs.length)return empty('Nothing this week');
+ return `<div class="mk-list">${xs.map(c=>{const k=by[c.concept];return `<a class="mk-li" href="${brief(k)}" title="${esc(tip(k))}">${ring(k,9)}<span class="mk-lt"><span class="ell">${esc(label(k))}</span>${k.project?`<span class="faint ell">${esc(pname(k.project))}</span>`:''}</span><span class="mk-why">${c.graded?`${c.hits} of ${c.graded} right`:'seen'}</span></a>`}).join('')}</div>`;
 }
 function mapHTML(ks){
  const gen=ks.filter(k=>!k.project),by={};
@@ -41,7 +58,7 @@ function mapHTML(ks){
  const order={hill:0,goal:1,model:2};
  const groups=Object.entries(by).sort(([a],[b])=>(b===M.d.project)-(a===M.d.project)||a.localeCompare(b));
  return `<div class="mk-gen">${gen.map(k=>node(k,26)).join('')}</div>`+
-  groups.map(([p,xs])=>`<div class="mk-proj${p===M.d.project?' here':''}"><a class="mk-ph" href="/p/${enc(p)}/#memory">${esc(p)}</a>
+  groups.map(([p,xs])=>`<div class="mk-proj${p===M.d.project?' here':''}"><a class="mk-ph" href="/p/${enc(p)}/#memory">${esc(pname(p))}</a>
    <div class="mk-row">${xs.sort((a,b)=>(order[a.kind]??3)-(order[b.kind]??3)||(a.title||'').localeCompare(b.title||'')).map(k=>node(k,15)).join('')}</div></div>`).join('');
 }
 function methodsHTML(ms){
@@ -61,7 +78,7 @@ function daysHTML(tl){
  const dots=days.map((d,i)=>{let y=H-12,out='';const put=(n,c,o)=>{for(let j=0;j<n;j++){out+=`<circle cx="${(i+.5)*cw}" cy="${y}" r="2.4" fill="${c}" opacity="${o}"/>`;y-=6}};
   put(d.h,'var(--positive)',1);put(d.m,'var(--negative)',1);put(Math.min(4,d.o),'var(--muted)',.45);return out}).join('');
  return `<svg class="mk-days" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="30 days of activity"><line x1="0" x2="${W}" y1="${H-6}" y2="${H-6}" stroke="var(--grid)"/>${dots}
-  <text x="0" y="${H}" class="faint">30 d ago</text><text x="${W}" y="${H}" text-anchor="end" class="faint">today</text></svg>`;
+  </svg><div class="mk-dax faint"><span>30 d ago</span><span>today</span></div>`;
 }
 VIEWS.memory=()=>{
  load();
@@ -72,7 +89,7 @@ VIEWS.memory=()=>{
  const due=ks.filter(k=>k.state==='due').sort((a,b)=>a.due-b.due),n=s=>ks.filter(k=>k.state===s).length;
  const legend=`<span class="mk-leg">${['known','shaky','due','untested'].map(s=>`<span><i style="background:${COL[s]}"></i>${ST[s]} ${n(s)}</span>`).join('')}</span>`;
  return head(due.length?`<b>${plural(due.length,'concept')} due</b>`:'Nothing due')+
-  `<div class="mk">${due.length?panel('Due now',dueHTML(due)):''}
+  `<div class="mk"><div class="mk-two">${panel('Due now',due.length?dueHTML(due):empty('Nothing due'))}${panel('This week',weekHTML(d.changed||[],ks))}</div>
   ${panel('Concepts',mapHTML(ks),{right:legend})}
   <div class="mk-two">${panel('Methods',methodsHTML(d.methods)||empty('No answers yet'))}${panel('Last 30 days',daysHTML(d.timeline||[]))}</div></div>`;
 };
