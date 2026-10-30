@@ -112,7 +112,7 @@ VIEWS.overview=()=>{
  const cg=!cf&&champ&&gs.find(g=>GU.isMain(g)&&g.model===champ&&g.value!=null);
  h+=`<div class="ov-kpis">${kpis([
   ['Champion',cf?sv(fullKey,cf.score,cf.n):cg?`${GU.gu(cg,cg.value)}${GU.ofP(cg)}`:DASH,champ?`<a href="#model/${enc(champ)}" class="ov-cn" title="${mnt(champ)}">${mn(champ)}</a>${cf?` · ${esc(short(fullKey))}${cf.errors?` · <span class="neg">${cf.errors.toLocaleString()} ${cf.errors===1?'error':'errors'}${cf.runs>1?` over ${cf.runs} runs`:''}</span>`:''}`:cg?` · ${esc(short(cg.slice))}`:''}`:'No champion yet'],
-  ['Candidates',String(cands.length),(promotable.length?`<span class="pos">${promotable.length} ready to promote</span>`:cands.length?`${onWay.length} passed a rung · ${failed.length} failed`:'None')+(sup?` · ${sup} superseded`:''),'#models'],
+  ['Candidates',String(cands.length),(promotable.length?`<span class="pos">${promotable.length} ready to promote</span>`:cands.length?`${onWay.length} passed a rung · ${failed.length} failed`:'None'),'#models'],
   ['Running',String(running.length),stalled.length?`<span class="neg">${stalled.length} stalled</span>`:running.length?'All reporting':'Nothing running','#workbench'],
   ['Open hills',String(open),`${climbed} climbed`,'#hills'],
  ])}</div>`;
