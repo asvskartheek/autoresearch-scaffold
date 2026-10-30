@@ -174,7 +174,7 @@ function strip(skip=new Set()){
 // recent failures nobody has opened yet: a red row with the error, until opened or a day old
 const failedJobs=()=>{const seen=wbSeen();return S.state.tasks.filter(t=>t.status==='failed'&&t.ended&&now()-t.ended<86400&&!seen.has(t.id)&&!S.state.tasks.some(k=>k.parent===t.id)).sort((a,b)=>b.ended-a.ended)};
 const failRow=t=>{const e=t.note?.text??t.note?.msg??'';
- return `<article class="wb-job short failed"><div class="wb-hl"><span class="wb-kind">${esc(wbKind(t.kind))}</span><h2 class="wb-ttl"><a href="#task/${enc(t.id)}">${title(t)}</a></h2><span class="wb-err" title="${esc(e)}">${esc(e)}</span><span class="wb-eta"><small>failed</small>${ago(t.ended)}</span><span class="wb-hp bad">Failed</span></div></article>`};
+ return `<article class="wb-job short failed"><div class="wb-hl"><span class="wb-kind">${esc(wbKind(t.kind))}</span><h2 class="wb-ttl"><a href="#task/${enc(t.id)}">${title(t)}</a></h2><span class="wb-err" title="${esc(e)}">${esc(e)}</span><span class="wb-eta ago">failed ${ago(t.ended)}</span><span class="wb-hp bad">Failed</span></div></article>`};
 
 // stalled for over a day: abandoned. One line for all of them, with one command that closes them all
 const isDead=t=>t.status==='stalled'&&(t.dead||now()-(t.heartbeat||t.created)>86400);
@@ -182,7 +182,7 @@ function deadGroup(ds){
  if(!ds.length)return '';
  const sil=ds.map(t=>now()-(t.heartbeat||t.created)),lo=Math.min(...sil),hi=Math.max(...sil);
  const c=`for t in ${ds.map(t=>t.id).join(' ')}; do arx task finish $t --status failed; done`;
- return `<details class="wb-job short wb-dead"><summary class="wb-hl"><span class="wb-hp bad">${ds.length} abandoned</span><span class="wb-dn">${ds.map(t=>title(t)).join(', ')}</span><span class="wb-eta"><small>silent</small>${span(lo)}${hi-lo>3600?' – '+span(hi):''}</span></summary>
+ return `<details class="wb-job short wb-dead"><summary class="wb-hl"><span class="wb-hp bad">${ds.length} abandoned</span><span class="wb-dn">${ds.map(t=>title(t)).join(', ')}</span><span class="wb-eta ago">silent ${span(lo)}${hi-lo>3600?' – '+span(hi):''}</span></summary>
  <div class="wb-fix">${cmd(c)}</div><ul class="wb-dl">${ds.map(t=>`<li><a href="#task/${enc(t.id)}">${title(t)}</a><span>${span(now()-(t.heartbeat||t.created))}</span></li>`).join('')}</ul></details>`;
 }
 
