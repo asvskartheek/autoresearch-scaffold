@@ -597,6 +597,7 @@ function docLoaded(f) {
     placePins();
   };
   new f.contentWindow.ResizeObserver(fit).observe(d.documentElement);
+  askFrame(d);
 }
 function docTheme() {
   const d = $("#app iframe.doc")?.contentDocument;

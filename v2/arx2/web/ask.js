@@ -6,10 +6,11 @@ function askToggle(on = !A.on) {
   A.on = on;
   document.body.classList.toggle("asking", on);
   $("#askbtn")?.classList.toggle("on", on);
+  docBody()?.parentElement.classList.toggle("asking", on);
   if (!on) hlOff();
 }
 
-addEventListener("keydown", (e) => {
+function onKey(e) {
   if (e.target.closest?.("input, textarea, select, [contenteditable]")) return;
   if (e.key === "a" && !e.metaKey && !e.ctrlKey && !e.altKey) { askToggle(); e.preventDefault(); }
   if (e.key === "Escape") {
@@ -17,34 +18,50 @@ addEventListener("keydown", (e) => {
     else if (A.open) { A.open = null; placePins(); }
     else askToggle(false);
   }
-});
+}
+addEventListener("keydown", onKey);
 
-// ---- picking an element --------------------------------------------------
+// ---- picking an element: in the page, or inside the paper on a doc page ------------
 let hl = null;
 function hlOff() { hl?.classList.remove("ask-hl"); hl = null; }
+const docBody = () => $("#app iframe.doc")?.contentDocument?.body || null;
+const rootOf = (el) => el.ownerDocument === document ? $("#app") : el.ownerDocument.body;
 function pickable(el) {
-  if (!el?.closest || !el.closest("#app") || el.id === "app") return null;
+  const root = el?.closest && rootOf(el);
+  if (!root || el === root || !root.contains(el)) return null;
   return el.closest("[data-ask]") || el;
 }
-document.addEventListener("mouseover", (e) => {
+function onOver(e) {
   if (!A.on || A.draft) return;
   const el = pickable(e.target);
   if (el === hl) return;
   hlOff();
   if (el) { hl = el; el.classList.add("ask-hl"); }
-});
-document.addEventListener("click", (e) => {
-  if (!A.on || e.target.closest("#askbox, #pins, #top")) return;
+}
+function onPick(e) {
+  if (!A.on || e.target.closest?.("#askbox, #pins, #top")) return;
   const el = pickable(e.target);
   if (!el) return;
   e.preventDefault(); e.stopPropagation();
-  openDraft(el);
-}, true);
+  openDraft(el, e);
+}
+document.addEventListener("mouseover", onOver);
+document.addEventListener("click", onPick, true);
+function askFrame(d) {
+  d.addEventListener("mouseover", onOver);
+  d.addEventListener("click", onPick, true);
+  d.addEventListener("keydown", onKey);
+  d.documentElement.classList.toggle("asking", A.on);
+}
 
 const clean = (s, n = 90) => (s || "").replace(/\s+/g, " ").trim().slice(0, n);
 const PAGE_KIND = { hill: "hill", cand: "candidate", goal: "goal", set: "set", task: "task", doc: "doc" };
 
-function anchorOf(el) {
+function anchorOf(el, e) {
+  if (el.ownerDocument !== document) {
+    const s = e && sentenceAt(el, e);
+    return { kind: "doc", key: S.route[1], what: describe(el, s?.text), loc: `doc:${pathOf(el)}${s ? `~${s.i}` : ""}` };
+  }
   const ex = el.closest("[data-ask]");
   if (ex) {
     const [kind, key, what] = ex.dataset.ask.split("|");
@@ -57,9 +74,13 @@ function anchorOf(el) {
   return { kind, key, what: describe(el), loc: pathOf(el) };
 }
 
-function describe(el) {
-  const head = clean(el.closest(".sheet, .section")?.querySelector("h2, h3")?.textContent, 50);
+function describe(el, sentence) {
+  const head = clean(el.closest(".sheet, .section, section")?.querySelector("h2, h3")?.textContent, 50);
   const where = head ? ` in “${head}”` : "";
+  if (sentence) return `“${clean(sentence)}”${where}`;
+  if (/^H[1-4]$/.test(el.tagName)) return `heading “${clean(el.innerText)}”`;
+  const fig = el.closest("figure");
+  if (fig) return `figure: ${clean(fig.querySelector("figcaption")?.textContent || fig.querySelector("[aria-label]")?.getAttribute("aria-label"), 70) || "?"}${where}`;
   if (el.closest(".waffle")) return `item square: ${clean(el.title) || "?"}${where}`;
   if (el.closest("svg")) {
     const t = clean(el.querySelector?.("title")?.textContent || (el.tagName === "text" ? el.textContent : ""), 60);
@@ -67,28 +88,64 @@ function describe(el) {
   }
   const en = el.closest(".ent");
   if (en) return `${en.dataset.k}: ${clean(en.textContent)}`;
+  const cell = el.closest("td, th");
+  if (cell) return `table cell “${clean(cell.textContent, 60)}”${where}`;
   const t = clean(el.textContent);
   return t ? `“${t}”${where}` : `${el.tagName.toLowerCase()}${where}`;
 }
 
-function pathOf(el) {
-  const out = [], app = $("#app");
-  for (; el && el !== app; el = el.parentElement) out.unshift([...el.parentElement.children].indexOf(el));
+// A sentence ends at . ! or ? (and closing quotes) before a space, so "0.9 s" stays whole.
+const SENTENCE = /\S[^]*?(?:[.!?]["”’)]*(?=\s|$)|$)/g;
+const sentencesOf = (el) => [...el.textContent.matchAll(SENTENCE)].map((m) => [m.index, m.index + m[0].length]);
+function sentenceAt(el, e) {
+  const ss = sentencesOf(el), d = el.ownerDocument;
+  const c = d.caretRangeFromPoint?.(e.clientX, e.clientY);
+  if (ss.length < 2 || !c || !el.contains(c.startContainer) || el.closest("svg")) return null;
+  const r = d.createRange(); r.setStart(el, 0); r.setEnd(c.startContainer, c.startOffset);
+  const at = r.toString().length, i = Math.max(0, ss.findIndex(([, b]) => at < b));
+  return { i, text: el.textContent.slice(...ss[i]) };
+}
+function sentenceRange(el, i) {
+  const s = sentencesOf(el)[i], d = el.ownerDocument;
+  if (!s) return null;
+  const r = d.createRange(), walk = d.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  for (let n, pos = 0, started = false; (n = walk.nextNode()); pos += n.length) {
+    if (!started && s[0] < pos + n.length) { r.setStart(n, s[0] - pos); started = true; }
+    if (started && s[1] <= pos + n.length) { r.setEnd(n, s[1] - pos); return r; }
+  }
+  return null;
+}
+
+function pathOf(el, root = rootOf(el)) {
+  const out = [];
+  for (; el && el !== root; el = el.parentElement) out.unshift([...el.parentElement.children].indexOf(el));
   return out.join(".");
 }
+// loc: a [data-ask] selector, a child-index path from #app, or "doc:<path>[~sentence]" from the paper's body.
 function findLoc(loc) {
   if (!loc) return null;
   if (loc.startsWith("[")) return $(loc, $("#app"));
-  let el = $("#app");
-  for (const i of loc.split(".")) el = el?.children[+i];
+  let el = loc.startsWith("doc:") ? docBody() : $("#app");
+  for (const i of loc.replace(/^doc:/, "").split("~")[0].split(".")) el = el?.children[+i];
   return el || null;
+}
+// Where a loc is, in this page's viewport. A sentence runs from its first line's left to its last line's right.
+function boxOf(loc) {
+  const el = findLoc(loc);
+  if (!el) return null;
+  const n = loc.match(/~(\d+)$/)?.[1];
+  const rs = [...((n != null && sentenceRange(el, +n)) || el).getClientRects()].filter((r) => r.width);
+  if (!rs.length) return null;
+  const f = el.ownerDocument.defaultView.frameElement?.getBoundingClientRect() || { left: 0, top: 0 };
+  const a = rs[0], b = rs[rs.length - 1];
+  return { left: a.left + f.left, top: b.top + f.top, right: b.right + f.left, bottom: b.bottom + f.top };
 }
 
 // ---- the question box ------------------------------------------------------
-function openDraft(el) {
+function openDraft(el, e) {
   hlOff();
-  A.draft = { ...anchorOf(el), route: S.route.join("/") };
-  const r = el.getBoundingClientRect();
+  A.draft = { ...anchorOf(el, e), route: S.route.join("/") };
+  const r = boxOf(A.draft.loc) || el.getBoundingClientRect();
   const box = $("#askbox");
   box.innerHTML = `<textarea rows="3" placeholder="What do you want to understand?"></textarea>
     <div class="spread"><span class="small mute">${esc(A.draft.what)}</span><button class="primary" onclick="sendAsk()">Ask</button></div>`;
@@ -203,8 +260,7 @@ function placePins() {
     if (nt && focused) nt.focus();
   }
   for (const a of list) {
-    const el = findLoc(a.loc) || $("#app h1");
-    const r = el?.getBoundingClientRect() || { right: 40, top: 80 };
+    const r = boxOf(a.loc) || ($("#app h1") || $("#app .tabs"))?.getBoundingClientRect() || { right: 40, top: 80 };
     const x = Math.min(r.right + scrollX - 10, scrollX + innerWidth - 30), y = r.top + scrollY - 10;
     const pin = $(`[data-ask-pin="${a.key}"]`, box);
     pin.style.left = `${x}px`; pin.style.top = `${y}px`;
