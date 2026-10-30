@@ -44,7 +44,10 @@ function sessions(){
 }
 function sessionOf([a,b]){
  const st=S.state,inS=x=>x>=a-1&&x<=b+1;
- const tasks=st.tasks.filter(t=>top(t)&&inS(t.created)).sort((x,y)=>x.created-y.created);
+ // a model's eval or training run nested under an experiment still belongs in that model's lane (an eval's own
+ // harness sub-tasks do not: the eval stands for them)
+ const lane=t=>top(t)||t.model&&st.models[t.model]&&byId(t.parent)?.kind!=='eval';
+ const tasks=st.tasks.filter(t=>lane(t)&&inS(t.created)).sort((x,y)=>x.created-y.created);
  const decs=(st.decisions||[]).filter(d=>d.model&&inS(d.t));
  const first=[...tasks.filter(t=>t.model).map(t=>[t.created,t.model]),
   ...Object.entries(st.models).filter(([,m])=>m.created&&m.status!=='historical'&&inS(+m.created)).map(([k,m])=>[+m.created,k]),
@@ -55,7 +58,7 @@ function sessionOf([a,b]){
 // "… Pre-declared: X" → [what changed, what it should move]
 const split=c=>{const s=String(c||''),i=s.search(/pre-?declared\s*:?/i);return i<0?[s,'']:[s.slice(0,i).trim().replace(/[.;,]$/,''),s.slice(i).replace(/^pre-?declared\s*:?\s*/i,'')]};
 const evScore=t=>{const sm=t.summary||{};if(emptyEval(t))return 'no results';if(sm.score==null)return '';
- if(partialEval(t))return `partial ${sm.n||0}/${t.progress?.total||((sm.n||0)+(sm.missing||0))}, unranked`;
+ if(partialEval(t))return `partial ${(sm.n||0).toLocaleString()}/${(t.progress?.total||((sm.n||0)+(sm.missing||0))).toLocaleString()}, unranked`;
  return S.state.slices[t.slice]?.scale==='continuous'?sv(t.slice,sm.score,sm.n):sm.n?`${Math.round(sm.score*sm.n).toLocaleString()}/${sm.n.toLocaleString()}`:pct(sm.score)};
 const verdict=(m,ds)=>{const d=ds.filter(x=>x.model===m&&/^(rejected|promote|champion)$/.test(x.kind)).at(-1),M=S.state.models[m]||{};
  if(d)return [d.kind==='rejected'?'Rejected':'Promoted',d.kind==='rejected'?'neg':'pos',d.reason||M.reason||''];
@@ -72,10 +75,12 @@ function story(){
  const lane=(ts,lab,top0=0)=>{const rows=[];let h='';
   for(const t of ts){const x0=at(t.created),x1=Math.max(x0+.5,at(wbObservedEnd(t))),sc=t.kind==='eval'?evScore(t):'';
    const lw=lab&&t.kind==='eval'?100*((short(t.slice||'').length+sc.length+1)*7.2+10)/trackPx:0;
-   let r=rows.findIndex(e=>e<=x0);if(r<0){r=rows.length;rows.push(0)}rows[r]=x1+lw+.5;
+   // a label that would run past the track's end sits before its bar instead
+   const flip=lw&&x1+lw>100+120*100/trackPx,from=flip?x0-lw:x0;
+   let r=rows.findIndex(e=>e<=from);if(r<0){r=rows.length;rows.push(0)}rows[r]=(flip?x1:x1+lw)+.5;
    const [sl,sc_]=wbState(t);
    h+=`<a class="arc-bar ${esc(sc_)}${t.status==='running'?' live':''}" href="#task/${enc(t.id)}" style="left:${x0.toFixed(2)}%;width:${(x1-x0).toFixed(2)}%;top:${top0+r*22}px" title="${esc(t.title)} · ${esc(sl)}${sc?' · '+esc(sc):''}"></a>`
-    +(lw?`<span class="arc-bl" style="left:calc(${x1.toFixed(2)}% + 4px);top:${top0+r*22}px">${esc(short(t.slice||''))} <b>${esc(sc)}</b></span>`:'');}
+    +(lw?`<span class="arc-bl" style="${flip?`right:calc(${(100-x0).toFixed(2)}% + 4px)`:`left:calc(${x1.toFixed(2)}% + 4px)`};top:${top0+r*22}px">${esc(short(t.slice||''))} <b>${esc(sc)}</b></span>`:'');}
   return [h,Math.max(1,rows.length)]};
  const multiDay=wbDay(a)!==wbDay(b);
  const seen=new Set(),ticks=(W<640?[0,1]:[0,.25,.5,.75,1]).map(f=>{const c=multiDay?wbWhen(a+f*w):wbClock(a+f*w);if(seen.has(c))return '';seen.add(c);return `<span style="left:${100*f}%">${c}</span>`}).join('');
@@ -103,7 +108,7 @@ function story(){
  const results=st.tasks.filter(t=>t.created>=a-1&&t.created<=b+1&&wbResultSummary(t));
  const resultLinks=results.map(t=>`<p><a class="ln" href="#task/${enc(t.id)}">${esc(t.title)}</a>: ${esc(wbResultSummary(t))}</p>`).join('');
  const stale=X.tasks.filter(t=>t.status==='stalled');
- const staleNote=stale.length?`<p class="sub">${stale.map(t=>`<a class="ln" href="#task/${enc(t.id)}">${esc(t.title)}</a>: last observed ${wbWhen(wbObservedEnd(t))}, silent for ${silent(t)}`).join('; ')}. Inactivity is excluded from this timeline.</p>`:'';
+ const staleNote=stale.length?`<p class="sub">${stale.map(t=>`<a class="ln" href="#task/${enc(t.id)}">${esc(t.title)}</a>: last observed ${wbWhen(wbObservedEnd(t))}, silent for ${silent(t)}`).join('; ')}.</p>`:'';
  return panel(i?'Research session':'Latest research session',`<div class="arc-story">
   ${lanes||oLane?`<div class="arc-tl"><div class="arc-ln arc-ax"><div class="arc-lh"></div><div class="arc-tk">${ticks}</div></div>${lanes}${oLane}</div>`:''}
   ${staleNote}${resultLinks}${tpf?`<div class="arc-tpf"><div class="arc-r arc-hd"><div>Tried</div><div>Predicted</div><div>Found</div></div>${tpf}</div>`:''}</div>`,{cls:'section arc-st',meta,right:nav});
@@ -146,7 +151,8 @@ VIEWS.archive=()=>{
  const row=(t,depth=0,open=false)=>{
   const [sl,sc]=wbState(t),ks=depth?[]:desc(t),nk=ks.length,tk=took(t),n=t.summary?.n,s=score(t),c=cont(t);
   const fold=nk?`<button class="arc-fold ${open?'on':''}" type="button" aria-expanded="${open}" onclick="event.stopPropagation();archiveFold('${esc(t.id)}')">${plural(nk,'sub-task')}</button>`:'';
-  const sub=[esc(wbKind(t.kind||'other')),t.agent&&'by '+esc(t.agent),t.model&&`<span class="arc-mi">${mn(t.model)}</span>`].filter(Boolean).join(' · ');
+  // the model (its own column on a wide screen) moves into this line on a narrow one, separator and all
+  const sub=[esc(wbKind(t.kind||'other')),t.agent&&'by '+esc(t.agent)].filter(Boolean).join(' · ')+(t.model?`<span class="arc-mi"> · ${mn(t.model)}</span>`:'');
   const href=`#task/${enc(t.id)}`;
   return `<tr class="click ${depth?'arc-kid':''}" onclick="if(!event.target.closest('a,button'))location.hash='${href}'">
   <td class="arc-task"><div class="two"${depth?' style="padding-left:20px"':''}><a href="${href}" class="ell"><b>${esc(t.title)}</b></a><span class="sub ell">${sub}${fold?' · '+fold:''}</span></div></td>

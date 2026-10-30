@@ -77,7 +77,17 @@ def _split(tok: str, min_n: int = 12) -> str:
     return " ".join(tok[a:b] for a, b in best[n][2])
 
 
-def _word(tok: str) -> str:
+def names(p) -> frozenset:
+    """The project's own names a note may cite bare (a slice's short name "random50", a model key): never split."""
+    out = set(p.models())
+    for k in p.slices():
+        out |= {k, k.split("/")[-1]}
+    return frozenset(out)
+
+
+def _word(tok: str, keep: frozenset = frozenset()) -> str:
+    if tok in keep:
+        return tok
     if re.fullmatch(r"[0-9a-f]{7,}", tok.lower()) and re.search(r"\d", tok):
         return tok  # a hash
     if re.search(r"[-_@#]|[A-Za-z0-9][./][A-Za-z]|[a-z][A-Z]", tok) or not re.search(r"[A-Za-z]", tok) or _TECH.fullmatch(tok):
@@ -86,7 +96,7 @@ def _word(tok: str) -> str:
     if m and (m.group(3) or _is(m.group(4)) or _split(m.group(4), 7) != m.group(4)):
         return " ".join(x for x in (m.group(1), m.group(2), m.group(3), _split(m.group(4), 7)) if x)
     if "/" in tok:
-        return "/".join(_word(p) for p in tok.split("/"))
+        return "/".join(_word(p, keep) for p in tok.split("/"))
     tok = re.sub(r"(?<=[a-z]{2})(?=\d{2,})", " ", tok)      # audit1319 -> audit 1319, vs150 -> vs 150; keeps gsm8k
     tok = re.sub(r"(?<=[a-z]{3})(\d)(?=[a-z]{3,})", r" \1 ", tok)  # fix5regress -> fix 5 regress
     tok = re.sub(r"(?:^|(?<= ))(\d+)(?=[a-z]{3,})", r"\1 ", tok)       # 95wrong -> 95 wrong; keeps 4B and 10k
@@ -101,7 +111,7 @@ def _paren(m) -> str:
     return w + " "
 
 
-def readable(msg: str) -> str:
+def readable(msg: str, keep: frozenset = frozenset()) -> str:
     if not isinstance(msg, str) or not msg or msg.lstrip()[:1] in "{[":
         return msg  # empty, or a JSON payload
     s = re.sub(r"([,;:])(?=[A-Za-z0-9(\[])", r"\1 ", msg)            # a,b -> a, b (but 1,319 stays)
@@ -112,4 +122,4 @@ def readable(msg: str) -> str:
     s = re.sub(r"([A-Za-z_][\w.]*[a-z])(?=[\[(])", _paren, s)
     s = re.sub(r"(?<=\w)\+(?=[A-Za-z])", " + ", s)
     s = re.sub(r"\b\d+\.\d{5,}\b", lambda m: f"{float(m.group(0)):.4g}", s)  # loss 1.0619175910949707 -> 1.062
-    return re.sub(r"[A-Za-z0-9](?:[\w\-/.@#]*\w)?", lambda m: _word(m.group(0)), s)
+    return re.sub(r"[A-Za-z0-9](?:[\w\-/.@#]*\w)?", lambda m: _word(m.group(0), keep), s)

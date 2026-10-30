@@ -1,7 +1,8 @@
 """readable() review fixes: inflections and compounds stay whole, run-together acronyms and numbers split."""
 import unittest
 
-from autoresearch.readable import readable
+from types import SimpleNamespace
+from autoresearch.readable import names, readable
 
 
 class Readable(unittest.TestCase):
@@ -16,6 +17,14 @@ class Readable(unittest.TestCase):
         self.assertEqual(readable("Failedfrozenpairedgate"), "Failed frozen paired gate")
         self.assertEqual(readable("Plannedrerun"), "Planned rerun")
         self.assertEqual(readable("plus4096 tokens"), "plus 4096 tokens")
+
+    def test_project_names_stay_whole(self):
+        self.assertEqual(readable("vs150 for the champion"), "vs 150 for the champion")
+        keep = names(SimpleNamespace(models=lambda: {"v2": {}}, slices=lambda: {"gsm8k-test/random50": {}}))
+        self.assertEqual(keep, {"v2", "gsm8k-test/random50", "random50"})
+        self.assertEqual(readable("Scored the candidate on random50 against the champion.", keep),
+                         "Scored the candidate on random50 against the champion.")
+        self.assertEqual(readable("audit1319 on random50", keep), "audit 1319 on random50")
 
     def test_earlier_cases_hold(self):
         self.assertEqual(readable("audit1319:95wrong,34cap hits"), "audit 1319: 95 wrong, 34 cap hits")

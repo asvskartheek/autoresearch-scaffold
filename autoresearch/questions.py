@@ -12,6 +12,7 @@ POST /api/questions/{ask,add,answer,dead,reopen,flag}. Asking enqueues inbox kin
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import math
 import re
@@ -143,10 +144,9 @@ def settle(p, qid, status, claim, evidence=None, by="agent", doc=None) -> dict:
         except ValueError as e:
             raise SystemExit(str(e))
     rec.pop("error", None)
-    _save(p, qid, rec)
     # Freeze resolved evidence with the authored claim; repeats cannot rewrite its support.
-    resolved = next(n for n in tree(p)["nodes"] if n["id"] == qid)
-    rec["evidence_snapshot"] = resolved.get("ev", [])
+    with _reading(p):
+        rec["evidence_snapshot"] = _node_ev(p, node | rec, _ctx(p, goals=any(e.get("goal") for e in ev)))
     _save(p, qid, rec)
     for it in features.inbox(p):  # a queued ask nobody started is no longer needed
         if it.get("kind") == "question" and it.get("ref") == qid and it.get("status") == "queued":
@@ -631,11 +631,18 @@ def ledger_brief(p) -> str:
 # ---------------------------------------------------------------- the tree a viewer gets
 def tree(p, full: bool = True) -> dict:
     """Seeded and stored nodes merged. `full` adds resolved evidence (`ev`), agent progress and goal trajectories."""
-    with p.snapshot():  # tasks read once per call
+    with _reading(p):
+        return _tree(p, full)
+
+
+@contextlib.contextmanager
+def _reading(p):
+    """Tasks and complete evals read once for the block."""
+    with p.snapshot():
         p._q_evals = None
         p._q_evals = _evals(p)
         try:
-            return _tree(p, full)
+            yield
         finally:
             p._q_evals = None
 
@@ -658,6 +665,24 @@ def _goal_status(p, goals) -> dict:
     return out
 
 
+def _ctx(p, goals: bool = True) -> dict:
+    """What resolve() reads. Goal statuses bootstrap, so `goals=False` skips them when no evidence cites a goal."""
+    ctx = dict(hills=p.hills(), goals=p.goals(), models=p.models(), champion=p.champion())
+    ctx["goal_status"] = _goal_status(p, ctx["goals"]) if goals else {}
+    return ctx
+
+
+def _node_ev(p, n, ctx) -> list[dict]:
+    """The node's evidence resolved against the ledger, each model:slice row with the run ids behind it."""
+    ev = _dedupe([r for r in (resolve(p, e, n, ctx) for e in n.get("evidence") or []) if r], p)
+    for e in ev:
+        if e.get("model") and e.get("slice"):
+            e["task_ids"] = list(_runs(p, e["model"], e["slice"]))
+            if e.get("base"):
+                e["baseline_task_ids"] = list(_runs(p, e["base"], e["slice"], e["model"]))
+    return ev
+
+
 def _tree(p, full: bool) -> dict:
     nodes = seeded(p)
     for k in nodes:
@@ -674,8 +699,7 @@ def _tree(p, full: bool) -> dict:
     if not full:
         return dict(byid=nodes)
     if full:
-        ctx = dict(hills=p.hills(), goals=p.goals(), models=p.models(), champion=p.champion())
-        ctx["goal_status"] = _goal_status(p, ctx["goals"])
+        ctx = _ctx(p)
         items = {}
         for it in features.inbox(p):
             if it.get("kind") == "question" and it.get("ref"):
@@ -684,12 +708,7 @@ def _tree(p, full: bool) -> dict:
         for n in nodes.values():
             if n.get("goal") and not n.get("claim"):
                 n["claim"] = _goal_claim(p, ctx["goal_status"].get(n["goal"]) or {})
-            n["ev"] = _dedupe([r for r in (resolve(p, e, n, ctx) for e in n.get("evidence") or []) if r], p)
-            for evidence in n["ev"]:
-                if evidence.get("model") and evidence.get("slice"):
-                    evidence["task_ids"] = list(_runs(p, evidence["model"], evidence["slice"]))
-                    if evidence.get("base"):
-                        evidence["baseline_task_ids"] = list(_runs(p, evidence["base"], evidence["slice"], evidence["model"]))
+            n["ev"] = _node_ev(p, n, ctx)
             it = items.get(n["id"])
             if it and n.get("status") == "agent":
                 live = dict(item=it["id"], status=it.get("status"), task=it.get("task"), error=it.get("error"))

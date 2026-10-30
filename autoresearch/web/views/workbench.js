@@ -61,13 +61,9 @@ const jobs=()=>active().filter(t=>!detail(t)&&!S.state.tasks.some(k=>k.parent===
 // the live sub-task an eval's numbers come from, if any
 const kidOf=t=>t.kind==='eval'?(byId(t.progress_from)||S.state.tasks.find(k=>k.detail_of===t.id&&isLive(k))):null;
 const binary=t=>S.state.slices?.[t.slice]?.scale!=='continuous';
-// the champion's score on this eval's slice, when it has one: the line the running score is read against
-function champRef(t){
- const c=S.state.champion;if(!c||c===t.model)return null;
- const r=S.state.leaderboard?.[t.slice]?.[c];
- // a union slice has no champion run of its own: the server pools the champion's runs on the slices it is made of
- return typeof r?.score==='number'?{y:r.score,label:'champion'}:t.champ_ref?{y:t.champ_ref.y,label:t.champ_ref.runs>1?`champion, ${t.champ_ref.runs} runs`:'champion'}:null;
-}
+// the champion's score on this eval's slice under the same declared harness, when it has one (the server picks it,
+// pooling a union slice's member runs): the line the running score is read against
+const champRef=t=>t.champ_ref?{y:t.champ_ref.y,label:t.champ_ref.runs>1?`champion, ${t.champ_ref.runs} runs`:'champion'}:null;
 // an eval's panels, completed from its harness sub-task: the sub-task's score becomes the eval's "Score so far"
 function evVitals(t){
  const own=t.vitals||[],k=kidOf(t);
@@ -128,10 +124,11 @@ function pn(t,p,lead){
  const f=p.fmt==='num'&&p.key?wbFmt(p.key):p.fmt,quiet=Math.max(t.health?.silent_s??0,t.status==='stalled'?now()-t.heartbeat:0);
  if(p.id==='eta'){lb='Done by';const left=p.value-now(),d=p.drift_s||0;
   big=t.status==='stalled'?`<span class="neg">none</span><small>last said ${wbClock(p.value)}</small>`:`${wbClock(p.value)}<small>${left>0?`in ${span(left)}`:'any moment'}</small>`;
-  sub=Math.abs(d)<60?'steady':`${span(Math.abs(d))} ${d<0?'sooner':'later'} than 5 min ago`}
+  const win=(t.eta||kidOf(t)?.eta)?.window_s||300,young=now()-t.created<win;
+  sub=Math.abs(d)<60?'steady':`${span(Math.abs(d))} ${d<0?'sooner':'later'} than ${young?'first estimated':span(win)+' ago'}`}
  else if(p.id==='gpu'){big=`${Math.round(p.value)}%${p.mem?.[0]!=null?`<small>${p.mem[0].toFixed(1)} of ${p.mem[1]?.toFixed(0)} GB</small>`:''}`;sub=p.gpus>1?`${p.gpus} GPUs`:'';
   if(p.mem?.[1])extra=`<div class="wb-mem">${meter(p.mem[0]/p.mem[1],{cls:'mem'})}</div>`}
- else if(p.id==='pair'){const dl=p.delta??p.value/(p.n||1);big=`<span class="${dl>0?'pos':dl<0?'neg':''}">${sd(t.slice,dl)}</span><small>90% CI ${pts(p.ci[0])} to ${pts(p.ci[1])}</small>`;sub=`${p.won} won · ${p.lost} lost`}
+ else if(p.id==='pair'){const dl=p.delta??p.value/(p.n||1);big=`<span class="${dl>0?'pos':dl<0?'neg':''}">${sd(t.slice,dl)}</span><small>90% CI ${pts(p.ci[0])} to ${pts(p.ci[1])}</small>`;sub=`${p.won} won · ${p.lost} lost${p.n?` of ${n0(p.n)}`:''}`}
  else if(p.id==='lat'){big=`${p.value.toFixed(1)} s<small>95th ${p.p95.toFixed(1)} s</small>`;sub='median'}
  else if((p.id==='tps'||p.id==='rate')&&quiet>=60){big=`<span class="neg">none</span><small>no progress for ${span(quiet)}</small>`}
  else if(p.id==='tps'){big=`${n0(p.value)}${p.step_time?`<small>${p.step_time.toFixed(1)} s a step</small>`:''}`}
@@ -174,7 +171,7 @@ function strip(skip=new Set()){
 // recent failures nobody has opened yet: a red row with the error, until opened or a day old
 const failedJobs=()=>{const seen=wbSeen();return S.state.tasks.filter(t=>t.status==='failed'&&t.ended&&now()-t.ended<86400&&!seen.has(t.id)&&!S.state.tasks.some(k=>k.parent===t.id)).sort((a,b)=>b.ended-a.ended)};
 const failRow=t=>{const e=t.note?.text??t.note?.msg??'';
- return `<article class="wb-job short failed"><div class="wb-hl"><span class="wb-kind">${esc(wbKind(t.kind))}</span><h2 class="wb-ttl"><a href="#task/${enc(t.id)}">${title(t)}</a></h2><span class="wb-err" title="${esc(e)}">${esc(e)}</span><span class="wb-eta"><small>failed</small>${ago(t.ended)}</span><span class="wb-hp bad">Failed</span></div></article>`};
+ return `<article class="wb-job short failed"><div class="wb-hl"><span class="wb-kind">${esc(wbKind(t.kind))}</span><h2 class="wb-ttl"><a href="#task/${enc(t.id)}">${title(t)}</a></h2><span class="wb-err" title="${esc(e)}">${esc(e)}</span><span class="wb-eta ago">failed ${ago(t.ended)}</span><span class="wb-hp bad">Failed</span></div></article>`};
 
 // stalled for over a day: abandoned. One line for all of them, with one command that closes them all
 const isDead=t=>t.status==='stalled'&&(t.dead||now()-(t.heartbeat||t.created)>86400);
@@ -182,7 +179,7 @@ function deadGroup(ds){
  if(!ds.length)return '';
  const sil=ds.map(t=>now()-(t.heartbeat||t.created)),lo=Math.min(...sil),hi=Math.max(...sil);
  const c=`for t in ${ds.map(t=>t.id).join(' ')}; do arx task finish $t --status failed; done`;
- return `<details class="wb-job short wb-dead"><summary class="wb-hl"><span class="wb-hp bad">${ds.length} abandoned</span><span class="wb-dn">${ds.map(t=>title(t)).join(', ')}</span><span class="wb-eta"><small>silent</small>${span(lo)}${hi-lo>3600?' – '+span(hi):''}</span></summary>
+ return `<details class="wb-job short wb-dead"><summary class="wb-hl"><span class="wb-hp bad">${ds.length} abandoned</span><span class="wb-dn">${ds.map(t=>title(t)).join(', ')}</span><span class="wb-eta ago">silent ${span(lo)}${hi-lo>3600?' – '+span(hi):''}</span></summary>
  <div class="wb-fix">${cmd(c)}</div><ul class="wb-dl">${ds.map(t=>`<li><a href="#task/${enc(t.id)}">${title(t)}</a><span>${span(now()-(t.heartbeat||t.created))}</span></li>`).join('')}</ul></details>`;
 }
 

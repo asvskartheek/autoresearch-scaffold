@@ -204,15 +204,18 @@ def panels(p, t: dict, st: dict, eta: dict | None) -> list[dict]:
     return out[:4]
 
 
-def champion_base(p, slice_name: str, champ: str) -> tuple[dict, int]:
+def champion_base(p, slice_name: str, champ: str, ref: dict | None = None) -> tuple[dict, int]:
     """The champion's per-example scores on a slice, pooled over every complete run, and how many runs that is.
     A union slice (a harness that runs several slices in one pass, e.g. a dev rung of 131 = 108 + 30 + 23 + 27) has
     no champion run of its own: then the champion's runs on the slices it is made of are pooled too, so the running
-    score still has a line to read against. Only ids of this slice count."""
-    from .core import per_id
+    score still has a line to read against. Only ids of this slice count. With `ref` (the live eval), only the
+    champion's runs under its declared harness count, as on the task page and in the gate."""
+    from .core import per_id, same_contract
     sls = p.slices()
     ids = set(sls.get(slice_name, {}).get("ids") or [])
     mine = [e for e in p.evals() if e.get("model") == champ and not e.get("superseded_by")]
+    if ref is not None:
+        mine = same_contract(mine, ref)
     cur = lambda name: [e for e in mine if e.get("slice") == name and e.get("slice_hash") == sls.get(name, {}).get("hash")]
     runs = cur(slice_name)
     rows = [r for e in runs for r in p.rows(e["id"])]
@@ -237,9 +240,10 @@ def champion_ref(p, st: dict, t: dict) -> dict | None:
     if not champ or champ == t.get("model") or not t.get("slice"):
         return None
     lb = ((st.get("leaderboard") or {}).get(t["slice"]) or {}).get(champ)
-    if lb and _num(lb.get("score")):
+    from .core import contract_of
+    if lb and _num(lb.get("score")) and lb.get("baseline_contract") == contract_of(t):
         return dict(y=lb["score"], label="champion")
-    base, runs = champion_base(p, t["slice"], champ)
+    base, runs = champion_base(p, t["slice"], champ, t)
     ids = (p.slices().get(t["slice"]) or {}).get("ids") or []
     if not base or (ids and len(base) < len(ids)):
         return None
@@ -264,7 +268,7 @@ def _eval_panels(p, t, st, ml, total):
     pair = None
     if binary and champ and champ != t.get("model") and rows:
         try:
-            base = champion_base(p, t["slice"], champ)[0]
+            base = champion_base(p, t["slice"], champ, t)[0]
         except Exception:
             base = {}
         if base:
