@@ -38,9 +38,9 @@
 .lrn .verdict{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
 .lrn .verdict b{font-size:28px;font-weight:400;letter-spacing:-.01em}
 .lrn .verdict .you{font-size:13px;color:var(--muted)}
-.lrn .vd{font-weight:600;font-size:16px;padding:2px 10px;border-radius:var(--radius-chip)}
-.lrn .vd.ok{color:var(--pill-positive-ink);background:var(--pill-positive-bg)}
-.lrn .vd.no{color:var(--pill-negative-ink);background:var(--pill-negative-bg)}
+.lrn .vd,.crs .vd{font-weight:600;font-size:16px;padding:2px 10px;border-radius:var(--radius-chip)}
+.lrn .vd.ok,.crs .vd.ok{color:var(--pill-positive-ink);background:var(--pill-positive-bg)}
+.lrn .vd.no,.crs .vd.no{color:var(--pill-negative-ink);background:var(--pill-negative-bg)}
 .lrn .vd.open{color:var(--pill-warning-ink);background:var(--pill-warning-bg)}
 .lrn .why{font-size:15px;margin:0;max-width:680px;overflow-wrap:anywhere}
 .lrn svg text{font-family:var(--font);fill:var(--muted);font-size:11px}
