@@ -70,7 +70,8 @@ def build_state(p: Project, until: float | None = None) -> dict:
         "champions": s["champions"], "sets": {k: _slim_set(k, x) for k, x in s["sets"].items()},
         "goals": goals, "hills": s["hills"], "patterns": s["patterns"], "annotations": s["annotations"][-200:],
         "ladder": s["ladders"].get("main", {"rungs": []}), "candidates": cands, "runs": runs, "tasks": tasks,
-        "docs": s["docs"], "split": v.split_check(), "timeline": timeline,
+        "docs": s["docs"], "split": v.split_check(), "evidence": {hk: v.hill_evidence(hk) for hk in s["hills"]},
+        "timeline": timeline,
         "span": [s["log"][0]["t"], s["log"][-1]["t"]] if s["log"] else [0, 0], "until": until,
         "n_events": len(s["log"]), "learner": m, "asks": s["asks"],
     }
