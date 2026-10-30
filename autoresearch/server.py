@@ -447,23 +447,6 @@ HUMAN_KINDS = ("comment", "reply", "resolve", "reopen", "edit", "delete", "seen"
 
 
 LEARNING_WRITES = ("/api/course", "/api/teach", "/api/predictions", "/api/understanding")
-LEARNING_READS = LEARNING_WRITES + ("/api/brief", "/api/memory")
-
-
-def _guest_viewer(viewer) -> bool:
-    """A learner ID a share-link guest may act as: a browser ID, never a person made on this machine."""
-    if not isinstance(viewer, str) or not people.ID.fullmatch(viewer):
-        return False
-    cur = people.roster().get(viewer)
-    return not cur or bool(cur.get("remote"))
-
-
-def guest_learning_read_allowed(path: str, q: dict) -> bool:
-    """A guest reads only their own learning record: a route that would answer for someone else, or for everyone
-    (no viewer), is refused, like the writes in guest_learning_allowed."""
-    return not path.startswith(LEARNING_READS) or _guest_viewer(q.get("viewer"))
-
-
 def guest_learning_allowed(path: str, body) -> bool:
     """A shared token identifies an access group, not an individual guest. Guest browser IDs remain
     self-asserted within that group, but cannot claim a local person's ID or legacy name-based history."""
@@ -474,7 +457,7 @@ def guest_learning_allowed(path: str, body) -> bool:
     rows = body.get("events") if path.startswith("/api/understanding") and "events" in body else [body]
     if not isinstance(rows, list):
         return False
-    return all(isinstance(row, dict) and _guest_viewer(row.get("viewer")) for row in rows)
+    return all(isinstance(row, dict) and people.guest_viewer(row.get("viewer")) for row in rows)
 
 
 def human_event(p: Project, name: str, kind: str, d: dict) -> dict | None:

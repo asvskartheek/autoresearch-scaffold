@@ -88,6 +88,22 @@ def who(d: dict) -> tuple[str | None, str | None]:
     return pid, (cur or {}).get("name") or clean_name(d.get("author")) or ("guest" if d.get("_remote") else "you")
 
 
+def guest_viewer(viewer) -> bool:
+    """A learner ID a share-link guest may read or write as: a browser ID, never a person made on this machine."""
+    if not isinstance(viewer, str) or not ID.fullmatch(viewer):
+        return False
+    cur = roster().get(viewer)
+    return not cur or bool(cur.get("remote"))
+
+
+def guest_refused(q: dict) -> bool:
+    """A learner route asked by a share-link guest for someone else's record, or for everyone's (no viewer)."""
+    return bool(getattr(features.REQUEST, "remote", False)) and not guest_viewer(q.get("viewer"))
+
+
+GUEST_REFUSED = (403, dict(error="use your guest learner ID"))
+
+
 def here(p) -> list[dict]:
     t = time.time()
     with _lock:

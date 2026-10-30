@@ -749,11 +749,17 @@ def brief(p: Project, since: float = 0, viewer: str = "anon") -> dict:
 
 @features.get("/api/brief")
 def _get_brief(p, path, q):
+    from . import people
+    if people.guest_refused(q):
+        return people.GUEST_REFUSED
     return 200, brief(p, _f(q.get("since"), 0.0), str(q.get("viewer") or "anon")[:60])
 
 
 @features.get("/api/predictions")
 def _get_predictions(p, path, q):
+    from . import people
+    if people.guest_refused(q):
+        return people.GUEST_REFUSED
     preds = predictions(p, q.get("viewer") or None)
     return 200, dict(predictions=preds, calibration=calibration(preds))
 
@@ -765,6 +771,9 @@ def _post_prediction(p, path, body):
 
 @features.get("/api/understanding")
 def _get_understanding(p, path, q):
+    from . import people
+    if people.guest_refused(q):
+        return people.GUEST_REFUSED
     return 200, understanding(p, q.get("viewer") or None, q.get("doc") or None)
 
 

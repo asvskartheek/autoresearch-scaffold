@@ -182,14 +182,14 @@ class Remote(unittest.TestCase):
         people.remember(guest, "Remote reader", self.ka, remote=True)
         course.record(self.a, dict(viewer=owner, item="goal", hit=True))
         base = f"/p/{self.ka}/api/"
-        for route in ("course", "brief", "teach", "predictions", "understanding", "memory"):
+        for route in ("course", "brief", "teach", "predictions", "understanding"):
             for q in (f"?viewer={owner}", "?viewer=Local%20reader", "?viewer=anon", ""):
                 self.assertEqual(self.req(base + route + q, cookie=self.tok)[0], 403, (route, q))
             code, body, _ = self.req(base + route + f"?viewer={guest}", cookie=self.tok)
             self.assertEqual(code, 200, (route, body))
         self.assertEqual(json.loads(self.req(base + f"course?viewer={guest}", cookie=self.tok)[1])["memory"], {})
-        mem = json.loads(self.req(base + f"memory?viewer={guest}", cookie=self.tok)[1])
-        self.assertTrue(all(x["id"] == guest for x in mem["people"]))
+        mem = json.loads(self.req(base + f"memory?viewer={owner}", cookie=self.tok)[1])
+        self.assertIsNone(mem["person"])  # memory answers a guest with nobody's record (memory.py)
         local = json.loads(self.req(base + f"course?viewer={owner}", host="127.0.0.1")[1])
         self.assertIn("goal", local["memory"])  # loopback still reads anyone's
         from autoresearch import learn
