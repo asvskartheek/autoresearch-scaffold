@@ -39,6 +39,40 @@
  .md-meta{flex:none;width:100%}
 }
 .card.flush .md-gate td.md-c1{padding-left:12px}
-.md-idc{display:inline-flex}
+.md-idc{display:inline-flex;min-width:0;max-width:100%}
 .md-idc{align-items:center;gap:2px}
-.md-id{font-size:12.5px;color:var(--text)}
+.md-id{font-size:12.5px;color:var(--text);overflow-wrap:anywhere;min-width:0}
+/* the result column never clips: its pills wrap, and the flush card keeps a right gutter */
+.md-gate td.md-res{white-space:normal;min-width:96px}
+.md-gate td.md-res .row{flex-wrap:wrap;gap:4px}
+.md-gate td.md-res .pill{white-space:normal;text-align:left;height:auto;min-height:20px;flex:0 1 auto;padding-top:2px;padding-bottom:2px}  /* a long result ("Champion not run on this harness") wraps */
+.card.flush .md-gate th:last-child,.card.flush .md-gate td:last-child{padding-right:var(--card-pad)}
+@media (max-width:1100px){.md-gate .md-hm,.md-gate .md-hw{display:none}.md-ci{min-width:110px}}
+@media (max-width:640px){.md-gate .md-hs{display:none}.md-gate .md-ci .ci{display:none}.md-ci{min-width:0}.md-gate td{white-space:normal}.md-gate td,.md-gate th{padding-left:6px;padding-right:6px}.md-gate td.md-res{min-width:0}.md-gate .md-sl{overflow-wrap:normal;word-break:normal}}
+/* the gate sizes to its card, not the window: with a sidebar open the card is narrower than the viewport */
+.md-gp{container-type:inline-size}
+.md-gate td.md-rule{white-space:normal;min-width:110px;max-width:150px}
+@container (max-width:1060px){.md-gate .md-hw{display:none}}
+@container (max-width:900px){.md-gate .md-hm{display:none}}
+@container (max-width:700px){.md-gate .md-hs{display:none}.md-gate .md-ci .ci{display:none}}
+/* a candidate's verdict: its ladder track and the next run as one chip */
+.md-vz{display:inline-flex;align-items:center;gap:10px 14px;flex-wrap:wrap}
+.md-vz .ladder .rg{font-size:13px}
+.md-nx{display:inline-flex;align-items:center;gap:6px;padding:3px 10px 3px 4px;border-radius:999px;background:var(--accent-soft);color:var(--text);font-size:13px}
+.md-nxa{padding:1px 7px;border-radius:999px;background:var(--accent);color:var(--surface);font-size:11px;font-weight:600}
+/* a next run already in progress: the chip links to its task and carries its live count */
+a.md-nx.md-run{color:var(--text)}
+a.md-nx.md-run:hover{box-shadow:inset 0 0 0 1px var(--accent)}
+.md-run .num{margin-left:2px;font-size:12.5px}
+@media (prefers-reduced-motion:no-preference){.md-run .md-nxa{animation:md-blink 2s ease-in-out infinite}}
+@keyframes md-blink{50%{opacity:.6}}
+/* a long model id in the header command wraps instead of widening the page (phones) */
+@media (max-width:900px){
+ .title .acts:has(>.md-gatecmd){flex:1 1 100%;min-width:0;max-width:100%;flex-wrap:wrap}
+ .md-gatecmd code{white-space:normal;overflow-wrap:anywhere}
+}
+
+.md-mobile-evidence{display:none;white-space:normal;overflow-wrap:anywhere;margin-top:6px}
+.md-mobile-evidence summary{cursor:pointer;color:var(--accent)}
+@media(max-width:1100px){.md-mobile-evidence{display:block}}
+@container(max-width:900px){.md-mobile-evidence{display:block}}

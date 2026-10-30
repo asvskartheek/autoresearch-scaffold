@@ -1,7 +1,7 @@
 """`ar` command line: the same ledger operations agents use from Python, for shells and subagents."""
 from __future__ import annotations
 
-import argparse, json, os, shutil, socket, subprocess, sys, time
+import argparse, json, math, os, re, shutil, socket, subprocess, sys, time
 from pathlib import Path
 
 from .core import Project, Task, _jsonl
@@ -50,7 +50,7 @@ def cmd_init(a):
     # Step 0: the dashboard is up and setup itself is a visible task before any other work happens.
     from .projects import register
     register(root)
-    url = _up(root, a.port) if not a.no_serve else None
+    url = _project_url(root, _up(root, a.port)) + "/" if not a.no_serve else None
     os.chdir(root)
     t = Task(Project(root), "setup", "Project setup", "Environment, model and dataset preparation. Note each step; finish when the first eval can run.")
     t.note("arx init")
@@ -63,6 +63,46 @@ def _port_open(port: int) -> bool:
     with socket.socket() as s:
         s.settimeout(0.3)
         return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+def _project_url(root: Path, base: str) -> str:
+    """This project's URL on a dashboard at `base`: always /p/<key>, since one server serves every registered project
+    and its bare root shows whichever project started it. The bare base only for an unregistered project."""
+    from . import projects
+    key = projects.key_for(root)
+    return f"{base}/p/{key}" if key else base
+
+
+def _served(p: Project) -> str | None:
+    """This project's URL on a running dashboard (http://127.0.0.1:<port>/p/<key>), or None. Its own server.json
+    first; else any running dashboard of another registered project, since one server lists every registered project
+    at /p/<key>/."""
+    from . import projects
+    import urllib.request
+    own = p.dir / "server.json"
+    try:
+        port = int(json.loads(own.read_text()).get("port") or 0) if own.exists() else 0
+    except (ValueError, TypeError):
+        port = 0
+    if port and _port_open(port):
+        return _project_url(p.root, f"http://127.0.0.1:{port}")
+    key = projects.key_for(p.root)
+    if not key:
+        return None
+    ports = set()
+    for r in projects.registry().values():
+        try:
+            ports.add(int(json.loads((Path(r["root"]) / ".research" / "server.json").read_text()).get("port") or 0))
+        except (OSError, ValueError, TypeError, KeyError):
+            pass
+    for port in sorted(x for x in ports if x and _port_open(x)):
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/projects", timeout=1.5) as r:
+                if any(q.get("key") == key for q in json.loads(r.read())):
+                    return f"http://127.0.0.1:{port}/p/{key}"
+        except (OSError, ValueError):
+            continue
+    return None
 
 
 def _up(root: Path, port: int, restart: bool = False) -> str:
@@ -111,7 +151,8 @@ def cmd_up(a):
     root = Project().root
     key = register(root)
     url = _up(root, a.port, a.restart)
-    print(f"{url}\n{url}/p/{key}/  (this project; every registered project is listed in the sidebar)")
+    from .answer import spawn; spawn(root)  # agents answer comments and inbox items
+    print(f"{url}/p/{key}/  (this project; every registered project is listed in the sidebar)")
 
 
 def cmd_projects(a):
@@ -134,7 +175,7 @@ def cmd_sync(a):
         raise SystemExit("this is the vendored copy itself; run the installed `arx sync`")
     shutil.rmtree(dst, ignore_errors=True)
     shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__"))
-    print(f"vendored copy updated from {src}\n{_up(root, 8890, restart=True)}")
+    print(f"vendored copy updated from {src}\n{_project_url(root, _up(root, 8890, restart=True))}/")
 
 
 def cmd_dataset(a):
@@ -179,10 +220,48 @@ def cmd_hill(a):
     print(f"hill {a.name} open: target {h['target']}, control {h.get('control')}" + (f", serves goal {a.goal}" if a.goal else ""))
 
 
-def _kpi_fmt(g, v):
+KPI_UNITS = dict(latency_p50="s", latency_p95="s", latency_mean="s", cost="$")
+
+
+def _minus(sl) -> bool:
+    return bool(re.match(r"\s*minus\b", str(sl.get("metric") or ""), re.I))
+
+
+def _goal_op(st) -> str:
+    """The comparator as read: a "minus ms" score stored as >= -1000 reads "<= 1000 ms"."""
+    neg = st.get("kpi", "score") == "score" and st.get("scale") == "continuous" and _minus(st)
+    return ">=" if bool(st.get("higher_is_better", True)) != neg else "<="
+
+
+def _goal_delta(st, vs) -> str:
+    """A paired delta vs the baseline: pts on a 0/1 slice, the slice's unit on a continuous one."""
+    if st.get("scale") != "continuous":
+        return f"{_fmt(vs['delta'])} pts [{_fmt(vs['lo'])}, {_fmt(vs['hi'])}]"
+    s, u = (-1 if _minus(st) else 1), (" " + st["unit"] if st.get("unit") else "")
+    lo, hi = sorted((s * vs["lo"], s * vs["hi"])) if vs.get("lo") is not None else (None, None)
+    f = lambda x: "—" if x is None else f"{x:+.4g}{u}"
+    return f"{f(s * vs['delta'])} [{f(lo)}, {f(hi)}]"
+
+
+def _kpi_fmt(g, v, target=False):
+    """A goal value in units: solved/n on a 0/1 slice, seconds or dollars for latency and cost, the slice's own unit on
+    a continuous one. A target count is the count that meets it: rounded up for >=, down for <=, never to a count that
+    misses."""
     if v is None:
         return "—"
-    return f"{100 * v:.1f}%" if g.get("kpi", "score") == "score" else f"{v:.4g}"
+    kpi = g.get("kpi", "score")
+    if kpi != "score":
+        u = KPI_UNITS.get(kpi) or ("tok/s" if re.search(r"tokens?_per_s|throughput", kpi) else None)
+        return f"${v:.4g}" if u == "$" else f"{v:.4g} {u}" if u else f"{v:.4g}"
+    sl = Project().slices().get(g.get("slice")) or {}
+    if sl.get("scale") == "continuous":  # a "minus ms" score reads as the plain amount, as on the dashboard
+        return f"{-v if _minus(sl) else v:.4g} {sl.get('unit') or ''}".rstrip()
+    n = g.get("n") or sl.get("n")
+    if not n:
+        return f"{100 * v:.1f}%"
+    hib = g.get("higher_is_better", True)
+    k = (math.ceil(v * n - 1e-9) if hib else math.floor(v * n + 1e-9)) if target else round(v * n)
+    return f"{k}/{n} ({100 * v:.1f}%)"
 
 
 def cmd_goal(a):
@@ -208,10 +287,16 @@ def cmd_goal(a):
             print(json.dumps(st, default=str))
             continue
         vs = st["vs_baseline"]
+        op = _goal_op(st)
+        tgt = _kpi_fmt(st, st["target"], target=True)
         print(f"{name} [{st['status']}] {st['title']}\n"
-              f"  target {st['kpi']} {'>=' if st['higher_is_better'] else '<='} {_kpi_fmt(st, st['target'])} on {st['slice']} (n = {st['n']})\n"
-              f"  {st['model'] or 'no champion'}: {_kpi_fmt(st, st['value'])}{'  MET' if st['met'] else ''}"
-              + (f"  Δ vs {st['baseline']} {_fmt(vs['delta'])} pts [{_fmt(vs['lo'])}, {_fmt(vs['hi'])}] n={vs['n']}" if vs and vs['delta'] is not None else ""))
+              f"  target {st['kpi']} {op} {tgt} on {st['slice']} (n = {st['n']})\n"
+              f"  {st['model'] or 'no champion'}: {_kpi_fmt(st, st['value'])} vs {op} {tgt}"
+              f"{'  MET' if st['met'] else '  not met' if st['value'] is not None else ''}"
+              + (f"  Δ vs {st['baseline']} {_goal_delta(st, vs)} n={vs['n']}" if vs and vs['delta'] is not None else ""))
+        warn = _error_warning(st["model"], st.get("pooled_errors"), st.get("pooled_rows"))
+        if warn:
+            print(f"  {warn}")
         for h, s in st["hills"].items():
             print(f"  hill {h} [{s}]")
 
@@ -228,7 +313,27 @@ def cmd_reject(a):
     Project().set_model_status(a.name, "rejected", a.reason)
 
 
+def _error_warning(model, errors, rows) -> str | None:
+    """A warning line when a pooled side is mostly errors: they still score 0, so the number is not the model's."""
+    from .core import ERROR_SHARE_WARN
+    if not rows or not errors or errors / rows < ERROR_SHARE_WARN:
+        return None
+    return (f"warning: {errors:,} of {rows:,} pooled rows of {model} are errors ({100 * errors / rows:.0f}%); "
+            f"the pooled score mostly measures the harness failing")
+
+
+def _bar(p, c) -> str:
+    """The rule's bar: signed in the slice's units once paired; before a pairing on a continuous slice, a share of
+    the champion's mean (the units come from the champion's runs)."""
+    from .learn import bar_amount, sd
+    if c.get("relative") and c.get("delta") is None:
+        thr = c.get("threshold_fraction", c.get("threshold")) or 0
+        return ("by " if c["rule"] == "better" else "within ") + bar_amount(p, c) if thr else ""
+    return sd(p, c["slice"], c["threshold"])
+
+
 def cmd_gate(a):
+    from .learn import sd, sv, _neg
     p = Project()
     g = p.gate(a.model)
     if a.json:
@@ -237,10 +342,28 @@ def cmd_gate(a):
     for r in g["rungs"]:
         print(f"  {r['rung']:<10} {r['status'].upper()}")
         for c in r["checks"]:
-            extra = ""
-            if c.get("delta") is not None:
-                extra = f"Δ {_fmt(c['delta'])} pts [{_fmt(c['lo'])}, {_fmt(c['hi'])}] n={c['n']} W/L {c['wins']}/{c['losses']}{' noisy' if c.get('noisy') else ''}"
-            print(f"      {c['state']:<14} {c['slice']:<28} {c['rule']} {_fmt(c['threshold'])}  {extra}")
+            sl, extra = c["slice"], ""
+            if c["state"] == "champion":  # never paired with itself: no bar, no delta
+                n = c.get("champion_runs") or 0
+                extra = "no run" if not n else f"{sv(p, sl, c.get('champion_score'))}" + (f" ({n} runs pooled)" if n > 1 else "")
+                print(f"      {c['state']:<14} {sl:<28} {extra}".rstrip())
+                continue
+            if c["state"] == "rejected" and c.get("reason"):
+                extra = c["reason"]
+            elif c.get("harness_mismatch"):
+                extra = (f"champion has {c['champion_runs_other_harness']} run(s) here, none under this model's harness "
+                         f"({str(c.get('baseline_contract'))[:12]}); it needs one")
+            elif c.get("delta") is not None:  # in the slice's units: pts on 0/1 slices, ms / MB / … on continuous ones
+                lo, hi = (c["hi"], c["lo"]) if p.is_continuous(sl) and _neg(p, sl) else (c["lo"], c["hi"])
+                runs = f" runs {c['cand_runs']}/{c['base_runs']}" if c.get("cand_runs", 1) > 1 or c.get("base_runs", 1) > 1 else ""
+                extra = (f"Δ {sd(p, sl, c['delta'])} [{sd(p, sl, lo)}, {sd(p, sl, hi)}] n={c['n']}{runs} "
+                         f"W/L {c['wins']}/{c['losses']}{' noisy' if c.get('noisy') else ''}")
+            bar = ("" if c["rule"] in ("recorded", "manual") else _bar(p, c) if sl in p.slices() else _fmt(c["threshold"]))
+            print(f"      {c['state']:<14} {sl:<28} {c['rule']} {bar}  {extra}".rstrip())
+            for side, who in (("cand", a.model), ("base", g["champion"])):
+                warn = _error_warning(who, c.get(f"{side}_errors"), c.get(f"{side}_rows"))
+                if warn:
+                    print(f"        {warn}")
     if g["next"]:
         print("next runs:")
         for n in g["next"]:
@@ -308,7 +431,7 @@ def cmd_task(a):
             sys.exit(3)
     elif a.action == "finish":
         t.finish(a.status, summary=json.loads(Path(a.summary_file).read_text()) if a.summary_file else None)
-    if a.action != "start" and not _port_open(json.loads((p.dir / "server.json").read_text()).get("port", 0)) if (p.dir / "server.json").exists() else True:
+    if a.action != "start" and not _served(p):
         print("warning: dashboard is not running; `arx up`", file=sys.stderr)
 
 
@@ -329,7 +452,7 @@ def cmd_status(a):
             print(f"  candidate {name}: " + " → ".join(f"{r['rung']}:{r['status']}" for r in g["rungs"]))
     for name in p.goals():
         st = p.goal_status(name)
-        print(f"  goal {name} [{st['status']}] {_kpi_fmt(st, st['value'])} / {_kpi_fmt(st, st['target'])} on {st['slice']}")
+        print(f"  goal {name} [{st['status']}] {_kpi_fmt(st, st['value'])} / {_kpi_fmt(st, st['target'], target=True)} on {st['slice']}")
     for name, h in p.hills().items():
         print(f"  hill {name} [{h['status']}] {h['title']}" + (f" (goal {h['goal']})" if h.get("goal") else ""))
 
@@ -346,21 +469,31 @@ def _is_dashboard(pid: int, port: int) -> bool:
 def cmd_paper(a):
     from . import papers
     p = Project()
-    port = (json.loads((p.dir / "server.json").read_text()).get("port") if (p.dir / "server.json").exists() else None) or 8890
-    if not _port_open(port):  # stale server.json: point at the command that serves it rather than a dead port
-        print(f"(this project's dashboard is not running on {port}: `arx up` prints where it is served)", file=sys.stderr)
+    base = _served(p)
+    if not base:  # no dashboard serves it: point at the command rather than a dead port
+        base = _project_url(p.root, "http://127.0.0.1:8890")
+        print("(this project's dashboard is not running: `arx up` prints where it is served)", file=sys.stderr)
     if a.verb in ("add", "edit"):  # edit = republish; open pages swap the new version in without reloading
         if not a.name or not a.file:
             sys.exit(f"usage: arx paper {a.verb} <name> --file paper.html")
         if a.goal and a.goal not in p.goals():
             sys.exit(f"unknown goal {a.goal}")
-        f = papers.add(p, a.name, Path(a.file), title=a.title, hill=a.hill, goal=a.goal)
-        print(f"{f}\nhttp://127.0.0.1:{port}/papers/{a.name}")
+        try:
+            f = papers.add(p, a.name, Path(a.file), title=a.title, hill=a.hill, goal=a.goal)
+        except ValueError as e:
+            sys.exit(str(e))
+        print(f"{f}\n{base}/papers/{a.name}")
     elif a.verb == "ls":
-        for name, m in papers.papers(p).items():
+        for name, m in papers.papers(p, with_health=True).items():
+            hl = m.get("health") or {}
             print(f"{name}  {m.get('title') or ''}  threads={m['comments']} open={m['open']} waiting={m['waiting']}"
-                  f"  http://127.0.0.1:{port}/papers/{name}")
+                  + (f" edits-owed={m['owed']}" if m.get("owed") else "")
+                  + (f" check-errors={hl['errors']}" if hl.get("errors") else "")
+                  + "".join(f" [stale: {x}]" for x in hl.get("stale") or []) + f"  {base}/papers/{name}")
     elif a.verb == "poll":  # blocks until a person is waiting on the agent; one JSON line per thread
+        for th in papers.owed(p, a.name):  # promised edits stay in view until the paper is republished
+            print(f"edit owed: {th['paper']} thread {th['id']}: you agreed to change the paper and have not "
+                  f"republished it (arx paper edit {th['paper']} --file ...)", file=sys.stderr)
         for th in papers.poll(p, a.name, timeout=a.timeout):
             print(json.dumps(dict(paper=th["paper"], thread=th["id"], quote=(th.get("anchor") or {}).get("quote"),
                                   block=(th.get("anchor") or {}).get("block"), mention=th["mention"],
@@ -370,24 +503,28 @@ def cmd_paper(a):
     elif a.verb == "attach":
         if not a.file:
             sys.exit("usage: arx paper attach <name> --file page.html")
-        print(f"http://127.0.0.1:{port}" + papers.attach(p, a.name, Path(a.file)))
+        print(base + papers.attach(p, a.name, Path(a.file)))
     elif a.verb == "new" and a.goal:  # the public paper: the worked goal example, to rewrite with this goal's result
         if a.goal not in p.goals():
             sys.exit(f"unknown goal {a.goal}")
+        if papers.owner(p, goal=a.goal):
+            sys.exit(f"goal {a.goal} already has the paper {papers.owner(p, goal=a.goal)!r}: edit that one")
         out = Path(a.file or f"paper-{a.goal}.html")
         if out.exists():
             sys.exit(f"{out} exists")
         shutil.copy(TEMPLATE / "paper-goal-example.html", out)
         st = p.goal_status(a.goal)
         print(f"{out}\na worked example: one possible shape, not a template (PROTOCOL.md § Papers). From the ledger:\n"
-              f"  target  {st['kpi']} {_kpi_fmt(st, st['target'])} on {st['slice']}, n = {st['n']}\n"
+              f"  target  {st['kpi']} {_goal_op(st)} {_kpi_fmt(st, st['target'], target=True)} on {st['slice']}, n = {st['n']}\n"
               f"  now     {st['model']}: {_kpi_fmt(st, st['value'])} [{st['status']}]\n"
-              + (f"  vs {st['baseline']}: Δ {_fmt(st['vs_baseline']['delta'])} pts, 90% CI [{_fmt(st['vs_baseline']['lo'])}, {_fmt(st['vs_baseline']['hi'])}], n = {st['vs_baseline']['n']}\n" if st["vs_baseline"] else "")
+              + (f"  vs {st['baseline']}: Δ {_goal_delta(st, st['vs_baseline'])} (90% CI), n = {st['vs_baseline']['n']}\n" if st["vs_baseline"] and st["vs_baseline"].get("delta") is not None else "")
               + "".join(f"  internal: ../{h} (hill {h}, {s})\n" for h, s in st["hills"].items())
               + f"  arx paper check --goal {a.goal} --file {out}\n  arx paper add {a.goal} --goal {a.goal} --file {out}")
     elif a.verb == "new":  # a starter page: the worked example, to rewrite with this hill's content
         if not a.name:
             sys.exit("usage: arx paper new <hill> [--file paper-<hill>.html] | arx paper new --goal <goal>")
+        if papers.owner(p, hill=a.name):
+            sys.exit(f"hill {a.name} already has the paper {papers.owner(p, hill=a.name)!r}: edit that one")
         out = Path(a.file or f"paper-{a.name}.html")
         if out.exists():
             sys.exit(f"{out} exists")
@@ -404,7 +541,8 @@ def cmd_paper(a):
             sys.exit(f"unknown goal {goal}")
         found = papers.check(src.read_text(), slices=list(p.slices()))
         if goal:  # the public paper: final result, paired delta, internal hill papers
-            found += papers.check_goal(src.read_text(), p.goal_status(goal), hill_papers=papers.names(p))
+            found += papers.check_goal(src.read_text(), p.goal_status(goal), hill_papers=papers.names(p),
+                                       titles={k: m["title"] for k, m in p.models().items() if m.get("title")})
         for level, msg in found:
             print(f"{level}: {msg}")
         errs = sum(1 for lv, _ in found if lv == "error")
@@ -422,8 +560,13 @@ def cmd_paper(a):
         elif a.link:
             label, _, url = a.link.rpartition("=") if "=" in a.link else ("", "", a.link)
             link = dict(label=label or url, url=url)
-        papers.post(p, a.name, a.verb, parent=a.comment, body=" ".join(a.text) or None, link=link, agent=True,
-                    author=a.author)
+        body = " ".join(a.text) or None
+        owe = a.verb == "reply" and not a.no_edit and (a.edit or papers.promises(body))
+        papers.post(p, a.name, a.verb, parent=a.comment, body=body, link=link, agent=True, author=a.author,
+                    owe=True if owe else None)
+        if owe:
+            print(f"edit owed on {a.name}: the thread shows as pending until you republish the paper "
+                  f"(arx paper edit {a.name} --file ...); pass --no-edit if the reply promises no change", file=sys.stderr)
 
 
 def cmd_serve(a):
@@ -548,7 +691,7 @@ def main(argv=None):
 
     s = sp.add_parser("task", help="workbench tasks from a shell")
     s.add_argument("action", choices=["start", "log", "note", "link", "progress", "left", "finish"])
-    s.add_argument("id", nargs="?"); s.add_argument("values", nargs="*")
+    s.add_argument("id", nargs="?", help="the task id (start: the title)"); s.add_argument("values", nargs="*")
     s.add_argument("--kind", default="experiment"); s.add_argument("--title"); s.add_argument("--description")
     s.add_argument("--model"); s.add_argument("--slice"); s.add_argument("--agent"); s.add_argument("--total", type=int)
     s.add_argument("--parent", help="task id this one sits under (default $ARX_PARENT)")
@@ -564,7 +707,8 @@ def main(argv=None):
   add|edit <name> --file F         publish / republish (open pages update in place)
   ls                               papers with thread counts
   poll [name]                      block until someone waits on the agent; one JSON line per thread
-  reply <name> <thread> "text"     answer a thread (--link label=url, --file page.html)
+  reply <name> <thread> "text"     answer a thread (--link label=url, --file page.html); a reply that agrees to
+                                   change the paper (or --edit) keeps the thread pending until you republish
   resolve <name> <thread> [note]   close a thread
   attach <name> --file F           serve a page next to the paper""")
     s.add_argument("verb", choices=["new", "add", "edit", "check", "ls", "poll", "reply", "resolve", "attach"]); s.add_argument("name", nargs="?")
@@ -574,14 +718,25 @@ def main(argv=None):
     s.add_argument("--link", help="reply: label=url (url may be #block, /papers/<name>#block, an arx page or https://)")
     s.add_argument("--author", default="agent", help="reply: the name shown on the agent's message")
     s.add_argument("--timeout", type=float, help="poll: give up after this many seconds")
+    s.add_argument("--edit", action="store_true", help="reply: you will change the paper; pending until republished")
+    s.add_argument("--no-edit", action="store_true", help="reply: the reply promises no change to the paper")
     s.set_defaults(fn=cmd_paper)
 
+    from . import features
+    features.load()
+    for reg in features.CLI:
+        reg(sp)
     s = sp.add_parser("status", help="champion, running tasks, each candidate's ladder position, open hills"); s.set_defaults(fn=cmd_status)
     s = sp.add_parser("serve", help="run the dashboard in the foreground (`arx up` runs it in the background)"); s.add_argument("--port", type=int, default=8890, help="dashboard port"); s.set_defaults(fn=cmd_serve)
 
     a = ap.parse_args(argv)
-    if a.cmd == "task" and a.action == "start" and not a.title:
-        ap.error("task start needs --title")
+    if a.cmd == "task" and a.action == "start":
+        if a.id and not a.title:  # arx task start "Download the weights": the title as a positional argument
+            a.title, a.id, a.values = " ".join([a.id, *a.values]), None, []
+        if a.id or a.values:
+            ap.error("task start takes the title once: arx task start \"title\" or --title \"title\"")
+        if not a.title:
+            ap.error("task start needs a title: arx task start \"title\" (or --title)")
     a.fn(a)
 
 

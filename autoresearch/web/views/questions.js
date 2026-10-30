@@ -1,0 +1,401 @@
+'use strict';
+// Questions: the project as a tree of questions (seeded from goals, hills and models; see autoresearch/questions.py).
+// Left: the outline, claims on hover. Right: the focused question, its claim and its evidence as paired-delta dots
+// with CI and fixed/broke squares. "Ask" under any node, or window.qAsk(text) from selected text on any view (the
+// comments chip's Ask button), sends a question to an agent (status agent, inbox kind=question).
+const QS={data:null,at:0,busy:false,closed:null,notes:{},fresh:new Set(),err:null};
+const qName=()=>{try{return localStorage.getItem('arx-name')||'you'}catch(e){return 'you'}};
+
+function qLoad(force){
+ if(QS.busy&&!force)return QS.busy;
+ if(!force&&QS.data&&Date.now()-QS.at<5000)return Promise.resolve();
+ if(force)QS.notes={};  // an answer or a new note may have landed
+ const p=fetch('api/questions',{cache:'no-store'}).then(r=>r.json()).then(d=>{QS.data=d;QS.at=Date.now();QS.err=null})
+  .catch(e=>{QS.err=String(e)}).finally(()=>{if(QS.busy===p)QS.busy=false;if(route().r==='questions')render()});
+ return QS.busy=p;
+}
+async function qPost(verb,body){
+ const r=await fetch('api/questions/'+verb,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({by:qName(),...body})});
+ const d=await r.json().catch(()=>({error:'bad response'}));
+ if(!r.ok||d.error)throw new Error(d.error||r.status);
+ return d;
+}
+
+// ---------- marks: open ring, answered disc, dead crossed square, agent spinner (or progress ring), you = amber diamond
+function qShape(n,sz=14){
+ const c=sz/2,r=sz/2-1.5,box=`width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}" aria-hidden="true"`;
+ const s=typeof n==='string'?n:n.status,human=typeof n==='object'&&n.needs_human&&s!=='answered'&&s!=='dead';
+ if(human||s==='human')return `<svg ${box}><path d="M${c} 1L${sz-1} ${c}L${c} ${sz-1}L1 ${c}Z" fill="var(--chart-3)"/></svg>`;
+ if(s==='agent'){
+  const pr=typeof n==='object'&&n.live?.progress,f=pr&&pr.total?Math.min(1,(pr.done||0)/pr.total):null;
+  if(f!=null){const L=2*Math.PI*r;return `<svg ${box}><circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--control)" stroke-width="2"/><circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="${(f*L).toFixed(2)} ${L.toFixed(2)}" transform="rotate(-90 ${c} ${c})"/></svg>`}
+  return `<svg ${box}><circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--rule)" stroke-width="2"/><path class="q-spin" d="M${c} ${c-r}A${r} ${r} 0 0 1 ${c+r} ${c}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/></svg>`}
+ if(s==='answered')return `<svg ${box}><circle cx="${c}" cy="${c}" r="${r}" fill="var(--positive)"/></svg>`;
+ if(s==='dead')return `<svg ${box}><rect x="2" y="2" width="${sz-4}" height="${sz-4}" rx="1.5" fill="none" stroke="var(--negative)" stroke-width="1.6"/><path d="M5 5L${sz-5} ${sz-5}M${sz-5} 5L5 ${sz-5}" stroke="var(--negative)" stroke-width="1.6"/></svg>`;
+ return `<svg ${box}><circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--accent)" stroke-width="1.8"/></svg>`;
+}
+const qWaiting=n=>n.needs_human&&(n.status==='open'||n.status==='agent');
+
+// ---------- the tree
+function qIndex(){
+ const d=QS.data,by={},kids={};
+ for(const n of d.nodes){by[n.id]=n;(kids[n.parent||'']??=[]).push(n.id)}
+ return {by,kids};
+}
+function qCount(id,kids){let a=0;for(const k of kids[id]||[])a+=1+qCount(k,kids);return a}
+function qDefaultClosed(by,kids){
+ // settled branches start folded; open work stays visible
+ const s=new Set();for(const n of Object.values(by))if(kids[n.id]?.length&&(n.status==='answered'||n.status==='dead'||n.seed==='group'))s.add(n.id);return s;
+}
+function qRow(id,ix,focus){
+ const n=ix.by[id],k=ix.kids[id]||[],cl=QS.closed.has(id),on=id===focus;
+ return `<li><div class="q-row ${on?'on':''} ${cl?'closed':''} ${n.status==='dead'?'dead':''} ${QS.fresh.has(id)?'fresh':''}" data-qgo="${esc(id)}" data-qnode="${esc(id)}" tabindex="0"${n.claim&&!on?` data-qtip="${esc(qPlain(n.claim))}"`:''}>`+
+  `<span class="q-car ${k.length?'':'none'}" data-qcar="${esc(id)}" role="button" aria-label="Toggle"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 3.5L5 6.5L8 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>`+
+  `<span class="q-sh">${qShape(n)}</span><span class="q-tx"><a class="q-q" href="#questions/${enc(id)}" tabindex="-1">${esc(n.title)}</a>${on&&n.claim?`<span class="q-cl">${esc(qPlain(n.claim))}</span>`:''}</span>`+
+  `${k.length&&cl?`<span class="q-ct">${qCount(id,ix.kids)}</span>`:''}</div>`+
+  (k.length&&!cl?`<ul class="q-t">${k.map(c=>qRow(c,ix,focus)).join('')}</ul>`:'')+`</li>`;
+}
+
+// ---------- evidence: one lane per run
+const qFmt=n=>n==null?'—':Number(n).toLocaleString('en-US');
+function qTag(e){return e.role||(e.slice||'').split('/').pop()}
+function qCol(e){
+ if(e.lo!=null&&e.hi!=null)return e.lo>0?'var(--positive)':e.hi<0?'var(--negative)':'var(--muted)';
+ return e.delta>0?'var(--positive)':e.delta<0?'var(--negative)':'var(--muted)';
+}
+// a model's readable label as plain text (mnt() without the HTML escaping; data-qtip is escaped once by esc())
+const qM=k=>{if(!k)return '';const t=S.state?.models?.[k]?.title;if(t)return t;const s=String(k);return s.split('+').length>3?'…+'+s.split('+').slice(-2).join('+'):s};
+const qCI=e=>{if(e.lo==null)return '';const [lo,hi]=negSlice(e.slice)?[e.hi,e.lo]:[e.lo,e.hi];
+ return isCont(e.slice)?`90% CI ${sd(e.slice,lo)} to ${sd(e.slice,hi)}`:`90% CI ${pts(lo)} to ${pts(hi)} pts`};
+// a claim's #model/<id>, #hill/<id>, #goal/<id>, #task/<id> or #answer/<id> becomes a link titled with the name it stands for
+function qRouteName(k,id){
+ const st=S.state||{};
+ if(k==='model')return qM(id);if(k==='hill')return st.hills?.[id]?.title||id;if(k==='goal')return st.goals?.[id]?.title||QS.data?.goals?.[id]?.title||id;
+ if(k==='task')return byId(id)?.title||id;if(k==='answer')return 'the full answer';if(k==='questions')return QS.data?.nodes?.find(n=>n.id===id)?.title||id;return id}
+const qLinky=t=>esc(t).replace(/(^|[\s(])#(model|hill|goal|task|answer|questions)\/([^\s<),;]*[^\s<.,;:)])/g,(m,pre,k,id)=>{let raw=id;try{raw=decodeURIComponent(id.replace(/&amp;/g,'&'))}catch(e){}return `${pre}<a href="#${k}/${enc(raw)}">${esc(qRouteName(k,raw))}</a>`});
+const qPlain=t=>String(t||'').replace(/(^|[\s(])#(model|hill|goal|task|answer|questions)\/([^\s<),;]*[^\s<.,;:)])/g,(m,pre,k,id)=>{let raw=id;try{raw=decodeURIComponent(id)}catch(e){}return pre+qRouteName(k,raw)});
+function qVal(e){
+ if(e.kind==='missing')return 'Not run';
+ if(e.kind==='paired')return e.delta==null?'—':sd(e.slice,e.delta);
+ if(e.c==null||!e.n)return '—';
+ return e.slice&&isCont(e.slice)?sv(e.slice,e.c/e.n):`${qFmt(e.c)} of ${qFmt(e.n)}`;
+}
+function qTipOf(e){
+ if(e.kind==='missing')return `${qM(e.model)||e.task}\n${e.slice||''}\nNot run`;
+ const head=`${e.label||qM(e.model)}\n${e.slice||e.what||''}${e.n?' · n '+qFmt(e.n):''}`;
+ if(e.kind==='raw')return `${head}\n${qVal(e)}`+(e.what?`\n${e.what}`:'');
+ const cont=isCont(e.slice);
+ return `${head}\n${cont?sv(e.slice,e.c/e.n):qFmt(e.c)} vs ${cont?sv(e.slice,e.bc/e.n):qFmt(e.bc)} (${qM(e.base)})\n${qVal(e)}`+(e.lo!=null?` · ${qCI(e)}`:'')+
+  `\n${e.wins??0} fixed · ${e.losses??0} broke`;
+}
+function qSquares(e){
+ if(e.kind!=='paired'||(!e.wins&&!e.losses))return '';
+ const u=Math.max(1,Math.ceil((e.wins+e.losses)/28));
+ return `<span class="sqs" title="${e.wins} fixed · ${e.losses} broke">`+'<i class="f"></i>'.repeat(Math.ceil(e.wins/u))+'<i class="b"></i>'.repeat(Math.ceil(e.losses/u))+`<span class="sqn"><b class="f">${e.wins} fixed</b> · <b class="b">${e.losses} broke</b></span></span>`;
+}
+function qEvidence(n){
+ // one lane per run: role, the delta (or count) as a dot with its CI, the value in the slice's units, and under it
+ // the slice, n and CI in words, so nothing needs a hover. 0/1 lanes share one pts axis; continuous lanes scale alone.
+ const ev=n.ev||[];if(!ev.length)return '';
+ const isPts=e=>e.kind==='paired'&&e.delta!=null&&!isCont(e.slice);
+ const span=e=>Math.max(...[e.delta,e.lo,e.hi].filter(v=>v!=null).map(Math.abs),0);
+ const R=Math.max(3,Math.ceil(Math.max(0,...ev.filter(isPts).map(e=>100*span(e)))*1.1));
+ // name the model on each row unless every row is this question's own model
+ const who=e=>e.model&&(e.model!==n.model||new Set(ev.map(x=>x.model)).size>1)?qM(e.model):'';
+ const rows=ev.map(e=>{
+  let lane='';
+  if(e.kind==='raw')lane=`<div class="trk"></div><div class="fill" style="width:${e.n&&e.c!=null&&!(e.slice&&isCont(e.slice))?Math.max(0,Math.min(100,100*e.c/e.n)).toFixed(1):0}%"></div>`;
+  else if(e.kind==='paired'&&e.delta!=null){
+   const col=qCol(e),k=isPts(e)?100:negSlice(e.slice)?-1:1,r=isPts(e)?R:(span(e)*1.15||1),x=v=>50+Math.max(-r,Math.min(r,k*v))/r*48;
+   const left=Math.min(x(e.lo),x(e.hi)),right=Math.max(x(e.lo),x(e.hi));
+   lane=`<div class="z"></div>`+(e.lo!=null?`<div class="ci" style="left:${left}%;width:${Math.max(.5,right-left)}%;background:${col}"></div>`:'')+`<div class="d" style="left:${x(e.delta)}%;background:${col}"></div>`}
+  const href=e.task?`#task/${enc(e.task)}`:e.model?`#model/${enc(e.model)}`:'';
+  const cap=[who(e),e.kind==='raw'&&e.role==='errors'?(e.what||e.label):e.slice,e.n?'n '+qFmt(e.n):'',e.kind==='paired'&&e.base?'vs '+qM(e.base):'',qCI(e)].filter(Boolean).map(esc).join(' · ');
+  const tag=e.role==='errors'?'errors':qTag(e);
+  return `<${href?'a':'div'} class="q-lr ${e.kind}"${href?` href="${href}"`:''} data-qtip="${esc(qTipOf(e))}"><span class="tag">${esc(tag)}</span><div class="lane">${lane}</div><b class="val">${esc(qVal(e))}</b><span class="cap">${cap}${qSquares(e)}</span></${href?'a':'div'}>`;
+ }).join('');
+ const axis=ev.some(isPts)?`<div class="q-lr axis"><span></span><div class="ax"><span>−${R}</span><span>0</span><span>+${R} pts</span></div><span></span></div>`:'';
+ const ids=[...new Set(ev.flatMap(e=>[...(e.task_ids||[]),...(e.baseline_task_ids||[])]))];
+ const provenance=ids.length?`<details class="q-more"><summary>Supporting runs (${ids.length})</summary>${ids.map(id=>`<p><a href="#task/${enc(id)}">${esc(id)}</a></p>`).join('')}</details>`:'';
+ return `<div class="q-ev">${rows}${axis}${provenance}</div>`;
+}
+
+// ---------- goal distance in units, with the champion succession as a sparkline
+function qDistance(gk){
+ // the numbers come as text in the goal's units (questions.py _goal_text): "43 more of 1,319", "458 ms to go"
+ const g=QS.data.goals?.[gk];if(!g||g.value==null)return '';
+ const gap=String(g.gap_txt||''),m=gap.match(/^([\d,.]+)\s*(.*)$/);
+ const txt=g.met?`met · ${esc(g.value_txt||'')}`:m?`<b>${esc(m[1])}</b> ${esc(m[2])}`:esc(gap);
+ const ps=g.points.map(p=>p[1]);let svg='';
+ if(ps.length>1){
+  const W=90,H=22,all=[...ps,g.target],lo=Math.min(...all),hi=Math.max(...all),r=hi-lo||1;
+  const X=i=>3+i/(ps.length-1)*(W-6),Y=v=>H-3-(v-lo)/r*(H-6);
+  svg=`<svg width="${W}" height="${H}" aria-hidden="true"><line x1="0" x2="${W}" y1="${Y(g.target)}" y2="${Y(g.target)}" stroke="var(--chart-3)" stroke-dasharray="2 2"/><polyline points="${ps.map((v,i)=>X(i)+','+Y(v)).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="1.6"/><circle cx="${X(ps.length-1)}" cy="${Y(ps.at(-1))}" r="2.5" fill="var(--accent)"/></svg>`}
+ const tip=g.points.map(p=>p[2]||p[0]).join('\n')+`\ntarget ${g.target_txt||num(g.target)} on ${g.slice}`;
+ return `<a class="q-dist" href="#goal/${enc(gk)}" data-qtip="${esc(tip)}">${svg}<span>${txt}</span></a>`;
+}
+
+// ---------- the focused question
+function qPath(id,ix){const p=[];for(let x=ix.by[ix.by[id]?.parent];x;x=ix.by[x.parent])p.unshift(x);return p}
+function qPanel(id,ix){
+ const n=ix.by[id];if(!n)return empty('No question');
+ const w=qWaiting(n),cls=w?'human':n.status;
+ const path=qPath(id,ix);
+ let h=(path.length?`<div class="q-path">${path.map(p=>`<a data-qgo="${esc(p.id)}">${esc(p.title)}</a>`).join('<span>/</span>')}</div>`:'')+
+  `<div class="q-fq"><span class="q-sh">${qShape(n,18)}</span><h2>${esc(n.title)}</h2></div>`;
+ if(n.status==='agent'){
+  const L=n.live||{},pr=L.progress,f=pr&&pr.total?Math.min(1,(pr.done||0)/pr.total):null;
+  const idle=L.status!=='running'&&QS.data.answer_agent&&!QS.data.answer_agent.running;
+  const line=L.status==='failed'?('Agent failed'+(L.error?': '+L.error:'')):L.note||(L.status==='running'?'Agent working':idle?'No agent running · arx answer':'Queued for an agent');
+  h+=`<div class="q-claim agent${idle?' idle':''}">${esc(line)}${L.task?` <a class="q-tl" href="#task/${enc(L.task)}">${esc(L.task)}</a>`:''}${f!=null?`<div class="pb"><i style="width:${(100*f).toFixed(1)}%"></i></div>`:''}</div>`;
+ }else if(n.claim)h+=`<div class="q-claim ${cls}">${qLinky(n.claim)}${n.settled_by&&!['agent','you'].includes(n.settled_by)?`<span class="q-by">${esc(n.settled_by)}</span>`:''}</div>`;
+ if(n.error&&n.status!=='agent')h+=`<div class="q-claim human" role="status">Answer attempt failed: ${esc(n.error)} <button class="btn" data-qact="retry">Retry answer</button></div>`;
+ if(w&&(!n.why||!n.choices?.length))h+=`<div class="q-acts"><button class="btn" data-qact="retry">Request decision context</button></div>`;
+ if(n.why&&n.status!=='answered'&&n.status!=='dead')h+=`<div class="q-why">${qLinky(n.why)}</div>`;
+ if(n.doc)h+=qDocCard(n.doc,n.fig);
+ if(n.quote)h+=`<div class="q-quote"><mark>${esc(n.quote)}</mark></div>`;
+ if(n.claim&&(!n.seeded||n.edited)){
+  const stamp=n.settled||n.created, snap=n.evidence_snapshot;
+  h+=`<div class="q-why">${stamp?'Answered '+wbWhen(stamp)+' ':''}<button class="btn" data-qact="retry">Refresh answer</button></div>`;
+  if(snap)h+=qEvidence({...n,ev:snap});
+  if(n.ev?.length)h+=`<details class="q-more"><summary>Current ledger evidence${snap&&JSON.stringify(snap)!==JSON.stringify(n.ev)?' · changed since this answer':''}</summary>${qEvidence(n)}</details>`;
+ }else h+=qEvidence(n);
+ const thr=n.seed==='comment',live=!thr&&(n.status==='open'||n.status==='agent');
+ if(w&&n.choices?.length)h+=`<div class="q-acts">${n.choices.map((c,i)=>`<button class="btn ${i?'':'q-warn'}" data-qpick="${esc(c)}">${esc(c)}</button>`).join('')}</div>`;
+ if(live)h+=`<div class="q-form ${w?'on':''}" id="q-af"><input class="q-in" id="q-ans" aria-label="Your answer" placeholder="Your answer"><button class="btn primary" data-qact="answer">Answer</button><button class="btn" data-qact="dead">Close as dead end</button></div>`;
+ const ks=ix.kids[id]||[];
+ if(ks.length)h+=`<div class="q-kids">${ks.map(k=>{const c=ix.by[k];return `<button class="q-kid" data-qgo="${esc(k)}" data-qnode="${esc(k)}"${c.claim?` data-qtip="${esc(qPlain(c.claim))}"`:''}><span class="q-sh">${qShape(c)}</span><span>${esc(c.title)}</span></button>`}).join('')}</div>`;
+ const open=n.model?['model','#model/'+enc(n.model)]:n.hill?['hill','#hill/'+enc(n.hill)]:n.goal?['goal','#goal/'+enc(n.goal)]:null;
+ h+=`<div class="q-acts"><button class="btn primary" data-qact="branch">Ask a follow-up</button>`+
+  (live&&!w?`<button class="btn" data-qact="settle">Answer</button>`:'')+(thr?`<a class="btn" href="${qThreadHref(n)}">Open the thread</a>`:live?`<button class="btn ${n.needs_human?'on':''}" data-qact="flag" aria-pressed="${!!n.needs_human}">${n.needs_human?'Waiting on a person':'Needs a person'}</button>`:`<button class="btn" data-qact="reopen">Reopen</button>`)+
+  `${open?`<a class="btn" href="${open[1]}">Open ${open[0]}</a>`:''}</div>`+
+  `<div class="q-form" id="q-bf"><input class="q-in" id="q-bin" aria-label="Follow-up question" placeholder="Your question for an agent" maxlength="120"><button class="btn primary" data-qact="ask">Ask</button></div>`;
+ h+=qNotesInline(id,ix);
+ return h;
+}
+// what the ledger says about this question, shown under its buttons (so their place never moves when the notes
+// arrive): the answering agent's own notes under its task, then the newest notes on this node from the ledger
+// (decisions, evidence runs), each with its source; notes on the questions under it fold behind a count
+function qNotesInline(id,ix){
+ const r=QS.notes[id];
+ if(r===undefined)qNotes(id);
+ const at=ix.by[id]?.answer_task||ix.by[id]?.live?.task;
+ const one=x=>{
+  const src=x.agent?'':/^\d{4}-\d{6}-/.test(x.src||'')?`<a href="#task/${enc(x.src)}">${esc(byId(x.src)?.title||x.src)}</a>`:x.src==='quote'?'quote':esc(String(x.src||'').replace(/^decision /,''));
+  const on=x.node!==id?`<a data-qgo="${esc(x.node)}">${esc(ix.by[x.node]?.title||x.node)}</a>`:'';
+  return `<li class="q-note" data-qnode="${esc(x.node)}"><p tabindex="0" data-qclamp>${esc(x.text)}</p><div class="meta">${on}<span>${src}</span><span>${x.t?ago(x.t):''}</span></div></li>`};
+ const mine=(r||[]).filter(x=>x.agent&&x.node===id),own=(r||[]).filter(x=>!x.agent&&x.node===id),sub=(r||[]).filter(x=>x.node!==id);
+ const agent=at||mine.length?`<div class="q-ng"><a class="q-at" href="#task/${enc(at||mine[0].src)}">How the agent worked${byId(at)?.updated?' · '+ago(byId(at).updated):''}</a>${mine.length?`<ul>${mine.map(one).join('')}</ul>`:''}</div>`:'';
+ const head=own.slice(0,3),rest=own.slice(3).concat(sub);
+ const ledger=head.length||rest.length?`<div class="q-ng"><span class="q-at">From the ledger</span>${head.length?`<ul>${head.map(one).join('')}</ul>`:''}`+
+  (rest.length?`<details class="q-more"><summary>${rest.length} more note${rest.length>1?'s':''}${sub.length?' here and below':''}</summary><ul>${rest.map(one).join('')}</ul></details>`:'')+`</div>`:'';
+ return agent||ledger?`<div class="q-notes">${agent}${ledger}</div>`:'';
+}
+function qNotes(id){
+ if(QS.notes[id]!==undefined)return;QS.notes[id]=null;
+ fetch('api/questions/notes?id='+enc(id),{cache:'no-store'}).then(r=>r.json()).then(d=>{QS.notes[id]=d.notes||[];render()}).catch(()=>{QS.notes[id]=[]});
+}
+// ---------- long answers: an HTML document per answer (.research/answers/<id>.html, comments.py save_doc). The thread or
+// the question shows its first figure and Open; #answer/<id> reads it full width in a sandboxed frame.
+const Q_SVG=new Set(['svg','g','path','rect','circle','ellipse','line','text','tspan','polyline','polygon','title']);
+const Q_ATTR=/^(viewbox|width|height|x|y|x1|y1|x2|y2|dx|dy|cx|cy|r|rx|ry|d|points|fill|stroke|stroke-width|stroke-dasharray|stroke-linecap|stroke-linejoin|opacity|fill-opacity|stroke-opacity|transform|font-size|font-weight|text-anchor|dominant-baseline|xmlns|preserveaspectratio)$/i;
+function qCleanSvg(src){
+ const t=document.createElement('template');t.innerHTML=String(src||'');const svg=t.content.querySelector('svg');if(!svg)return '';
+ const walk=el=>{for(const a of [...el.attributes])if(!Q_ATTR.test(a.name)||/url\s*\(|javascript:|expression|&#|\\/i.test(a.value))el.removeAttribute(a.name);
+  for(const c of [...el.childNodes]){if(c.nodeType===3)continue;if(c.nodeType!==1||!Q_SVG.has(c.localName)){c.remove();continue}walk(c)}};
+ walk(svg);
+ if(!svg.getAttribute('viewBox')){const w=parseFloat(svg.getAttribute('width')),ht=parseFloat(svg.getAttribute('height'));if(w&&ht)svg.setAttribute('viewBox',`0 0 ${w} ${ht}`)}
+ svg.removeAttribute('width');svg.removeAttribute('height');
+ return svg.outerHTML;
+}
+function qDocCard(did,fig){
+ const f=fig?qCleanSvg(fig):'';
+ return `<a class="q-doc" href="#answer/${enc(did)}">${f?`<div class="fig">${f}</div>`:''}<span class="btn">Open the full answer</span></a>`;
+}
+const qTheme=()=>document.documentElement.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+// the document arrives as text and runs in a sandboxed srcdoc frame (opaque origin: its widgets run, but it cannot
+// read the ledger or post as the viewer); the dashboard's theme goes on its <html> as data-theme
+function qDocLoad(id){
+ QS.docs[id]=null;
+ const u='api/answers/'+enc(id);
+ Promise.all([qLoad(),fetch(u+'?meta=1',{cache:'no-store'}),fetch(u,{cache:'no-store'})])
+  .then(async([_,m,h])=>{QS.docs[id]=m.ok&&h.ok?{...await m.json(),html:await h.text()}:{error:1};render()})
+  .catch(()=>{QS.docs[id]={error:1};render()});
+}
+const qThemed=(html,t)=>/<html\b/i.test(html)?html.replace(/<html\b/i,`<html data-theme="${t}"`):`<html data-theme="${t}">${html}</html>`;
+// Opaque documents can request only a dashboard route; section anchors remain inside the document.
+const qInternalRoute=h=>typeof h==='string'&&/^#(model|hill|goal|task|answer|questions)\/[^\s?#\x00-\x1f]{1,240}$/.test(h);
+function qDocHtml(html,t){
+ const bridge=`<script>document.addEventListener('click',function(e){const a=e.target.closest('a[href]');if(!a)return;const h=a.getAttribute('href');if(!h||h[0]!=='#')return;e.preventDefault();if(/^#(model|hill|goal|task|answer|questions)\\/[^\\s?#\\x00-\\x1f]{1,240}$/.test(h)){parent.postMessage({type:'arx-answer-route',href:h},'*');return}let id;try{id=decodeURIComponent(h.slice(1))}catch(_){return}document.getElementById(id)?.scrollIntoView({block:'start'});},true);<\/script>`;
+ const themed=qThemed(html,t);
+ return /<head\b/i.test(themed)?themed.replace(/<head\b[^>]*>/i,m=>m+bridge):themed.replace(/<html\b[^>]*>/i,m=>m+'<head>'+bridge+'</head>');
+}
+addEventListener('message',e=>{
+ const frame=document.querySelector('iframe.q-reader');
+ if(!frame||e.source!==frame.contentWindow||e.origin!=='null'||e.data?.type!=='arx-answer-route'||!qInternalRoute(e.data.href))return;
+ location.hash=e.data.href;
+});
+// the question or comment thread a document answers: its crumbs lead back there, and a thread's answer opens the thread
+const qThreadHref=n=>n?.thread?`?c=${enc(n.thread)}#${String(n.route||'overview').replace(/^#/,'')}`:'';
+// the frame fills the window below the crumbs, so the document scrolls inside it and the page never does
+function qFit(){
+ const f=document.querySelector('.q-reader');if(!f)return;
+ let h=innerHeight-f.getBoundingClientRect().top-scrollY-12;f.style.height=Math.max(420,h)+'px';
+ const extra=document.scrollingElement.scrollHeight-innerHeight;if(extra>0)f.style.height=Math.max(420,h-extra)+'px';
+}
+addEventListener('resize',()=>{if(route().r==='answer')qFit()});
+VIEWS.answer=arg=>{
+ qLoad();
+ if((QS.docs??={})[arg]===undefined)qDocLoad(arg);
+ const d=QS.docs[arg],title=d?.title||'Answer',owner=QS.data?.nodes?.find(n=>n.doc===arg);
+ const crumbs=[['Questions','#questions'],...(owner?[[owner.title,'#questions/'+enc(owner.id)]]:[]),[title]];
+ const acts=owner?.thread?`<a class="btn" href="${qThreadHref(owner)}">Open the thread</a>`:'';
+ // the document's own heading names it, so the page shows only the crumbs (no second title)
+ if(d?.error)return page({title,crumbs})+empty('No such answer');
+ if(!d)return page({title:'',crumbs,acts})+`<div class="q-rwrap"><div class="q-rload">Reading the answer…</div></div>`;
+ setTimeout(qFit,0);
+ return page({title:'',crumbs,acts})+`<div class="q-why">Authored document${d.t?' · '+wbWhen(d.t):''}. Claims describe the saved answer; current ledger evidence may differ.${owner?` <a href="#questions/${enc(owner.id)}">Check evidence and refresh</a>`:''}</div><div class="q-rwrap"><div class="q-rload">Reading the answer…</div><iframe class="q-reader" title="${esc(title)}" sandbox="allow-scripts allow-popups" onload="this.parentNode.classList.add('ok')" srcdoc="${esc(qDocHtml(d.html,qTheme()))}"></iframe></div>`;
+};
+addEventListener('hashchange',()=>{const {r,arg}=route();if(r==='answer'&&QS.docs)delete QS.docs[arg]});  // reopening reads the latest version
+
+function qFocus(ix,arg){
+ if(arg&&ix.by[arg])return arg;
+ // the open goal with the most work under it
+ const roots=ix.kids['']||[],goals=roots.filter(k=>ix.by[k].status==='open'&&ix.by[k].goal);
+ return goals.sort((a,b)=>qCount(b,ix.kids)-qCount(a,ix.kids))[0]||roots[0];
+}
+function qRootGoal(id,ix){for(let x=ix.by[id];x;x=ix.by[x.parent])if(x.goal)return x.goal;return Object.keys(QS.data.goals||{}).find(k=>QS.data.goals[k].status==='open')}
+
+VIEWS.questions=arg=>{
+ qLoad();
+ if(!QS.data)return page({title:'Questions',crumbs:[['Questions']]})+(QS.err?`<div class="banner">${esc(QS.err)}</div>`:empty('Reading the ledger…'));
+ const ix=qIndex();
+ if(!QS.closed)QS.closed=qDefaultClosed(ix.by,ix.kids);
+ const focus=qFocus(ix,arg);
+ if(!focus)return page({title:'Questions',crumbs:[['Questions']]})+empty('No questions yet','<span>arx q add "&lt;title&gt;"</span>');
+ for(let x=ix.by[ix.by[focus].parent];x;x=ix.by[x.parent])QS.closed.delete(x.id);
+ // a deep link on a narrow screen: the panel sits under the tree, so bring it into view once per link
+ if(arg&&QS.deep!==arg){QS.deep=arg;if(innerWidth<=820)setTimeout(()=>document.getElementById('q-panel')?.scrollIntoView({block:'start'}),0)}
+ const hs=QS.data.nodes.filter(qWaiting);
+ const need=hs.length?`<details class="q-need"><summary class="q-ib">${qShape('human',10)}${hs.length} need${hs.length>1?'':'s'} you</summary><div class="q-pop">${hs.map(n=>`<button data-qgo="${esc(n.id)}">${qShape('human',10)}<span>${esc(n.title)}</span></button>`).join('')}</div></details>`:'';
+ const key=`<span class="q-ib key" tabindex="0" data-qtip="key"><svg width="14" height="14" viewBox="0 0 14 14" aria-label="Key"><circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="7" cy="4.3" r=".9" fill="currentColor"/><path d="M7 6.5V10.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span>`;
+ const roots=ix.kids['']||[];
+ return page({title:'Questions',crumbs:[['Questions']],acts:qDistance(qRootGoal(focus,ix))})+
+  `<section class="card flush qv"><div class="q-col q-tree"><div class="q-bar">${need}${key}</div><ul class="q-t">${roots.map(r=>qRow(r,ix,focus)).join('')}</ul></div>`+
+  `<div class="q-col q-panel" id="q-panel">${qPanel(focus,ix)}</div></section>`;
+};
+
+// ---------- interaction
+function qGo(id){
+ QS.deep=id;
+ history.replaceState(null,'','#questions/'+enc(id));
+ render(true);
+ const p=document.getElementById('q-panel');if(p&&(p.getBoundingClientRect().top<0||innerWidth<=820))p.scrollIntoView({behavior:'smooth',block:'start'});
+}
+async function qAskPost(title,parent,quote){
+ const q=await qPost('ask',{title,parent,quote,route:location.hash});
+ QS.fresh.add(q.id);setTimeout(()=>QS.fresh.delete(q.id),1500);
+ QS.closed?.delete(parent);
+ await qLoad(true);
+ return q;
+}
+document.addEventListener('click',async e=>{
+ if(!e.target.closest('.qv'))return;
+ const car=e.target.closest('[data-qcar]');
+ if(car){e.stopPropagation();const id=car.dataset.qcar;QS.closed.has(id)?QS.closed.delete(id):QS.closed.add(id);render(true);return}
+ const g=e.target.closest('[data-qgo]');
+ if(g){e.preventDefault();g.closest('details.q-need')?.removeAttribute('open');qGo(g.dataset.qgo);return}
+ const cl=e.target.closest('[data-qclamp]');
+ if(cl&&!e.target.closest('a')){cl.classList.toggle('full');return}
+ const a=e.target.closest('[data-qact]');
+ const pick=e.target.closest('[data-qpick]');
+ const act=a?.dataset.qact,id=()=>qFocus(qIndex(),route().arg);
+ if(pick||act==='answer'||act==='dead'){
+  // the claim is the answer itself; who gave it is stored as settled_by and shown beside it
+  const v=pick?pick.dataset.qpick:$('#q-ans')?.value.trim();if(!v)return;
+  const claim=/[.?!]$/.test(v)?v:v+'.';
+  try{await qPost(act==='dead'?'dead':'answer',{id:id(),claim});await qLoad(true)}catch(err){alert(err.message)}
+  return}
+ if(!a)return;
+ if(act==='settle'){$('#q-af').classList.toggle('on');$('#q-ans')?.focus();return}
+ if(act==='retry'||act==='reopen'||act==='flag'){
+  const n=qIndex().by[id()];
+  try{await qPost(act,{id:id(),on:act==='flag'?!n?.needs_human:undefined});await qLoad(true)}catch(err){alert(err.message)}
+  return}
+ if(a.dataset.qact==='branch'){$('#q-bf').classList.add('on');$('#q-bin').focus();return}
+ if(a.dataset.qact==='ask'){
+  const v=$('#q-bin').value.trim();if(!v)return;a.disabled=true;a.textContent='Asking…';$('#q-bin').disabled=true;
+  try{const q=await qAskPost(v,qFocus(qIndex(),route().arg));qGo(q.id)}catch(err){a.disabled=false;a.textContent='Ask';$('#q-bin').disabled=false;alert(err.message)}
+ }
+});
+document.addEventListener('keydown',e=>{
+ if(e.key==='Enter'&&e.target.id==='q-bin')document.querySelector('[data-qact="ask"]')?.click();
+ if(e.key==='Enter'&&e.target.id==='q-ans')document.querySelector('[data-qact="answer"]')?.click();
+ if(e.key==='Enter'&&e.target.dataset?.qclamp!==undefined)e.target.classList.toggle('full');
+ if((e.key==='Enter'||e.key===' ')&&e.target.classList?.contains('q-row')){e.preventDefault();qGo(e.target.dataset.qgo)}
+});
+
+// ---------- tooltip: claims in the tree, exact numbers on evidence, the key
+const qTipEl=(()=>{const t=document.createElement('div');t.className='q-tip';t.setAttribute('role','tooltip');document.body.append(t);return t})();
+function qLegend(){return `<div class="lg">${[['open','Open'],['answered','Answered'],['dead','Dead end'],['agent','Agent'],['human','You']].map(([s,l])=>`${qShape(s,12)}<span>${l}</span>`).join('')}</div>`}
+function qTipShow(el){
+ const t=el.dataset.qtip;if(!t)return;
+ if(t==='key')qTipEl.innerHTML=qLegend();else qTipEl.textContent=t;
+ qTipEl.classList.add('on');
+ const rc=el.getBoundingClientRect(),w=qTipEl.offsetWidth,hh=qTipEl.offsetHeight;
+ let top=rc.bottom+6;if(top+hh>innerHeight-8)top=rc.top-hh-6;
+ qTipEl.style.left=Math.max(8,Math.min(innerWidth-w-8,rc.left+(el.classList.contains('q-row')?28:0)))+'px';qTipEl.style.top=top+'px';
+}
+const qTipHide=()=>qTipEl.classList.remove('on');
+document.addEventListener('mouseover',e=>{const el=e.target.closest?.('[data-qtip]');el?qTipShow(el):qTipHide()});
+document.addEventListener('focusin',e=>{const el=e.target.closest?.('[data-qtip]');el?qTipShow(el):qTipHide()});
+addEventListener('scroll',qTipHide,true);
+addEventListener('hashchange',()=>{qTipHide();if(route().r==='questions')qLoad(true)});
+
+// ---------- ask from selected text: comments.js's selection chip calls window.qAsk(text); a small ask box opens next to
+// where the text was, prefilled with whole words, and the question lands under the node the text is about
+const qChip=(()=>{const d=document.createElement('div');d.className='q-chip';d.innerHTML=`<div class="q-askf"><input class="q-in" maxlength="120" aria-label="Question"><button class="btn primary" type="button">Ask</button></div><a class="q-done"></a>`;document.body.append(d);return d})();
+let qSel=null,qLast=null;
+function qParentFor(node){
+ const own=node?.closest?.('[data-qnode]');if(own)return own.dataset.qnode;
+ const {r,arg}=route();
+ if(r==='questions')return arg||null;
+ return {hill:'h:',model:'m:',goal:'g:'}[r]&&arg?{hill:'h:',model:'m:',goal:'g:'}[r]+arg:null;
+}
+// remember the last selection's place; the chip clears the selection before calling qAsk
+document.addEventListener('selectionchange',()=>{
+ const s=getSelection();if(!s||s.isCollapsed||!s.rangeCount)return;
+ const an=s.anchorNode?.nodeType===3?s.anchorNode.parentElement:s.anchorNode;
+ if(!an||qChip.contains(an))return;
+ qLast={rect:s.getRangeAt(0).getBoundingClientRect(),node:an};
+});
+function qHide(){qChip.className='q-chip';qSel=null}
+function qWords(t,max=60){
+ t=String(t||'').replace(/\s+/g,' ').trim().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}%)]+$/gu,'');
+ if(t.length<=max)return t;
+ const cut=t.slice(0,max+1).replace(/\s+\S*$/,'');return (cut||t.slice(0,max)).replace(/[\s,;:.-]+$/,'')+'…';
+}
+window.qAsk=text=>{
+ const quote=String(text||'').replace(/\s+/g,' ').trim().slice(0,400);if(!quote)return;
+ const rc=qLast?.rect,node=qLast?.node;
+ qSel={quote,parent:qParentFor(node&&document.contains(node)?node:null)};
+ const inp=qChip.querySelector('input'),w=Math.min(380,innerWidth-16);
+ inp.value=`Why "${qWords(quote)}"?`;
+ qChip.className='q-chip on form';
+ qChip.style.left=Math.max(8,Math.min(innerWidth-w-8,(rc?rc.left:innerWidth/2-w/2)+scrollX))+'px';
+ qChip.style.top=Math.max(8,(rc?rc.bottom+8:120)+scrollY)+'px';
+ inp.focus();inp.select();
+};
+document.addEventListener('mousedown',e=>{if(!qChip.contains(e.target)&&!e.target.closest?.('.ask'))qHide()});
+async function qChipSubmit(){
+ const inp=qChip.querySelector('input'),v=inp.value.trim();if(!v||!qSel)return;
+ const sel=qSel;
+ try{
+  const q=await qPost('ask',{title:v,parent:sel.parent,quote:sel.quote,route:location.hash});
+  const done=qChip.querySelector('.q-done');done.href='#questions/'+enc(q.id);done.textContent='Asked';
+  qChip.className='q-chip on sent';QS.at=0;setTimeout(qHide,2500);
+ }catch(err){alert(err.message)}
+}
+qChip.querySelector('.q-askf .btn').addEventListener('click',qChipSubmit);
+qChip.querySelector('input').addEventListener('keydown',e=>{if(e.key==='Enter')qChipSubmit();if(e.key==='Escape')qHide()});
+qChip.querySelector('.q-done').addEventListener('click',()=>setTimeout(qHide,0));

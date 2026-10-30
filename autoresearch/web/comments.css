@@ -1,0 +1,100 @@
+/* comments overlay (comments.js): one fixed layer above the app; colour lives on the pins and shapes */
+.cm-host{--cm-open:var(--chart-3);--cm-rep:var(--accent);--cm-res:var(--positive);position:fixed;inset:0;pointer-events:none;z-index:1000;font:400 13px/1.45 var(--font)}
+.cm-host *{box-sizing:border-box}
+/* Comment and the list sit in the top bar beside Share (comments.js docks them), out of the page's way */
+.cm-fab{position:relative;display:flex;gap:4px;align-items:center;font:400 13px/1.45 var(--font)}
+.cm-host>.cm-fab{position:fixed;right:16px;top:12px;pointer-events:auto}  /* a page with no top bar */
+.cm-lst,.cm-mode{all:unset;box-sizing:border-box;cursor:pointer;height:28px;min-width:28px;padding:0 7px;display:inline-flex;align-items:center;justify-content:center;gap:5px;
+ border-radius:var(--radius-control);color:var(--muted);font:500 13px var(--font);white-space:nowrap}
+.cm-lst:hover,.cm-mode:hover{background:var(--active);color:var(--text)}
+.cm-lst:focus-visible,.cm-mode:focus-visible{outline:2px solid var(--accent)}
+.cm-mode.on{background:var(--primary);color:var(--on-primary)}
+.cm-lst span{font-variant-numeric:tabular-nums;color:var(--text)}.cm-lst span:empty{display:none}
+.cm-btn{height:32px;padding:0 12px;border-radius:var(--radius-control);border:1px solid var(--control);background:var(--surface);color:var(--text);cursor:pointer;font-weight:500}
+.cm-btn:hover{background:var(--raised)}
+.cm-btn.on{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+.cm-btn b{font:500 11px var(--mono);opacity:.6;margin-left:6px}
+.cm-lst.none{display:none}
+.cm-tools{display:none;position:absolute;top:calc(100% + 10px);right:0;z-index:3;height:32px;padding:2px;border-radius:var(--radius-control);border:1px solid var(--control);background:var(--surface);gap:2px;box-shadow:0 4px 14px rgba(0,0,0,.15)}
+.cm-tools.on{display:flex}
+.cm-tools button{height:26px;padding:0 9px;border-radius:4px;border:0;background:transparent;color:var(--muted);cursor:pointer}
+.cm-tools button:hover{background:var(--raised);color:var(--text)}
+.cm-tools button.on{background:var(--active);color:var(--text);font-weight:600}
+.cm-tools button.pk{color:var(--text);font-weight:500}
+.cm-tools button:not(.pk){font-size:12px;padding:0 7px}
+.cm-sep{flex:none;width:1px;margin:4px 3px;background:var(--rule)}
+.cm-layer.pick{cursor:default}
+/* a picked element's outline: faint until its thread is hovered or open, dashed while the comment is written */
+.cm-shapes rect.v.pk{fill:none;stroke:var(--c);stroke-width:2;opacity:0;transition:opacity .12s}
+.cm-shapes g.hot rect.v.pk{opacity:1}.cm-shapes g.draft rect.v.pk{opacity:1;stroke-dasharray:5 3}
+.cm-layer{position:fixed;inset:0;pointer-events:none;cursor:crosshair;user-select:none;-webkit-user-select:none;touch-action:none}
+.cm-layer.on{pointer-events:auto}
+.cm-shapes{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;overflow:visible}
+.cm-shapes g{--c:var(--cm-open);transition:opacity .15s}
+.cm-shapes g.rep{--c:var(--cm-rep)}.cm-shapes g.wait{--c:var(--cm-rep)}.cm-shapes g.res{--c:var(--cm-res);opacity:.3}.cm-shapes g.hot{opacity:1}
+.cm-shapes path{fill:none;stroke:var(--c);vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.cm-shapes .v{stroke-width:2.5}.cm-shapes .v.highlight{stroke-width:18;stroke-opacity:.35;stroke-linecap:butt}
+.cm-shapes g.hot .v{stroke-width:4}.cm-shapes g.hot .v.highlight{stroke-width:20;stroke-opacity:.5}
+.cm-shapes .hit{stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer}
+.cm-shapes .hit.highlight{stroke-width:20}
+.cm-shapes rect.v.q{fill:var(--c);fill-opacity:.28;stroke:none}.cm-shapes g.hot rect.v.q{fill-opacity:.45}.cm-shapes g.res rect.v.q{fill-opacity:.15}
+.cm-shapes g.draft .v{stroke-dasharray:6 4}.cm-shapes g.draft .v.highlight{stroke-dasharray:none}
+.cm-pin{position:fixed;width:24px;height:24px;margin:-24px 0 0 -24px;border-radius:12px 12px 2px 12px;background:var(--cm-open);color:#16181a;
+ font:600 11px var(--mono);display:flex;align-items:center;justify-content:center;pointer-events:auto;cursor:pointer;border:2px solid var(--surface);transition:transform .12s}
+.cm-pin.rep{background:var(--cm-rep);color:var(--on-primary)}.cm-pin.res{background:var(--cm-res);opacity:.55;color:var(--on-primary)}
+.cm-pin.wait{background:var(--cm-rep);color:var(--on-primary);animation:cm-pulse 1.4s ease-in-out infinite}
+.cm-pin.r{margin-left:0;border-radius:12px 12px 12px 2px}
+.cm-pin.hot{transform:scale(1.2);opacity:1}
+@keyframes cm-pulse{50%{box-shadow:0 0 0 5px color-mix(in srgb,var(--cm-rep) 30%,transparent)}}
+.cm-pop{position:fixed;z-index:2;width:320px;max-width:calc(100vw - 24px);background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-card);
+ box-shadow:0 8px 28px rgba(0,0,0,.18);pointer-events:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
+.cm-anchor{font-size:var(--fs-small);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-left:2px solid var(--cm-open);padding-left:6px}
+.cm-msgs{display:flex;flex-direction:column;gap:8px;max-height:52vh;overflow:auto}
+.cm-pop textarea,.cm-name{width:100%;background:var(--raised);color:var(--text);border:1px solid var(--control);border-radius:var(--radius-control);padding:7px 8px;font:inherit}
+.cm-pop textarea{min-height:64px;resize:vertical}
+.cm-pop textarea:focus,.cm-name:focus{outline:2px solid var(--accent);border-color:transparent}
+.cm-row .cm-name{width:auto;min-width:0;height:28px;padding:3px 8px}
+.cm-pop textarea.need{outline:2px solid var(--warning);animation:cm-shake .25s}
+@keyframes cm-shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.cm-err{font-size:var(--fs-small);color:var(--pill-warning-ink)}
+.cm-pop [disabled]{opacity:.6;cursor:default}
+.cm-row{display:flex;justify-content:flex-end;gap:6px;align-items:center}
+.cm-sp{flex:1;font-size:var(--fs-small);color:var(--faint)}
+.cm-sm{height:28px;padding:0 10px;border-radius:var(--radius-control);border:1px solid var(--control);background:var(--surface);color:var(--text);cursor:pointer}
+.cm-sm.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary);font-weight:500}
+.cm-msg{padding:6px 8px;background:var(--raised);border-radius:var(--radius-control);white-space:pre-wrap;overflow-wrap:anywhere}
+.cm-msg.agent{background:var(--accent-soft)}
+.cm-msg.err{background:var(--pill-warning-bg);color:var(--pill-warning-ink)}
+.cm-msg a{color:var(--accent);text-decoration:underline}
+.cm-pop.wide{width:440px}
+.cm-fig{white-space:normal;margin:0 0 6px;color:var(--text)}.cm-fig svg{width:100%;height:auto;display:block;font-family:var(--font)}
+.cm-busy{display:flex;gap:8px;align-items:center;color:var(--muted)}.cm-busy a{white-space:nowrap;margin-left:auto}
+.cm-idle{color:var(--muted)}.cm-idle code{font:500 12px var(--mono);color:var(--text)}
+.cm-dot{flex:none;width:8px;height:8px;border-radius:4px;background:var(--cm-rep);animation:cm-blink 1.2s ease-in-out infinite}
+@keyframes cm-blink{50%{opacity:.25}}
+.cm-who{font-size:var(--fs-small);color:var(--faint);margin-bottom:2px}
+.cm-list{position:fixed;z-index:1;right:16px;top:calc(var(--topbar,52px) + 4px);width:330px;max-width:calc(100vw - 32px);max-height:60vh;overflow:auto;pointer-events:auto;background:var(--surface);color:var(--text);
+ border:1px solid var(--border);border-radius:var(--radius-card);box-shadow:0 8px 28px rgba(0,0,0,.18);display:none}
+.cm-list.on{display:block}
+.cm-me{padding:8px 10px;border-bottom:1px solid var(--rule)}
+.cm-it{padding:8px 10px;border-bottom:1px solid var(--rule);cursor:pointer}.cm-it:hover,.cm-it.hot{background:var(--raised)}
+.cm-it.res{opacity:.6}
+.cm-n{font:600 11px var(--mono);color:var(--warning);margin-right:6px}
+.cm-chip{position:fixed;pointer-events:auto;display:none;gap:4px}
+@media (max-width:600px){.cm-btn b{display:none}.cm-tools button:not(.pk){padding:0 5px}.cm-mode span{display:none}  /* a phone: the icon alone, */
+ .top .right{gap:6px}.top .live{font-size:0;gap:0}}  /* and the bar's own items closer (Live keeps its dot), so the crumb keeps its room */
+.cm-btn{white-space:nowrap}
+/* the menu drawer on a phone covers the page, and the pins, marks and threads drawn over the page with it */
+.app.nav-open~.cm-host>:not(.cm-fab){visibility:hidden}
+@media print{.cm-host,.cm-fab{display:none}}
+/* people: faces on messages, who has read the thread, threads for you */
+.cm-who{display:flex;align-items:center;gap:6px}
+.cm-seen{display:flex;align-items:center;gap:6px;padding:4px 2px 0;font-size:11px;color:var(--muted)}
+.cm-seen .px-face+.px-face{margin-left:-5px}
+.cm-me{display:flex;align-items:center;gap:8px}
+.cm-sec{padding:8px 12px 2px;font-size:11px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.04em}
+.cm-it.you{box-shadow:inset 3px 0 0 var(--accent)}
+.cm-it .px-face{vertical-align:middle;margin-right:6px}
+.cm-lst.you{position:relative}
+.cm-lst.you::after{content:attr(data-you);position:absolute;top:-6px;right:-6px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--accent);color:#fff;font-size:10px;line-height:16px;text-align:center}
+.cm-guest{flex:none;font-size:10.5px;font-weight:500;padding:0 5px;border-radius:4px;background:var(--active);color:var(--muted)}

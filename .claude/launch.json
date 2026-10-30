@@ -4,8 +4,50 @@
     {
       "name": "papers-demo",
       "runtimeExecutable": "bash",
-      "runtimeArgs": ["-c", "cd scratch/demo-gsm8k && PYTHONPATH=../.. exec python3 -m autoresearch serve --port 8931"],
+      "runtimeArgs": [
+        "-c",
+        "cd scratch/demo-gsm8k && PYTHONPATH=../.. exec python3 -m autoresearch serve --port 8931"
+      ],
       "port": 8931
+    },
+    {
+      "name": "prototypes",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "prototypes/serve.py",
+        "8940"
+      ],
+      "port": 8940
+    },
+    {
+      "name": "arx-dev",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "PYTHONPATH=. exec python3 -m autoresearch serve --port 8960"
+      ],
+      "port": 8960
+    },
+    {
+      "name": "arx-collab",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "PYTHONPATH=. exec python3 -m autoresearch serve --port 8985"
+      ],
+      "port": 8985
+    },
+    {
+      "name": "snapshot-check",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8986",
+        "-d",
+        "scratch"
+      ],
+      "port": 8986
     }
   ]
 }

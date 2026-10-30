@@ -6,7 +6,7 @@
    .grid row lands on the sheet's content edges: n columns × w + (n−1) × 24 = content width. */
 :root{
  --ground:#f2f5f8;--surface:#fff;--raised:#f5f7f9;--active:#e4e9ee;--border:#e3e7eb;--rule:#eef1f4;--control:#cdd3d9;
- --text:#131416;--muted:#5b6168;--faint:#6f767d;
+ --text:#131416;--muted:#5b6168;--faint:#646b72;
  --accent:#1b6c80;--accent-soft:#e3f0f3;--primary:#16181a;--on-primary:#fff;
  --positive:#1e7b4f;--negative:#c4242a;--warning:#92400e;
  --chart-1:#1b6c80;--chart-2:#2f70bb;--chart-3:#a86f0c;--grid:#e9edf0;
@@ -71,7 +71,7 @@ code,.mono{font-family:var(--mono);font-size:.92em}
 .iconbtn:hover{background:var(--active);color:var(--text)}
 .sheet{grid-column:2;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sheet);margin:0 var(--sheet-inset) var(--sheet-inset) 0;min-width:0;min-height:calc(100vh - var(--topbar) - var(--sheet-inset))}
 main{padding:var(--pad) var(--pad) 64px;max-width:1440px;min-width:0}
-.menu-btn{display:none}
+.menu-btn{display:none;flex:none}
 
 /* ---------- title row */
 .title{display:flex;align-items:flex-start;gap:16px;margin-bottom:var(--gap);min-width:0}
@@ -185,6 +185,9 @@ td .two b{font-weight:500}
 .seg button:hover{color:var(--text)}
 .seg button.on{background:var(--surface);color:var(--text);box-shadow:inset 0 0 0 1px var(--border)}
 .seg button small{color:var(--faint);font-size:12px;font-weight:400}
+/* all:unset drops the global focus ring (same specificity, later rule): give it back to every unset control */
+.btn:focus-visible,.iconbtn:focus-visible,.tabs button:focus-visible,.seg button:focus-visible,
+.lrn :is(.pip,.opt,.chip,.linkbtn,.concept):focus-visible,:is(.q-ib,.q-car,.q-kid,.q-pop button,.gi-opt,.gi-con button):focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 details>summary{cursor:pointer;color:var(--muted);font-size:13px;list-style:none;display:flex;align-items:center;gap:6px}
 details>summary::-webkit-details-marker{display:none}
 details>summary::before{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform .15s}
@@ -243,6 +246,7 @@ svg .ax{stroke:var(--grid)}
  .ph{flex-wrap:wrap;row-gap:6px}.ph .r{flex:1 1 auto;justify-content:flex-end;flex-wrap:wrap}
  h1{font-size:20px}
  .live .clk{display:none}
+ .side a.nav{height:44px;flex:none}.iconbtn{width:40px;height:40px}  /* touch targets; flex:none so the drawer scrolls instead of squeezing rows */
 }
 
 /* ---------- copy and commands */
@@ -261,3 +265,20 @@ svg .ax{stroke:var(--grid)}
 .pdot.run{background:var(--accent)}.pdot.bad{background:var(--negative)}
 .side a.nav .count.hot{color:var(--on-primary);background:var(--accent);border-radius:9px;padding:0 6px;line-height:18px}
 .side{overflow-y:auto}
+/* share menu */
+.sh-pop{position:fixed;z-index:60;width:min(420px,calc(100vw - 16px));padding:12px;border-radius:12px;background:var(--surface);box-shadow:var(--shadow-pop,0 10px 30px rgba(0,0,0,.18)),0 0 0 1px var(--border);display:flex;flex-direction:column;gap:10px;font-size:13px}
+.sh-row{display:flex;align-items:center;gap:8px}.sh-l{font-weight:600}
+.sh-url{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;background:var(--subtle,var(--hover))}
+.sh-url code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.sh-dl{align-self:flex-start;display:inline-flex;align-items:center;gap:6px}.sh-dl svg{width:16px;height:16px}
+.nf{display:flex;flex-wrap:wrap;gap:8px}
+.sh-st{font-size:12px;color:var(--muted)}
+.sh-pop :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* glossary: a research word with a dotted underline; its card holds a tiny picture, one line and the lesson link */
+.term{text-decoration:underline dotted color-mix(in srgb,currentColor 55%,transparent);text-underline-offset:3px;text-decoration-thickness:1px;cursor:help}
+.term:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+.term-pop{position:fixed;z-index:70;width:220px;padding:10px 12px;border-radius:10px;background:var(--surface);box-shadow:0 10px 30px rgba(0,0,0,.18),0 0 0 1px var(--border);display:flex;flex-direction:column;gap:4px;font-size:12.5px;line-height:1.4;color:var(--text);font-weight:400}
+.term-pop svg{display:block;margin:0 auto 4px}
+.term-pop b{font-weight:600;font-size:13px}
+.term-pop span{color:var(--muted)}
+.term-pop a{display:inline-flex;align-items:center;gap:2px;color:var(--accent);font-weight:500;align-self:flex-start}

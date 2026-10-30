@@ -14,9 +14,10 @@ People comment from the browser; the agent waits on `arx paper poll` and answers
 """
 from __future__ import annotations
 
-import json, os, re, secrets, shutil, time
+import html as _html, json, os, re, secrets, shutil, time
 from pathlib import Path
 
+from . import features
 from .core import Project, _jsonl, _read, _write, now
 
 MENTION = re.compile(r"(?<![\w@])@agent\b", re.I)
@@ -36,14 +37,100 @@ def names(p: Project) -> list[str]:
     return [d.parent.name for d in sorted((p.dir / "papers").glob("*/paper.html"))]
 
 
-def papers(p: Project) -> dict:
+H1 = re.compile(r"<h1\b[^>]*>(.*?)</h1>", re.S | re.I)
+_H1: dict = {}  # path -> (mtime_ns, title); papers() runs on every dashboard poll
+
+
+def h1_title(p: Project, name: str) -> str | None:
+    """The paper's own <h1>, as plain text: the title when meta.json has none."""
+    f = pdir(p, name) / "paper.html"
+    try:
+        m = f.stat().st_mtime_ns
+    except OSError:
+        return None
+    hit = _H1.get(str(f))
+    if hit and hit[0] == m:
+        return hit[1]
+    t = H1.search(f.read_text(errors="replace"))
+    t = " ".join(_html.unescape(re.sub(r"<[^>]+>", " ", t.group(1))).split())[:200] if t else None
+    _H1[str(f)] = (m, t or None)
+    return t or None
+
+
+def title_of(p: Project, name: str, meta: dict | None = None) -> str:
+    """How a paper reads: its meta title, else its <h1>, else the goal's or hill's title, else its name."""
+    meta = meta if meta is not None else _read(pdir(p, name) / "meta.json", {})
+    g = (p.goals().get(meta.get("goal")) or {}) if meta.get("goal") else {}
+    h = (p.hills().get(meta.get("hill")) or {}) if meta.get("hill") else {}
+    return meta.get("title") or h1_title(p, name) or g.get("title") or h.get("title") or name
+
+
+_HEALTH: dict = {}  # (root, name) -> (key, health); lint and goal status are recomputed only when something moved
+
+
+def _mt(f: Path) -> float:
+    try:
+        return f.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def health(p: Project, name: str, meta: dict = None) -> dict:
+    """Is the paper still true? `errors`: how many `arx paper check` errors it has now (with `check_goal` for a goal
+    paper, which compares its numbers with the ledger), `first`: the first of them; `stale`: what moved in the ledger
+    since it was published (the champion changed, its goal was achieved or abandoned)."""
+    meta = meta if meta is not None else _read(pdir(p, name) / "meta.json", {})
+    v = version(p, name)
+    key = (v, *(_mt(p.dir / f) for f in ("models.json", "goals.json", "hills.json", "slices.json", "tasks")))
+    hit = _HEALTH.get((str(p.root), name))
+    if hit and hit[0] == key:
+        return hit[1]
+    html = (pdir(p, name) / "paper.html").read_text(errors="replace")
+    found = check(html, slices=list(p.slices()))
+    goals, models, hills = p.goals(), p.models(), p.hills()
+    g = goals.get(meta.get("goal")) if meta.get("goal") else None
+    if g:
+        try:
+            found += check_goal(html, p.goal_status(meta["goal"]), hill_papers=names(p),
+                                titles={k: m["title"] for k, m in models.items() if m.get("title")})
+        except (SystemExit, KeyError, ValueError):
+            pass
+    errs = [m for lv, m in found if lv == "error"]
+    stale = []
+    if g:
+        try:
+            if p.goal_status(meta["goal"]).get("comparison_state") in ("different_harness", "missing_baseline", "missing_measurement"):
+                stale.append("no compatible current baseline comparison; date and link any historical claim")
+        except (SystemExit, KeyError, ValueError):
+            pass
+    if g and g.get("status") in ("achieved", "abandoned") and (g.get(g["status"]) or 0) > v:
+        stale.append(f"goal {g['status']} after it was published")
+    h = hills.get(meta.get("hill")) if meta.get("hill") else None
+    champ = next((m for m in models.values() if m.get("status") == "champion"), None)
+    live = g is not None or (h is not None and h.get("status") in ("open", "climbed"))
+    if live and champ and (champ.get("promoted") or 0) > v:
+        stale.append("champion changed after it was published")
+    out = dict(errors=len(errs), first=errs[0] if errs else None, stale=stale)
+    _HEALTH[(str(p.root), name)] = (key, out)
+    return out
+
+
+def papers(p: Project, with_health: bool = False) -> dict:
+    """Every paper with its thread counts; `with_health` adds `health()` (lint errors and ledger drift)."""
     out = {}
     for name in names(p):
         d = pdir(p, name)
-        ts = threads(thread(p, name))
-        out[name] = dict(_read(d / "meta.json", {}), name=name, version=version(p, name),
+        v = version(p, name)
+        ts = threads(thread(p, name), published=v)
+        meta = _read(d / "meta.json", {})
+        out[name] = dict(meta, title=title_of(p, name, meta), name=name, version=v,
                          comments=len(ts), open=sum(1 for t in ts if not t["resolved"]),
-                         waiting=sum(1 for t in ts if t["waiting"]))
+                         waiting=sum(1 for t in ts if t["waiting"]), owed=sum(1 for t in ts if t["owed"]))
+        if with_health:
+            try:
+                out[name]["health"] = health(p, name, meta)
+            except OSError:
+                pass
     return out
 
 
@@ -51,9 +138,27 @@ def version(p: Project, name: str) -> float:
     return (pdir(p, name) / "paper.html").stat().st_mtime
 
 
+def owner(p: Project, hill: str = None, goal: str = None, but: str = None) -> str | None:
+    """The paper that already covers this hill or goal (by its meta, or by being named after it), other than `but`."""
+    for n in names(p):
+        if n == but:
+            continue
+        meta = _read(pdir(p, n) / "meta.json", {})
+        if (hill and (meta.get("hill") == hill or (n == hill and not meta.get("goal")))) or \
+           (goal and (meta.get("goal") == goal or (n == goal and not meta.get("hill")))):
+            return n
+    return None
+
+
 def add(p: Project, name: str, src: Path, title: str = None, hill: str = None, goal: str = None) -> Path:
-    """Publish or republish a paper. Open pages swap the new version in place."""
+    """Publish or republish a paper. Open pages swap the new version in place. A hill or a goal has one paper:
+    publishing a second one under another name is refused (republish the first instead)."""
     d = pdir(p, name)
+    if hill or goal:
+        other = owner(p, hill=hill, goal=goal, but=name)
+        if other:
+            raise ValueError(f"{'hill ' + hill if hill else 'goal ' + goal} already has the paper {other!r}: "
+                             f"republish it (arx paper edit {other} --file ...) rather than start a second one")
     d.mkdir(parents=True, exist_ok=True)
     tmp = d / ".paper.html.tmp"
     shutil.copyfile(src, tmp)
@@ -102,10 +207,11 @@ def post(p: Project, name: str, kind: str, **fields) -> dict:
     return ev
 
 
-def threads(log: list[dict]) -> list[dict]:
+def threads(log: list[dict], published: float = None) -> list[dict]:
     """Fold the event log into threads, oldest first. Each has its messages (edits applied, deletes dropped),
-    `resolved`, `waiting` (the last message is from a person: the agent owes an answer) and `thinking`
-    (the agent has seen that message)."""
+    `resolved`, `waiting` (the last message is from a person: the agent owes an answer), `thinking`
+    (the agent has seen that message) and `owed` (the agent said it would change the paper, `owe: true` on its
+    reply, and the paper has not been republished since `published`, its version)."""
     out, msgs, owner = {}, {}, {}  # owner: message id -> thread id
     for e in log:
         if not isinstance(e, dict) or not isinstance(e.get("id"), str) or e.get("kind") not in KINDS:
@@ -113,13 +219,15 @@ def threads(log: list[dict]) -> list[dict]:
         e.setdefault("t", "")
         k = e["kind"]
         if k == "comment":
-            m = dict(id=e["id"], t=e["t"], author=e.get("author") or "you", body=e.get("body", ""), agent=False)
+            m = dict(id=e["id"], t=e["t"], author=e.get("author") or "you", body=e.get("body", ""), agent=False,
+                     by=e.get("by"), mentions=e.get("mentions") or [])
             out[e["id"]] = dict(id=e["id"], t=e["t"], anchor=e.get("anchor"), resolved=False, resolved_by=None,
-                                messages=[m], seen=set())
+                                messages=[m], seen=set(), seen_by={})
             msgs[e["id"]] = m; owner[e["id"]] = e["id"]
         elif k == "reply" and e.get("parent") in out:
             m = dict(id=e["id"], t=e["t"], author=e.get("author") or ("agent" if e.get("agent") else "you"),
-                     body=e.get("body") or "", agent=bool(e.get("agent")), link=e.get("link"))
+                     body=e.get("body") or "", agent=bool(e.get("agent")), link=e.get("link"), by=e.get("by"),
+                     mentions=e.get("mentions") or [], owe=bool(e.get("owe") and e.get("agent")))
             out[e["parent"]]["messages"].append(m)
             msgs[e["id"]] = m; owner[e["id"]] = e["parent"]
         elif k in ("resolve", "reopen") and e.get("parent") in out:
@@ -133,7 +241,9 @@ def threads(log: list[dict]) -> list[dict]:
             msgs[e["target"]].update(body=e.get("body") or "", edited=e["t"])
         elif k == "delete" and e.get("target") in msgs:
             msgs[e["target"]]["deleted"] = True
-        elif k == "seen" and e.get("parent") in owner:
+        elif k == "seen" and e.get("by") and e.get("parent") in out:  # a person read the thread (people.py)
+            out[e["parent"]]["seen_by"][e["by"]] = e["t"]
+        elif k == "seen" and e.get("parent") in owner:  # the agent picked up that message
             out[owner[e["parent"]]]["seen"].add(e["parent"])
     res = []
     for th in out.values():
@@ -146,9 +256,14 @@ def threads(log: list[dict]) -> list[dict]:
         last = th["messages"][-1] if th["messages"] else None
         # "@agent" in a person's message summons the agent with the whole thread, even on a resolved thread
         th["mention"] = bool(last and not last["agent"] and MENTION.search(last["body"]))
-        th["waiting"] = bool(last and not last["agent"] and (not th["resolved"] or th["mention"]))
+        to_people = bool(last and last.get("mentions") and not th["mention"])  # people talking to people
+        th["waiting"] = bool(last and not last["agent"] and not to_people and (not th["resolved"] or th["mention"]))
+        th["people"] = sorted({m["by"] for m in th["messages"] if m.get("by")})
+        th["mentions"] = sorted({x for m in th["messages"] for x in m.get("mentions") or []})
         th["thinking"] = bool(th["waiting"] and last["id"] in th["seen"])
         th["last"] = last["id"] if last else None
+        owe = [m["t"] for m in th["messages"] if m.get("owe")]
+        th["owed"] = bool(owe and isinstance(owe[-1], (int, float)) and (published is None or published < owe[-1]))
         th.pop("seen")
         res.append(th)
     return res
@@ -157,6 +272,22 @@ def threads(log: list[dict]) -> list[dict]:
 def pending(log: list[dict]) -> list[dict]:
     """Threads where the agent owes an answer, oldest first."""
     return [t for t in threads(log) if t["waiting"]]
+
+
+PROMISE = re.compile(r"\b(I'll|I will|I'm going to|will (?:redraw|update|change|edit|add|rewrite|fix|replace|remove|"
+                     r"move|split|draw|rework|redo|show)|agreed|good (?:idea|point)|you're right)\b", re.I)
+DONE = re.compile(r"\b(republished|redrawn|rebuilt|replaced|now (?:shows|draws|reads)|is now|done)\b", re.I)
+
+
+def promises(body: str) -> bool:
+    """An agent reply that agrees to change the paper without saying it already did: the edit is owed."""
+    return bool(body and PROMISE.search(body) and not DONE.search(body))
+
+
+def owed(p: Project, name: str = None) -> list[dict]:
+    """Threads where the agent agreed to change the paper and has not republished it since, with `paper` set."""
+    return [dict(th, paper=n) for n in ([name] if name else names(p))
+            for th in threads(thread(p, n), published=version(p, n)) if th["owed"]]
 
 
 def poll(p: Project, name: str = None, timeout: float = None, interval: float = 1.0) -> list[dict]:
@@ -241,19 +372,39 @@ def check(html: str, slices=()) -> list[tuple[str, str]]:
     return out
 
 
-def _kpi_text(kpi: str, v: float) -> list[str]:
-    """How a KPI value may be written: 0.928 -> 92.8%, 92.8 % ; a target 0.96 -> 96%."""
+def _amount_text(v: float) -> list[str]:
+    """How a plain amount may be written: 1458.125 -> 1458, 1,458, 1458.1; 0.3832 -> 0.383."""
+    r = round(v)
+    return list(dict.fromkeys([f"{r:,d}", f"{r:d}", f"{v:,.1f}", f"{v:.1f}", f"{v:g}", f"{v:.4g}", f"{v:.3g}"]))
+
+
+def _kpi_text(kpi: str, v: float, st: dict | None = None) -> list[str]:
+    """How a KPI value may be written: 0.928 -> 92.8%, 92.8 % ; a target 0.96 -> 96%. A score on a continuous slice
+    is an amount in the slice's unit, and a "minus ms" one is written as the plain amount: -1000 -> 1,000."""
+    if kpi == "score" and (st or {}).get("scale") == "continuous":
+        return _amount_text(-v if re.match(r"\s*minus\b", str(st.get("metric") or ""), re.I) else v)
     if kpi != "score":
         return [f"{v:g}", f"{v:.3g}", f"{v:.2f}"]
     return list(dict.fromkeys([f"{100 * v:g}%", f"{100 * v:.1f}%", f"{100 * v:.0f}%", f"{100 * v:.1f} %"]))
 
 
-def check_goal(html: str, st: dict, hill_papers=()) -> list[tuple[str, str]]:
+def _names(who: str, titles: dict | None) -> list[str]:
+    """The ways a paper may name a model: its readable title (preferred; raw `a+b+c` ids are unreadable), else its id."""
+    t = (titles or {}).get(who)
+    return [x for x in (t, _html.escape(t, quote=False) if t else None, who) if x]
+
+
+def _says(text: str, who: str, titles: dict | None) -> bool:
+    return any(x in text for x in _names(who, titles))
+
+
+def check_goal(html: str, st: dict, hill_papers=(), titles: dict | None = None) -> list[tuple[str, str]]:
     """The goal paper is the public one. On top of `check`: a `result` section that states the goal KPI, slice
     and n, the champion's value and the paired delta vs the starting champion; links to every internal hill paper
     of the goal (relative `../<hill>`, marked class="internal"); a `system` section that shows the starting
     system and the champion side by side; and a draft / negative-result label that matches
-    the goal's status. `st` is `Project.goal_status(goal)`."""
+    the goal's status. `st` is `Project.goal_status(goal)`; `titles` maps model ids to titles, and a model is named
+    by its title or its id."""
     out = []
     body = re.sub(r"<script\b.*?</script>|<style\b.*?</style>", "", html, flags=re.S | re.I)
     m = re.search(r'<section\b[^>]*data-block="result"[^>]*>(.*?)</section>', body, re.S | re.I)
@@ -265,16 +416,21 @@ def check_goal(html: str, st: dict, hill_papers=()) -> list[tuple[str, str]]:
             out.append(("error", f"result section does not name the goal slice {st['slice']}"))
         if not re.search(rf"\bn\s*=\s*{st['n']}\b", text):
             out.append(("error", f"result section does not give n = {st['n']}"))
-        if not any(t in text for t in _kpi_text(st["kpi"], st["target"])):
-            out.append(("error", f"result section does not state the target ({_kpi_text(st['kpi'], st['target'])[0]})"))
-        if st.get("value") is not None and not any(t in text for t in _kpi_text(st["kpi"], st["value"])):
-            out.append(("error", f"result section does not state the ledger value {_kpi_text(st['kpi'], st['value'])[1]} "
+        if not any(t in text for t in _kpi_text(st["kpi"], st["target"], st)):
+            out.append(("error", f"result section does not state the target ({_kpi_text(st['kpi'], st['target'], st)[0]})"))
+        if st.get("value") is not None and not any(t in text for t in _kpi_text(st["kpi"], st["value"], st)):
+            out.append(("error", f"result section does not state the ledger value {_kpi_text(st['kpi'], st['value'], st)[1]} "
                                  f"({st['model']}); numbers come from the ledger"))
         vs = st.get("vs_baseline")
         if vs and vs.get("delta") is not None:
-            if st.get("baseline") and st["baseline"] not in text:
-                out.append(("error", f"result section does not name the starting champion {st['baseline']}"))
-            if f"{100 * vs['delta']:+.1f}" not in text:
+            if st.get("baseline") and not _says(text, st["baseline"], titles):
+                out.append(("error", f"result section does not name the starting champion "
+                                     f"({' or '.join(map(repr, _names(st['baseline'], titles)[::2]))})"))
+            if st.get("scale") == "continuous":  # in the slice's unit, signed as the reader prefers ("1,071 ms faster")
+                if not any(t in text for t in _amount_text(abs(vs["delta"]))):
+                    out.append(("error", f"result section does not give the paired delta {_amount_text(abs(vs['delta']))[0]}"
+                                         f"{' ' + st['unit'] if st.get('unit') else ''} vs the start"))
+            elif f"{100 * vs['delta']:+.1f}" not in text:
                 out.append(("error", f"result section does not give the paired delta {100 * vs['delta']:+.1f} pts vs the start"))
             if not re.search(r"90% CI|interval", text):
                 out.append(("error", "result section gives no 90% interval for the paired delta"))
@@ -284,8 +440,9 @@ def check_goal(html: str, st: dict, hill_papers=()) -> list[tuple[str, str]]:
                              "champion side by side, how each added part works and what each one fixed"))
     else:
         for who in (st.get("baseline"), st.get("model")):
-            if who and who not in m.group(1):
-                out.append(("error", f"system section does not name {who}: it compares the start with the champion"))
+            if who and not _says(m.group(1), who, titles):
+                out.append(("error", f"system section does not name {' or '.join(map(repr, _names(who, titles)[::2]))}: "
+                                     "it compares the start with the champion"))
         if not VISUAL.search(m.group(1)):
             out.append(("error", "system section has no visual: draw the before and after systems"))
     for h in st.get("hills") or {}:
@@ -306,3 +463,57 @@ def check_goal(html: str, st: dict, hill_papers=()) -> list[tuple[str, str]]:
     if st.get("slice_changed"):
         out.append(("error", f"slice {st['slice']} changed since the goal opened; its numbers do not hold"))
     return out
+
+
+def context(p: Project, name: str) -> dict:
+    """What the reader shows around a paper, from the ledger as it is now: the paper's title, its goal or hill with
+    their titles and current status (an abandoned goal reads as abandoned whatever the paper's text still says),
+    and the current champion."""
+    d = pdir(p, name)
+    if not (d / "paper.html").exists():
+        raise KeyError(name)
+    meta = _read(d / "meta.json", {})
+    out = dict(name=name, title=title_of(p, name, meta), goal=None, hill=None)
+    champ = p.champion()
+    out["champion"] = dict(name=champ, label=features.model_label(p, champ)) if champ else None
+    if meta.get("goal"):
+        g = p.goals().get(meta["goal"])
+        if g:
+            info = dict(name=meta["goal"], title=g.get("title") or meta["goal"], status=g.get("status"),
+                        reason=g.get("reason"), slice=g.get("slice"), n=g.get("n"), target=g.get("target"),
+                        kpi=g.get("kpi", "score"), when=g.get("abandoned") or g.get("achieved"))
+            try:
+                st = p.goal_status(meta["goal"])
+                info |= dict(model=st.get("model"), label=features.model_label(p, st.get("model")) if st.get("model") else None,
+                             value=st.get("value"), met=st.get("met"), scale=st.get("scale"), unit=st.get("unit"),
+                             metric=st.get("metric"), higher_is_better=st.get("higher_is_better", True))
+            except SystemExit:
+                pass
+            out["goal"] = info
+        else:
+            out["goal"] = dict(name=meta["goal"], title=meta["goal"], status="missing")
+    if meta.get("hill"):
+        h = p.hills().get(meta["hill"])
+        out["hill"] = dict(name=meta["hill"], title=(h or {}).get("title") or meta["hill"], status=(h or {}).get("status", "missing"))
+    return out
+
+
+def missing(p: Project) -> dict:
+    """Goals and live hills with no paper yet (one public paper per goal, one living paper per hill)."""
+    have = [_read(pdir(p, n) / "meta.json", {}) for n in names(p)]
+    goals = {m.get("goal") for m in have} | set(names(p))
+    hills = {m.get("hill") for m in have} | set(names(p))
+    return dict(goals=[dict(name=k, title=g.get("title") or k, status=g.get("status")) for k, g in p.goals().items() if k not in goals],
+                hills=[dict(name=k, title=h.get("title") or k, status=h.get("status")) for k, h in p.hills().items()
+                       if k not in hills and h.get("status") in ("open", "climbed")])
+
+
+@features.get("/api/paper-context/")
+def _context(p, path, q):
+    from urllib.parse import unquote
+    return 200, context(p, unquote(path[len("/api/paper-context/"):]).strip("/"))
+
+
+@features.get("/api/papers-missing")
+def _missing(p, path, q):
+    return 200, missing(p)

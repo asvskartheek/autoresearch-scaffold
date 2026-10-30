@@ -1,0 +1,765 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>arx · discuss</title>
+<!-- data-proto: story frames, questions, agent runs, collaborators and their comments are derived from the real
+     gsm8k-ft ledger (state, hill percent-base per-id runs, GRPO v2 metrics). Every number in an answer is computed
+     in the page from that data; only the agent's step timings and the people are simulated. -->
+<style>
+:root{
+ --ground:#f2f5f8;--surface:#fff;--raised:#f5f7f9;--active:#e4e9ee;--border:#e3e7eb;--rule:#eef1f4;--control:#cdd3d9;
+ --text:#131416;--muted:#5b6168;--faint:#6f767d;
+ --accent:#1b6c80;--accent-soft:#e3f0f3;--primary:#16181a;--on-primary:#fff;
+ --positive:#1e7b4f;--negative:#c4242a;--warning:#92400e;
+ --chart-1:#1b6c80;--chart-2:#2f70bb;--chart-3:#a86f0c;--grid:#e9edf0;
+ --pill-positive-bg:#dcfae5;--pill-positive-ink:#04250e;--pill-negative-bg:#ffedea;--pill-negative-ink:#831c1e;
+ --pill-neutral-bg:#ebeef1;--pill-neutral-ink:#353736;--pill-accent-bg:#ddeef2;--pill-accent-ink:#0f4a59;
+ --radius-card:8px;--radius-control:6px;--radius-chip:4px;--radius-sheet:16px;
+ --font:"IBM Plex Sans",Inter,system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+ --p-mira:#a86f0c;--p-dev:#2f70bb;--p-you:#1b6c80;
+ color-scheme:light}
+@media (prefers-color-scheme:dark){:root{
+ --ground:#0c0f12;--surface:#13171b;--raised:#1a1f24;--active:#232a31;--border:#232a30;--rule:#1c2227;--control:#3a434b;
+ --text:#eef1f3;--muted:#a3abb3;--faint:#8c959d;--accent:#5cb8cc;--accent-soft:#163038;--primary:#eef1f3;--on-primary:#0c0f12;
+ --positive:#4cc38a;--negative:#f07575;--warning:#e3a84f;--chart-1:#5cb8cc;--chart-2:#6aa1e6;--chart-3:#d9a441;--grid:#222930;
+ --pill-positive-bg:#14291e;--pill-positive-ink:#6fd6a1;--pill-negative-bg:#2e1a1d;--pill-negative-ink:#f59a9a;
+ --pill-neutral-bg:#222930;--pill-neutral-ink:#c3cad1;--pill-accent-bg:#14303a;--pill-accent-ink:#8fd3e2;
+ --p-mira:#d9a441;--p-dev:#6aa1e6;--p-you:#5cb8cc;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--ground);color:var(--text);font:400 14px/1.45 var(--font);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;cursor:pointer}
+.mono{font-family:var(--mono);font-size:.92em}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+
+.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;height:52px;padding:0 16px;background:var(--ground)}
+.crumbs{display:flex;gap:8px;color:var(--muted);font-size:13px;min-width:0;white-space:nowrap;overflow:hidden}
+.crumbs b{color:var(--text);font-weight:500;overflow:hidden;text-overflow:ellipsis}
+.crumbs .sep{color:var(--control)}
+.right{margin-left:auto;display:flex;align-items:center;gap:12px;flex:none}
+.faces{display:flex}
+.face{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:600;color:#fff;border:2px solid var(--ground);margin-left:-6px;position:relative}
+.face:first-child{margin-left:0}
+.face[data-tip]:hover::after{content:attr(data-tip);position:absolute;top:32px;right:0;white-space:nowrap;background:var(--primary);color:var(--on-primary);font-weight:500;padding:3px 8px;border-radius:4px;font-size:12px}
+.agents{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);white-space:nowrap}
+.agents b{color:var(--text);font-weight:500}
+.spin{width:10px;height:10px;border-radius:50%;border:2px solid var(--accent);border-right-color:transparent;animation:r .8s linear infinite;flex:none}
+.idle{width:8px;height:8px;border-radius:50%;background:var(--control);flex:none}
+@keyframes r{to{transform:rotate(360deg)}}
+.btn{height:32px;padding:0 14px;border-radius:var(--radius-control);border:1px solid var(--control);background:var(--surface);font-weight:500}
+.btn:hover{background:var(--raised)}
+.btn.primary{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+
+.sheet{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sheet);margin:0 8px 8px;display:grid;grid-template-columns:minmax(0,1fr) 400px;min-height:calc(100vh - 60px)}
+.story{padding:28px 32px 80px;min-width:0;border-right:1px solid var(--rule)}
+.story h1{font-size:22px;font-weight:600;letter-spacing:-.01em;margin:0 0 24px;max-width:720px}
+.frame{max-width:720px;margin:0 0 40px;position:relative}
+.frame .n{position:absolute;left:-22px;top:2px;font:500 12px var(--mono);color:var(--faint)}
+.fig{position:relative;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface);padding:12px;user-select:none;-webkit-user-select:none}
+.fig svg{display:block;width:100%;height:auto;overflow:visible;touch-action:pan-y}
+.fig .askfig{position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-weight:600;display:grid;place-items:center;opacity:0;transition:opacity .15s}
+.frame:hover .askfig,.askfig:focus-visible{opacity:1}
+@media (hover:none){.fig .askfig{opacity:1}}
+.here{position:absolute;top:-10px;right:40px;display:flex;gap:4px}
+.here .face{width:20px;height:20px;font-size:9px;border-width:2px;border-color:var(--surface);margin:0;transition:all .4s}
+.cap{margin:12px 2px 0;font-size:16px;line-height:1.5;max-width:640px}
+.cap .num{all:unset;cursor:pointer;font-weight:600;border-bottom:1.5px dotted var(--accent)}
+.cap .num:hover{background:var(--accent-soft)}
+svg text{font-family:var(--font);fill:var(--muted);font-size:11px}
+svg .lab{fill:var(--text);font-size:12px}
+svg .mono{font-family:var(--mono);font-size:10.5px}
+svg .hit{cursor:pointer}
+svg .hit:hover{opacity:.75}
+html.marquee,html.marquee *{user-select:none!important;-webkit-user-select:none!important;cursor:crosshair}
+svg .sel{fill:var(--accent);fill-opacity:.08;stroke:var(--accent);stroke-width:1;stroke-dasharray:3 2;pointer-events:none}
+svg .picked{stroke:var(--text);stroke-width:2}
+.pin circle{fill:var(--primary)}
+.pin text{fill:var(--on-primary);font-size:10px;font-weight:600;text-anchor:middle}
+.pin{cursor:pointer}
+.pin.flash circle{animation:fl .9s ease 2}
+@keyframes fl{50%{r:13}}
+
+/* thread rail */
+.rail{padding:20px 16px 80px;background:var(--surface);border-radius:0 var(--radius-sheet) var(--radius-sheet) 0;min-width:0}
+.rail .head{display:flex;align-items:baseline;gap:8px;margin:0 4px 14px;font-weight:600;font-size:16px}
+.rail .head span{font-weight:400;color:var(--muted);font-size:13px}
+.empty{color:var(--faint);margin:40px 4px;text-align:center}
+.th{border:1px solid var(--border);border-radius:var(--radius-card);margin-bottom:12px;background:var(--surface)}
+.th.enter{animation:in .25s ease}
+@keyframes in{from{opacity:0;transform:translateY(-6px)}}
+.th.new{border-color:var(--accent)}
+.anch{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--rule);font-size:12px;color:var(--muted);cursor:pointer;border-radius:var(--radius-card) var(--radius-card) 0 0}
+.anch:hover{background:var(--raised)}
+.anch .pinb{width:18px;height:18px;border-radius:50%;background:var(--primary);color:var(--on-primary);display:grid;place-items:center;font-size:10px;font-weight:600;flex:none}
+.anch .q{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msg{padding:10px 12px;display:flex;gap:10px}
+.msg+.msg{border-top:1px solid var(--rule)}
+.msg .face{margin:0;width:24px;height:24px;font-size:10px;border:0;flex:none}
+.msg .bot{width:24px;height:24px;border-radius:6px;background:var(--active);color:var(--text);display:grid;place-items:center;font:600 10px var(--mono);flex:none}
+.msg .body{min-width:0;flex:1}
+.msg .who{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center}
+.msg .who b{color:var(--text);font-weight:500}
+.msg .who .t{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--faint)}
+.msg .txt{margin-top:2px;overflow-wrap:anywhere}
+.steps{list-style:none;margin:6px 0 0;padding:0;font-size:12.5px;color:var(--muted)}
+.steps li{display:flex;align-items:center;gap:8px;min-height:20px}
+.steps li .ok{width:10px;color:var(--positive);flex:none;text-align:center;font-size:11px}
+.steps li.wait{color:var(--faint)}
+.steps li.wait .ok::before{content:"";display:block;width:6px;height:6px;margin:0 2px;border-radius:50%;background:var(--control)}
+.steps.fold li:not(:last-child){display:none}
+.steps .tog{all:unset;cursor:pointer;color:var(--faint);font-size:12px}
+.ans{margin-top:8px}
+.ans .cursor{display:inline-block;width:6px;height:14px;background:var(--accent);vertical-align:-2px;margin-left:1px;animation:bl 1s steps(2) infinite}
+@keyframes bl{50%{opacity:0}}
+.mini{margin-top:8px;border:1px solid var(--rule);border-radius:6px;padding:8px;background:var(--raised)}
+.mini.enter{animation:in .35s ease}
+.mini svg{display:block;width:100%;height:auto}
+.queued{font-size:12.5px;color:var(--faint);margin-top:4px}
+.reply{display:flex;gap:6px;padding:8px 12px 10px;border-top:1px solid var(--rule)}
+.reply input{flex:1;min-width:0;height:30px;border:1px solid var(--border);border-radius:var(--radius-control);background:var(--surface);padding:0 10px;font:inherit;color:inherit}
+
+/* ask popover */
+.pop{position:absolute;z-index:40;width:340px;max-width:calc(100vw - 32px);background:var(--surface);border:1px solid var(--control);border-radius:var(--radius-card);box-shadow:0 8px 28px rgba(0,0,0,.14);padding:10px}
+.pop .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);background:var(--raised);border-radius:var(--radius-chip);padding:2px 8px;margin-bottom:8px;max-width:100%}
+.pop .chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pop textarea{width:100%;height:58px;resize:none;border:1px solid var(--border);border-radius:var(--radius-control);padding:8px;font:inherit;color:inherit;background:var(--surface)}
+.pop .sugg{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.pop .sugg button{border:1px solid var(--border);background:var(--surface);border-radius:999px;padding:3px 10px;font-size:12.5px;text-align:left}
+.pop .sugg button:hover{border-color:var(--accent);color:var(--accent)}
+.pop .row{display:flex;justify-content:flex-end;gap:8px}
+
+/* share dialog */
+.scrim{position:fixed;inset:0;background:rgba(10,12,14,.38);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px}
+.dlg{width:min(460px,100%);background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px}
+.dlg h2{margin:0 0 16px;font-size:16px;font-weight:600}
+.dlg .link{display:flex;gap:8px}
+.dlg .link input{flex:1;min-width:0;height:32px;border:1px solid var(--border);border-radius:var(--radius-control);padding:0 10px;font:12.5px var(--mono);color:var(--text);background:var(--raised)}
+.dlg select,.dlg .inv input{height:32px;border:1px solid var(--border);border-radius:var(--radius-control);background:var(--surface);color:var(--text);font:inherit;padding:0 8px}
+.dlg .line{display:flex;align-items:center;gap:10px;margin-top:12px}
+.dlg .line .grow{flex:1;min-width:0}
+.dlg .inv{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.dlg .inv input{flex:1 1 160px;min-width:0}
+.dlg .ppl{margin-top:10px}
+.dlg .ppl .line .face{margin:0;border:0}
+.dlg .ppl .sub{color:var(--faint);font-size:12px}
+.dlg .foot{display:flex;justify-content:flex-end;margin-top:20px}
+
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--primary);color:var(--on-primary);padding:8px 14px;border-radius:6px;font-size:13px;z-index:60;animation:in .2s ease}
+.jump{display:none}
+
+@media (max-width:900px){
+ .sheet{grid-template-columns:1fr}
+ .story{border-right:0;padding:20px 16px 24px}
+ .frame .n{position:static;display:block;margin-bottom:6px}
+ .rail{border-top:1px solid var(--rule);border-radius:0 0 var(--radius-sheet) var(--radius-sheet);padding:16px 12px 90px}
+ .jump{display:flex;position:fixed;bottom:16px;right:16px;z-index:30;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:999px;background:var(--primary);color:var(--on-primary);border:0;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.18)}
+ .jump .spin{border-color:var(--on-primary);border-right-color:transparent}
+}
+@media (max-width:520px){
+ .top{padding:0 10px;gap:8px}
+ .crumbs .p{display:none}
+ .agents .lbl{display:none}
+ .sheet{margin:0 0 8px;border-radius:12px}
+ .cap{font-size:15px}
+ .fig{padding:8px}
+ .pop{position:fixed;left:8px!important;right:8px;bottom:8px;top:auto!important;width:auto;max-width:none}
+}
+</style>
+</head>
+<body>
+<header class="top">
+ <div class="crumbs"><span class="p">gsm8k-ft</span><span class="sep p">/</span><b>Turning the adapter off</b></div>
+ <div class="right">
+  <div class="agents" id="agents"><span class="idle"></span><span class="lbl">agents</span><b>0</b></div>
+  <div class="faces" id="faces"></div>
+  <button class="btn primary" id="share">Share</button>
+ </div>
+</header>
+<div class="sheet">
+ <section class="story" id="story"><h1>Turning the adapter off</h1></section>
+ <aside class="rail" id="rail"><div class="head">Questions <span id="tcount"></span></div><div id="threads"><div class="empty">Drag across a figure, click a point, or select a caption.</div></div></aside>
+</div>
+<button class="jump" id="jump"></button>
+
+<script>
+"use strict";
+const $ = (s, el = document) => el.querySelector(s);
+const NS = "http://www.w3.org/2000/svg";
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt = n => n.toLocaleString("en-US");
+const short = m => m.replace(/-v(\d)$/, " v$1");
+const rnd = (a, b) => a + Math.random() * (b - a);
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const CAP = 4;  // agents allowed to run at once; the rest queue (the real daemon's --max-agents)
+
+let S, H, T;       // state, hill percent-base, GRPO v2 task
+let CH, BASE, DEV, CTL, IDS, CIDS, FULL, GOAL, REWARD;
+const PEOPLE = {
+  you: {n: "You", i: "KA", c: "var(--p-you)"},
+  mira: {n: "Mira", i: "MI", c: "var(--p-mira)"},
+  dev: {n: "Dev", i: "DV", c: "var(--p-dev)"},
+};
+const SHARED = [{p: "mira", role: "comment"}, {p: "dev", role: "comment"}];
+let linkAccess = "comment";
+
+/* ---------------- data ---------------- */
+async function load() {
+  const j = u => fetch(u).then(r => r.json());
+  [S, H, T] = await Promise.all([j("../data/gsm8k-ft-state.json"), j("../data/hill-percent-base.json"),
+    j("../data/tasks/1026-015519-train-2f1c.json")]);
+  CH = S.champion;
+  GOAL = S.goals["gsm8k-96"];
+  BASE = GOAL.baseline;
+  DEV = H.target.runs; CTL = H.control.runs; IDS = H.target.ids; CIDS = H.control.ids;
+  FULL = S.leaderboard["gsm8k-test/full"];
+  REWARD = T.metrics.filter(m => m.reward != null).map(m => ({s: m.step, r: m.reward, kl: m.kl, len: m["completions/mean_length"]}));
+}
+// per-id scores are means over repeat runs (the champion has 13), so "right" = right in most runs
+const ok = v => (v || 0) >= .5;
+// counts come from the ledger's latest run when it has one (what arx reports), else from the per-id means
+const solved = (runs, m, ids) => {
+  const lb = S.leaderboard[runs === DEV ? H.target.slice : runs === CTL ? H.control.slice : ""], r = lb && lb[m];
+  return r ? Math.round(r.score * r.n) : Math.round(ids.reduce((a, i) => a + (runs[m] ? runs[m][i] || 0 : 0), 0));
+};
+function paired(a, b, runs = DEV, ids = IDS) {
+  let f = 0, br = 0, s = 0, ss = 0; const fix = [], brk = [];
+  for (const i of ids) {
+    const d = (runs[a][i] || 0) - (runs[b][i] || 0); s += d; ss += d * d;
+    const A = ok(runs[a][i]), B = ok(runs[b][i]);
+    if (A && !B) { f++; fix.push(i); } if (!A && B) { br++; brk.push(i); }
+  }
+  const n = ids.length, mean = s / n, sd = Math.sqrt(Math.max(0, ss / n - mean * mean)), h = 1.645 * sd / Math.sqrt(n);
+  return {n, f, b: br, fix, brk, delta: mean, lo: mean - h, hi: mean + h, a: solved(runs, a, ids), bb: solved(runs, b, ids)};
+}
+const pts = x => (x >= 0 ? "+" : "−") + Math.abs(x * 100).toFixed(1);
+const modelsOnDev = () => Object.keys(DEV).sort((a, b) => solved(DEV, b, IDS) - solved(DEV, a, IDS));
+const status = m => (S.models[m] || {}).status || "?";
+const firstSentence = s => { const t = (s || "").split(/(?<=\.)\s/)[0]; const w = t.split(/\s+/); return w.length > 14 ? w.slice(0, 14).join(" ") + "…" : t; };
+
+/* ---------------- svg helpers ---------------- */
+function svg(w, h, inner) { return `<svg viewBox="0 0 ${w} ${h}" xmlns="${NS}">${inner}</svg>`; }
+const line = (x1, y1, x2, y2, st, extra = "") => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${st}" ${extra}/>`;
+const txt = (x, y, s, extra = "") => `<text x="${x}" y="${y}" ${extra}>${esc(s)}</text>`;
+const hitA = (kind, ref, label) => `class="hit" data-kind="${kind}" data-ref="${esc(ref)}" data-label="${esc(label)}"`;
+function ema(v, a = .12) { let e = v[0]; return v.map(x => (e = a * x + (1 - a) * e)); }
+function pathOf(xs, ys) { return xs.map((x, i) => (i ? "L" : "M") + x.toFixed(1) + " " + ys[i].toFixed(1)).join(""); }
+
+/* ---------------- frames ---------------- */
+function frames() {
+  const N = GOAL.n, target = Math.ceil(GOAL.target * N);
+  const champN = Math.round(FULL[CH].score * N), baseN = Math.round(FULL[BASE].score * N);
+  const archN = Math.round(FULL["qwen3-4b-rl-archived"].score * N);
+  const tried = modelsOnDev().filter(m => !["qwen3-4b-rl-archived", BASE].includes(m));
+  const pc = paired(CH, BASE);
+  const rl = paired("percent-rlvr-v2", BASE);
+  const r0 = REWARD.slice(0, 20).reduce((a, b) => a + b.r, 0) / 20, r1 = REWARD.slice(-20).reduce((a, b) => a + b.r, 0) / 20;
+  const num = (v, kind, ref, label) => `<button class="num" data-kind="${kind}" data-ref="${esc(ref)}" data-label="${esc(label)}">${v}</button>`;
+  return [
+    {fig: figGoal(N, target, [["qwen3-4b-rl-archived", archN], [BASE, baseN], [CH, champN]]),
+     cap: `The champion solves ${num(fmt(champN), "bar", CH, "champion on full")} of ${fmt(N)}. The goal needs ${fmt(target)}: ${num(target - champN, "gap", "gap", "the gap to goal")} more.`},
+    {fig: figDots(),
+     cap: `${num(tried.length, "dots", "all", "all changes on percent slice")} changes were tried on ${IDS.length} percentage problems. One passed the gate: the adapter switched off.`},
+    {fig: figGrid(pc),
+     cap: `Switching the adapter off and allowing 1,024 tokens fixed ${num(pc.f, "cells", "fixed", "fixed problems")} problems and broke ${num(pc.b, "cells", "broke", "broken problems")}.`},
+    {fig: figCurve(),
+     cap: `RL reward rose from ${num(r0.toFixed(2), "steps", "1-20", "steps 1–20")} to ${r1.toFixed(2)} over ${REWARD.length} steps. The percentage slice moved ${num(rl.a - rl.bb, "rl", "rl", "RL v2 on the percent slice")} problems.`},
+  ];
+}
+
+function figGoal(N, target, rows) {
+  const W = 640, Hh = 200, x0 = 150, x1 = 620, lo = 1100, hi = N;
+  const X = v => x0 + (v - lo) / (hi - lo) * (x1 - x0);
+  let g = "";
+  for (let t = 1100; t <= 1300; t += 50) g += line(X(t), 14, X(t), 150, "var(--grid)") + txt(X(t), 166, fmt(t), 'text-anchor="middle"');
+  g += txt(x0, 182, "solved, axis from 1,100", 'font-size="10"');
+  rows.forEach(([m, v], i) => {
+    const y = 24 + i * 40, c = m === CH ? "var(--accent)" : "var(--control)";
+    g += txt(x0 - 10, y + 15, short(m).replace("qwen3-4b-rl-", "qwen rl "), 'text-anchor="end" class="mono"');
+    g += `<rect x="${x0}" y="${y}" width="${X(v) - x0}" height="22" rx="3" fill="${c}" ${hitA("bar", m, short(m) + " on full")}/>`;
+    g += txt(X(v) + 6, y + 15, fmt(v), 'class="lab"');
+  });
+  g += line(X(target), 8, X(target), 150, "var(--text)", 'stroke-dasharray="4 3"') + txt(X(target), 4, `goal ${fmt(target)}`, 'text-anchor="middle" class="lab"');
+  const cy = 24 + 2 * 40 + 11, cv = rows[2][1];
+  g += `<g ${hitA("gap", "gap", "the gap to goal")}><rect x="${X(cv) + 40}" y="${cy - 10}" width="${X(target) - X(cv) - 40}" height="20" fill="transparent"/>` +
+       line(X(cv) + 44, cy, X(target) - 3, cy, "var(--negative)", 'stroke-width="2"') + txt((X(cv) + 44 + X(target)) / 2, cy - 6, `${target - cv} short`, 'text-anchor="middle" fill="var(--negative)" style="fill:var(--negative)"') + "</g>";
+  return {w: W, h: Hh, html: svg(W, Hh, g), x: X};
+}
+
+function figDots() {
+  const ms = modelsOnDev(), W = 640, rowH = 17, Hh = 30 + ms.length * rowH + 26, x0 = 200, x1 = 600;
+  const lo = 120, hi = IDS.length, X = v => x0 + (v - lo) / (hi - lo) * (x1 - x0);
+  let g = "";
+  for (let t = 120; t <= 180; t += 20) g += line(X(t), 18, X(t), Hh - 24, "var(--grid)") + txt(X(t), Hh - 8, t, 'text-anchor="middle"');
+  g += txt(x1, Hh - 8, `of ${IDS.length}`, 'text-anchor="start" dx="10"');
+  const champ = solved(DEV, CH, IDS);
+  g += line(X(champ), 12, X(champ), Hh - 24, "var(--accent)", 'stroke-dasharray="3 3"');
+  ms.forEach((m, i) => {
+    const y = 26 + i * rowH, v = solved(DEV, m, IDS), st = status(m);
+    const c = m === CH ? "var(--accent)" : st === "rejected" ? "var(--negative)" : st === "candidate" ? "var(--chart-3)" : "var(--faint)";
+    g += txt(x0 - 12, y + 4, short(m), `text-anchor="end" class="mono" ${m === CH ? 'style="fill:var(--text);font-weight:600"' : ""}`);
+    g += line(x0, y, X(v), y, "var(--rule)");
+    g += `<circle cx="${X(v)}" cy="${y}" r="5.5" fill="${st === "rejected" ? "var(--surface)" : c}" stroke="${c}" stroke-width="1.8" ${hitA("dot", m, short(m))}/>`;
+  });
+  const lg = [["champion", "var(--accent)", 1], ["rejected", "var(--negative)", 0], ["candidate", "var(--chart-3)", 1], ["baseline", "var(--faint)", 1]];
+  lg.forEach(([l, c, f], i) => { const x = 20 + i * 100; g += `<circle cx="${x}" cy="6" r="4.5" fill="${f ? c : "var(--surface)"}" stroke="${c}" stroke-width="1.6"/>` + txt(x + 9, 10, l); });
+  return {w: W, h: Hh, html: svg(W, Hh, g)};
+}
+
+function figGrid(pc) {
+  const cat = i => { const a = ok(DEV[CH][i]), b = ok(DEV[BASE][i]); return a && !b ? 0 : !a && b ? 1 : !a && !b ? 2 : 3; };
+  const order = IDS.slice().sort((p, q) => cat(p) - cat(q));
+  const cols = 37, sz = 15, gp = 2, W = 640, top = 26, Hh = top + Math.ceil(order.length / cols) * (sz + gp) + 4;
+  const fill = ["var(--positive)", "var(--negative)", "var(--surface)", "var(--active)"];
+  const strk = ["var(--positive)", "var(--negative)", "var(--control)", "var(--active)"];
+  const names = ["fixed", "broke", "both wrong", "both right"];
+  const counts = [0, 0, 0, 0]; order.forEach(i => counts[cat(i)]++);
+  let g = "";
+  names.forEach((l, k) => { const x = 4 + k * 130; g += `<rect x="${x}" y="2" width="11" height="11" rx="2" fill="${fill[k]}" stroke="${strk[k]}"/>` + txt(x + 17, 12, `${l} ${counts[k]}`); });
+  order.forEach((id, j) => {
+    const k = cat(id), x = 4 + (j % cols) * (sz + gp), y = top + Math.floor(j / cols) * (sz + gp);
+    g += `<rect x="${x}" y="${y}" width="${sz}" height="${sz}" rx="2" fill="${fill[k]}" stroke="${strk[k]}" ${hitA("cell", id, "problem " + id.slice(0, 6))}/>`;
+  });
+  return {w: W, h: Hh, html: svg(W, Hh, g)};
+}
+
+function figCurve() {
+  const W = 640, Hh = 220, x0 = 40, x1 = 560, y0 = 190, y1 = 16;
+  const sMax = REWARD[REWARD.length - 1].s, X = s => x0 + (s - 1) / (sMax - 1) * (x1 - x0), Y = r => y0 - r * (y0 - y1);
+  let g = "";
+  for (let r = 0; r <= 1.001; r += .25) g += line(x0, Y(r), x1, Y(r), "var(--grid)") + txt(x0 - 8, Y(r) + 4, r.toFixed(2), 'text-anchor="end"');
+  for (let s = 0; s <= sMax; s += 50) g += txt(X(Math.max(1, s)), y0 + 16, s, 'text-anchor="middle"');
+  g += txt(x1, y0 + 16, "step", 'text-anchor="end" dx="0" dy="0" style="display:none"');
+  const xs = REWARD.map(p => X(p.s)), raw = REWARD.map(p => Y(p.r)), sm = ema(REWARD.map(p => p.r)).map(Y);
+  g += `<path d="${pathOf(xs, raw)}" fill="none" stroke="var(--chart-1)" stroke-opacity=".22" stroke-width="1"/>`;
+  g += `<path d="${pathOf(xs, sm)}" fill="none" stroke="var(--chart-1)" stroke-width="2.2"/>`;
+  g += txt(xs[xs.length - 1] + 6, sm[sm.length - 1] + 4, "train reward", 'class="lab"');
+  // eval outcome marker at the end
+  const rl = paired("percent-rlvr-v2", BASE);
+  g += line(x1 + 2, Y(rl.bb / IDS.length), x1 + 2, Y(rl.a / IDS.length), "var(--text)", 'stroke-width="3"');
+  g += txt(x1 + 8, Y(rl.a / IDS.length) + 22, `eval ${rl.bb}→${rl.a}`, `class="lab" ${hitA("rl", "rl", "RL v2 on the percent slice")}`);
+  for (let k = 0; k < 12; k++) { const a = 1 + k * 16, b = a + 16; g += `<rect x="${X(a)}" y="${y1}" width="${X(b) - X(a)}" height="${y0 - y1}" fill="transparent" ${hitA("steps", a + "-" + Math.min(b, sMax), `steps ${a}–${Math.min(b, sMax)}`)} style="cursor:crosshair"/>`; }
+  return {w: W, h: Hh, html: svg(W, Hh, g), X, sMax, x0, x1};
+}
+
+/* ---------------- render story ---------------- */
+let FR = [];
+function renderStory() {
+  FR = frames();
+  const st = $("#story");
+  FR.forEach((f, k) => {
+    const el = document.createElement("div");
+    el.className = "frame"; el.id = "f" + k;
+    el.innerHTML = `<span class="n">${k + 1}</span><div class="fig">${f.fig.html}<button class="askfig" title="Ask">?</button><div class="here"></div></div><p class="cap">${f.cap}</p>`;
+    st.appendChild(el);
+    const s = $("svg", el); s.appendChild(document.createElementNS(NS, "g")).setAttribute("class", "pins");
+    wireFigure(el, k);
+  });
+}
+
+/* ---------------- selection → ask ---------------- */
+function svgPt(s, e) { const p = s.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(s.getScreenCTM().inverse()); }
+function wireFigure(el, k) {
+  const s = $("svg", el); let start = null, rect = null, moved = false;
+  s.addEventListener("pointerdown", e => {
+    if (e.pointerType === "touch") return;  // touch: tap points; dragging scrolls
+    if (e.button !== 0) return;
+    e.preventDefault();  // a marquee, not a text selection
+    start = svgPt(s, e); moved = false;
+    getSelection().removeAllRanges(); document.documentElement.classList.add("marquee");
+    rect = document.createElementNS(NS, "rect"); rect.setAttribute("class", "sel"); s.appendChild(rect);
+    s.setPointerCapture(e.pointerId);
+  });
+  const stop = () => document.documentElement.classList.remove("marquee");
+  s.addEventListener("pointercancel", () => { if (start) { start = null; rect.remove(); } stop(); });
+  s.addEventListener("selectstart", e => { if (start) e.preventDefault(); });
+  s.addEventListener("pointermove", e => {
+    if (!start) return; const p = svgPt(s, e);
+    if (Math.abs(p.x - start.x) + Math.abs(p.y - start.y) > 6) moved = true;
+    rect.setAttribute("x", Math.min(p.x, start.x)); rect.setAttribute("y", Math.min(p.y, start.y));
+    rect.setAttribute("width", Math.abs(p.x - start.x)); rect.setAttribute("height", Math.abs(p.y - start.y));
+  });
+  const end = e => {
+    if (!start) return; const p = svgPt(s, e), a = start; start = null; stop();
+    if (!moved) { rect.remove(); const t = (document.elementFromPoint(e.clientX, e.clientY) || {closest: () => null}).closest(".hit"); return t ? choose(k, t, e) : null; }
+    const r = rect.getBoundingClientRect(), hits = [...s.querySelectorAll(".hit")].filter(h => { const b = h.getBoundingClientRect(); return b.right > r.left && b.left < r.right && b.bottom > r.top && b.top < r.bottom; });
+    const pt = {x: (p.x + a.x) / 2, y: (p.y + a.y) / 2};
+    openAsk(k, regionAnchor(k, hits, a, p), r, pt, rect);
+  };
+  s.addEventListener("pointerup", end);
+  s.addEventListener("click", e => { if (e.pointerType === "touch" || e.detail === 0) { const t = e.target.closest && e.target.closest(".hit"); if (t) choose(k, t, e); } });
+  $(".askfig", el).addEventListener("click", e => { const b = s.getBoundingClientRect(); openAsk(k, {frame: k, kind: "frame", ref: "frame", label: `figure ${k + 1}`}, {left: b.right - 340, bottom: b.top + 40, top: b.top}, null); });
+  const cap = $(".cap", el);
+  cap.addEventListener("mouseup", () => setTimeout(() => {
+    const sel = window.getSelection(), t = sel.toString().trim();
+    if (t.length < 2 || !cap.contains(sel.anchorNode)) return;
+    const r = sel.getRangeAt(0).getBoundingClientRect();
+    openAsk(k, {frame: k, kind: "text", ref: t, label: "“" + t + "”"}, r, null);
+  }, 0));
+  cap.querySelectorAll(".num").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); const r = b.getBoundingClientRect(); openAsk(k, {frame: k, kind: b.dataset.kind, ref: b.dataset.ref, label: b.dataset.label}, r, null); }));
+}
+function choose(k, t, e) {
+  const s = t.ownerSVGElement, b = t.getBBox(), r = t.getBoundingClientRect();
+  t.classList.add("picked");
+  openAsk(k, {frame: k, kind: t.dataset.kind, ref: t.dataset.ref, label: t.dataset.label}, r, {x: b.x + b.width / 2, y: b.y + b.height / 2}, null, t);
+}
+function regionAnchor(k, hits, a, p) {
+  if (k === 3) {
+    const f = FR[3].fig, s0 = Math.max(1, Math.round(1 + (Math.min(a.x, p.x) - f.x0) / (f.x1 - f.x0) * (f.sMax - 1)));
+    const s1 = Math.min(f.sMax, Math.round(1 + (Math.max(a.x, p.x) - f.x0) / (f.x1 - f.x0) * (f.sMax - 1)));
+    return {frame: k, kind: "steps", ref: `${s0}-${Math.max(s0 + 1, s1)}`, label: `steps ${s0}–${Math.max(s0 + 1, s1)}`};
+  }
+  const refs = [...new Set(hits.filter(h => h.dataset.kind !== "steps").map(h => h.dataset.ref))];
+  if (!refs.length) return {frame: k, kind: "frame", ref: "frame", label: `figure ${k + 1}`};
+  if (refs.length === 1) { const h = hits.find(x => x.dataset.ref === refs[0]); return {frame: k, kind: h.dataset.kind, ref: refs[0], label: h.dataset.label}; }
+  const kind = hits[0].dataset.kind;
+  return {frame: k, kind: kind + "s", ref: refs, label: `${refs.length} ${kind === "cell" ? "problems" : kind === "dot" ? "models" : "items"} selected`};
+}
+
+const SUGG = {
+  bar: ["Where did the +69 come from?", "What changed vs the baseline?"],
+  gap: ["Where could the 43 come from?", "Has the champion run the open hills?"],
+  dot: ["Why was this rejected?", "Did it hurt the control slice?", "How does it compare to the champion?"],
+  dots: ["Which of these is real, not noise?", "Do target gains cost control?"],
+  cell: ["Who else gets this one right?", "Why did it break?"],
+  cells: ["What do these have in common?", "Is the gain real or noise?"],
+  steps: ["Is reward still climbing here?", "Did KL blow up?"],
+  rl: ["Why didn't reward transfer?", "Is +2 noise?"],
+  frame: ["Explain this visually", "Is the gain real or noise?"],
+  text: ["Show me the evidence", "Is this real or noise?"],
+};
+let pop = null;
+function closeAsk() { if (pop) { pop.el.remove(); if (pop.rect) pop.rect.remove(); if (pop.t) pop.t.classList.remove("picked"); pop = null; } }
+function openAsk(k, anchor, r, pt, rect, t) {
+  closeAsk();
+  const el = document.createElement("div"); el.className = "pop";
+  const kk = anchor.kind in SUGG ? anchor.kind : (anchor.kind.endsWith("s") ? anchor.kind : "frame");
+  el.innerHTML = `<div class="chip">⌖ <span>${esc(anchor.label)}</span></div><textarea placeholder="Ask…"></textarea>
+    <div class="sugg">${(SUGG[kk] || SUGG.frame).map(q => `<button>${esc(q)}</button>`).join("")}</div>
+    <div class="row"><button class="btn" data-x>Cancel</button><button class="btn primary" data-go>Ask</button></div>`;
+  document.body.appendChild(el);
+  const left = Math.min(Math.max(8, r.left + window.scrollX), window.scrollX + document.documentElement.clientWidth - el.offsetWidth - 8);
+  el.style.left = left + "px"; el.style.top = (r.bottom + window.scrollY + 8) + "px";
+  pop = {el, rect, t};
+  const ta = $("textarea", el); ta.focus({preventScroll: true});
+  const go = q => { q = q.trim(); if (!q) return; const keepRect = pop.rect; pop.rect = null; closeAsk(); if (keepRect) setTimeout(() => keepRect.remove(), 1200); ask("you", anchor, q, pt); };
+  ta.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); go(ta.value); } if (e.key === "Escape") closeAsk(); });
+  el.querySelectorAll(".sugg button").forEach(b => b.addEventListener("click", () => go(b.textContent)));
+  $("[data-go]", el).addEventListener("click", () => go(ta.value));
+  $("[data-x]", el).addEventListener("click", closeAsk);
+}
+document.addEventListener("pointerdown", e => { if (pop && !pop.el.contains(e.target) && !e.target.closest("svg") && !e.target.closest(".num")) closeAsk(); });
+
+/* ---------------- threads + agents ---------------- */
+const threads = []; let agentNo = 0; const queue = []; let running = 0;
+function ask(who, anchor, q, pt) {
+  const th = {id: threads.length + 1, anchor, msgs: [], pt};
+  threads.unshift(th);
+  addPin(th);
+  th.msgs.push({who, text: q, t: Date.now()});
+  renderThreads(th.id);
+  summon(th, q);
+  return th;
+}
+function addPin(th) {
+  const s = $(`#f${th.anchor.frame} svg`), g = $(".pins", s);
+  const vb = s.viewBox.baseVal, pt = th.pt || {x: vb.width - 16, y: 14 + ((th.id * 22) % (vb.height - 28))};
+  const p = document.createElementNS(NS, "g"); p.setAttribute("class", "pin"); p.dataset.th = th.id;
+  p.innerHTML = `<circle cx="${pt.x}" cy="${pt.y - 14}" r="9"/><text x="${pt.x}" y="${pt.y - 10.5}">${th.id}</text>`;
+  p.addEventListener("click", e => { e.stopPropagation(); const c = document.getElementById("th" + th.id); c.scrollIntoView({behavior: "smooth", block: "center"}); c.classList.add("new"); setTimeout(() => c.classList.remove("new"), 1500); });
+  g.appendChild(p);
+}
+function summon(th, q) {
+  const plan = answer(th.anchor, q, th);
+  if (th.msgs.length > 1) plan.steps.unshift(`read thread ${th.id} (${th.msgs.length} messages)`);
+  const m = {who: "agent", no: ++agentNo, plan, done: 0, state: "queued", out: "", t: Date.now()};
+  th.msgs.push(m);
+  queue.push([th, m]); pump(); renderThreads();
+}
+function pump() {
+  while (running < CAP && queue.length) { const [th, m] = queue.shift(); running++; m.state = "running"; m.t0 = Date.now(); step(th, m); }
+  renderAgents();
+}
+function step(th, m) {
+  renderMsg(th, m);
+  if (m.done < m.plan.steps.length) { setTimeout(() => { m.done++; step(th, m); }, rnd(700, 2600)); return; }
+  // stream the answer word by word
+  const words = m.plan.text.split(" "); let i = 0;
+  m.state = "writing"; renderMsg(th, m);
+  const iv = setInterval(() => {
+    m.out = words.slice(0, ++i).join(" "); renderMsg(th, m);
+    if (i >= words.length) { clearInterval(iv); m.state = "done"; m.t1 = Date.now(); running--; m.fresh = true; renderMsg(th, m); m.fresh = false; pump(); }
+  }, rnd(35, 70));
+}
+function renderAgents() {
+  const busy = running, q = queue.length, el = $("#agents");
+  el.innerHTML = `${busy ? '<span class="spin"></span>' : '<span class="idle"></span>'}<span class="lbl">agents</span><b>${busy}/${CAP}</b>${q ? `<span>+${q} queued</span>` : ""}`;
+  const j = $("#jump"); j.innerHTML = `${busy ? '<span class="spin"></span>' : ""}${threads.length} question${threads.length === 1 ? "" : "s"}`;
+  j.style.visibility = threads.length ? "visible" : "hidden";
+  $("#tcount").textContent = threads.length ? `${threads.length} · ${threads.filter(t => t.msgs.some(m => m.who === "agent" && m.state !== "done")).length} answering` : "";
+}
+function face(p) { const P = PEOPLE[p]; return `<span class="face" style="background:${P.c}">${P.i}</span>`; }
+function ago(t) { const s = Math.round((Date.now() - t) / 1000); return s < 60 ? s + "s" : Math.round(s / 60) + "m"; }
+function msgHTML(th, m) {
+  if (m.who !== "agent") return `<div class="msg">${face(m.who)}<div class="body"><div class="who"><b>${PEOPLE[m.who].n}</b><span class="t">${ago(m.t)}</span></div><div class="txt">${esc(m.text)}</div></div></div>`;
+  const steps = m.plan.steps, el = m.state === "done" ? ((m.t1 - m.t0) / 1000).toFixed(1) + "s" : m.state === "queued" ? "" : ((Date.now() - m.t0) / 1000).toFixed(0) + "s";
+  const head = m.state === "queued" ? "queued" : m.state === "done" ? `${steps.length} steps · ${el}` : steps[Math.min(m.done, steps.length - 1)].replace(/^./, c => c) + "…";
+  let li = "";
+  if (m.state !== "queued") steps.forEach((s, i) => {
+    const state = i < m.done ? "done" : i === m.done && m.state === "running" ? "now" : "wait";
+    if (m.state === "running" && i > m.done) return;
+    li += `<li class="${state === "wait" ? "wait" : ""}"><span class="ok">${state === "done" ? "✓" : state === "now" ? '<span class="spin" style="width:9px;height:9px"></span>' : ""}</span>${esc(s)}</li>`;
+  });
+  const fold = m.state === "done" && !m.open;
+  return `<div class="msg" data-m="${m.no}"><span class="bot">#${m.no}</span><div class="body">
+    <div class="who"><b>agent #${m.no}</b><span>${m.state === "done" ? "" : m.state === "queued" ? "waiting for a slot" : m.state === "writing" ? "writing" : "reading ledger"}</span><span class="t">${el}</span></div>
+    ${m.state === "queued" ? `<div class="queued">${CAP} agents busy</div>` : `<ul class="steps ${fold ? "fold" : ""}">${fold ? `<li><span class="ok">✓</span><button class="tog">${steps.length} steps · ${el}</button></li>` : li}</ul>`}
+    ${m.out ? `<div class="ans">${esc(m.out)}${m.state === "writing" ? '<span class="cursor"></span>' : ""}</div>` : ""}
+    ${m.state === "done" && m.plan.fig ? `<div class="mini ${m.fresh ? "enter" : ""}">${m.plan.fig}</div>` : ""}
+  </div></div>`;
+}
+function threadHTML(th) {
+  return `<div class="th" id="th${th.id}"><div class="anch"><span class="pinb">${th.id}</span><span class="q">Frame ${th.anchor.frame + 1} · ${esc(th.anchor.label)}</span></div>
+    <div class="msgs">${th.msgs.map(m => msgHTML(th, m)).join("")}</div>
+    <form class="reply"><input placeholder="Reply" aria-label="Reply"><button class="btn">Ask</button></form></div>`;
+}
+function wireThread(th) {
+  const c = document.getElementById("th" + th.id);
+  $(".anch", c).onclick = () => { const f = document.getElementById("f" + th.anchor.frame); f.scrollIntoView({behavior: "smooth", block: "center"}); const p = $(`.pin[data-th="${th.id}"]`, f); if (p) { p.classList.remove("flash"); void p.getBBox(); p.classList.add("flash"); } };
+  $(".reply", c).onsubmit = e => { e.preventDefault(); const i = $("input", c); const q = i.value.trim(); if (!q) return; i.value = ""; reply(th, "you", q); };
+  c.querySelectorAll(".tog").forEach(b => b.onclick = () => { const no = +b.closest(".msg").dataset.m; th.msgs.find(m => m.no === no).open = true; renderMsg(th, th.msgs.find(m => m.no === no)); });
+}
+function reply(th, who, q) { th.msgs.push({who, text: q, t: Date.now()}); renderThreads(); summon(th, q); }
+function renderThreads(fresh) {
+  const box = $("#threads"), drafts = {};
+  box.querySelectorAll(".th").forEach(c => { const v = $(".reply input", c).value; if (v) drafts[c.id] = v; });
+  const focused = document.activeElement && document.activeElement.closest && document.activeElement.closest(".th");
+  box.innerHTML = threads.length ? threads.map(threadHTML).join("") : box.innerHTML;
+  threads.forEach(wireThread);
+  Object.entries(drafts).forEach(([id, v]) => { const c = document.getElementById(id); if (c) $(".reply input", c).value = v; });
+  if (focused) { const c = document.getElementById(focused.id); if (c) $(".reply input", c).focus({preventScroll: true}); }
+  if (fresh) { const c = document.getElementById("th" + fresh); c.classList.add("new", "enter"); setTimeout(() => c.classList.remove("new"), 1500); }
+  renderAgents();
+}
+function renderMsg(th, m) {
+  const c = document.getElementById("th" + th.id); if (!c) return;
+  const old = c.querySelector(`.msg[data-m="${m.no}"]`); if (!old) return;
+  const tmp = document.createElement("div"); tmp.innerHTML = msgHTML(th, m); old.replaceWith(tmp.firstElementChild);
+  wireThread(th); renderAgents();
+}
+setInterval(() => threads.forEach(th => th.msgs.forEach(m => m.who === "agent" && m.state === "running" && renderMsg(th, m))), 1000);
+
+/* ---------------- the answering: real computations on the ledger ---------------- */
+function answer(a, q, th) {
+  const ql = q.toLowerCase();
+  const wantCtl = /control|cost|hurt|regress/.test(ql), wantNoise = /noise|real|ci\b|sure|significant|luck/.test(ql);
+  const S0 = `read story frame ${a.frame + 1}`;
+  const k = a.kind;
+  if (wantCtl && a.frame === 2) return ansModel(S0, CH, true, true, ql);
+  if (k === "bar" || (k === "frame" && a.frame === 0) || (k === "text" && a.frame === 0 && !/goal|43|gap/.test(a.ref))) return ansClimb(S0, wantCtl);
+  if (k === "gap" || (a.frame === 0)) return ansGap(S0);
+  if (k === "dot") return ansModel(S0, a.ref, wantCtl, wantNoise, ql);
+  if (k === "dots") return ansModels(S0, Array.isArray(a.ref) ? a.ref : modelsOnDev(), wantCtl);
+  if (k === "cell") return ansCell(S0, a.ref, ql);
+  if (k === "cells") {
+    const pc = paired(CH, BASE), ids = Array.isArray(a.ref) ? a.ref : (a.ref === "broke" ? pc.brk : pc.fix);
+    const which = ids.every(i => pc.brk.includes(i)) ? "broke" : ids.every(i => pc.fix.includes(i)) ? "fixed" : "mixed";
+    return ansCells(S0, ids, which, wantNoise);
+  }
+  if (a.frame === 1) return ansModels(S0, modelsOnDev(), true);
+  if (a.frame === 2) return wantCtl ? ansModel(S0, CH, true, true, ql) : ansCells(S0, IDS, "all", true);
+  if (k === "steps") return ansSteps(S0, a.ref, ql);
+  return ansRL(S0, wantNoise);
+}
+function ciFig(p, label) {
+  const W = 320, Hh = 74, c = 160, sc = 110 / Math.max(p.f, p.b, 8);
+  let g = line(c, 4, c, 36, "var(--control)");
+  g += `<rect x="${c}" y="8" width="${p.f * sc}" height="11" rx="2" fill="var(--positive)"/>` + txt(c + p.f * sc + 5, 17, `${p.f} fixed`, 'class="lab"');
+  g += `<rect x="${c - p.b * sc}" y="22" width="${p.b * sc}" height="11" rx="2" fill="var(--negative)"/>` + txt(c - p.b * sc - 5, 31, `${p.b} broke`, 'text-anchor="end" class="lab"');
+  const X = v => c + v * 1000; // 1 pt = 10px
+  g += line(X(Math.max(-.12, p.lo)), 54, X(Math.min(.12, p.hi)), 54, "var(--text)", 'stroke-width="2"') + `<circle cx="${X(p.delta)}" cy="54" r="3.5" fill="var(--text)"/>`;
+  g += line(c, 47, c, 61, "var(--muted)", 'stroke-dasharray="2 2"');
+  g += txt(4, 58, label, 'font-size="10"') + txt(W - 4, 58, `${pts(p.delta)} pts [${pts(p.lo)}, ${pts(p.hi)}]`, 'text-anchor="end" class="mono"');
+  g += txt(c, 72, "0", 'text-anchor="middle" font-size="9"');
+  return svg(W, Hh, g);
+}
+function ansClimb(S0, wantCtl) {
+  const v = GOAL.vs_baseline, base = Math.round(v.base * v.n), cand = Math.round(v.cand * v.n);
+  const W = 320, Hh = 96, X = x => 20 + (x - 1100) / (1320 - 1100) * 280;
+  let g = "", y = 18;
+  const seg = (l, a, b, c, yy) => `<rect x="${X(Math.min(a, b))}" y="${yy}" width="${Math.abs(X(b) - X(a))}" height="14" rx="2" fill="${c}"/>` + txt(X(Math.max(a, b)) + 5, yy + 11, l, 'class="lab"');
+  g += seg(`baseline ${fmt(base)}`, 1100, base, "var(--control)", y);
+  g += seg(`+${v.wins} fixed`, base, base + v.wins, "var(--positive)", y + 20);
+  g += seg(`−${v.losses} broke`, base + v.wins, cand, "var(--negative)", y + 40);
+  g += seg(`champion ${fmt(cand)}`, 1100, cand, "var(--accent)", y + 60);
+  return {steps: [S0, "read goal gsm8k-96", `loaded 2 runs on gsm8k-test/full (n=${v.n})`, "ran paired diff", "drawing figure"],
+    text: `The +${cand - base} is net, not one clean gain: on all ${fmt(v.n)} problems, turning the adapter off fixed ${v.wins} and broke ${v.losses}. 90% paired CI ${pts(v.lo)} to ${pts(v.hi)} pts, so the climb is real.`,
+    fig: svg(W, Hh, g)};
+}
+function ansGap(S0) {
+  const hs = ["time-rate", "group-count"].map(h => ({h, sl: S.hills[h].target, lb: S.leaderboard[S.hills[h].target] || {}}));
+  const W = 320, Hh = 92; let g = "";
+  hs.forEach((o, i) => {
+    const n = S.slices[o.sl].n, arch = o.lb["qwen3-4b-rl-archived"], wrong = Math.round((1 - arch.score) * n), y = 10 + i * 36;
+    g += txt(4, y + 10, o.h, 'class="lab"') + `<rect x="100" y="${y}" width="${wrong * 2.6}" height="14" rx="2" fill="var(--control)"/>` + txt(104 + wrong * 2.6, y + 11, `${wrong} wrong (archived)`, "");
+    g += txt(100, y + 27, "champion: not run", 'style="fill:var(--negative)"');
+  });
+  const tr = S.leaderboard[S.hills["time-rate"].target]["qwen3-4b-rl-archived"], n = S.slices[S.hills["time-rate"].target].n;
+  return {steps: [S0, "read goal gsm8k-96", "read hills time-rate, group-count", "checked champion runs on open hills", "drawing figure"],
+    text: `Two open hills hold the likely 43. The archived model missed ${Math.round((1 - tr.score) * n)} of ${n} time-rate problems. The champion has not run either hill yet, so that is the first thing to run.`,
+    fig: svg(W, Hh, g)};
+}
+function ansModel(S0, m, wantCtl, wantNoise, ql) {
+  const vs = m === CH ? BASE : CH, p = paired(m, vs), pc = paired(m, vs, CTL, CIDS);
+  const md = S.models[m] || {}, dec = S.decisions.filter(d => d.model === m).pop();
+  const steps = [S0, `read model ${m}`, `read hill percent-base (${IDS.length} + ${CIDS.length} ids)`, `ran paired diff vs ${short(vs)}`, wantCtl ? "ran paired diff on control" : "computed 90% CI", "drawing figure"];
+  let text;
+  if (m === CH) text = `Against the fresh baseline on the percent slice: ${p.f} fixed, ${p.b} broke, ${pts(p.delta)} pts, CI lower bound ${pts(p.lo)}, above zero, so it passed. Control: ${pc.a} vs ${pc.bb} of ${CIDS.length}.`;
+  else if (/why|reject/.test(ql) || status(m) === "rejected") {
+    text = `Versus the champion: ${p.a} vs ${p.bb} of ${IDS.length}, ${p.f} fixed, ${p.b} broke. CI lower bound ${pts(p.lo)} pts ${p.lo > 0 ? "is above zero here, but its gate compared it with its own same-harness baseline, where the bound was not above zero" : "is not above zero"}, so it was ${status(m)}. The change: ${firstSentence(md.change)}`;
+  } else text = `Versus the champion: ${p.a} vs ${p.bb}, CI ${pts(p.lo)} to ${pts(p.hi)} pts. Status: ${status(m)}. The change: ${firstSentence(md.change)}`;
+  if (wantCtl && m !== CH) text += ` Control: ${pc.a} vs ${pc.bb} of ${CIDS.length} (${pc.f} fixed, ${pc.b} broke).`;
+  return {steps, text, fig: wantCtl ? stack([ciFig(p, "target"), ciFig(pc, "control")]) : ciFig(p, "target")};
+}
+function stack(svgs) { return svgs.map(s => `<div style="margin:2px 0">${s}</div>`).join(""); }
+function ansModels(S0, ms, wantCtl) {
+  const W = 320, Hh = 170, x0 = 34, x1 = 310, y0 = 146, y1 = 8;
+  const tv = m => solved(DEV, m, IDS) / IDS.length, cv = m => solved(CTL, m, CIDS) / CIDS.length;
+  const X = v => x0 + (v - .65) / (.95 - .65) * (x1 - x0), Y = v => y0 - (v - .85) / (1 - .85) * (y0 - y1);
+  let g = "";
+  [.7, .8, .9].forEach(v => g += line(X(v), y1, X(v), y0, "var(--grid)") + txt(X(v), y0 + 12, v.toFixed(1), 'text-anchor="middle" font-size="9"'));
+  [.9, .95, 1].forEach(v => g += line(x0, Y(v), x1, Y(v), "var(--grid)") + txt(x0 - 4, Y(v) + 3, v.toFixed(2), 'text-anchor="end" font-size="9"'));
+  ms.forEach(m => { const c = m === CH ? "var(--accent)" : status(m) === "rejected" ? "var(--negative)" : "var(--chart-3)"; g += `<circle cx="${X(tv(m))}" cy="${Y(cv(m))}" r="${m === CH ? 5 : 3.5}" fill="${c}" fill-opacity=".85"/>`; });
+  g += txt(x1, y0 + 24, "target →", 'text-anchor="end" font-size="9"') + txt(x0 - 4, y1 - 0, "control", 'text-anchor="end" font-size="9"');
+  g += `<circle cx="${X(tv(CH))}" cy="${Y(cv(CH))}" r="9" fill="none" stroke="var(--accent)"/>`;
+  const better = ms.filter(m => m !== CH && tv(m) > tv(CH)), passCI = ms.filter(m => m !== CH && paired(m, CH).lo > 0);
+  return {steps: [S0, `read ${ms.length} models`, "read hill percent-base", `ran ${ms.length} paired diffs vs champion`, "drawing figure"],
+    text: `${better.length} of these score above the champion on the percent slice, ${passCI.length} with a 90% CI lower bound above zero. Target gains and control mostly move together; nothing trades one for the other.`,
+    fig: svg(W, Hh + 16, g)};
+}
+function ansCell(S0, id, ql) {
+  const ms = modelsOnDev(), right = ms.filter(m => ok(DEV[m][id]));
+  const W = 320, Hh = 60, step = 300 / ms.length; let g = "";
+  ms.forEach((m, i) => { const y = ok(DEV[m][id]), c = m === CH ? "var(--accent)" : y ? "var(--positive)" : "var(--negative)"; g += `<circle cx="${12 + i * step}" cy="18" r="6" fill="${y ? c : "var(--surface)"}" stroke="${c}" stroke-width="1.6"/>`; });
+  g += txt(4, 44, "each dot one system, best on the slice to worst", 'font-size="10"') + txt(4, 56, `${right.length} of ${ms.length} right`, 'class="lab"');
+  const champOk = ok(DEV[CH][id]), baseOk = ok(DEV[BASE][id]), v = DEV[CH][id] || 0;
+  const reps = ((S.baseline.have || {})[H.target.slice] || {}).runs || 1;
+  let text = `Problem ${id.slice(0, 8)}: ${right.length} of ${ms.length} systems get it right.`;
+  if (v > 0 && v < 1) text += ` The champion is right in only ${Math.round(v * reps)} of its ${reps} repeat runs, so this one is a coin flip.`;
+  if (champOk && !baseOk) text += ` The adapter got it wrong; with the adapter off it is right, and ${right.length - 1} others agree.`;
+  else if (!champOk && baseOk) text += ` The champion broke it. ${right.filter(m => m !== BASE).slice(0, 2).map(short).join(" and ") || "No one else"} still solve it, so it is recoverable.`;
+  else text += champOk ? " Champion and baseline both solve it." : " Champion and baseline both miss it.";
+  return {steps: [S0, "read hill percent-base", `looked up ${id.slice(0, 8)} across ${ms.length} runs`, "drawing figure"], text, fig: svg(W, Hh, g)};
+}
+function ansCells(S0, ids, which, wantNoise) {
+  const ms = modelsOnDev().filter(m => m !== CH && m !== BASE);
+  const rescue = ids.map(i => ms.filter(m => ok(DEV[m][i])).length);
+  const p = paired(CH, BASE);
+  const W = 320, Hh = 22 + Math.min(ids.length, 24) * 0 + 64; let g = "";
+  const maxR = ms.length, bw = Math.min(14, 296 / ids.length);
+  ids.slice(0, 40).forEach((id, j) => { const h = rescue[j] / maxR * 44; g += `<rect x="${8 + j * (bw + 1)}" y="${50 - h}" width="${bw}" height="${h}" rx="1.5" fill="${which === "broke" ? "var(--negative)" : "var(--positive)"}" fill-opacity=".8"/>`; });
+  g += line(6, 50, 314, 50, "var(--control)") + txt(8, 64, `bar = how many of ${maxR} other systems solve it`, 'font-size="10"');
+  if (wantNoise || which === "all") {
+    return {steps: [S0, "read hill percent-base", `ran paired diff on ${IDS.length} ids`, "computed 90% CI", "drawing figure"],
+      text: `Real: ${p.f} fixed and ${p.b} broke, counting a problem right when it is right in most repeat runs. The 90% paired CI is ${pts(p.lo)} to ${pts(p.hi)} pts, above zero.`, fig: ciFig(p, "target")};
+  }
+  const easy = rescue.filter(r => r >= maxR / 2).length;
+  if (which === "mixed") {
+    const f = ids.filter(i => p.fix.includes(i)).length, b = ids.filter(i => p.brk.includes(i)).length;
+    return {steps: [S0, "read hill percent-base", `looked up ${ids.length} ids across ${ms.length + 2} runs`, "drawing figure"],
+      text: `Of these ${ids.length}: ${f} fixed, ${b} broke, ${ids.length - f - b} unchanged. ${easy} are solved by at least half of the other systems.`, fig: svg(W, Hh, g)};
+  }
+  return {steps: [S0, "read hill percent-base", `looked up ${ids.length} ids across ${ms.length + 2} runs`, "drawing figure"],
+    text: which === "broke"
+      ? `${easy} of the ${ids.length} broken problems are solved by at least half the other systems, so they are not hard problems; switching the adapter off lost something it knew.`
+      : `${easy} of the ${ids.length} are solved by most other systems too: these were problems the adapter specifically got wrong, not lucky fixes.`,
+    fig: svg(W, Hh, g)};
+}
+function ansSteps(S0, ref, ql) {
+  const [a, b] = String(ref).split("-").map(Number), seg = REWARD.filter(p => p.s >= a && p.s <= b);
+  const mean = v => v.reduce((x, y) => x + y, 0) / v.length;
+  const r = mean(seg.map(p => p.r)), kl = mean(seg.map(p => p.kl || 0)), len = mean(seg.map(p => p.len || 0));
+  const all = mean(REWARD.map(p => p.r));
+  const W = 320, Hh = 100, X = s => 10 + (s - a) / Math.max(1, b - a) * 300, Y = v => 76 - v * 66;
+  const xs = seg.map(p => X(p.s));
+  let g = line(10, Y(all), 310, Y(all), "var(--control)", 'stroke-dasharray="3 3"') + txt(10, Y(all) + 12, `run mean ${all.toFixed(2)}`, 'font-size="9"');
+  g += `<path d="${pathOf(xs, seg.map(p => Y(p.r)))}" fill="none" stroke="var(--chart-1)" stroke-opacity=".3"/><path d="${pathOf(xs, ema(seg.map(p => p.r), .25).map(Y))}" fill="none" stroke="var(--chart-1)" stroke-width="2"/>`;
+  g += txt(10, 96, `step ${a}`, 'font-size="9"') + txt(310, 96, `step ${b}`, 'text-anchor="end" font-size="9"');
+  const half = Math.floor(seg.length / 2), up = mean(seg.slice(half).map(p => p.r)) - mean(seg.slice(0, half).map(p => p.r));
+  return {steps: [S0, "read task 1026-015519-train-2f1c", `sliced metrics to steps ${a}–${b}`, "smoothed reward", "drawing figure"],
+    text: `Steps ${a}–${b}: mean reward ${r.toFixed(2)} vs ${all.toFixed(2)} for the run, ${up > .03 ? "still rising" : up < -.03 ? "falling" : "flat"} (${up >= 0 ? "+" : ""}${up.toFixed(2)} across the window). KL ${kl.toFixed(4)}, completions ${Math.round(len)} tokens.`,
+    fig: svg(W, Hh, g)};
+}
+function ansRL(S0, wantNoise) {
+  const p = paired("percent-rlvr-v2", BASE);
+  return {steps: [S0, "read model percent-rlvr-v2", "read task 1026-015519-train-2f1c", `ran paired diff vs ${short(BASE)}`, "computed 90% CI", "drawing figure"],
+    text: `Reward is measured on the training mix, where most groups were already solvable. On the percent slice RL v2 fixed ${p.f} and broke ${p.b}: ${pts(p.delta)} pts, CI ${pts(p.lo)} to ${pts(p.hi)}. Noise-sized.`,
+    fig: ciFig(p, "target")};
+}
+
+/* ---------------- collaborators (simulated) ---------------- */
+const presence = {mira: 1, dev: 0};
+function renderFaces() {
+  $("#faces").innerHTML = ["you", "mira", "dev"].map(p => `<span class="face" style="background:${PEOPLE[p].c}" data-tip="${PEOPLE[p].n}${p === "you" ? "" : " · frame " + (presence[p] + 1)}">${PEOPLE[p].i}</span>`).join("");
+  document.querySelectorAll(".here").forEach(h => h.innerHTML = "");
+  Object.entries(presence).forEach(([p, f]) => { const h = $(`#f${f} .here`); if (h) h.insertAdjacentHTML("beforeend", `<span class="face" style="background:${PEOPLE[p].c}" title="${PEOPLE[p].n}">${PEOPLE[p].i[0]}</span>`); });
+}
+function simulate() {
+  setInterval(() => { const p = pick(["mira", "dev"]); presence[p] = Math.floor(Math.random() * FR.length); renderFaces(); }, 9000);
+  setTimeout(() => {
+    presence.mira = 1; renderFaces();
+    const m = "fresh-sft-vllm-vote5-v1", c = $(`#f1 [data-ref="${m}"]`), b = c.getBBox();
+    ask("mira", {frame: 1, kind: "dot", ref: m, label: short(m)}, "This scores above the champion. Why was it rejected?", {x: b.x + b.width / 2, y: b.y + b.height / 2});
+    toast("Mira asked on frame 2");
+  }, 14000);
+  setTimeout(() => {
+    presence.dev = 3; renderFaces();
+    const f = FR[3].fig;
+    ask("dev", {frame: 3, kind: "steps", ref: "120-192", label: "steps 120–192"}, "Is reward still climbing at the end?", {x: f.X(156), y: 40});
+    toast("Dev asked on frame 4");
+  }, 30000);
+  setTimeout(() => {
+    const mine = threads.filter(t => t.msgs[0].who === "you").pop();
+    if (mine) { reply(mine, "dev", "Can we see what this does to control?"); toast("Dev replied on question " + mine.id); }
+  }, 46000);
+}
+let tt; function toast(s) { clearTimeout(tt); document.querySelectorAll(".toast").forEach(t => t.remove()); const t = document.createElement("div"); t.className = "toast"; t.textContent = s; document.body.appendChild(t); tt = setTimeout(() => t.remove(), 2600); }
+
+/* ---------------- share ---------------- */
+function share() {
+  const sc = document.createElement("div"); sc.className = "scrim";
+  const draw = () => {
+    sc.innerHTML = `<div class="dlg" role="dialog" aria-label="Share"><h2>Share “Turning the adapter off”</h2>
+      <div class="link"><input readonly value="https://arx.example/s/gsm8k-ft/adapter-off-k3f9"><button class="btn" data-copy>Copy</button></div>
+      <div class="line"><span class="grow">Anyone with the link</span><select data-link>
+        <option value="off" ${linkAccess === "off" ? "selected" : ""}>No access</option>
+        <option value="view" ${linkAccess === "view" ? "selected" : ""}>Can view</option>
+        <option value="comment" ${linkAccess === "comment" ? "selected" : ""}>Can comment</option></select></div>
+      <div class="inv"><input list="names" placeholder="Invite by name" data-name><select data-role><option value="comment">Can comment</option><option value="view">Can view</option></select><button class="btn" data-inv>Invite</button></div>
+      <datalist id="names"><option>Sam</option><option>Priya</option><option>Jonas</option></datalist>
+      <div class="ppl"><div class="line">${face("you")}<span class="grow">You</span><span class="sub">owner</span></div>
+        ${SHARED.map((s, i) => `<div class="line">${s.p in PEOPLE ? face(s.p) : `<span class="face" style="background:var(--faint)">${s.p.slice(0, 2).toUpperCase()}</span>`}<span class="grow">${esc(PEOPLE[s.p] ? PEOPLE[s.p].n : s.p)}${s.pending ? ' <span class="sub">invited</span>' : ""}</span>
+          <select data-i="${i}"><option value="comment" ${s.role === "comment" ? "selected" : ""}>Can comment</option><option value="view" ${s.role === "view" ? "selected" : ""}>Can view</option><option value="x">Remove</option></select></div>`).join("")}</div>
+      <div class="foot"><button class="btn primary" data-done>Done</button></div></div>`;
+    $("[data-copy]", sc).onclick = e => { const i = $(".link input", sc); i.select(); try { navigator.clipboard.writeText(i.value); } catch (_) {} e.target.textContent = "Copied"; };
+    $("[data-link]", sc).onchange = e => linkAccess = e.target.value;
+    $("[data-inv]", sc).onclick = () => { const n = $("[data-name]", sc).value.trim(); if (!n) return; SHARED.push({p: n, role: $("[data-role]", sc).value, pending: true}); draw(); };
+    sc.querySelectorAll("select[data-i]").forEach(s => s.onchange = () => { const i = +s.dataset.i; if (s.value === "x") SHARED.splice(i, 1); else SHARED[i].role = s.value; draw(); });
+    $("[data-done]", sc).onclick = () => sc.remove();
+  };
+  draw();
+  sc.addEventListener("click", e => { if (e.target === sc) sc.remove(); });
+  document.body.appendChild(sc);
+}
+
+/* ---------------- boot ---------------- */
+(async () => {
+  await load();
+  renderStory(); renderFaces(); renderAgents(); simulate();
+  $("#share").onclick = share;
+  $("#jump").onclick = () => $("#rail").scrollIntoView({behavior: "smooth"});
+})();
+</script>
+</body>
+</html>

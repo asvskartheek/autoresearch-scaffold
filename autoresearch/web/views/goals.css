@@ -89,7 +89,8 @@ a:hover>.gl-pt,a:focus-visible>.gl-pt{stroke:var(--text);stroke-width:2}
  .gl-bn{display:none}
  .gl-ends span:last-child{flex:none}
  .gl-strip .kpi .s{white-space:normal}
- .gl-body{grid-template-columns:1fr;gap:14px;padding:12px 0 10px}
+ .gl-body{grid-template-columns:minmax(0,1fr);gap:14px;padding:12px 0 10px}
+ .gl-body>*{min-width:0}
  .gl-big{font-size:28px}
  .gl-figs{grid-template-columns:1fr;gap:0}
  .gl-figs>div{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;border-left:0;padding:8px 0;border-top:1px solid var(--rule)}
@@ -106,3 +107,109 @@ a:hover>.gl-pt,a:focus-visible>.gl-pt{stroke:var(--text);stroke-width:2}
  .gl-ab tr{padding:10px 0;border-bottom:1px solid var(--rule)}
  .gl-ab td{height:auto;border:0;padding:2px 0!important;text-align:left!important}
 }
+
+/* units next to a big figure: "1,224 of 1,319" */
+.gl-of{font-size:.5em;color:var(--muted);letter-spacing:0;margin-left:2px}
+.gl-con,.gi-con{display:inline-flex;align-items:center;gap:4px;font-size:12px;border:1px solid var(--border);background:var(--raised);border-radius:var(--radius-chip);padding:1px 7px;color:var(--text)}
+.gl-cons{display:flex;flex-wrap:wrap;gap:6px;margin:-8px 0 var(--gap)}
+
+/* the map: main goal, its guards and sub-goals */
+.gm{display:flex;flex-direction:column;gap:18px}
+.gm-node{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:baseline;border:1px solid var(--border);border-radius:var(--radius-control);padding:10px 12px;background:var(--surface);min-width:0}
+.gm-node:hover{border-color:var(--accent)}
+.gm-node[aria-current]{outline:2px solid var(--accent);outline-offset:-1px}
+.gm-tree.root>.gm-node{border-color:var(--text);border-width:1.5px}
+.gm-node.abandoned,.gm-node.achieved{opacity:.7}
+.gm-t{font-size:13px;font-weight:500;min-width:0;overflow-wrap:anywhere}
+.gm-d{font-size:13px;white-space:nowrap}
+.gm-bar{grid-column:1/-1;position:relative;height:6px;border-radius:3px;background:var(--grid);margin:6px 0 2px;overflow:hidden}
+.gm-bar i{position:absolute;left:0;top:0;bottom:0;background:var(--chart-1);border-radius:3px}
+.gm-bar.met i{background:var(--positive)}
+.gm-bar.none{background:repeating-linear-gradient(90deg,var(--grid) 0 6px,transparent 6px 10px)}
+.gm-m{grid-column:1/-1;font-size:11px;color:var(--faint);overflow-wrap:anywhere}
+.gm-lvl{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;margin:8px 0 0 18px;position:relative;padding-top:4px}
+.gm-lvl::before{content:"";position:absolute;left:-10px;top:0;bottom:12px;border-left:1px solid var(--control)}
+.gm-lab{grid-column:1/-1;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint)}
+.gm-lvl .gm-tree{min-width:0}
+.gm-panel{margin-bottom:var(--gap)}
+.gl-prog+.gm-panel{margin-bottom:0}
+
+/* goal intake */
+.gi{display:flex;flex-direction:column;gap:var(--gap);margin-bottom:32px}
+.gi-ask{display:flex;gap:8px}
+.gi-ask textarea{flex:1;min-height:48px;resize:vertical;font:15px/1.45 var(--font);color:var(--text);background:var(--raised);border:1px solid var(--control);border-radius:var(--radius-control);padding:10px 12px}
+.gi-ask textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.gi-ask .btn{height:auto;align-self:stretch;padding:0 18px}
+.gi-err{font-size:13px;margin:8px 0 0}
+.gi-item{position:relative;display:flex;flex-direction:column;gap:14px}
+.gi-x{position:absolute;top:10px;right:10px;font-size:18px}
+.gi-said{display:flex;justify-content:flex-end;padding-right:28px}
+.gi-said span{max-width:85%;background:var(--accent-soft);border-radius:12px 12px 2px 12px;padding:8px 12px;font-size:15px;white-space:pre-wrap;overflow-wrap:anywhere}
+.gi-st{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);min-width:0}
+.gi-st .btn{height:26px;margin-left:4px}
+.gi-st .faint{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.gi-dot{width:8px;height:8px;border-radius:50%;background:var(--control);flex:none}
+.gi-dot.live{background:var(--accent);animation:gi-pulse 1.2s ease-in-out infinite}
+@keyframes gi-pulse{50%{opacity:.35}}
+.gi-qs{display:flex;flex-direction:column;gap:14px}
+.gi-qt{font-size:15px;font-weight:500;margin-bottom:8px}
+.gi-qt .faint{font-size:12px;font-weight:400;margin-right:6px}
+.gi-opts{display:flex;flex-wrap:wrap;gap:6px}
+.gi-opt{all:unset;box-sizing:border-box;cursor:pointer;border:1px solid var(--control);background:var(--surface);border-radius:var(--radius-control);padding:6px 12px;font-size:14px;text-align:left}
+.gi-opt:hover{border-color:var(--accent)}
+.gi-opt.on{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+.gi-opt:disabled{opacity:.5;cursor:default}
+.gi-opt small{display:block;font-size:12px;opacity:.7;font-family:var(--mono)}
+.gi-item.working .gi-qs{opacity:.6}
+.gi-card{border:1px solid var(--border);border-radius:var(--radius-card)}
+.gi-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--rule)}
+.gi-in{font:inherit;color:inherit;background:transparent;border:1px dashed transparent;border-radius:var(--radius-chip);padding:2px 5px;margin:-3px -6px;min-width:0}
+.gi-in:hover{border-color:var(--control);background:var(--raised)}
+.gi-in:focus{outline:2px solid var(--accent);border-color:transparent;background:var(--surface)}
+select.gi-in{border-color:var(--control);margin:0;max-width:100%}
+.gi-title{font-size:16px;font-weight:600;flex:1;min-width:200px}
+.gi-name{font-size:13px;color:var(--faint);width:16ch}
+.gi-num{width:6ch;font-weight:600;font-variant-numeric:tabular-nums}
+.gi-add{border:1px dashed var(--control);margin:0;font-size:13px;padding:1px 8px}
+.gi-fields{display:grid;grid-template-columns:110px minmax(0,1fr)}
+.gi-fields>div{padding:10px 16px;border-bottom:1px solid var(--rule);min-width:0}
+.gi-fields>.k{color:var(--muted);font-size:13px;padding-right:0;display:flex;align-items:center}
+.gi-fields>.v{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.gi-big{font-size:18px;font-weight:600}
+.gi-con button{all:unset;cursor:pointer;color:var(--faint);padding:0 2px;font-size:14px;line-height:1}
+.gi-con button:hover{color:var(--negative)}
+.gi-spark{display:block}
+.gi-why{position:relative;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;border:1px solid var(--control);font-size:11px;color:var(--faint);cursor:help;flex:none}
+.gi-why:hover,.gi-why:focus{color:var(--text);border-color:var(--accent);outline:0}
+.gi-why .tip{display:none;position:absolute;z-index:5;left:50%;top:24px;transform:translateX(-50%);width:300px;max-width:80vw;background:var(--primary);color:var(--on-primary);font-size:13px;line-height:1.45;border-radius:var(--radius-control);padding:10px 12px;text-align:left;font-weight:400;box-shadow:0 6px 24px rgba(0,0,0,.18)}
+.gi-why:hover .tip,.gi-why:focus .tip{display:block}
+.gi-foot{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:12px 16px}
+.gi-foot .gi-err{margin:0}
+.gi-done{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:14px}
+.gi-rel h3{font-size:14px;font-weight:600;margin:0 0 10px}
+.gi-sugs{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.gi-sug{border:1px solid var(--border);border-radius:var(--radius-card);padding:12px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.gi-sug .t{font-weight:500;display:flex;gap:8px;align-items:flex-start}
+.gi-sug .t>span:first-child{flex:1}
+.gi-sug .d{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.gi-sug .row{display:flex;align-items:center;gap:8px;margin-top:auto;padding-top:4px}
+.gi-sug .row .btn{margin-left:auto;height:28px}
+.gi-sug.added{background:var(--raised)}
+.gi-sug.added .btn{background:none;border-color:transparent;color:var(--positive);opacity:1}
+@media (max-width:640px){
+ .gi-fields{grid-template-columns:1fr}
+ .gi-fields>.k{border-bottom:0;padding-bottom:0}
+ .gi-why .tip{left:auto;right:-8px;transform:none}
+ .gm-lvl{margin-left:10px;grid-template-columns:1fr}
+}
+.gi-said-a{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;padding-right:28px;font-size:13px}
+.gi-said-a>span{border:1px solid var(--border);border-radius:var(--radius-chip);padding:2px 8px}
+.gi-dot.off{background:var(--warning)}
+.gi-st .cmd{min-width:0}
+.gi-note{margin:6px 0 0;font-size:13px;color:var(--muted);line-height:1.45}
+/* a hill's share on the goal page: the count, and under it what the count is of */
+.gl-sh .two{align-items:flex-end}
+.gl-sh .sub{max-width:240px;text-align:right}
+@media (max-width:600px){.gl-sh .sub{max-width:120px;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3}}
+/* the map's target tick on a goal drawn on its own scale (the same encoding as the goal page) */
+.gm-bar b{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--text)}

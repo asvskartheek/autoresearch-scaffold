@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GSM8K explainer</title>
+<!-- data-proto: an "explainer" with comprehension checks does not exist in the ledger yet.
+     Real, read at runtime from ../data/gsm8k-ft-state.json: every score, n, run id, rejection, hill share, decision time.
+     Derived (marked data-proto below): the per-problem cell layouts (per-id rows are not in the export, only counts),
+     the 1,024-token wrong-cut count (only "7 cap hits" is logged), the typed solution text in the cap animation,
+     the worked steps of each hill example (expanded from hill.examples), and the check questions themselves. -->
+<style>
+:root{--ground:#f2f5f8;--surface:#fff;--raised:#f5f7f9;--active:#e4e9ee;--border:#e3e7eb;--rule:#eef1f4;--control:#cdd3d9;
+ --text:#131416;--muted:#5b6168;--faint:#6f767d;--accent:#1b6c80;--accent-soft:#e3f0f3;--primary:#16181a;--on-primary:#fff;
+ --positive:#1e7b4f;--negative:#c4242a;--warning:#92400e;--chart-1:#1b6c80;--chart-2:#2f70bb;--chart-3:#a86f0c;--grid:#e9edf0;
+ --pill-positive-bg:#dcfae5;--pill-negative-bg:#ffedea;--pill-warning-bg:#fff5db;--pill-neutral-bg:#ebeef1;
+ --radius-card:8px;--radius-control:6px;--radius-chip:4px;
+ --font:"IBM Plex Sans",Inter,system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{
+ --ground:#0c0f12;--surface:#13171b;--raised:#1a1f24;--active:#232a31;--border:#232a30;--rule:#1c2227;--control:#3a434b;
+ --text:#eef1f3;--muted:#a3abb3;--faint:#8c959d;--accent:#5cb8cc;--accent-soft:#163038;--primary:#eef1f3;--on-primary:#0c0f12;
+ --positive:#4cc38a;--negative:#f07575;--warning:#e3a84f;--chart-1:#5cb8cc;--chart-2:#6aa1e6;--chart-3:#d9a441;--grid:#222930;
+ --pill-positive-bg:#14291e;--pill-negative-bg:#2e1a1d;--pill-warning-bg:#2b2215;--pill-neutral-bg:#222930;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--ground);color:var(--text);font:15px/1.45 var(--font);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer}
+main{max-width:920px;margin:0 auto;padding:56px 20px 120px}
+h1{font:600 22px/1.2 var(--font);margin:0 0 4px}
+.sub{color:var(--muted);font-size:14px;margin-bottom:28px}
+.step{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);padding:22px 24px;margin:0 0 18px;scroll-margin-top:64px}
+.step>.hd{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}
+.step>.hd b{font:600 12px var(--mono);color:var(--faint)}
+.step>.hd h2{font:600 17px/1.3 var(--font);margin:0}
+.big{font:600 clamp(19px,2.4vw,24px)/1.3 var(--font);margin:4px 0 14px;text-wrap:balance}
+/* checks */
+.check{border:1px solid var(--border);background:var(--raised);border-radius:var(--radius-card);padding:14px 16px;margin:0 0 16px}
+.check .q{font-weight:600;font-size:16px;margin-bottom:10px}
+.check .q:before{content:"Predict";font:600 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:4px}
+.opts{display:flex;flex-wrap:wrap;gap:8px}
+.opts button{border:1px solid var(--control);background:var(--surface);border-radius:var(--radius-control);padding:8px 14px;font-weight:500;min-height:38px}
+.opts button:hover:not([disabled]){border-color:var(--accent)}
+.opts button[disabled]{cursor:default;opacity:.55}
+.opts button.ok{opacity:1;border-color:var(--positive);background:var(--pill-positive-bg);color:var(--positive)}
+.opts button.no{opacity:1;border-color:var(--negative);background:var(--pill-negative-bg);color:var(--negative)}
+.res{margin-top:10px;font-size:14px;display:none;align-items:center;gap:12px;flex-wrap:wrap}
+.res.show{display:flex}
+.res .why{color:var(--muted)}
+.alt-btn{border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent);border-radius:var(--radius-control);padding:5px 10px;font-size:13px;font-weight:600}
+.skip{border:0;background:none;color:var(--faint);font-size:12.5px;text-decoration:underline;padding:0;margin-top:8px}
+.lock{position:relative;transition:filter .4s}
+.lock.locked{filter:blur(7px) grayscale(.6);pointer-events:none;user-select:none;opacity:.6}
+.alt{margin-top:14px;border-top:1px dashed var(--border);padding-top:14px;display:none}
+.alt.show{display:block}
+/* controls */
+.ctl{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:6px 0 14px}
+.seg{display:inline-flex;background:var(--pill-neutral-bg);border-radius:var(--radius-control);padding:3px;gap:2px}
+.seg button{border:0;background:none;padding:6px 12px;border-radius:4px;font-size:13.5px;font-weight:500;color:var(--muted)}
+.seg button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.lab{font:500 12px var(--mono);color:var(--faint)}
+input[type=range]{accent-color:var(--accent);width:min(360px,100%)}
+.btn{border:1px solid var(--control);background:var(--surface);border-radius:var(--radius-control);padding:6px 12px;font-size:13.5px;font-weight:500}
+.btn.pri{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+.readnum{font:600 40px/1 var(--mono);font-variant-numeric:tabular-nums}
+.readnum small{font-size:16px;color:var(--faint);font-weight:500}
+.delta{font:600 15px var(--mono)}
+.pos{color:var(--positive)}.neg{color:var(--negative)}.mut{color:var(--muted)}.acc{color:var(--accent)}.warn{color:var(--warning)}
+svg{display:block;max-width:100%;overflow:visible}
+svg text{font-family:var(--font)}
+.cells{display:grid;gap:2px}
+.cells i{display:block;aspect-ratio:1;border-radius:2px;background:var(--control);transition:background .45s}
+.cells i.r{background:var(--positive)}.cells i.w{background:var(--negative)}.cells i.c{background:var(--warning)}
+.cells i.f{background:var(--positive);outline:2px solid var(--text);outline-offset:-2px}.cells i.b{background:var(--negative);outline:2px solid var(--text);outline-offset:-2px}
+.cells i.g{background:transparent;outline:1.5px dashed var(--negative);outline-offset:-1.5px}.cells i.e{background:var(--rule)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:10px}
+.legend span:before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px;background:var(--sw)}
+/* typed solution */
+.tape{font:14px/1.6 var(--mono);background:var(--raised);border:1px solid var(--border);border-radius:var(--radius-control);padding:12px 14px;min-height:150px;position:relative;white-space:pre-wrap}
+.tape .cut{color:var(--negative);font-weight:600}
+.tape .ans{color:var(--positive);font-weight:600}
+/* worked example */
+.ex{display:grid;gap:8px}
+.ex .ln{font:15px/1.4 var(--mono);padding:8px 12px;border-radius:var(--radius-control);background:var(--raised);opacity:0;transform:translateY(6px);transition:opacity .35s,transform .35s}
+.ex .ln:not(.show){max-height:0;padding-top:0;padding-bottom:0;margin:-4px 0}
+.ex .ln{max-height:80px}
+.ex .ln.show{opacity:1;transform:none}
+.ex .ln.bad{background:var(--pill-negative-bg);color:var(--negative)}
+.ex .ln.bad.x{text-decoration:line-through;text-decoration-thickness:2px}
+.ex .ln.good{background:var(--pill-positive-bg);color:var(--positive);font-weight:600}
+.ex .ln.q{font-family:var(--font);font-size:16px;background:none;padding-left:0}
+.ex .ln.note{font-family:var(--font);background:none;color:var(--muted);padding-left:0;font-size:14px}
+.player{display:flex;gap:8px;align-items:center;margin-top:12px}
+.player .bar{flex:1;height:4px;background:var(--rule);border-radius:2px;overflow:hidden}
+.player .bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .3s}
+.hshare{display:flex;height:30px;border-radius:var(--radius-control);overflow:hidden;margin:4px 0 6px}
+.hshare button{border:0;color:#fff;font:600 13px var(--mono);display:flex;align-items:center;justify-content:center;transition:filter .2s;min-width:0}
+.hshare button.on{box-shadow:inset 0 0 0 3px var(--text)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.chip{font:500 12.5px var(--font);padding:4px 9px;border-radius:var(--radius-chip);background:var(--pill-neutral-bg);border:0}
+/* evidence */
+.ev{cursor:pointer;text-decoration:underline dotted var(--control);text-underline-offset:4px;font-variant-numeric:tabular-nums}
+.ev:hover{color:var(--accent);text-decoration-color:var(--accent)}
+svg .ev{text-decoration:none;cursor:pointer}
+#pop{position:fixed;z-index:30;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);box-shadow:0 8px 28px rgba(0,0,0,.18);padding:10px 12px;font:12.5px/1.45 var(--font);max-width:340px;display:none}
+#pop.show{display:block}#pop .h{font-weight:600;font-size:13.5px;margin-bottom:6px}
+#pop dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:0}#pop dt{color:var(--faint)}#pop dd{margin:0;font-family:var(--mono);font-size:12px;word-break:break-word}
+/* understanding readout */
+#meter{position:fixed;top:10px;right:12px;z-index:20;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);padding:7px 12px;font:500 12.5px var(--mono);display:flex;gap:14px;align-items:center;box-shadow:0 2px 10px rgba(0,0,0,.06)}
+#meter b{font-weight:600;color:var(--text)}#meter span{color:var(--faint)}
+#meter .dots{display:flex;gap:3px}#meter .dots i{width:8px;height:8px;border-radius:50%;background:var(--control)}
+#meter .dots i.ok{background:var(--positive)}#meter .dots i.no{background:var(--negative)}#meter .dots i.skip{background:var(--warning)}
+#meter .dots i.cur{box-shadow:0 0 0 2px var(--accent)}
+#m-p{width:24px;height:24px;border-radius:12px;border:1px solid var(--control);background:var(--raised);color:var(--text);font:600 10px var(--mono);cursor:pointer;padding:0}
+#meter.paused{border-color:var(--warning)}#meter.paused #m-t{color:var(--warning)}
+.sum .row{display:grid;grid-template-columns:minmax(0,1fr) 70px 70px 60px;gap:10px;padding:7px 0;border-bottom:1px solid var(--rule);font-size:14px;align-items:center}
+.sum .row.h{font:600 11px var(--mono);color:var(--faint);text-transform:uppercase;letter-spacing:.05em}
+.sum .row>:not(:first-child){text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.sum .row.stuck{background:var(--pill-warning-bg)}
+.tbar{height:6px;border-radius:3px;background:var(--accent);margin-top:4px}
+#load{padding:80px;text-align:center;color:var(--faint);font:13px var(--mono)}
+@media (max-width:640px){main{padding:56px 12px 100px}.step{padding:16px}#meter{left:12px;right:12px;justify-content:space-between;gap:8px}.readnum{font-size:32px}
+ .sum .row{grid-template-columns:minmax(0,1fr) 54px 54px 44px}}
+</style></head><body>
+<div id="meter"><button id="m-p" title="Pause timer (P)" aria-label="Pause timer">❚❚</button><span>⏱ <b id="m-t">0:00</b></span><span>checks <b id="m-c">0 / 0</b></span><div class="dots" id="m-d"></div></div>
+<main id="main"><div id="load">loading ledger</div></main>
+<div id="pop" role="dialog"></div>
+<script>
+let PAUSED = false;
+function togglePause(){PAUSED=!PAUSED;const b=document.getElementById("m-p");b.textContent=PAUSED?"▶":"❚❚";b.title=PAUSED?"Resume timer (P)":"Pause timer (P)";document.getElementById("meter").classList.toggle("paused",PAUSED)}
+addEventListener("DOMContentLoaded",()=>{document.getElementById("m-p").onclick=togglePause});
+addEventListener("keydown",e=>{if((e.key==="p"||e.key==="P")&&!/INPUT|TEXTAREA/.test(e.target.tagName)&&!e.metaKey&&!e.ctrlKey)togglePause()});
+
+"use strict";
+const fmt = n => Number(n).toLocaleString("en-US");
+const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const mmss = ms => { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+const mins = ms => { const s = Math.round(ms / 1000); return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`; };
+
+/* ── evidence registry ── */
+const EV = {}; let evN = 0;
+const ev = (text, h, rows) => { const k = "e" + evN++; EV[k] = { h, rows }; return `<span class="ev" data-ev="${k}" tabindex="0">${text}</span>`; };
+const run = (r, slice, model) => [["slice", slice], ["n", fmt(r.n)], ["right", fmt(Math.round(r.score * r.n))], ["model", model], ["run", r.task]];
+
+/* ── understanding log (localStorage, per viewer) ── */
+const KEY = "arx-explainer-gsm8k-96";
+let LOG;
+try { LOG = JSON.parse(localStorage.getItem(KEY)) || null; } catch { LOG = null; }
+if (!LOG) LOG = { started: Date.now(), active: 0, steps: {}, checks: {}, alts: {}, done: null };
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(LOG)); } catch {} };
+const stepLog = id => LOG.steps[id] || (LOG.steps[id] = { ms: 0, replays: 0 });
+const replay = id => { stepLog(id).replays++; save(); };
+
+const STEPS = [];      // {id, title}
+const CSTEP = { "c-gap": "distance", "c-adapter": "switches", "c-cap": "cap", "c-churn": "churn", "c-percent": "hills", "c-luck": "luck", "c-left": "left" };
+const CHECKS = Object.keys(CSTEP);
+let curStep = null;
+
+fetch("../data/gsm8k-ft-state.json").then(r => r.json()).then(build).catch(e => { $("#load").textContent = "could not load ledger: " + e; });
+
+function build(S) {
+  const LB = S.leaderboard, G = S.goals["gsm8k-96"], H = S.hills, M = S.models, D = S.decisions;
+  const FULL = "gsm8k-test/full", DEV = "gsm8k-test/dev-percent-base-v1";
+  const N = G.n, need = Math.ceil(G.target * N - 1e-9), champ = S.champion, base = G.baseline;
+  const R = (sl, m) => Math.round(LB[sl][m].score * LB[sl][m].n);
+  const now = R(FULL, champ), start = R(FULL, base), gap = need - now, vb = G.vs_baseline;
+  const evNow = ev(fmt(now), "Champion on full", run(LB[FULL][champ], FULL, champ));
+  const evStart = ev(fmt(start), "Starting champion on full", run(LB[FULL][base], FULL, base));
+  const evNeed = ev(fmt(need), "Goal target", [["goal", "gsm8k-96"], ["slice", FULL], ["n", fmt(N)], ["rule", `≥ ${G.target} of ${fmt(N)} → ${fmt(need)}`]]);
+  const evGap = ev(String(gap), "Problems still needed", [["calc", `${fmt(need)} − ${fmt(now)}`], ["slice", FULL], ["run", LB[FULL][champ].task]]);
+  const pair = [["slice", FULL], ["n", fmt(N)], ["cand run", LB[FULL][champ].task], ["base run", LB[FULL][base].task], ["fixed / broken", `${vb.wins} / ${vb.losses}`], ["paired 90% CI", `${Math.round(vb.lo * N)} to ${Math.round(vb.hi * N)} problems`]];
+
+  const html = [];
+  html.push(`<h1>${G.title}</h1><div class="sub">${ev(fmt(N), "Full test set", [["slice", FULL], ["hash", S.slices[FULL].hash], ["n", fmt(N)]])} grade-school maths problems · Qwen3 4B</div>`);
+
+  /* 1 ─ distance */
+  html.push(step("distance", "Where we are", `
+    ${check("c-gap", `The champion gets ${fmt(now)} of ${fmt(N)} right. How many more for 96%?`, [String(gap), String(N - now), String(N - need)], 0,
+      `${fmt(need)} − ${fmt(now)} = ${gap}. ${N - need} wrong answers are still allowed.`)}
+    <div class="lock locked" data-for="c-gap">
+      <div class="big">${evGap} problems to go. Started ${evStart}, now ${evNow}, target ${evNeed}.</div>
+      <svg id="line" viewBox="0 0 860 110"></svg>
+      <div class="ctl"><button class="btn" id="line-play">↻ Replay</button></div>
+    </div>
+    <div class="alt" data-alt="c-gap"><div class="lab">every problem is one square · ${fmt(N)}</div><div class="cells" id="gap-cells" style="grid-template-columns:repeat(60,1fr);margin-top:8px"></div>
+      <div class="legend"><span style="--sw:var(--positive)">${fmt(now)} right</span><span style="--sw:transparent;outline:1px dashed var(--negative)">${gap} still needed</span><span style="--sw:var(--rule)">${N - need} may stay wrong</span></div></div>`));
+
+  /* 2 ─ two switches (real runs on the percent slice) */
+  const sw = {
+    "on-512": [base, "Starting champion: RL adapter, 512 tokens"],
+    "off-512": ["percent-base-ablation-v1", "Adapter off, 512 tokens"],
+    "off-1024": [champ, "Champion: adapter off, 1,024 tokens"],
+    "off-2048": ["percent-base-2048-v1", "Adapter off, 2,048 tokens (candidate)"] };
+  html.push(step("switches", "The change that worked", `
+    ${check("c-adapter", `Qwen3 4B came with an RL adapter trained for maths. Turn it off. The percent slice goes…`, ["up", "down", "no change"], 0,
+      `Up: ${R(DEV, base)} → ${R(DEV, "percent-base-ablation-v1")} of 185. The inherited adapter was hurting.`)}
+    <div class="lock locked" data-for="c-adapter">
+      <div class="ctl"><span class="lab">RL adapter</span><div class="seg" id="sw-a"><button data-v="on">on</button><button data-v="off">off</button></div>
+        <span class="lab">output tokens</span><div class="seg" id="sw-t"><button data-v="512">512</button><button data-v="1024">1,024</button><button data-v="2048">2,048</button></div></div>
+      <div style="display:flex;gap:24px;align-items:flex-end;flex-wrap:wrap"><div class="readnum" id="sw-n">–</div><div class="delta" id="sw-d"></div></div>
+      <div class="lab" id="sw-l" style="margin-top:6px"></div>
+      <svg id="sw-bar" viewBox="0 0 860 40" style="margin-top:12px"></svg>
+    </div>
+    <div class="alt" data-alt="c-adapter"><div class="lab">all four real runs · ${DEV} · n = 185</div><svg id="sw-chart" viewBox="0 0 860 190"></svg></div>`));
+
+  /* 3 ─ token cap */
+  html.push(step("cap", "Why more tokens helped", `
+    ${check("c-cap", `With the adapter off, 20 of 185 solutions hit the 512-token cap, 17 of them wrong. Raise the cap to 1,024. How many of those 17 turn right?`, ["almost all", "about half", "none"], 1,
+      `About half: the slice went ${R(DEV, "percent-base-ablation-v1")} → ${R(DEV, champ)}, +${R(DEV, champ) - R(DEV, "percent-base-ablation-v1")}. Cap hits fell from 20 to 7.`)}
+    <div class="lock locked" data-for="c-cap">
+      <div class="ctl"><span class="lab">token cap</span><input type="range" id="cap-r" min="0" max="2" step="1" value="0"><b class="delta" id="cap-v">512</b></div>
+      <div class="cells" id="cap-cells" style="grid-template-columns:repeat(37,1fr)"></div>
+      <div class="legend"><span style="--sw:var(--positive)">right</span><span style="--sw:var(--warning)">wrong, cut off at the cap</span><span style="--sw:var(--negative)">wrong, finished</span></div>
+      <div class="big" style="margin-top:14px" id="cap-txt"></div>
+    </div>
+    <div class="alt" data-alt="c-cap"><div class="lab">one solution being written, token by token</div>
+      <div class="ctl"><div class="seg" id="tape-cap"><button data-v="512" class="on">cap 512</button><button data-v="1024">cap 1,024</button></div><button class="btn" id="tape-play">▶ Play</button></div>
+      <div class="tape" id="tape"></div></div>`));
+
+  /* 4 ─ churn on full */
+  html.push(step("churn", "What changed on the full test", `
+    ${check("c-churn", `On all ${fmt(N)} problems the net gain is +${vb.wins - vb.losses}. How many answers actually changed?`, [String(vb.wins - vb.losses), String(vb.wins + vb.losses), "about 300"], 1,
+      `${vb.wins} fixed and ${vb.losses} broken: ${vb.wins + vb.losses} changed. Churn is why the interval is wide.`)}
+    <div class="lock locked" data-for="c-churn">
+      <div class="ctl"><div class="seg" id="ch-s"><button data-v="0" class="on">start</button><button data-v="1">now</button></div><button class="btn" id="ch-play">▶ Flip</button>
+        <span class="delta"><span class="pos">${ev(vb.wins + " fixed", "Fixed on full", pair)}</span> · <span class="neg">${ev(vb.losses + " broken", "Broken on full", pair)}</span></span></div>
+      <div class="cells" id="ch-cells" style="grid-template-columns:repeat(60,1fr)"></div>
+      <div class="legend"><span style="--sw:var(--positive)">right</span><span style="--sw:var(--negative)">wrong</span><span style="--sw:var(--text)">outlined: changed</span></div>
+    </div>
+    <div class="alt" data-alt="c-churn"><svg id="ch-alt" viewBox="0 0 860 150"></svg><button class="btn" id="ch-alt-play">↻ Replay</button></div>`));
+
+  /* 5 ─ hills, animated worked failures */
+  const HL = [["percent-base", "chart-1", "Percent"], ["time-rate", "chart-2", "Time & rate"], ["group-count", "chart-3", "Groups"]];
+  const totErr = H["percent-base"].share.of, other = totErr - HL.reduce((a, [h]) => a + H[h].share.count, 0);
+  html.push(step("hills", "The three kinds of mistake", `
+    <div class="lab">${ev(totErr + " wrong answers", "Archived errors on full", run(LB[FULL]["qwen3-4b-rl-archived"], FULL, "qwen3-4b-rl-archived"))} from the original model, sorted by kind</div>
+    <div class="hshare" id="hs">${HL.map(([h, c, l]) => `<button data-h="${h}" style="flex:${H[h].share.count};background:var(--${c})">${H[h].share.count}</button>`).join("")}<button disabled style="flex:${other};background:var(--control);color:var(--muted)">${other}</button></div>
+    <div class="legend">${HL.map(([h, c, l]) => `<span style="--sw:var(--${c})">${l} · ${H[h].status === "climbed" ? "climbed" : "champion not measured"}</span>`).join("")}<span style="--sw:var(--control)">other</span></div>
+    <div style="margin-top:18px" class="ex" id="ex"></div>
+    <div class="player"><button class="btn" id="ex-play">▶ Play</button><div class="bar"><i id="ex-bar"></i></div><span class="lab" id="ex-meta"></span></div>
+    <div id="ex-check" style="margin-top:14px"></div>
+    <div class="alt" data-alt="c-percent"><div class="lab">the same problem as bars · $ thousands</div><svg id="pct-bars" viewBox="0 0 860 170"></svg></div>`));
+
+  /* 6 ─ luck */
+  const vote = M["percent-vote5-v1"];
+  html.push(step("luck", "Why 13 tries were rejected", `
+    ${check("c-luck", `“Vote of 5” fixed 5 problems and broke 2, out of 185. Real gain, or could it be luck?`, ["real gain", "could be luck"], 1,
+      `Luck: 7 coin flips land 5–2 or better about 23% of the time. The gate needs a gain luck rarely makes.`)}
+    <div class="lock locked" data-for="c-luck">
+      <div class="ctl"><button class="btn pri" id="coin">Flip 7 coins</button><button class="btn" id="coin100">×100</button><span class="delta" id="coin-o"></span></div>
+      <div class="lab" style="margin-top:16px">every rejected try vs what it had to beat · ${DEV} · n = 185</div>
+      <svg id="grave" viewBox="0 0 860 420"></svg>
+    </div>
+    <div class="alt" data-alt="c-luck"><div class="lab">1,000 runs of 7 coin flips · heads = fixed, tails = broken</div><svg id="coin-h" viewBox="0 0 860 170"></svg></div>`));
+
+  /* 7 ─ what is left */
+  const caps = (M["percent-base-2048-v1"].change.match(/\((\d+) cap hits, (\d+) wrong\)/) || [, 34, 29]);
+  html.push(step("left", "What is left", `
+    ${check("c-left", `Suppose both open hills each gain +20 on the full test. Is the goal met?`, ["yes", "no"], 1,
+      `No: ${fmt(now)} + 40 = ${fmt(now + 40)}, still ${need - now - 40} short of ${fmt(need)}.`)}
+    <div class="lock locked" data-for="c-left">
+      <svg id="left" viewBox="0 0 860 260"></svg>
+      <div class="lab" style="margin-top:12px">waiting to run</div>
+      <div class="chips">${Object.entries(M).filter(([, m]) => m.status === "candidate").map(([k, m]) => `<button class="chip">${ev(m.title + (Object.values(M).filter(o => o.status === "candidate" && o.title === m.title).length > 1 ? " · " + (k.match(/\d{4,}/) || [""])[0] : ""), m.title, [["model", k], ["status", "candidate"], ["change", m.change.slice(0, 220)]])}</button>`).join("")}</div>
+    </div>
+    <div class="alt" data-alt="c-left"><svg id="left-alt" viewBox="0 0 860 110"></svg><button class="btn" id="left-alt-play">↻ Replay</button></div>`));
+
+  html.push(`<section class="step sum" id="s-summary" data-step="summary"><div class="hd"><b>✓</b><h2 id="sum-h">Summary</h2></div><div id="sum"></div>
+    <div class="ctl" style="margin-top:14px"><button class="btn" id="reset">Start over</button></div></section>`);
+  $("#main").innerHTML = html.join("");
+
+  wireChecks();
+
+  /* ── step 1: number line ── */
+  const lo = 1100, X = v => 20 + (v - lo) / (N - lo) * 820;
+  async function playLine() {
+    const s = $("#line"); const y = 50;
+    s.innerHTML = `<rect x="20" y="${y - 8}" width="820" height="16" rx="3" fill="var(--rule)"/>
+      <rect id="ln-f" x="20" y="${y - 8}" width="${X(start) - 20}" height="16" rx="3" fill="var(--accent)"/>
+      <rect x="${X(now)}" y="${y - 8}" width="${X(need) - X(now)}" height="16" fill="none" stroke="var(--negative)" stroke-dasharray="4 3" id="ln-g" opacity="0"/>
+      ${[[start, "start"], [need, "target"], [N, "all"]].map(([v, l]) => `<line x1="${X(v)}" x2="${X(v)}" y1="${y - 18}" y2="${y + 18}" stroke="var(--muted)" stroke-width="2"/><text x="${X(v)}" y="${y + 38}" text-anchor="middle" font-size="14" font-weight="600" fill="var(--text)">${fmt(v)}</text><text x="${X(v)}" y="${y + 56}" text-anchor="middle" font-size="12" fill="var(--faint)">${l}</text>`).join("")}
+      <text id="ln-n" x="${X(start)}" y="${y - 22}" text-anchor="middle" font-size="16" font-weight="600" fill="var(--accent)">${fmt(start)}</text>
+      <text x="20" y="${y + 38}" font-size="12" fill="var(--faint)">${fmt(lo)}</text>`;
+    const f = $("#ln-f", s), t = $("#ln-n", s);
+    for (let i = 0; i <= 40; i++) { const v = Math.round(start + (now - start) * i / 40); f.setAttribute("width", X(v) - 20); t.setAttribute("x", X(v)); t.textContent = fmt(v); await sleep(25); }
+    $("#ln-g", s).setAttribute("opacity", 1);
+  }
+  onReveal("c-gap", playLine); $("#line-play").onclick = () => { replay("distance"); playLine(); };
+  onAlt("c-gap", () => { $("#gap-cells").innerHTML = Array.from({ length: N }, (_, i) => `<i class="${i < now ? "r" : i < need ? "g" : "e"}"></i>`).join(""); });
+
+  /* ── step 2: switches ── */
+  let A = "on", T = "512";
+  function swRender() {
+    $$("#sw-a button").forEach(b => b.classList.toggle("on", b.dataset.v === A)); $$("#sw-t button").forEach(b => b.classList.toggle("on", b.dataset.v === T));
+    const k = sw[A + "-" + T], b0 = R(DEV, base);
+    if (!k) { $("#sw-n").innerHTML = `<span class="mut">never run</span>`; $("#sw-d").textContent = ""; $("#sw-l").textContent = "no run with the adapter on and a longer cap"; $("#sw-bar").innerHTML = ""; return; }
+    const v = R(DEV, k[0]);
+    $("#sw-n").innerHTML = `${ev(v, k[1], run(LB[DEV][k[0]], DEV, k[0]))}<small> / 185</small>`;
+    $("#sw-d").innerHTML = v === b0 ? "" : `<span class="${v > b0 ? "pos" : "neg"}">${v > b0 ? "+" : ""}${v - b0} vs start</span>`;
+    $("#sw-l").textContent = k[1];
+    const W = 820 / 185;
+    $("#sw-bar").innerHTML = `<rect x="20" y="8" width="820" height="20" rx="3" fill="var(--rule)"/><rect x="20" y="8" width="${b0 * W}" height="20" rx="3" fill="var(--control)"/>
+      <rect x="20" y="8" width="${v * W}" height="20" rx="3" fill="var(--accent)" style="transition:width .4s"/><line x1="${20 + b0 * W}" x2="${20 + b0 * W}" y1="2" y2="34" stroke="var(--text)" stroke-width="2"/>`;
+  }
+  $("#sw-a").onclick = e => { if (e.target.dataset.v) { A = e.target.dataset.v; replay("switches"); swRender(); } };
+  $("#sw-t").onclick = e => { if (e.target.dataset.v) { T = e.target.dataset.v; replay("switches"); swRender(); } };
+  swRender();
+  onAlt("c-adapter", () => {
+    const ks = Object.values(sw), W = 600 / 185;
+    $("#sw-chart").innerHTML = ks.map(([m, l], i) => { const v = R(DEV, m), y = 14 + i * 44;
+      return `<text x="250" y="${y + 18}" text-anchor="end" font-size="13" fill="var(--text)">${l}</text><rect x="260" y="${y}" width="${v * W}" height="26" rx="3" fill="${i ? "var(--accent)" : "var(--control)"}"/><text x="${266 + v * W}" y="${y + 18}" font-size="13" font-weight="600" fill="var(--text)" font-family="var(--mono)">${v}</text>`; }).join("");
+  });
+
+  /* ── step 3: token cap grid (data-proto: per-cell layout derived from counts; 1,024 wrong-cut assumed = its 7 cap hits) ── */
+  const capState = [
+    { cap: "512", right: R(DEV, "percent-base-ablation-v1"), cut: 17, src: "percent-base-ablation-v1" },
+    { cap: "1,024", right: R(DEV, champ), cut: 7, src: champ },
+    { cap: "2,048", right: R(DEV, "percent-base-2048-v1"), cut: 0, src: "percent-base-2048-v1" }];
+  // stable per-cell order: cells 0..right-1 right; the cut cells are the ones that flip first as the cap rises
+  function capRender() {
+    const s = capState[+$("#cap-r").value], b = capState[0];
+    $("#cap-v").textContent = s.cap;
+    const wrongDone = 185 - s.right - s.cut;
+    const cells = []; // order: always-right, cut-at-512 (some become right), finished-wrong
+    for (let i = 0; i < 185; i++) {
+      let c;
+      if (i < b.right) c = "r";
+      else if (i < b.right + b.cut) { const j = i - b.right; c = j < s.right - b.right ? "r" : j < s.right - b.right + s.cut ? "c" : "w"; }
+      else c = "w";
+      cells.push(c);
+    }
+    // keep totals exact
+    let r = cells.filter(c => c === "r").length; for (let i = 184; r > s.right && i >= 0; i--) if (cells[i] === "r") { cells[i] = "w"; r--; }
+    for (let i = 0; r < s.right && i < 185; i++) if (cells[i] === "w") { cells[i] = "r"; r++; }
+    const box = $("#cap-cells"); if (!box.children.length) box.innerHTML = "<i></i>".repeat(185);
+    [...box.children].forEach((el, i) => el.className = cells[i]);
+    $("#cap-txt").innerHTML = `${ev(s.right, "Right at cap " + s.cap, run(LB[DEV][s.src], DEV, s.src))} of 185 right` +
+      (s.cap === "2,048" ? ` <span class="mut">· cap hits not logged for this run</span>` : ` · <span class="warn">${s.cut} cut off</span>`) +
+      (s.cap === "1,024" ? `<div class="lab" style="margin-top:6px">${ev(`full test: ${caps[1]} still hit the cap, ${caps[2]} wrong`, "Cap hits on full", [["slice", FULL], ["n", fmt(N)], ["run", LB[FULL][champ].task], ["source", "percent-base-2048-v1 change field"]])}</div>` : "");
+  }
+  $("#cap-r").oninput = () => { replay("cap"); capRender(); };
+  capRender();
+  // alt: typed solution (data-proto: text written for the example, not a logged trace)
+  const SOL = ["Buy price: $80,000. Repairs: $50,000.", "Total spent = 80,000 + 50,000 = $130,000.", "The value increases by 150%.", "Increase = 1.5 × 80,000 = $120,000.",
+    "New value = 80,000 + 120,000 = $200,000.", "Profit = 200,000 − 130,000 = $70,000.", "Answer: 70000"];
+  let tapeCap = 512, tapeRun = 0;
+  async function playTape() {
+    const id = ++tapeRun, el = $("#tape"); el.innerHTML = ""; const stop = tapeCap === 512 ? 4.4 : 99;
+    for (let i = 0; i < SOL.length; i++) {
+      const line = SOL[i], lim = i + 1 > stop ? Math.floor(line.length * (stop - i)) : line.length;
+      for (let c = 0; ; c = Math.min(c + 2, lim)) { if (id !== tapeRun) return; el.innerHTML = el.innerHTML.replace(/<span class="cur">.*<\/span>$/, "") + `<span class="cur">${line.slice(0, c)}</span>`; await sleep(14); if (c >= lim) break; }
+      el.innerHTML = el.innerHTML.replace(/<span class="cur">(.*)<\/span>$/, i === SOL.length - 1 ? '<span class="ans">$1</span>' : "$1") + "\n";
+      if (lim < line.length) { el.innerHTML += `<span class="cut">✂ cap reached · no final answer · scored wrong</span>`; return; }
+    }
+  }
+  $("#tape-cap").onclick = e => { if (!e.target.dataset.v) return; tapeCap = +e.target.dataset.v; $$("#tape-cap button").forEach(b => b.classList.toggle("on", b === e.target)); replay("cap"); playTape(); };
+  $("#tape-play").onclick = () => { replay("cap"); playTape(); };
+  onAlt("c-cap", playTape);
+
+  /* ── step 4: churn (data-proto: which squares flip is illustrative; counts are real) ── */
+  const both = start - vb.losses;
+  const startCls = Array.from({ length: N }, (_, i) => i < both ? "r" : i < both + vb.losses ? "r" : "w");
+  const nowCls = Array.from({ length: N }, (_, i) => i < both ? "r" : i < both + vb.losses ? "b" : i < both + vb.losses + vb.wins ? "f" : "w");
+  // spread the changed cells through the grid so it reads as churn, deterministic shuffle
+  const perm = Array.from({ length: N }, (_, i) => i); let seed = 7;
+  for (let i = N - 1; i > 0; i--) { seed = (seed * 16807) % 2147483647; const j = seed % (i + 1); [perm[i], perm[j]] = [perm[j], perm[i]]; }
+  $("#ch-cells").innerHTML = "<i></i>".repeat(N);
+  const chCells = [...$("#ch-cells").children];
+  const chSet = s => { $$("#ch-s button").forEach(b => b.classList.toggle("on", +b.dataset.v === s)); perm.forEach((p, i) => chCells[p].className = (s ? nowCls : startCls)[i]); };
+  chSet(0);
+  $("#ch-s").onclick = e => { if (e.target.dataset.v) { replay("churn"); chSet(+e.target.dataset.v); } };
+  $("#ch-play").onclick = async () => { replay("churn"); chSet(0); await sleep(500);
+    const order = perm.map((p, i) => [p, i]).filter(([, i]) => startCls[i] !== nowCls[i] || nowCls[i] === "b" || nowCls[i] === "f");
+    $$("#ch-s button").forEach(b => b.classList.toggle("on", b.dataset.v === "1"));
+    for (let k = 0; k < order.length; k++) { const [p, i] = order[k]; chCells[p].className = nowCls[i]; if (k % 4 === 0) await sleep(16); }
+    perm.forEach((p, i) => chCells[p].className = nowCls[i]); };
+  onReveal("c-churn", () => $("#ch-play").click());
+  async function churnAlt() {
+    const s = $("#ch-alt"), W = 3.4;
+    s.innerHTML = `<text x="0" y="20" font-size="13" fill="var(--faint)">fixed</text><rect id="ca-f" x="70" y="6" width="0" height="22" rx="3" fill="var(--positive)"/><text id="ca-ft" x="76" y="22" font-size="14" font-weight="600" fill="var(--text)" font-family="var(--mono)"></text>
+      <text x="0" y="60" font-size="13" fill="var(--faint)">broken</text><rect id="ca-b" x="70" y="46" width="0" height="22" rx="3" fill="var(--negative)"/><text id="ca-bt" x="76" y="62" font-size="14" font-weight="600" fill="var(--text)" font-family="var(--mono)"></text>
+      <text x="0" y="100" font-size="13" fill="var(--faint)">net</text><rect id="ca-n" x="70" y="86" width="0" height="22" rx="3" fill="var(--accent)"/><text id="ca-nt" x="76" y="102" font-size="14" font-weight="600" fill="var(--text)" font-family="var(--mono)"></text>
+      <text id="ca-sum" x="70" y="140" font-size="15" font-weight="600" fill="var(--text)" opacity="0">${vb.wins} changed one way + ${vb.losses} the other = ${vb.wins + vb.losses} changed answers</text>`;
+    const anim = async (id, n) => { for (let i = 0; i <= n; i += 2) { $("#" + id, s).setAttribute("width", Math.min(i, n) * W); $("#" + id + "t", s).setAttribute("x", 76 + Math.min(i, n) * W); $("#" + id + "t", s).textContent = Math.min(i, n); await sleep(12); } $("#" + id + "t", s).textContent = n; $("#" + id, s).setAttribute("width", n * W); $("#" + id + "t", s).setAttribute("x", 76 + n * W); };
+    await anim("ca-f", vb.wins); await anim("ca-b", vb.losses); await anim("ca-n", vb.wins - vb.losses); $("#ca-sum", s).setAttribute("opacity", 1);
+  }
+  onAlt("c-churn", churnAlt); $("#ch-alt-play").onclick = () => { replay("churn"); churnAlt(); };
+
+  /* ── step 5: worked failures (data-proto: steps expanded from hill.examples[0]) ── */
+  const WORK = {
+    "percent-base": { q: H["percent-base"].examples[0].input, steps: [["Spent: 80k + 50k = 130k", ""], ["Value rises by 150%", ""], ["80k × 1.5 = 120k", "bad"], ["Profit: 120k − 130k = −10k", "bad x"], ["150% is the increase, so ×2.5", "note"], ["80k × 2.5 = 200k", "good"], ["Profit: 200k − 130k = 70k", "good"]], pause: 4 },
+    "time-rate": { q: H["time-rate"].examples[0].input, steps: [["Hours: 3 + 1.5 + 1.5 = 6", ""], ["Distance: 12 miles", "bad"], ["12 ÷ 6 = 2 mph", "bad x"], ["The distance stays 60 miles", "note"], ["60 ÷ 6 = 10 mph", "good"]] },
+    "group-count": { q: H["group-count"].examples[0].input, steps: [["Per school: 2 teams + 2 coaches", "bad"], ["4 × (2 + 2) = 16 people", "bad x"], ["A team is 5 players, not 1 person", "note"], ["Per school: 2 × 5 + 2 = 12", "good"], ["4 × 12 = 48 people", "good"]] } };
+  let curH = "percent-base", exRun = 0, pctAnswered = !!LOG.checks["c-percent"];
+  function exMeta(h) { const x = H[h], c = LB[x.target]?.[champ];
+    return `${ev(x.share.count + " of " + totErr + " errors", "Share of archived errors", [["hill", h], ["of what", x.share.of_what]])} · champion ${c ? ev(R(x.target, champ) + " / " + c.n, "Champion on " + x.target, run(c, x.target, champ)) : ev("not run", "No champion run", [["slice", x.target], ["n", fmt(S.slices[x.target].n)]])}`; }
+  async function playEx(h, from = 0) {
+    const id = ++exRun, w = WORK[h], ex = $("#ex");
+    if (from === 0) ex.innerHTML = `<div class="ln q show">${w.q}</div>` + w.steps.map(([t, c]) => `<div class="ln ${c}">${t}</div>`).join("");
+    $("#ex-meta").innerHTML = exMeta(h);
+    const ls = $$(".ln:not(.q)", ex);
+    for (let i = from; i < ls.length; i++) {
+      if (id !== exRun) return;
+      if (h === "percent-base" && i === w.pause && !pctAnswered) { $("#ex-check").innerHTML = check("c-percent", "The model wrote 80k × 1.5. What should it be?", ["80k × 2.5", "80k × 0.5", "80k × 1.5 is right"], 0, "A 150% increase adds 1.5 × 80k on top of the 80k you had: ×2.5."); wireChecks(); return; }
+      ls[i].classList.add("show"); $("#ex-bar").style.width = ((i + 1) / ls.length * 100) + "%"; await sleep(ls[i].classList.contains("note") ? 1300 : 900);
+    }
+  }
+  const setHill = h => { curH = h; $$("#hs button").forEach(b => b.classList.toggle("on", b.dataset.h === h)); $("#ex-bar").style.width = 0; playEx(h); };
+  $("#hs").onclick = e => { const b = e.target.closest("button[data-h]"); if (b) { replay("hills"); setHill(b.dataset.h); } };
+  $("#ex-play").onclick = () => { replay("hills"); setHill(curH); };
+  onReveal("c-percent", () => { pctAnswered = true; playEx("percent-base", WORK["percent-base"].pause); });
+  onAlt("c-percent", () => {
+    const U = 2.6, s = $("#pct-bars"), row = (y, parts, lab) => { let x = 200; return `<text x="190" y="${y + 19}" text-anchor="end" font-size="13" fill="var(--text)">${lab}</text>` + parts.map(([v, c, t]) => { const r = `<rect x="${x}" y="${y}" width="${v * U - 2}" height="28" rx="3" fill="var(--${c})"/><text x="${x + 6}" y="${y + 19}" font-size="12" fill="var(--on-primary)" font-family="var(--mono)">${t}</text>`; x += v * U; return r; }).join(""); };
+    s.innerHTML = row(10, [[80, "faint", "80 bought"], [50, "muted", "50 repairs"]], "spent 130") + row(60, [[80, "faint", "80"], [40, "negative", "+40 ✗"]], "model: ×1.5 = 120") + row(110, [[80, "faint", "80 original"], [120, "positive", "+120 = 150% of 80"]], "right: ×2.5 = 200")
+      + `<line x1="${200 + 130 * U}" x2="${200 + 130 * U}" y1="0" y2="150" stroke="var(--text)" stroke-dasharray="3 3"/>`;
+  });
+  setHill("percent-base");
+
+  /* ── step 6: luck + graveyard ── */
+  let flips = 0, hits = 0;
+  const flip7 = () => { let h = 0; for (let i = 0; i < 7; i++) h += Math.random() < .5; return h; };
+  function coinOut(last) { $("#coin-o").innerHTML = `${last != null ? `last: <b>${last}–${7 - last}</b> · ` : ""}5–2 or better: <b>${hits}</b> of ${flips} (${flips ? Math.round(hits / flips * 100) : 0}%)`; }
+  $("#coin").onclick = () => { replay("luck"); const h = flip7(); flips++; if (h >= 5) hits++; coinOut(h); };
+  $("#coin100").onclick = () => { replay("luck"); let h; for (let i = 0; i < 100; i++) { h = flip7(); flips++; if (h >= 5) hits++; } coinOut(h); };
+  coinOut();
+  onAlt("c-luck", async () => {
+    const s = $("#coin-h"), cnt = Array(8).fill(0), W = 90;
+    for (let k = 1; k <= 1000; k++) { cnt[flip7()]++; if (k % 25 === 0) { const mx = Math.max(...cnt);
+      s.innerHTML = cnt.map((c, i) => `<rect x="${60 + i * W}" y="${130 - c / mx * 110}" width="${W - 10}" height="${c / mx * 110}" rx="3" fill="${i >= 5 ? "var(--warning)" : "var(--control)"}"/><text x="${60 + i * W + (W - 10) / 2}" y="150" text-anchor="middle" font-size="12" fill="var(--faint)" font-family="var(--mono)">${i}–${7 - i}</text><text x="${60 + i * W + (W - 10) / 2}" y="${124 - c / mx * 110}" text-anchor="middle" font-size="11" fill="var(--text)">${c}</text>`).join("")
+        + `<text x="${60 + 5 * W}" y="14" font-size="13" font-weight="600" fill="var(--warning)">5–2 or better: ${cnt[5] + cnt[6] + cnt[7]} of ${k}</text>`; await sleep(30); } }
+  });
+  { // graveyard dot plot (data-proto: short names + families derived from model change text)
+    const NM = { "percent-sft-v1": ["SFT, lr 1e-6", "train"], "percent-rlvr-v1": ["RLVR, 48 steps", "train"], "percent-rlvr-v2": ["RLVR, 192 steps", "train"], "raw-sft-lr2e5-v1": ["SFT, lr 2e-5", "train"], "raw-rft-vllm-greedy-v1": ["Train on own right answers", "train"],
+      "percent-vote5-v1": ["Vote of 5, percent only", "sample"], "raw-vllm-vote5-v1": ["Vote of 5", "sample"], "fresh-sft-vllm-vote5-v1": ["SFT + vote of 5", "sample"],
+      "percent-structured-v1": ["Fixed equation prefix", "prompt"], "raw-vllm-verify-v1": ["Check own answer", "prompt"], "raw-vllm-program-v1": ["Write a program", "prompt"],
+      "percent-base-ablation-v1": ["Adapter off", "swap"], "thinking4b-8192-v1": ["Thinking 4B model", "swap"] };
+    const FO = ["train", "sample", "prompt", "swap"];
+    const rows = Object.entries(M).filter(([k, m]) => m.status === "rejected" && LB[DEV][k]).sort((a, b) => FO.indexOf((NM[a[0]] || [, "swap"])[1]) - FO.indexOf((NM[b[0]] || [, "swap"])[1]) || a[1].created - b[1].created);
+    const L = 230, Rr = 800, lo2 = 120, hi2 = 180, Xg = v => L + (v - lo2) / (hi2 - lo2) * (Rr - L), rh = 28, T0 = 34;
+    let g = `<g><line x1="${L}" x2="${L}" y1="6" y2="20" stroke="var(--muted)" stroke-width="2"/><text x="${L + 8}" y="18" font-size="12" fill="var(--muted)">had to beat</text><circle cx="${L + 110}" cy="13" r="6" fill="var(--negative)"/><text x="${L + 122}" y="18" font-size="12" fill="var(--muted)">rejected try, right of 185</text></g>`, lf = "";
+    rows.forEach(([k, m], i) => { const [nm, fam] = NM[k] || [m.title, "swap"], y = T0 + i * rh + 14, pv = R(DEV, m.parent), cv = R(DEV, k);
+      if (fam !== lf) { g += `<text x="0" y="${y + 5}" font-size="11" fill="var(--faint)" font-family="var(--mono)" letter-spacing=".06em">${fam.toUpperCase()}</text>`; lf = fam; }
+      const e = "e" + evN++; EV[e] = { h: nm, rows: [["model", k], ["slice", DEV], ["n", "185"], ["right", `${cv} vs ${pv} (${m.parent})`], ["run", LB[DEV][k].task], ["reason", (m.reason || "").slice(0, 200)]] };
+      g += `<g class="ev" data-ev="${e}"><rect x="64" y="${y - 13}" width="${Rr - 40}" height="${rh - 2}" fill="transparent"/><text x="${L - 14}" y="${y + 5}" text-anchor="end" font-size="13.5" fill="var(--text)">${nm}</text>
+        <line x1="${Xg(Math.min(pv, cv))}" x2="${Xg(Math.max(pv, cv))}" y1="${y}" y2="${y}" stroke="var(--control)" stroke-width="2"/><line x1="${Xg(pv)}" x2="${Xg(pv)}" y1="${y - 8}" y2="${y + 8}" stroke="var(--muted)" stroke-width="2"/>
+        <circle cx="${Xg(cv)}" cy="${y}" r="6" fill="var(--negative)"/><text x="${Xg(cv) + (cv >= pv ? 12 : -12)}" y="${y + 5}" text-anchor="${cv >= pv ? "start" : "end"}" font-size="12" fill="var(--negative)" font-family="var(--mono)">${cv}</text>
+        ${k === "percent-base-ablation-v1" ? `<text x="${Rr + 6}" y="${y + 5}" font-size="12" fill="var(--accent)">kept in champion</text>` : ""}</g>`; });
+    const yb = T0 + rows.length * rh + 8;
+    g = [130, 150, 170].map(v => `<line x1="${Xg(v)}" x2="${Xg(v)}" y1="${T0 - 4}" y2="${yb}" stroke="var(--grid)"/><text x="${Xg(v)}" y="${yb + 16}" text-anchor="middle" font-size="12" fill="var(--faint)" font-family="var(--mono)">${v}</text>`).join("") + g;
+    $("#grave").setAttribute("viewBox", `0 0 900 ${yb + 24}`); $("#grave").innerHTML = g;
+  }
+
+  /* ── step 7: what is left ── */
+  {
+    const U = 10, pools = [["time & rate · old errors, champion not measured", H["time-rate"].share.count, "chart-2"], ["groups · old errors, champion not measured", H["group-count"].share.count, "chart-3"], [`cut at the 1,024 cap · champion errors on full`, +caps[2], "negative"]];
+    let s = `<text x="0" y="18" font-size="14" fill="var(--text)"><tspan font-weight="600" fill="var(--negative)" font-family="var(--mono)">${gap}</tspan> needed</text>`;
+    for (let i = 0; i < gap; i++) s += `<rect x="${i * U}" y="28" width="${U - 2}" height="20" rx="2" fill="none" stroke="var(--negative)" stroke-width="1.5"/>`;
+    pools.forEach(([l, n, c], i) => { const y = 88 + i * 58; s += `<text x="0" y="${y}" font-size="13.5" fill="var(--muted)"><tspan font-weight="600" fill="var(--text)" font-family="var(--mono)">${n}</tspan> ${l}</text><rect x="0" y="${y + 8}" width="${n * U - 2}" height="20" rx="2" fill="var(--${c})"/>`; });
+    s += `<line x1="${gap * U - 1}" x2="${gap * U - 1}" y1="24" y2="250" stroke="var(--negative)" stroke-dasharray="3 3"/>`;
+    $("#left").innerHTML = s;
+    async function leftAlt() { const sv = $("#left-alt"), lo3 = 1200, Xl = v => 20 + (v - lo3) / (1280 - lo3) * 820;
+      sv.innerHTML = `<rect x="20" y="40" width="820" height="16" rx="3" fill="var(--rule)"/><rect id="la" x="20" y="40" width="${Xl(now) - 20}" height="16" rx="3" fill="var(--accent)"/>
+        <line x1="${Xl(need)}" x2="${Xl(need)}" y1="26" y2="70" stroke="var(--negative)" stroke-width="2"/><text x="${Xl(need)}" y="88" text-anchor="middle" font-size="13" fill="var(--negative)" font-weight="600">${fmt(need)}</text>
+        <text id="lat" x="${Xl(now)}" y="20" text-anchor="middle" font-size="14" font-weight="600" fill="var(--accent)" font-family="var(--mono)">${fmt(now)}</text>`;
+      for (const add of [20, 40]) { await sleep(700); $("#la", sv).setAttribute("width", Xl(now + add) - 20); $("#lat", sv).setAttribute("x", Xl(now + add)); $("#lat", sv).textContent = `${fmt(now)} + ${add} = ${fmt(now + add)}`; }
+      await sleep(500); sv.insertAdjacentHTML("beforeend", `<text x="${Xl(need) - 8}" y="72" text-anchor="end" font-size="13" font-weight="600" fill="var(--text)">${need - now - 40} short</text>`); }
+    onAlt("c-left", leftAlt); $("#left-alt-play").onclick = () => { replay("left"); leftAlt(); };
+  }
+
+  $("#reset").onclick = () => { try { localStorage.removeItem(KEY); } catch {} location.reload(); };
+  restoreChecks();
+  track();
+}
+
+/* ── building blocks ── */
+function step(id, title, body) { STEPS.push({ id, title }); return `<section class="step" id="s-${id}" data-step="${id}"><div class="hd"><b>${String(STEPS.length).padStart(2, "0")}</b><h2>${title}</h2></div>${body}</section>`; }
+const CHK = {};
+function check(id, q, opts, right, why) {
+  CHK[id] = { right, why, opts };
+  return `<div class="check" data-check="${id}"><div class="q">${q}</div><div class="opts">${opts.map((o, i) => `<button data-i="${i}">${o}</button>`).join("")}</div>
+    <div class="res"><b class="mark"></b><span class="why">${why}</span></div><button class="skip">show me</button></div>`;
+}
+const REVEAL = {}, ALT = {};
+const onReveal = (id, f) => (REVEAL[id] = f);
+const onAlt = (id, f) => (ALT[id] = f);
+function wireChecks() {
+  $$(".check").forEach(c => { if (c.dataset.wired) return; c.dataset.wired = 1; const id = c.dataset.check;
+    c.querySelector(".opts").onclick = e => { const b = e.target.closest("button"); if (!b || b.disabled) return; answer(id, +b.dataset.i); };
+    c.querySelector(".skip").onclick = () => answer(id, -1); });
+  meter();
+}
+function answer(id, i, restoring = false) {
+  const c = $(`[data-check="${id}"]`), k = CHK[id]; if (!c || c.dataset.done) return; c.dataset.done = 1;
+  const ok = i === k.right;
+  if (!restoring) { LOG.checks[id] = { i, ok, skip: i < 0, step: curStep, t: LOG.active }; save(); }
+  $$(".opts button", c).forEach((b, j) => { b.disabled = true; if (j === k.right) b.classList.add("ok"); else if (j === i) b.classList.add("no"); });
+  const res = $(".res", c); res.classList.add("show"); $(".skip", c).remove();
+  $(".mark", c).innerHTML = i < 0 ? `<span class="warn">skipped</span>` : ok ? `<span class="pos">✓ right</span>` : `<span class="neg">✗ not quite</span>`;
+  if (!ok && ALT[id]) { const btn = document.createElement("button"); btn.className = "alt-btn"; btn.textContent = "See it another way"; res.append(btn);
+    btn.onclick = () => { const a = $(`[data-alt="${id}"]`); a.classList.add("show"); LOG.alts[id] = (LOG.alts[id] || 0) + 1; save(); ALT[id](); a.scrollIntoView({ behavior: "smooth", block: "nearest" }); btn.remove(); };
+    if (restoring && LOG.alts[id]) btn.click(); }
+  const lock = $(`[data-for="${id}"]`); if (lock) lock.classList.remove("locked");
+  if (REVEAL[id]) REVEAL[id]();
+  meter(); summary();
+}
+function restoreChecks() { Object.entries(LOG.checks).forEach(([id, r]) => { if (id === "c-percent") return; answer(id, r.i, true); }); }
+
+/* ── tracking: active time per step (visible + tab focused), replays, misses ── */
+function track() {
+  const vis = new Map();
+  const io = new IntersectionObserver(es => { es.forEach(e => vis.set(e.target.dataset.step, e.intersectionRatio)); let best = null, br = 0; vis.forEach((r, k) => { if (r > br) { br = r; best = k; } }); curStep = best; meter(); }, { threshold: [0, .1, .25, .5, .75, 1] });
+  $$("[data-step]").forEach(s => io.observe(s));
+  let last = Date.now(), lastInput = Date.now();
+  ["pointerdown", "pointermove", "keydown", "scroll", "wheel", "touchstart"].forEach(ev => addEventListener(ev, () => (lastInput = Date.now()), { passive: true }));
+  setInterval(() => { const t = Date.now(), dt = Math.min(t - last, 2000); last = t;
+    if (!PAUSED && document.visibilityState === "visible" && t - lastInput < 90000 && curStep && !LOG.done) { LOG.active += dt; if (curStep !== "summary") stepLog(curStep).ms += dt; save(); }
+    if (curStep === "summary" && !LOG.done && CHECKS.every(id => LOG.checks[id])) { LOG.done = LOG.active; save(); summary(); }
+    $("#m-t").textContent = mmss(LOG.done || LOG.active); }, 500);
+  summary();
+}
+function meter() {
+  const n = CHECKS.length, ok = CHECKS.filter(id => LOG.checks[id]?.ok).length;
+  $("#m-c").textContent = `${ok} / ${n}`;
+  const stepOfCheck = id => CSTEP[id];
+  $("#m-d").innerHTML = CHECKS.map(id => { const r = LOG.checks[id]; return `<i class="${r ? (r.skip ? "skip" : r.ok ? "ok" : "no") : ""} ${stepOfCheck(id) === curStep ? "cur" : ""}" title="${id}"></i>`; }).join("");
+}
+function summary() {
+  const el = $("#sum"); if (!el) return;
+  const n = CHECKS.length, ans = CHECKS.filter(id => LOG.checks[id]), ok = ans.filter(id => LOG.checks[id].ok).length;
+  const rows = STEPS.map(s => { const l = LOG.steps[s.id] || { ms: 0, replays: 0 }; const chk = CHECKS.filter(id => CSTEP[id] === s.id);
+    const miss = chk.filter(id => LOG.checks[id] && !LOG.checks[id].ok).length; return { ...s, ...l, miss, chk: chk.length }; });
+  const mx = Math.max(1, ...rows.map(r => r.ms));
+  const score = r => r.miss * 60000 + r.replays * 8000 + r.ms; // stuck = missed checks first, then replays, then time
+  const stuck = rows.slice().sort((a, b) => score(b) - score(a))[0];
+  const stuckReal = stuck && (stuck.miss || stuck.replays > 2 || stuck.ms > 90000) ? stuck : null;
+  const t = LOG.done || LOG.active;
+  $("#sum-h").innerHTML = ans.length < n ? `So far: ${mins(t)}, ${ok} of ${n} checks` : `Understood in ${mins(t)}, ${ok} of ${n} checks${stuckReal ? `, stuck on ${stuckReal.title.toLowerCase()}` : ""}`;
+  el.innerHTML = `<div class="row h"><span>step</span><span>time</span><span>replays</span><span>missed</span></div>` + rows.map(r => `<div class="row ${stuckReal && r.id === stuckReal.id ? "stuck" : ""}">
+    <span><a href="#s-${r.id}" style="color:inherit">${r.title}</a><div class="tbar" style="width:${r.ms / mx * 100}%"></div></span><span>${mmss(r.ms)}</span><span>${r.replays}</span><span>${r.chk ? r.miss : "–"}</span></div>`).join("");
+}
+
+/* ── evidence popover ── */
+const pop = $("#pop");
+function showPop(el) { const d = EV[el.dataset.ev]; if (!d) return;
+  pop.innerHTML = `<div class="h">${d.h}</div><dl>${d.rows.map(([k, v]) => `<dt>${k}</dt><dd>${String(v).replace(/</g, "&lt;")}</dd>`).join("")}</dl>`; pop.classList.add("show");
+  const r = el.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+  pop.style.left = Math.min(Math.max(8, r.left + r.width / 2 - pw / 2), innerWidth - pw - 8) + "px";
+  let y = r.top - ph - 10; if (y < 56) y = r.bottom + 10; pop.style.top = Math.min(y, innerHeight - ph - 8) + "px"; }
+document.addEventListener("click", e => { const el = e.target.closest("[data-ev]"); if (el) { e.stopPropagation(); showPop(el); } else if (!e.target.closest("#pop")) pop.classList.remove("show"); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") pop.classList.remove("show"); if (e.key === "Enter" && e.target.dataset?.ev) showPop(e.target); });
+addEventListener("scroll", () => pop.classList.remove("show"), { passive: true });
+</script>
+</body></html>

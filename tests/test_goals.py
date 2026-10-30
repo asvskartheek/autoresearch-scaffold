@@ -55,6 +55,25 @@ class Goals(unittest.TestCase):
         self.p.add_model("later"); run(self.p, "later", [1] * 20); self.p.promote("later", force=True)
         self.assertEqual(self.p.goal_status("ninety")["model"], "better")  # evidence is frozen at achieve
 
+    def test_achievement_is_frozen_after_same_model_repeat(self):
+        self.p.open_goal("g", "G", "full", .9)
+        self.p.add_model("winner")
+        run(self.p, "winner", [1] * 19 + [0])
+        self.p.promote("winner", force=True)
+        frozen = self.p.achieve_goal("g")
+        run(self.p, "winner", [0] * 20)
+        st = self.p.goal_status("g")
+        for key in ("value", "task", "runs", "n", "vs_baseline"):
+            self.assertEqual(st[key], frozen[key], key)
+        self.assertTrue(st["met"])
+        self.assertAlmostEqual(st["gap"], -.05)
+        self.assertFalse(st["current_observation"]["met"])
+        self.assertAlmostEqual(st["current_observation"]["value"], .475)
+
+    def test_same_model_comparison_is_starting_point(self):
+        self.p.open_goal("g", "G", "full", .9)
+        self.assertEqual(self.p.goal_status("g")["comparison_state"], "same_model")
+
     def test_hills_serve_goals_and_abandon(self):
         with self.assertRaises(SystemExit):
             self.p.open_hill("h", "H", "full", goal="nope")
@@ -67,6 +86,13 @@ class Goals(unittest.TestCase):
     def test_lower_is_better_kpi(self):
         g = self.p.open_goal("cheap", "cheap", "full", 0.5, kpi="cost")
         self.assertFalse(g["higher_is_better"])
+
+    def test_cost_goal_is_unpaired_not_a_harness_mismatch(self):
+        self.p.open_goal("cheap", "cheap", "full", 0.5, kpi="cost")
+        self.p.add_model("next"); run(self.p, "next", [1] * 20); self.p.promote("next", force=True)
+        st = self.p.goal_status("cheap")
+        self.assertIsNone(st["vs_baseline"])
+        self.assertEqual(st["comparison_state"], "unpaired")
 
 
 GOAL = dict(name="gsm8k-96", status="open", slice="gsm8k-test/full", n=1319, kpi="score", target=0.96,
@@ -96,9 +122,20 @@ class GoalPaper(unittest.TestCase):
         self.assertIn("ledger value", " ".join(self.errs(html, value=0.95)))
         self.assertIn("negative result", " ".join(self.errs(html, status="abandoned")))
         self.assertIn("no system section", " ".join(self.errs(html.replace('data-block="system"', 'data-block="sys"'))))
-        self.assertIn("system section does not name qwen3-other-v1", " ".join(self.errs(html, baseline="qwen3-other-v1")))
+        self.assertTrue(any("system section does not name" in error and "qwen3-other-v1" in error
+                            for error in self.errs(html, baseline="qwen3-other-v1")))
         self.assertIn("no final-result", " ".join(self.errs("<section data-block=\"x\"></section>")))
         self.assertEqual(self.errs(html, hills={"time-rate": "open"}), [])  # a hill without a paper needs no link
+
+    def test_continuous_goal_is_checked_in_its_unit(self):
+        # a "minus ms" goal: the paper writes 1,000 ms, 387 ms and 1,071 ms faster, never -100000% or +107100.0 pts
+        st = dict(slice="cold/n24", n=24, target=-1000.0, value=-387.2, scale="continuous", unit="ms",
+                  metric="minus ms to paint", vs_baseline=dict(delta=1071.0, lo=1012.0, hi=1169.0, n=24), hills={})
+        res = ('<section data-block="result"><p>Target 1,000 ms on cold/n24, n = 24. percent-base-1024-v1 at 387 ms, '
+               '1,071 ms faster than qwen3-4b-rl-fresh-v1 (90% CI 1,012 to 1,169 ms). Draft.</p></section>')
+        errs = [e for e in self.errs(res, **st) if "system" not in e and "draft" not in e]
+        self.assertEqual(errs, [])
+        self.assertIn("paired delta 1,071 ms", " ".join(self.errs(res.replace("1,071 ms faster", "faster"), **st)))
 
 
 class Registry(unittest.TestCase):
@@ -152,6 +189,13 @@ class Routes(unittest.TestCase):
     def test_only_registered_projects(self):
         for bad in ("/p/nope/api/state", "/p/..%2F..%2Fetc/api/state", f"/p/{self.kb}/papers/..%2F/raw"):
             self.assertEqual(self.req(bad)[0], 404, bad)
+
+    def test_unknown_project_page_links_the_registered_ones(self):
+        code, body = self.req("/p/nope/")
+        self.assertEqual(code, 404)
+        self.assertIn(b"No project <code>nope</code>", body)
+        self.assertIn(f'href="/p/{self.kb}/"'.encode(), body)
+        self.assertIn(b">beta<", body)
 
     def test_bare_key_redirects(self):
         import http.client

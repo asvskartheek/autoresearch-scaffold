@@ -19,6 +19,14 @@
 .ttl b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .ttl .crumb{color:var(--muted-fg);text-decoration:none;white-space:nowrap}.ttl .crumb:hover{color:var(--foreground)}
 .ttl .sep{color:var(--input)} #hillCrumb{display:contents}
+.ttl .crumb.ell{overflow:hidden;text-overflow:ellipsis;max-width:28ch;min-width:0}
+.lgr{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 16px;font-size:13px;color:var(--muted-fg);border-bottom:1px solid var(--border);background:var(--background)}
+.lgr b{color:var(--foreground);font-weight:600}
+.lgr .tag{font:500 11.5px var(--mono);padding:2px 7px;border-radius:4px;background:var(--muted);color:var(--muted-fg)}
+.lgr .tag.ok{background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)}
+.lgr .tag.bad{background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red)}
+.lgr .tag.warn{background:var(--warn-bg);color:var(--warn-ink)}
+.lgr .why{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 200px}
 .bar .back{display:none}
 .side.rail{position:fixed;left:0;top:0;width:60px;z-index:40;align-items:center;padding:12px 10px}
 .side.rail .brand{padding:0 0 14px}
@@ -69,12 +77,38 @@ kbd{font:11px var(--mono);border:1px solid var(--input);border-bottom-width:2px;
 .who .tm{font-size:11.5px;color:var(--muted-fg);line-height:1.2}
 .who .meta{min-width:0;flex:1}
 .badge.ai{background:var(--agent-soft);color:var(--agent)}
+.badge.guest{background:var(--muted);color:var(--muted-fg)}
 .acts{display:flex;gap:2px;opacity:0;transition:opacity .15s}
 .card.on .acts,.card:hover .acts,.acts:focus-within{opacity:1}
 .acts .btn{color:var(--muted-fg)} .acts .btn:hover{color:var(--foreground)}
 .body{margin-top:6px;font-size:13.5px;line-height:1.5;overflow-wrap:anywhere;white-space:pre-wrap}
 .body code{font:12px var(--mono);background:var(--muted);border-radius:4px;padding:1px 4px}
 .body a{color:var(--agent)}
+.tools{display:inline-flex;gap:2px;padding:2px;border:1px solid var(--input);border-radius:999px}
+.tools button{all:unset;display:grid;place-items:center;width:28px;height:28px;border-radius:999px;cursor:pointer;color:var(--muted-fg)}
+.tools button:hover{background:var(--muted);color:var(--fg)}.tools button.on{background:var(--primary);color:var(--primary-fg,#fff)}
+.ink{position:absolute;inset:0;z-index:4;pointer-events:none}.ink.on{pointer-events:auto;cursor:crosshair;touch-action:none}
+.ink-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.ink-svg path{fill:none;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.ink-svg .v{stroke:#e8590c;stroke-width:2.5}.ink-svg .v.highlight{stroke:#facc15;stroke-width:16;stroke-opacity:.38}
+.ink-svg .hit{stroke:transparent;stroke-width:14;pointer-events:visibleStroke;cursor:pointer}
+.ink-svg g.res .v{stroke-opacity:.35}.ink-svg g.on .v{stroke:var(--ring);stroke-width:3.5}.ink-svg g.on .v.highlight{stroke:#facc15;stroke-opacity:.6;stroke-width:18}
+.ink-svg g.draft .v{stroke-dasharray:5 4}.ink-svg g.hover .v{stroke:var(--ring);stroke-width:3.5}.ink-svg g.hover .v.highlight{stroke:#facc15;stroke-opacity:.6;stroke-width:18}
+.card.hover{border-color:var(--ring)}
+@media (max-width:900px){.tools .dr,.tools .sep{display:none}}  /* a phone picks; drawing needs a pointer */
+.tools .dr,.tools .sep{display:none}.tools.open .dr{display:grid}.tools.open .sep{display:block}
+.tools .sep{width:1px;margin:5px 2px;background:var(--input)}
+.tools button.pk{width:auto;padding:0 10px 0 8px;gap:6px;grid-auto-flow:column;font-size:12.5px;color:var(--foreground)}.tools button.pk.on{color:var(--primary-fg,#fff)}
+@media (max-width:520px){.tools button.pk span{display:none}.tools button.pk{padding:0 6px}}
+.ink.pick{cursor:default}
+.ink-svg .v.pk{stroke:var(--ring);stroke-width:2;stroke-opacity:.35}.ink-svg g.on .v.pk,.ink-svg g.hover .v.pk,.ink-svg g.draft .v.pk{stroke-opacity:1}
+.shp{width:300px}.shp-u{padding:6px 10px 8px;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted-fg)}
+.shp-u b{font-weight:600;color:var(--foreground)}.shp .shp-x{margin-left:auto;font-size:11.5px;color:var(--muted-fg)}.shp code{font:12px var(--mono)}
+.shp a{display:block;padding:7px 10px;border-radius:6px;color:inherit;text-decoration:none;font-size:13px}.shp a:hover{background:var(--muted)}
+.seen{display:flex;align-items:center;gap:6px;margin:4px 14px 0;font-size:11px;color:var(--muted-fg)}
+.seen .px-face+.px-face{margin-left:-5px}
+.body .px-fig{margin:4px 0 8px}
+.body b.at{color:var(--ring)}
 .quote{margin:0 14px;padding:8px 0 0;font-size:12px;color:var(--muted-fg);display:flex;gap:6px;align-items:baseline}
 .quote q{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;quotes:none;border-left:2px solid var(--hl-on);padding-left:8px}
 .tag{font-size:11px;color:var(--warn-ink);background:var(--warn-bg);border-radius:4px;padding:1px 5px;margin:8px 14px 0;display:inline-block}
@@ -138,6 +172,7 @@ kbd{font:11px var(--mono);border:1px solid var(--input);border-bottom-width:2px;
   .col:not(.all) .card:not(.on):not(.draft){display:none}
   .add{position:fixed;left:50%!important;top:auto!important;bottom:20px;transform:translateX(-50%);height:40px;padding:0 16px;z-index:36}
 }
+@media (max-width:520px){.bar{gap:6px;padding:0 10px}.nav .count.m{min-width:24px}}  /* a phone: the title gets the room */
 </style>
 </head>
 <body>
@@ -151,16 +186,28 @@ kbd{font:11px var(--mono);border:1px solid var(--input);border-bottom-width:2px;
     <span class="count" id="count"></span><span class="count m" id="countM" hidden></span>
     <button class="btn icon ghost" id="next" title="Next comment"><svg class="i" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
   </div>
+  <div class="tools" id="tools" hidden role="toolbar" aria-label="Comment">
+    <button data-tool="pick" class="pk" title="Comment on an element (C)"><svg class="i" viewBox="0 0 24 24"><path d="M4 4l6 16 2.5-6.5L19 11z"/></svg><span>Comment</span></button><i class="sep"></i>
+    <button data-tool="box" class="dr" title="Box (B)"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="1.5"/></svg></button>
+    <button data-tool="arrow" class="dr" title="Arrow (A)"><svg class="i" viewBox="0 0 24 24"><path d="M5 19 19 5M10 5h9v9"/></svg></button>
+    <button data-tool="pen" class="dr" title="Pen (D)"><svg class="i" viewBox="0 0 24 24"><path d="M4 18c3-6 6 2 9-4s4-6 7-8"/></svg></button>
+    <button data-tool="highlight" class="dr" title="Highlight (H)"><svg class="i" viewBox="0 0 24 24"><path d="M4 16h16" stroke-width="7" stroke-opacity=".35"/></svg></button>
+  </div>
   <span class="switch" id="showRes" role="switch" aria-checked="false" tabindex="0" hidden><i></i>Resolved</span>
+  <button class="btn icon outline" id="share" title="Share"><svg class="i" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="M8.2 10.8l7.6-4M8.2 13.2l7.6 4"/></svg></button>
   <button class="btn icon outline" id="theme" title="Toggle theme"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
   <button class="me" id="me" title="Your name on comments"><span class="av" id="meAv"></span><span class="nmv" id="meNm"></span></button>
   <span class="live" id="live" title="Live"></span>
 </header>
+<div class="lgr" id="ledger" hidden></div>
 <div id="root"></div>
 </div>
 <div class="toast" id="toast"><span id="toastT"></span><button class="btn sm outline" id="toastB">Show</button></div>
 <div class="ov" id="ov"><div class="dlg"><header><b id="ovT"></b><a class="btn sm outline" id="ovOpen" target="_blank" rel="noopener">Open in new tab</a>
   <button class="btn icon sm ghost" id="ovX" title="Close"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button></header><iframe id="ovF"></iframe></div></div>
+<script src="../people.js"></script>
+<script src="../keys.js"></script>
+<script src="../comments.js"></script>
 <script>
 (() => {
 const $ = s => document.querySelector(s);
@@ -197,16 +244,29 @@ const color = n => COLORS[[...String(n)].reduce((a, c) => (a * 31 + c.charCodeAt
 // a person reads as a pale tint of their own hue with the initials in that hue: identity, not data
 const tint = n => `background:color-mix(in srgb,${color(n)} 16%,var(--page));color:${color(n)}`;
 const initials = n => String(n).trim().split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase() || "?";
-let me = store.get("arx-reviewer", "");
+// the person (people.js): the same id and name as on the dashboard; every event carries both
+const PX = window.ARXP, myId = () => PX ? PX.me().id : "";
+// ids establish ownership (server.py human_event), not a matching name; a share-link guest (any host but loopback)
+// resolves and reopens only the threads they started
+const GUEST = !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+const mineMsg = m => !m.agent && (m.by ? m.by === myId() : !GUEST && !!me && m.author === me);
+const isGuest = m => !m.agent && !!(PX && (PX.roster()[m.by] || {}).guest);  // written from a share link
+const mayResolve = t => !!t && (!GUEST || t.messages[0].by === myId());
+let me = PX ? PX.me().name : store.get("arx-reviewer", "");
+const setMe = n => { me = n.trim().slice(0, 40); PX ? PX.setName(me) : store.set("arx-reviewer", me); paintMe(); };
 function paintMe() {
   $("#meAv").textContent = me ? initials(me) : "?"; $("#meAv").style.cssText = me ? tint(me) : "background:var(--muted);color:var(--muted-fg)";
   $("#meNm").textContent = me || "Set your name";
 }
-$("#me").onclick = () => { const n = prompt("Your name on comments", me); if (n != null && n.trim()) { me = n.trim().slice(0, 40); store.set("arx-reviewer", me); paintMe(); renderAll(); } };
+$("#me").onclick = () => { const n = prompt("Your name on comments", me); if (n != null && n.trim()) { setMe(n); renderAll(); } };
 paintMe();
 
 // ---------- the dashboard's nav, as a rail ----------
-const NAV = [["overview", "Overview", '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>'],
+const NAV = [["start", "Start", '<path d="M5 20V4h12l-3 4 3 4H5"/>'],
+  ["learn", "Brief", '<path d="M4 4h7v16H4zM13 4h7v16h-7z"/>'],
+  ["course", "101", '<path d="M3 8l9-5 9 5-9 5zM6 10v7c4 3 8 3 12 0v-7"/>'],
+  ["questions", "Questions", '<circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 1 1 4 3v2M12 17h.01"/>'],
+  ["overview", "Overview", '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>'],
   ["workbench", "Workbench", '<path d="M4 12h3l2-6 4 12 2-6h5"/>'],
   ["goals", "Goals", '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="0.6" fill="currentColor"/>'],
   ["models", "Models", '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M8.3 7l7.5 4M8.3 17l7.5-4"/>'],
@@ -230,7 +290,7 @@ if (!NAME) { location.replace(BASE + "/#papers"); return; }
 $("#root").innerHTML = `<div class="canvas"><div class="sheet"><div class="page" id="page"></div></div>
   <aside class="col" id="col"><div class="sheet-head"><span id="sheetT">Comments</span><button class="btn icon sm ghost" id="sheetX" title="Close"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
   <button class="btn primary add" id="add">${I.plus}Comment</button></aside></div>`;
-$("#nav").hidden = $("#showRes").hidden = false;
+$("#nav").hidden = $("#showRes").hidden = $("#tools").hidden = false;
 const page = $("#page"), col = $("#col"), addBtn = $("#add");
 const mobile = () => matchMedia("(max-width:900px)").matches;
 let frame = null, version = null, meta = {}, threads = [], active = null, showResolved = store.get("arx-show-resolved") === "1";
@@ -278,7 +338,8 @@ function prepare(f, ready) {
   d.addEventListener("selectionchange", () => f === frame && onSelect());
   d.addEventListener("mouseup", () => f === frame && setTimeout(onSelect, 0));
   d.addEventListener("click", e => f === frame && onPaperClick(e), true);
-  d.addEventListener("keydown", onKey);
+  d.addEventListener("keydown", e => { if (picking && picker.key(e)) return; window.ARXK && ARXK.key(e); if (!e.defaultPrevented) onKey(e); });  // keys pressed while the paper has focus
+  d.addEventListener("pointerover", () => hoverId && setHover(null));  // on the paper itself: no mark or card is under the pointer
 }
 function syncHlVars(d) {
   const cs = getComputedStyle(root);
@@ -324,7 +385,10 @@ function rangeAt(nodes, s, e) {
   r.setStart(...at(s)); const [en, eo] = at(e); r.setEnd(en, eo); return r;
 }
 function resolve(a) {
-  const d = paperDoc(); if (!d || !a || !a.quote) return null;
+  const d = paperDoc(); if (!d || !a) return null;
+  if (a.pick && window.ARXPICK) return resolvePick(a);
+  if (a.shape) { const b = [...d.querySelectorAll("[data-block]")].find(x => x.dataset.block === a.block) || (a.block ? null : d.body); return { range: null, block: b, exact: !!b, shape: true, word: b && refWord(b, a) }; }
+  if (!a.quote) return null;
   const b = a.block ? [...d.querySelectorAll("[data-block]")].find(x => x.dataset.block === a.block) : null;
   for (const el of b ? [b, d.body] : [d.body]) {
     const nodes = texts(el); if (!nodes.length) continue;
@@ -357,6 +421,11 @@ const ago = t => { const s = Date.now() / 1000 - t; if (s < 45) return "Just now
   const dt = new Date(t * 1000), td = new Date(); return dt.toDateString() === td.toDateString() ? dt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : dt.toLocaleDateString([], { month: "short", day: "numeric" }) + ", " + dt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); };
 const md = s => esc(s).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
   .replace(/(^|\s)(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+// an agent's answer leads with its figure; a person's @mentions are marked
+function body(m, t) {
+  if (m.agent && PX) { const [figs, text] = PX.figs(m.body); return figs + md(text); }
+  return PX ? PX.at(md(m.body), t ? t.messages.map(x => x.author) : []) : md(m.body);  // the thread's names as posted: old @mentions of a renamed person still mark
+}
 function avatar(m) { return m.agent ? `<span class="av agent">${I.spark}</span>` : `<span class="av" style="${tint(m.author)}">${esc(initials(m.author))}</span>`; }
 
 function linkKind(url) {
@@ -385,27 +454,34 @@ function follow(url, ev, label) {
 }
 
 function msgHtml(m, i, t) {
-  const mine = !m.agent && me && m.author === me;
-  const acts = (i === 0 && !t.resolved ? `<button class="btn icon sm ghost" data-act="resolve" title="Resolve">${I.check}</button>` : "") +
+  const mine = mineMsg(m);
+  const acts = (i === 0 && !t.resolved && mayResolve(t) ? `<button class="btn icon sm ghost" data-act="resolve" title="Resolve">${I.check}</button>` : "") +
     `<button class="btn icon sm ghost" data-act="menu" data-mid="${m.id}" data-mine="${mine ? 1 : 0}" title="More">${I.dots}</button>`;
-  return `<div class="msg${i > 0 && i < t.messages.length - 1 ? " more" : ""}" data-mid="${m.id}"><div class="who">${avatar(m)}<div class="meta"><div class="nm">${esc(m.author)}${m.agent ? '<span class="badge ai">AI</span>' : ""}</div>
+  return `<div class="msg${i > 0 && i < t.messages.length - 1 ? " more" : ""}" data-mid="${m.id}"><div class="who">${avatar(m)}<div class="meta"><div class="nm">${esc(m.author)}${m.agent ? '<span class="badge ai">AI</span>' : isGuest(m) ? '<span class="badge guest">guest</span>' : ""}</div>
     <div class="tm">${ago(m.t)}${m.edited ? " · edited" : ""}</div></div><div class="acts">${acts}</div></div>
-    <div class="body">${md(m.body)}</div>${m.link ? chip(m.link) : ""}</div>`;
+    <div class="body">${body(m, t)}</div>${m.link ? chip(m.link) : ""}</div>`;
 }
-function sig(t) { return JSON.stringify([t.messages, t.resolved, t.thinking, t.waiting, me, !!(ranges.get(t.id) || {}).exact, Math.floor(Date.now() / 60000)]); }
+const lastT = t => (t.messages.at(-1) || {}).t || 0;
+const readers = t => Object.fromEntries(Object.entries(t.seen_by || {}).filter(([k, v]) => v >= lastT(t)));
+function markSeen(t) {
+  const last = t.messages.at(-1); if (!PX || !myId() || !last || last.by === myId() || ((t.seen_by || {})[myId()] || 0) >= last.t) return;
+  t.seen_by = { ...(t.seen_by || {}), [myId()]: last.t }; api("seen", { parent: t.id });
+}
+function sig(t) { return JSON.stringify([t.messages, t.messages.map(isGuest), t.resolved, t.thinking, t.waiting, me, readers(t), Object.keys(readers(t)).map(id => PX?.name(id)), !!(ranges.get(t.id) || {}).exact, Math.floor(Date.now() / 60000)]); }
 function cardFor(t) {
   let c = cards.get(t.id);
   if (!c) {
     c = h("div", "card"); c.dataset.id = t.id;
     c.innerHTML = `<div class="content"></div><div class="reply"><textarea class="ta" rows="1" placeholder="Reply"></textarea>
       <div class="row"><button class="btn sm ghost" data-act="cancel">Cancel</button><button class="btn sm primary" data-act="send" disabled>Reply</button></div></div>`;
-    const ta = c.querySelector("textarea");
+    const ta = c.querySelector("textarea"); PX && PX.complete(ta);
     ta.value = drafts[t.id] || ""; grow(ta); c.querySelector(".reply").classList.toggle("typing", !!ta.value);
     ta.addEventListener("input", () => { drafts[t.id] = ta.value; saveDrafts(); grow(ta); c.querySelector("[data-act=send]").disabled = !ta.value.trim();
       c.querySelector(".reply").classList.toggle("typing", !!ta.value || document.activeElement === ta); layout(); });
     ta.addEventListener("focus", () => { c.querySelector(".reply").classList.add("typing"); layout(); });
     ta.addEventListener("keydown", e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sendReply(t.id); } if (e.key === "Escape") ta.blur(); });
     c.addEventListener("click", e => onCardClick(e, t.id));
+    c.addEventListener("mouseenter", () => setHover(t.id)); c.addEventListener("mouseleave", () => setHover(null));
     col.appendChild(c); cards.set(t.id, c);
   }
   const s = sig(t);
@@ -414,13 +490,16 @@ function cardFor(t) {
     const r = ranges.get(t.id), msgs = t.messages, hidden = msgs.length - 2;
     c.querySelector(".content").innerHTML =
       (r && !r.exact ? `<span class="tag">${r.block ? "Text changed since this comment" : "Original text was removed"}</span>` : "") +
-      (t.anchor && t.anchor.quote ? `<div class="quote"><q>${esc(t.anchor.quote)}</q></div>` : "") +
+      (t.anchor && t.anchor.pick ? `<div class="quote"><span style="white-space:nowrap">${esc(t.anchor.pick.kind || "element")}</span>${t.anchor.pick.text ? `<q>${esc(t.anchor.pick.text.slice(0, 80))}</q>` : ""}</div>`
+        : t.anchor && t.anchor.shape ? `<div class="quote"><span style="white-space:nowrap">${TOOLN[t.anchor.shape.tool] || "Drawing"}${t.anchor.quote ? " on" : ""}</span>${t.anchor.quote ? `<q>${esc(t.anchor.quote.slice(0, 80))}</q>` : ""}</div>`
+        : t.anchor && t.anchor.quote ? `<div class="quote"><q>${esc(t.anchor.quote)}</q></div>` : "") +
       msgs.map((m, i) => msgHtml(m, i, t)).join("") +
       (hidden > 0 ? `<div class="collapsed">${hidden} more ${hidden === 1 ? "reply" : "replies"}</div>` : "") +
       (t.thinking ? `<div class="think"><span class="av agent">${I.spark}</span>Agent is thinking<span class="dots"><i></i><i></i><i></i></span></div>` :
         t.waiting ? `<div class="think"><span class="av agent">${I.spark}</span>Sent to the agent</div>` :
-        `<div class="think"><button class="btn sm outline" data-act="ask"><span class="av agent">${I.spark}</span>Send to agent</button></div>`) +
-      (t.resolved ? `<div class="res">${I.check}Resolved${t.resolved_by ? " by " + esc(t.resolved_by) : ""}<button class="btn sm outline" data-act="reopen">${I.reopen}Re-open</button></div>` : "");
+        t.resolved ? "" : `<div class="think"><button class="btn sm outline" data-act="ask"><span class="av agent">${I.spark}</span>Send to agent</button></div>`) +
+      (PX && Object.keys(readers(t)).some(k => k !== myId()) ? `<div class="seen">Seen ${PX.seenFaces(readers(t), myId())}</div>` : "") +
+      (t.resolved ? `<div class="res">${I.check}Resolved${t.resolved_by ? " by " + esc(t.resolved_by) : ""}${mayResolve(t) ? `<button class="btn sm outline" data-act="reopen">${I.reopen}Re-open</button>` : ""}</div>` : "");
   }
   c.classList.toggle("resolved", t.resolved); c.classList.toggle("waiting", t.waiting);
   return c;
@@ -433,7 +512,7 @@ function renderAll() {
   for (const [id, c] of cards) if (!threads.find(t => t.id === id)) { c.remove(); cards.delete(id); }
   const open = threads.filter(t => !t.resolved).length, res = threads.length - open;
   $("#showRes").setAttribute("aria-checked", showResolved); $("#showRes").lastChild.textContent = res ? `Resolved (${res})` : "Resolved";
-  updateCount(); paint(); layout();
+  updateCount(); paint(); drawInk(); layout();
 }
 function updateCount() {
   const v = ordered(), i = v.findIndex(t => t.id === active);
@@ -445,7 +524,8 @@ function updateCount() {
 function topOf(t) {
   const r = ranges.get(t.id), fr = frame;
   if (!fr) return 0;
-  const rect = r && r.range ? r.range.getClientRects()[0] || r.range.getBoundingClientRect() : r && r.block ? r.block.getBoundingClientRect() : null;
+  if (r && r.shape && r.block) { const x = shapeXf(t.anchor, r); return page.offsetTop + x.ty + (t.anchor.shape.y || 0) * x.k; }
+  const rect = r && r.el ? r.el.getBoundingClientRect() : r && r.range ? r.range.getClientRects()[0] || r.range.getBoundingClientRect() : r && r.block ? r.block.getBoundingClientRect() : null;
   return rect ? fr.offsetTop + page.offsetTop + rect.top : 0;
 }
 const ordered = () => visible().map(t => ({ t, y: topOf(t) })).sort((a, b) => a.y - b.y || a.t.t - b.t.t).map(x => x.t);
@@ -487,35 +567,259 @@ function addAt() {
 }
 addBtn.addEventListener("mousedown", e => e.preventDefault());
 addBtn.onclick = () => startDraft();
-function startDraft() {
-  if (!selRange) return;
-  const anchor = anchorFrom(selRange); if (!anchor) return;
+function startDraft(given) {
+  if (!given && !selRange) return;
+  const anchor = given ? given.anchor : anchorFrom(selRange); if (!anchor) return;
   cancelDraft(); setActive(null);
   const el = h("div", "card on draft");
-  el.innerHTML = `<div class="msg"><div class="who">${avatar({ author: me || "?" })}<div class="meta"><div class="nm">${esc(me || "New comment")}</div></div></div>
+  const pk = anchor.pick;  // a picked element: what it is, as the tag named it
+  el.innerHTML = (pk ? `<div class="quote"><span style="white-space:nowrap">${esc(pk.kind)}</span>${pk.text ? `<q>${esc(pk.text.slice(0, 80))}</q>` : ""}</div>` : "") + `<div class="msg"><div class="who">${avatar({ author: me || "?" })}<div class="meta"><div class="nm">${esc(me || "New comment")}</div></div></div>
     ${me ? "" : '<input class="in name-in" placeholder="Your name" maxlength="40" style="margin-top:8px">'}
     <textarea class="ta" rows="2" placeholder="Comment" style="margin-top:8px"></textarea>
     <div class="row"><button class="btn sm ghost" data-act="x">Cancel</button><button class="btn sm primary" data-act="post" disabled>Comment</button></div></div>`;
   col.appendChild(el);
-  const ta = el.querySelector("textarea"), nm = el.querySelector(".name-in"), go = el.querySelector("[data-act=post]");
+  const ta = el.querySelector("textarea"), nm = el.querySelector(".name-in"), go = el.querySelector("[data-act=post]"); PX && PX.complete(ta);
   const ok = () => go.disabled = !ta.value.trim() || (nm && !nm.value.trim());
   ta.oninput = () => { grow(ta); ok(); layout(); }; nm && (nm.oninput = ok);
   ta.onkeydown = e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); !go.disabled && post(); } if (e.key === "Escape") cancelDraft(); };
   el.querySelector("[data-act=x]").onclick = cancelDraft; go.onclick = post;
-  const rect = selRange.getClientRects()[0] || selRange.getBoundingClientRect();
-  draft = { anchor, range: selRange, el, y: frame.offsetTop + page.offsetTop + rect.top };
-  paperDoc().getSelection().removeAllRanges(); selRange = null; addBtn.classList.remove("show");
+  if (given) draft = { anchor, range: null, el, y: given.y };
+  else {
+    const rect = selRange.getClientRects()[0] || selRange.getBoundingClientRect();
+    draft = { anchor, range: selRange, el, y: frame.offsetTop + page.offsetTop + rect.top };
+    paperDoc().getSelection().removeAllRanges(); selRange = null; addBtn.classList.remove("show");
+  }
   if (mobile()) { col.classList.add("open"); col.classList.remove("all"); $("#sheetT").textContent = "New comment"; }
   renderAll(); (nm && !nm.value ? nm : ta).focus({ preventScroll: true });
   async function post() {
-    if (nm) { me = nm.value.trim().slice(0, 40); store.set("arx-reviewer", me); paintMe(); }
+    if (nm) setMe(nm.value);
     go.disabled = true;
     const ev = await api("comment", { anchor, body: ta.value });
     if (ev) { cancelDraft(); active = ev.id; await refresh(); }
     else go.disabled = false;
   }
 }
-function cancelDraft() { if (draft) { draft.el.remove(); draft = null; if (mobile() && !active) col.classList.remove("open"); renderAll(); } }
+function cancelDraft() { if (draft) { draft.el.remove(); draft = null; drawInk(); if (mobile() && !active) col.classList.remove("open"); renderAll(); } }
+
+// ---------- drawing on the paper: Box, Arrow, Pen, Highlight. A mark is stored on the block under it (anchor.block),
+// as an SVG path in px from that block's top-left at the block's width then (bw). Text reflows (tiles stack, lines
+// wrap), so a mark also holds on to a word under it: the path opens with two bare moves "M x0 y0M x1 y1" (they draw
+// nothing) giving that word's top-left and bottom-left then, and the word (anchor.suffix) is found again after its
+// 40-character prefix. The mark
+// then follows the word and scales with its height (words in a figure scale with it, words in text do not). Marks
+// without the reference, or whose word is gone, fall back to the block, scaled by its width.
+const TOOLN = { box: "Box", arrow: "Arrow", pen: "Drawing", highlight: "Highlight" };
+const ink = h("div", "ink", '<svg class="ink-svg" xmlns="http://www.w3.org/2000/svg"></svg>'), inkSvg = ink.firstChild;
+page.appendChild(ink);
+let pen = null, stroke = null;
+function setPen(t) {
+  pen = pen === t ? null : t; if (pen && picking) setPick(false, true);
+  ink.classList.toggle("on", !!pen || picking); $("#tools").classList.toggle("open", !!pen || picking);
+  if (!pen && stroke) { try { ink.releasePointerCapture(stroke.id); } catch {} stroke = null; drawInk(); }  // Esc mid-stroke: drop it
+  document.querySelectorAll("#tools button").forEach(b => b.classList.toggle("on", b.dataset.tool === pen));
+  if (pen && !me) needName();
+}
+document.querySelectorAll("#tools button").forEach(b => b.onclick = () => b.dataset.tool === "pick" ? setPick(!picking) : setPen(b.dataset.tool));
+
+// ---------- picking an element to comment on (ARXPICK in comments.js, as on the dashboard): c or Comment outlines the
+// element under the pointer in the paper (a bar, a tick, a paragraph ...), a click or Enter anchors the comment to it:
+// anchor.pick = {kind, text, path (from its block), ctx (the block's words), x y w h (its box in block px), bw}. The
+// element is found again by its path, else by its kind and words anywhere in the block, else the block holds it.
+let picking = false, lastPt = null;
+const picker = window.ARXPICK && ARXPICK({ doc: paperDoc, root: () => paperDoc().body, exit: () => setPick(false), pick: el => pickEl(el),
+  off: () => { const r = frame.getBoundingClientRect(); return { x: r.left, y: r.top }; } });
+function setPick(on, keepTools) {
+  if (!picker || !frame) return; picking = on;
+  if (on && pen) setPen(pen);
+  ink.classList.toggle("on", on || !!pen); ink.classList.toggle("pick", on); $("#tools").classList.toggle("open", on || !!pen || !!keepTools);
+  document.querySelector('#tools [data-tool="pick"]').classList.toggle("on", on);
+  if (on) { picker.on(); if (!me) needName(); } else picker.off();
+}
+function pickEl(el) {
+  const d = paperDoc(), b = blockOf(el) || d.body, br = b.getBoundingClientRect(), r = el.getBoundingClientRect(), fo = fOff();
+  const kind = ARXPICK.kind(el), text = ARXPICK.text(el, 300);
+  const pick = { kind, text, path: ARXPICK.path(b, el) || "", ctx: b === el ? "" : ARXPICK.text(b, 160),
+    x: r1(r.left - br.left), y: r1(r.top - br.top), w: r1(r.width), h: r1(r.height), bw: r1(br.width) };
+  const anchor = { block: b === d.body ? "" : b.dataset.block, quote: text || ARXPICK.around(el, 120) || kind, pick };
+  setPick(false); startDraft({ anchor, y: page.offsetTop + fo.y + r.top }); drawInk();
+}
+function resolvePick(a) {
+  const d = paperDoc(), p = a.pick, b = a.block ? [...d.querySelectorAll("[data-block]")].find(x => x.dataset.block === a.block) : d.body;
+  if (!b) return { range: null, exact: false };
+  const sq = t => String(t || "").replace(/\s+/g, ""), fits = x => !!x && ARXPICK.kind(x) === p.kind && sq(ARXPICK.text(x, 300)) === sq(p.text);
+  let el = null; try { el = p.path ? b.querySelector(":scope>" + p.path) : b; } catch {}
+  if (!fits(el)) { const alt = [...b.querySelectorAll("*")].find(fits); if (alt) el = alt; }
+  return { range: null, block: b, el: el || b, pick: true, exact: fits(el) };
+}
+ink.addEventListener("pointermove", e => { if (picking && !pen) { lastPt = { x: e.clientX, y: e.clientY }; picker.point(e.clientX, e.clientY); } });
+ink.addEventListener("pointerleave", () => { if (picking) picker.hide(); });
+ink.addEventListener("click", e => { if (picking && !pen) { e.preventDefault(); picker.tap(e.clientX, e.clientY, e.pointerType && e.pointerType !== "mouse"); } });
+ink.addEventListener("wheel", e => { if (picking && e.altKey) { e.preventDefault(); picker.wheel(e.deltaY); } }, { passive: false });
+addEventListener("scroll", () => { if (picking && lastPt) picker.point(lastPt.x, lastPt.y); }, { passive: true });
+// keys while picking (j k [ ] arrows Enter Esc) go to the picker before keys.js and the reader
+addEventListener("keydown", e => { if (picking && !(e.target.closest && e.target.closest("input,textarea,[contenteditable]")) && picker.key(e)) return; }, true);
+// keys.js: c toggles picking, n / N step through the comments, r / x reply in or resolve the open one
+window.ARXC = { comment: () => setPick(!picking), mode: () => picking, open: () => active, count: () => ordered().length, has: () => !!active,
+  step: dir => { (dir > 0 ? $("#next") : $("#prev")).click(); return true; },
+  reply: () => { const c = active && cards.get(active), ta = c && c.querySelector(".reply textarea"); if (!ta) return false; ta.focus(); return true; },
+  resolve: () => { if (!active || !mayResolve(threads.find(t => t.id === active)) || !needName()) return false; const id = active; api("resolve", { parent: id }).then(() => { setActive(null); refresh(); }); return true; } };
+const r1 = x => Math.round(x * 10) / 10;
+function shapeD(tool, pts) {
+  const a = pts[0], b = pts.at(-1);
+  if (tool === "box") return `M${r1(a.x)} ${r1(a.y)}H${r1(b.x)}V${r1(b.y)}H${r1(a.x)}Z`;
+  if (tool === "arrow") { const ang = Math.atan2(b.y - a.y, b.x - a.x), L = 12, s = .45;
+    return `M${r1(a.x)} ${r1(a.y)}L${r1(b.x)} ${r1(b.y)}M${r1(b.x - L * Math.cos(ang - s))} ${r1(b.y - L * Math.sin(ang - s))}L${r1(b.x)} ${r1(b.y)}L${r1(b.x - L * Math.cos(ang + s))} ${r1(b.y - L * Math.sin(ang + s))}`; }
+  return "M" + pts.filter((p, i) => i === 0 || i === pts.length - 1 || i % 2 === 0).map(p => `${r1(p.x)} ${r1(p.y)}`).join("L");
+}
+const local = e => { const r = ink.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+// the frame's top-left in the ink layer's px (the ink layer covers the page, the frame sits at its top)
+const fOff = () => { const i = ink.getBoundingClientRect(), f = frame.getBoundingClientRect(); return { x: f.left - i.left, y: f.top - i.top }; };
+const REF = /^M(-?[\d.]+) (-?[\d.]+)M(-?[\d.]+) (-?[\d.]+)(?=M)/;
+// the reference word of a mark (anchor.suffix: the word alone), found again in its block: after its prefix, else
+// alone; null when the mark has none or the word is gone
+function refWord(b, a) {
+  const m = REF.exec(a.shape.d || ""), word = a.suffix; if (!m || !word) return null;
+  const nodes = texts(b); if (!nodes.length) return null;
+  const full = nodes.map(([n]) => n.data).join(""), pre = a.prefix || "";
+  let i = pre ? full.indexOf(pre + word) : -1;
+  if (i >= 0) i += pre.length; else i = full.indexOf(word);
+  return i < 0 ? null : rangeAt(nodes, i, i + word.length);
+}
+// where a mark's path (block px then) goes now, in the ink layer's px: x' = tx + x·k, y' = ty + y·k
+function shapeXf(a, r) {
+  const fo = fOff(), m = REF.exec(a.shape.d || ""), wr = m && r.word && r.word.getClientRects()[0];
+  if (wr && wr.height) { const k = wr.height / Math.max(1, m[4] - m[2]); return { tx: fo.x + wr.left - m[1] * k, ty: fo.y + wr.top - m[2] * k, k }; }
+  const br = r.block.getBoundingClientRect(), k = br.width / Math.max(1, a.shape.bw || br.width);
+  return { tx: fo.x + br.left, ty: fo.y + br.top, k };
+}
+ink.addEventListener("pointerdown", e => {
+  if (!pen || e.button) return;  // picking: the click handler e.preventDefault(); ink.setPointerCapture(e.pointerId);
+  stroke = { id: e.pointerId, tool: pen, pts: [local(e)] };
+});
+ink.addEventListener("pointermove", e => { if (!stroke || e.pointerId !== stroke.id) return; stroke.pts.push(local(e)); drawInk(); });
+ink.addEventListener("pointerup", e => {
+  if (!stroke || e.pointerId !== stroke.id) return; const s = stroke; stroke = null; ink.releasePointerCapture(e.pointerId);
+  const xs = s.pts.map(p => p.x), ys = s.pts.map(p => p.y), w = Math.max(...xs) - Math.min(...xs), ht = Math.max(...ys) - Math.min(...ys);
+  if (w < 6 && ht < 6) return drawInk();
+  const d = paperDoc(), fo = fOff(), cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+  // what the mark is about: an arrow points with its tip, anything else covers its middle
+  const tip = s.tool === "arrow" ? s.pts.at(-1) : { x: cx, y: cy }, fw = frame.contentWindow;
+  const tx = Math.min(Math.max(tip.x - fo.x, 1), fw.innerWidth - 1), ty = Math.min(Math.max(tip.y - fo.y, 1), fw.innerHeight - 1);  // a mark past the edge: the nearest point inside
+  const cr = caretAt(d, tx, ty), under = d.elementFromPoint(tx, ty) || d.body;
+  // the block under the point; in the margin, the block of the nearest text
+  const b = blockOf(under) || (cr && blockOf(cr[0])) || d.body, br = b.getBoundingClientRect();
+  const ox = fo.x + br.left, oy = fo.y + br.top, rel = s.pts.map(p => ({ x: p.x - ox, y: p.y - oy }));
+  // the words it is about (the agent reads them): the word at an arrow's tip, or the words inside a box, a pen mark's
+  // span or a highlight's band; with none, the nearest element's words (a bar or a tick: its figure's)
+  let ref = cr && wordAt(b, cr[0], cr[1]), quote = "";
+  if (s.tool === "arrow") { if (ref && near(ref.rect, tx, ty, 12)) quote = ref.full.slice(ref.s, ref.e); }
+  else { const pad = { highlight: 9, pen: 4 }[s.tool] || 0, inside = wordsIn(b, { l: Math.min(...xs) - fo.x - pad, r: Math.max(...xs) - fo.x + pad, t: Math.min(...ys) - fo.y - pad, b: Math.max(...ys) - fo.y + pad });
+    if (inside) { quote = inside.quote; ref = inside.first || ref; } }
+  if (!quote && ref && !b.contains(under)) {  // in the margin: the whole words beside it
+    const a0 = Math.max(0, ref.s - 60), a1 = ref.e + 60; let t = ref.full.slice(a0, a1);
+    if (a0 > 0) t = t.replace(/^\S*\s+/, ""); if (a1 < ref.full.length) t = t.replace(/\s+\S*$/, "");
+    quote = t.replace(/\s+/g, " ").trim(); }
+  if (!quote) { let q = under; while (q && q !== b && !(q.textContent || "").trim()) q = q.parentElement;
+    quote = texts(b.contains(q) ? q : b).map(([n]) => n.data.trim()).filter(Boolean).join(" ").replace(/\s+/g, " ").slice(0, 120); }
+  const shape = { tool: s.tool, d: refD(ref, br) + shapeD(s.tool, rel), bw: r1(br.width), bh: r1(br.height), x: r1(Math.min(...rel.map(p => p.x))), y: r1(Math.min(...rel.map(p => p.y))), w: r1(w), h: r1(ht) };
+  const anchor = { block: b === d.body ? "" : b.dataset.block, quote: quote || "", shape };
+  if (ref) Object.assign(anchor, { prefix: ref.full.slice(Math.max(0, ref.s - 40), ref.s), suffix: ref.full.slice(ref.s, ref.e) });
+  if (!anchor.block && !anchor.quote) anchor.quote = TOOLN[s.tool];  // the server keeps an anchor only with a block or words
+  setPen(null); startDraft({ anchor, y: page.offsetTop + oy + shape.y }); drawInk();
+});
+const near = (r, x, y, m) => x >= r.left - m && x <= r.right + m && y >= r.top - m && y <= r.bottom + m;
+// the characters of block b whose middle lies inside box (frame px): their words in reading order (a space between
+// text nodes or gaps) and the first one as the mark's reference word; null when none
+function wordsIn(b, box) {
+  const nodes = texts(b), r = b.ownerDocument.createRange(), hit = [];
+  nodes.forEach(([n, p], k) => {
+    r.selectNodeContents(n); const nb = r.getBoundingClientRect();
+    if (!nb.width || nb.right < box.l || nb.left > box.r || nb.bottom < box.t || nb.top > box.b) return;
+    for (let i = 0; i < n.data.length; i++) {
+      if (!/\S/.test(n.data[i])) continue;
+      r.setStart(n, i); r.setEnd(n, i + 1); const q = r.getBoundingClientRect(), mx = q.left + q.width / 2, my = q.top + q.height / 2;
+      if (q.width && mx >= box.l && mx <= box.r && my >= box.t && my <= box.b) hit.push([p + i, k, n, i]);
+    }
+  });
+  if (!hit.length) return null;
+  const full = nodes.map(([n]) => n.data).join("");
+  let quote = full[hit[0][0]];
+  for (let j = 1; j < hit.length; j++) quote += (hit[j][0] === hit[j - 1][0] + 1 && hit[j][1] === hit[j - 1][1] ? "" : " ") + full[hit[j][0]];
+  return { quote: quote.slice(0, 300), first: wordAt(b, hit[0][2], hit[0][3]) };
+}
+function caretAt(d, x, y) {
+  if (d.caretPositionFromPoint) { const p = d.caretPositionFromPoint(x, y); return p && [p.offsetNode, p.offset]; }
+  if (d.caretRangeFromPoint) { const r = d.caretRangeFromPoint(x, y); return r && [r.startContainer, r.startOffset]; }
+  return null;
+}
+// the word at (or else right after, or before) a caret inside block b: its offsets in b's text and its first box
+function wordAt(b, node, off) {
+  if (!node || node.nodeType !== 3 || !b.contains(node)) return null;
+  const nodes = texts(b), hit = nodes.find(([n]) => n === node); if (!hit) return null;
+  const t = node.data; let s = off, e = off;
+  while (s > 0 && /\S/.test(t[s - 1])) s--; while (e < t.length && /\S/.test(t[e])) e++;
+  if (s === e) { const nx = /\S+/.exec(t.slice(off)); if (nx) { s = off + nx.index; e = s + nx[0].length; }
+    else { const pv = /\S+(?=\s*$)/.exec(t.slice(0, off)); if (!pv) return null; s = pv.index; e = s + pv[0].length; } }
+  const full = nodes.map(([n]) => n.data).join(""), r = rangeAt(nodes, hit[1] + s, hit[1] + e), rect = r.getClientRects()[0];
+  return rect && rect.height ? { s: hit[1] + s, e: hit[1] + e, full, rect } : null;
+}
+// the two bare moves that carry the reference word's first box, in block px (see the note above)
+const refD = (ref, br) => ref ? `M${r1(ref.rect.left - br.left)} ${r1(ref.rect.top - br.top)}M${r1(ref.rect.left - br.left)} ${r1(ref.rect.bottom - br.top)}` : "";
+function inkG(a, cls, id) {
+  const r = id === "_draft" ? resolve(a) : ranges.get(id);
+  if (a.pick) { if (!r || !r.el) return ""; const q = r.el.getBoundingClientRect(), fo = fOff(), L = r1(fo.x + q.left - 2), T = r1(fo.y + q.top - 2), R = r1(fo.x + q.right + 2), B = r1(fo.y + q.bottom + 2);
+    const d = `M${L} ${T}H${R}V${B}H${L}Z`;  // the picked element's outline: a box, so a click inside it opens its comment
+    return `<g class="${cls} pk" data-id="${esc(id)}"><path class="hit" d="${d}"/><path class="v box pk" d="${d}"/></g>`; }
+  if (!r || !r.block || !a.shape) return "";
+  const x = shapeXf(a, r);
+  return `<g class="${cls}" data-id="${esc(id)}" transform="translate(${r1(x.tx)} ${r1(x.ty)}) scale(${r1(x.k * 1000) / 1000})"><path class="hit" d="${esc(a.shape.d)}"/><path class="v ${esc(a.shape.tool)}" d="${esc(a.shape.d)}"/></g>`;
+}
+function drawInk() {
+  if (!frame) return;
+  let out = visible().filter(t => t.anchor && (t.anchor.shape || t.anchor.pick)).map(t => inkG(t.anchor, (t.id === active ? "on " : "") + (t.id === hoverId ? "hover " : "") + (t.resolved ? "res" : ""), t.id)).join("");
+  if (draft && (draft.anchor.shape || draft.anchor.pick)) out += inkG(draft.anchor, "draft", "_draft");
+  if (stroke) out += `<g class="draft"><path class="v ${stroke.tool}" d="${shapeD(stroke.tool, stroke.pts)}"/></g>`;
+  if (inkSvg._html !== out) inkSvg.innerHTML = inkSvg._html = out;  // the 1.5 s refresh leaves the marks under the pointer alone
+}
+// a mark and its card ring together, whichever one the pointer is on; one at a time, so nothing stays ringed
+let hoverId = null;
+function setHover(id) {
+  if (id === hoverId) return; hoverId = id;
+  for (const [k, c] of cards) c.classList.toggle("hover", k === id);
+  inkSvg.querySelectorAll("g[data-id]").forEach(g => g.classList.toggle("hover", g.dataset.id === id));
+}
+inkSvg.addEventListener("click", e => { const g = e.target.closest("g[data-id]"); if (g && g.dataset.id !== "_draft") { e.stopPropagation(); setActive(g.dataset.id, { scroll: "if-needed" }); } });
+inkSvg.addEventListener("pointerover", e => { const g = e.target.closest("g[data-id]"); g && g.dataset.id !== "_draft" && setHover(g.dataset.id); });
+inkSvg.addEventListener("pointerout", e => { const g = e.target.closest("g[data-id]"); if (g && !g.contains(e.relatedTarget)) setHover(null); });
+addEventListener("resize", () => { if (pen && mobile()) setPen(pen); drawInk(); });
+
+// ---------- share: the paper's link (for others once `arx share on` ran) and the paper as one file ----------
+async function paperLink(hash = "") {
+  let u = location.origin + location.pathname, shared = false;
+  try { const d = await (await fetch(`${BASE}/api/share`, { cache: "no-store" })).json();
+    if (d.link) { const x = new URL(d.link); x.pathname += "papers/" + encodeURIComponent(NAME); u = x.href; shared = true; } } catch {}
+  return { url: u + hash, shared };
+}
+// copy, with a fallback where the clipboard API is missing (plain http on another machine) or refused
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch {}
+  const ta = h("textarea"); ta.value = text; ta.style.cssText = "position:fixed;opacity:0"; document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand("copy"); } catch {} ta.remove();
+  if (!ok) prompt("Copy", text);
+  return ok;
+}
+$("#share").onclick = async e => {
+  e.stopPropagation(); $("#shp") && $("#shp").remove();
+  const { url, shared } = await paperLink(), m = h("div", "menu shp"); m.id = "shp";
+  m.innerHTML = `<div class="shp-u"><b>${shared ? "Anyone on your network" : "Only this machine"}</b><br><code>${esc(url)}</code></div><button data-s="copy">Copy link</button>` +
+    (shared ? "" : `<button data-s="on"><code>arx share on</code><span class="shp-x">for others</span></button>`) +
+    `<a data-s="dl" href="${BASE}/api/export?paper=${encodeURIComponent(NAME)}" download>Download as one file</a>`;
+  document.body.appendChild(m);
+  const r = $("#share").getBoundingClientRect(); m.style.top = scrollY + r.bottom + 6 + "px"; m.style.left = Math.max(8, Math.min(r.right - 300, innerWidth - 308)) + "px";
+  const copied = (b, t) => async ev => { ev.stopPropagation(); if (await copyText(t)) { const was = b.innerHTML; b.textContent = "Copied"; setTimeout(() => { b.innerHTML = was; }, 1500); } };
+  for (const [k, t] of [["copy", url], ["on", "arx share on"]]) { const b = m.querySelector(`[data-s=${k}]`); if (b) b.onclick = copied(b, t); }
+  setTimeout(() => addEventListener("click", function off(ev) { if (!m.contains(ev.target)) { m.remove(); removeEventListener("click", off); } }));
+};
 
 // ---------- clicks ----------
 function hitThread(e) {
@@ -526,6 +830,13 @@ function hitThread(e) {
   const hits = visible().filter(t => { const r = ranges.get(t.id); try { return r && r.range && r.range.isPointInRange(node, off) && [...r.range.getClientRects()].some(b => e.clientX >= b.left - 1 && e.clientX <= b.right + 1 && e.clientY >= b.top - 1 && e.clientY <= b.bottom + 1); } catch { return false; } });
   return hits.length ? hits.sort((a, b) => ranges.get(a.id).range.toString().length - ranges.get(b.id).range.toString().length)[0] : null;
 }
+// a click inside a drawn box opens its comment (the smallest box, when boxes nest); the text under it stays selectable
+function boxAt(e) {
+  const f = frame.getBoundingClientRect(), x = e.clientX + f.left, y = e.clientY + f.top;
+  const hits = [...inkSvg.querySelectorAll("g[data-id]:not(.draft) .v.box")].map(p => [p.closest("g").dataset.id, p.getBoundingClientRect()])
+    .filter(([, r]) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom).sort((a, b) => a[1].width * a[1].height - b[1].width * b[1].height);
+  return hits.length ? threads.find(t => t.id === hits[0][0]) : null;
+}
 function onPaperClick(e) {
   const a = e.target.closest && e.target.closest("a[href]");
   if (a) { // links inside the paper: in-page jumps scroll this page; anything else opens a new tab
@@ -534,7 +845,7 @@ function onPaperClick(e) {
     if (!a.target) { e.preventDefault(); open(a.href, "_blank", "noopener"); return; }
   }
   const s = paperDoc().getSelection(); if (s && !s.isCollapsed) return;
-  const t = hitThread(e);
+  const t = hitThread(e) || boxAt(e);
   if (t) setActive(t.id, { scroll: false });
   else if (active && !e.target.closest("button,input,select,textarea,label,a")) setActive(null);
 }
@@ -561,9 +872,10 @@ async function sendReply(id) {
 function menu(btn, tid, mid, mine, t) {
   closeMenu();
   const m = h("div", "menu"); m.id = "menu";
-  const items = [["Copy link to comment", () => navigator.clipboard && navigator.clipboard.writeText(location.origin + location.pathname + "#c-" + tid)]];
-  if (mine) items.unshift(["Edit", () => editMsg(tid, mid)], ["Delete", async () => { if (confirm("Delete this comment?")) { await api("delete", { target: mid }); refresh(); } }, "danger"]);
-  for (const [label, fn, cls] of items) { const b = h("button", cls || "", esc(label)); b.onclick = e => { e.stopPropagation(); closeMenu(); fn(); }; m.appendChild(b); }
+  const items = [["Copy link to comment", async () => { if (await copyText((await paperLink("#c-" + tid)).url)) toast("Link copied"); }]];
+  if (mine) items.unshift(["Edit", () => editMsg(tid, mid)], ["Delete", async () => { await api("delete", { target: mid }); refresh(); }, "danger", "Delete for good?"]);
+  for (const [label, fn, cls, sure] of items) { const b = h("button", cls || "", esc(label));
+    b.onclick = e => { e.stopPropagation(); if (sure && !b.dataset.sure) { b.dataset.sure = 1; b.textContent = sure; return; } closeMenu(); fn(); }; m.appendChild(b); }
   document.body.appendChild(m);
   const r = btn.getBoundingClientRect(); m.style.top = scrollY + r.bottom + 4 + "px"; m.style.left = Math.max(8, Math.min(r.right - 170, innerWidth - 178)) + "px";
   setTimeout(() => addEventListener("click", closeMenu, { once: true }));
@@ -586,6 +898,7 @@ function editMsg(tid, mid) {
 function setActive(id, { scroll } = {}) {
   if (id && draft) cancelDraft();
   active = id; renderAll();
+  const at = id && threads.find(x => x.id === id); at && markSeen(at);
   if (mobile()) { col.classList.toggle("open", !!id); col.classList.remove("all"); $("#sheetT").textContent = "Comment"; }
   if (id && scroll) scrollToThread(id, scroll === "if-needed");
   if (id) history.replaceState(null, "", "#c-" + id); else if (location.hash.startsWith("#c-")) history.replaceState(null, "", location.pathname);
@@ -606,12 +919,19 @@ $("#prev").onclick = () => step(-1); $("#next").onclick = () => { if (mobile() &
 $("#sheetX").onclick = () => { col.classList.remove("open", "all"); if (active) setActive(null); cancelDraft(); };
 const toggleRes = () => { showResolved = !showResolved; store.set("arx-show-resolved", showResolved ? "1" : "0"); renderAll(); };
 $("#showRes").onclick = toggleRes; $("#showRes").onkeydown = e => (e.key === " " || e.key === "Enter") && (e.preventDefault(), toggleRes());
+// keys.js gives the reader its Vim keys (j k through the comments, n N, f, g + a page, ?); the tools keep B A D H, and P
+// stays the paper's own (explain-kit pause)
+window.ARXK && ["b", "a", "d", "h", "p"].forEach(ARXK.reserve);
 function onKey(e) {
+  const typing = e.target.closest && e.target.closest("input,textarea,[contenteditable]");
+  const k = { b: "box", a: "arrow", d: "pen", h: "highlight" }[e.key];
+  if (!typing && !e.metaKey && !e.ctrlKey && !e.altKey && k && !mobile()) { e.preventDefault(); setPen(k); return; }  // below 900 px the tools are hidden: no drawing
+  if (e.key === "Escape" && pen) { setPen(pen); return; }
   if ((e.metaKey || e.ctrlKey) && e.altKey && (e.key === "m" || e.code === "KeyM")) { e.preventDefault(); startDraft(); }
   if (e.key === "Escape") { if (draft) cancelDraft(); else if (active) setActive(null); }
 }
 addEventListener("keydown", e => { if (!$("#ov").classList.contains("show")) onKey(e); else if (e.key === "Escape") closePreview(); });
-document.addEventListener("click", e => { if (active && !e.target.closest(".card,.menu,.bar,.ov,.toast") && !mobile()) setActive(null); });
+document.addEventListener("click", e => { if (active && !e.target.closest(".card,.menu,.bar,.ov,.toast,.ink") && !mobile()) setActive(null); });
 
 function jumpTo(target) {
   if (target.startsWith("c-")) { const id = target.slice(2); if (threads.find(t => t.id === id)) { if (threads.find(t => t.id === id).resolved && !showResolved) toggleRes(); setActive(id, { scroll: true }); } return; }
@@ -634,7 +954,7 @@ $("#ovX").onclick = closePreview; $("#ov").onclick = e => e.target === $("#ov") 
 // ---------- server ----------
 async function api(kind, body) {
   try {
-    const r = await fetch(`${BASE}/api/paper/${encodeURIComponent(NAME)}/${kind}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, author: me }) });
+    const r = await fetch(`${BASE}/api/paper/${encodeURIComponent(NAME)}/${kind}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, author: me, by: myId() || undefined }) });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
     return await r.json();
   } catch (err) { toast("Could not save: " + err.message); return null; }
@@ -669,6 +989,37 @@ async function swapPaper(v, prev) {
   toast(changed.length ? `Paper updated · ${leaves.length} passage${leaves.length === 1 ? "" : "s"} changed` : "Paper updated", leaves.length ? () => jumpTo(leaves[0]) : null);
 }
 
+// the paper's title, its goal or hill by title, and where that goal stands in the ledger now: the paper's own text is
+// frozen when it was written (it may still say "draft" after the goal was abandoned)
+let ctx = null, ctxAt = 0;
+const fmtN = x => Number(x).toLocaleString("en-US");
+async function loadContext() {
+  ctxAt = Date.now();
+  try { const r = await fetch(`${BASE}/api/paper-context/${encodeURIComponent(NAME)}`, { cache: "no-store" }); if (!r.ok) return; ctx = await r.json(); } catch { return; }
+  const g = ctx.goal, hl = ctx.hill;
+  $("#title").textContent = ctx.title; document.title = ctx.title + " · paper";
+  $("#hillCrumb").innerHTML = g ? `<a class="crumb ell" href="${BASE}/#goal/${encodeURIComponent(g.name)}" title="${esc(g.title)}">${esc(g.title === ctx.title ? "Goal" : g.title)}</a><span class="sep">/</span>`
+    : hl ? `<a class="crumb ell" href="${BASE}/#hill/${encodeURIComponent(hl.name)}" title="${esc(hl.title)}">${esc(hl.title === ctx.title ? "Hill" : hl.title)}</a><span class="sep">/</span>` : "";
+  let line = "";
+  if (g) {
+    const tag = { open: ["warn", "Draft · goal open"], achieved: ["ok", "Goal achieved"], abandoned: ["bad", "Goal abandoned · negative result"], missing: ["", "Goal not in the ledger"] }[g.status] || ["", g.status];
+    const bin = g.kpi === "score" && (g.scale || "binary") === "binary" && g.n;
+    // anything else in its unit, as the goal page reads it: a "minus ms" score as the plain amount, latency in s
+    const neg = g.kpi === "score" && /^\s*minus\b/i.test(g.metric || ""), cmp = (g.higher_is_better !== false) !== neg ? "≥" : "≤";
+    const u = g.kpi === "score" ? g.unit || "" : /^latency/.test(g.kpi) ? "s" : /tokens?_per_s|throughput/i.test(g.kpi) ? "tok/s" : "";
+    const amt = x => { x = Number(neg ? -x : x); const s = Math.abs(x) >= 100 ? fmtN(Math.round(x)) : String(+x.toPrecision(3)); return g.kpi === "cost" ? "$" + s : s + (u ? " " + u : ""); };
+    const val = g.value == null ? "" : bin ? `${fmtN(Math.round(g.value * g.n))} of ${fmtN(g.n)}` : amt(g.value);
+    const tgt = g.target == null ? "" : bin ? `${fmtN(Math.ceil(g.target * g.n - 1e-9))} of ${fmtN(g.n)}` : `${cmp} ${amt(g.target)}`;
+    const when = g.when ? new Date(g.when * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+    line = `<span class="tag ${tag[0]}">${esc(tag[1])}</span>` + (g.status === "abandoned"
+      ? `<span class="why">${when ? esc(when) + (g.reason ? ": " : "") : ""}${esc(g.reason || "")}</span>`
+      : `<span class="why">${g.label ? `<b>${esc(g.label)}</b> ` : ""}${val ? esc(val) : "no run"}${tgt ? ` · target ${esc(tgt)}` : ""}${g.slice ? ` on ${esc(g.slice)}` : ""}${when && g.status === "achieved" ? ` · ${esc(when)}` : ""}</span>`);
+  } else if (hl) {
+    line = `<span class="tag ${hl.status === "climbed" ? "ok" : hl.status === "open" ? "warn" : ""}">Internal note · hill ${esc(hl.status)}</span>${ctx.champion ? `<span class="why">champion now <b>${esc(ctx.champion.label)}</b></span>` : ""}`;
+  }
+  $("#ledger").innerHTML = line; $("#ledger").hidden = !line;
+}
+
 let busy = false, fails = 0;
 async function refresh() {
   if (busy) return; busy = true;
@@ -677,13 +1028,12 @@ async function refresh() {
     if (!r.ok) throw new Error(r.status);
     const d = await r.json(); fails = 0; $("#live").className = "live"; $("#live").title = "Live";
     meta = d.meta || {};
-    $("#title").textContent = document.title = meta.title || NAME;
-    $("#hillCrumb").innerHTML = meta.goal ? `<a class="crumb" href="${BASE}/#goal/${encodeURIComponent(meta.goal)}">${esc(meta.goal)}</a><span class="sep">/</span>`
-      : meta.hill ? `<a class="crumb" href="${BASE}/#hill/${encodeURIComponent(meta.hill)}">${esc(meta.hill)}</a><span class="sep">/</span><span class="crumb">internal</span><span class="sep">/</span>` : "";
+    if (!ctx) { $("#title").textContent = document.title = meta.title || NAME; }
+    if (!ctx || Date.now() - ctxAt > 15000) loadContext();
     if (version === null) { version = d.version; srcTexts(version).catch(() => {}); frame = await loadPaper(version); }
     else if (d.version !== version) { const prev = version; version = d.version; await swapPaper(version, prev); }
     threads = d.threads;
-    if (active && !threads.find(t => t.id === active)) active = null;
+    if (active && !threads.find(t => t.id === active)) { active = null; if (location.hash.startsWith("#c-")) history.replaceState(null, "", location.pathname); }
     reanchor(); renderAll();
   } catch (err) { if (++fails > 2) { $("#live").className = "live off"; $("#live").title = "Offline: retrying"; } }
   finally { busy = false; }
@@ -693,6 +1043,7 @@ async function refresh() {
   const h0 = decodeURIComponent(location.hash.slice(1));
   if (h0) setTimeout(() => jumpTo(h0), 150);
   setInterval(refresh, 1500);
+  if (PX) { PX.on(() => { me = PX.me().name; paintMe(); renderAll(); }); PX.start(BASE + "/api/people", () => "papers/" + NAME); }
   document.fonts && document.fonts.ready.then(layout);
 })();
 })();

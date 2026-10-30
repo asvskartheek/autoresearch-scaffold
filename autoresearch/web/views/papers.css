@@ -12,10 +12,16 @@
 .pp-ln .st{font-size:13px}
 .pp-ln a.ln .st{color:var(--accent)}
 .pp-k{color:var(--faint)}
+.pp-h{gap:4px}.pp-h .pill{font-size:12px;cursor:help}
 .ptbl .pp-c .two{align-items:flex-end}
 .ptbl .pp-c .fig{font-size:13px}
 .ptbl .pp-c .sub{font-size:12px}
 .ptbl .pp-u{color:var(--muted);font-size:13px;white-space:nowrap}
+.ptbl .pp-w .pill{display:inline-block;margin:2px 0 2px 4px;white-space:nowrap}
+.pm{display:grid;gap:2px}
+.pm-r{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:6px 0;border-bottom:1px solid var(--rule);font-size:13.5px;min-width:0}
+.pm-r:last-child{border-bottom:0}
+.pm-r .cmd{max-width:min(360px,40vw)}
 .pp-cmds{display:flex;flex-direction:column;align-items:center;gap:8px;padding-bottom:8px}
 @media (max-width:900px){
  .ptbl thead{display:none}
@@ -29,4 +35,5 @@
  .ptbl table{table-layout:auto}
  .ptbl .pp-u{grid-column:1/-1;text-align:left;font-size:12px;margin-top:2px}
  .pp-cmds .cmd{max-width:100%}
+ .pm-r{grid-template-columns:minmax(0,1fr) auto}.pm-r .cmd{grid-column:1/-1;max-width:100%}
 }

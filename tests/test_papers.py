@@ -212,11 +212,20 @@ class Routes(unittest.TestCase):
         th = json.loads(self.req("/api/paper/demo")[1])["threads"]
         self.assertTrue(th[0]["resolved"]); self.assertEqual(len(th[0]["messages"]), 2)
 
+    def test_people(self):
+        code, ev = self.req("/api/paper/demo/comment", dict(body="look", anchor=dict(ANCHOR, shape=dict(tool="box", d="M0 0L10 10", bw=200, bh=80, evil="x")), author="Ann", by="p-aaaa0001"))
+        cid = json.loads(ev)["id"]
+        self.assertEqual(self.req("/api/paper/demo/seen", dict(parent=cid, by="p-bbbb0002"))[0], 200)
+        th = json.loads(self.req("/api/paper/demo")[1])["threads"][-1]
+        self.assertIn("p-bbbb0002", th["seen_by"]); self.assertFalse(th["thinking"])  # a person reading is not the agent
+        self.assertEqual(th["anchor"]["shape"], dict(tool="box", d="M0 0L10 10", bw=200.0, bh=80.0))
+        self.assertEqual(th["people"], ["p-aaaa0001"])
+
     def test_rejects(self):
         self.assertEqual(self.req("/api/paper/demo/comment", dict(body="", anchor=ANCHOR))[0], 400)
         self.assertEqual(self.req("/api/paper/demo/comment", dict(body="x"))[0], 400)  # no anchor
         self.assertEqual(self.req("/api/paper/demo/reply", dict(parent="nope", body="x"))[0], 400)
-        self.assertEqual(self.req("/api/paper/demo/seen", dict(parent="x"))[0], 404)  # people cannot mark seen
+        self.assertEqual(self.req("/api/paper/demo/seen", dict(parent="x"))[0], 400)  # seen needs a person and a thread
         self.assertEqual(self.req("/api/paper/demo/comment", dict(body="x", anchor=ANCHOR), origin="https://evil.com")[0], 403)
         _, ev = self.req("/api/paper/demo/comment", dict(body="mine", anchor=ANCHOR, author="Ann"))
         cid = json.loads(ev)["id"]

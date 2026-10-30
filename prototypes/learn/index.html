@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Since you looked</title>
+<style>
+:root{
+ --ground:#f2f5f8;--surface:#fff;--raised:#f5f7f9;--active:#e4e9ee;--border:#e3e7eb;--rule:#eef1f4;--control:#cdd3d9;
+ --text:#131416;--muted:#5b6168;--faint:#6f767d;
+ --accent:#1b6c80;--accent-soft:#e3f0f3;--primary:#16181a;--on-primary:#fff;
+ --positive:#1e7b4f;--negative:#c4242a;--warning:#92400e;--grid:#e9edf0;
+ --pill-positive-bg:#dcfae5;--pill-positive-ink:#04250e;--pill-negative-bg:#ffedea;--pill-negative-ink:#831c1e;
+ --pill-warning-bg:#fff5db;--pill-warning-ink:#7a3a0b;--pill-neutral-bg:#ebeef1;--pill-neutral-ink:#353736;
+ --pill-accent-bg:#ddeef2;--pill-accent-ink:#0f4a59;
+ --radius-card:8px;--radius-control:6px;--radius-chip:4px;--radius-sheet:16px;
+ --font:"IBM Plex Sans",Inter,system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+ color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+ --ground:#0c0f12;--surface:#13171b;--raised:#1a1f24;--active:#232a31;--border:#232a30;--rule:#1c2227;--control:#3a434b;
+ --text:#eef1f3;--muted:#a3abb3;--faint:#8c959d;--accent:#5cb8cc;--accent-soft:#163038;--primary:#eef1f3;--on-primary:#0c0f12;
+ --positive:#4cc38a;--negative:#f07575;--warning:#e3a84f;--grid:#222930;
+ --pill-positive-bg:#14291e;--pill-positive-ink:#6fd6a1;--pill-negative-bg:#2e1a1d;--pill-negative-ink:#f59a9a;
+ --pill-warning-bg:#2b2215;--pill-warning-ink:#e8b765;--pill-neutral-bg:#222930;--pill-neutral-ink:#c3cad1;
+ --pill-accent-bg:#14303a;--pill-accent-ink:#8fd3e2;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--ground);color:var(--text);font:400 14px/1.45 var(--font);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.mono{font-family:var(--mono);font-size:.92em}
+.top{display:flex;align-items:center;gap:12px;height:48px;padding:0 16px;max-width:1200px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px}
+.brand span{font-weight:400;color:var(--muted);font-size:13px}
+.top .r{margin-left:auto;display:flex;align-items:center;gap:12px;color:var(--muted);font-size:13px}
+.linkbtn{all:unset;cursor:pointer;color:var(--muted);font-size:13px}.linkbtn:hover{color:var(--text)}
+.sheet{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sheet);max-width:1200px;margin:0 auto 8px;padding:24px}
+@media (min-width:1216px){.sheet{margin:0 auto 8px}}
+.head{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+h1{font-size:22px;font-weight:600;letter-spacing:-.01em;margin:0}
+h2{font-size:16px;font-weight:600;margin:0}
+.since{color:var(--muted);font-size:13px}
+.pips{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
+.pip{width:22px;height:6px;border-radius:3px;background:var(--active);cursor:pointer;border:0;padding:0}
+.pip.cur{background:var(--text)}.pip.hit{background:var(--positive)}.pip.miss{background:var(--negative)}.pip.pend{background:var(--warning)}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;align-items:start}
+@media (max-width:860px){.layout{grid-template-columns:minmax(0,1fr)}.sheet{padding:16px;border-radius:12px}.pips{margin-left:0;width:100%}}
+
+/* deck card */
+.stage{border:1px solid var(--border);border-radius:var(--radius-card);padding:24px;min-height:440px;display:flex;flex-direction:column;gap:18px;min-width:0}
+@media (max-width:860px){.stage{padding:16px;min-height:0}}
+.kind{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:var(--radius-chip);font-size:12px;font-weight:500;background:var(--pill-neutral-bg);color:var(--pill-neutral-ink);white-space:nowrap}
+.pill.pos{background:var(--pill-positive-bg);color:var(--pill-positive-ink)}.pill.neg{background:var(--pill-negative-bg);color:var(--pill-negative-ink)}
+.pill.warn{background:var(--pill-warning-bg);color:var(--pill-warning-ink)}.pill.acc{background:var(--pill-accent-bg);color:var(--pill-accent-ink)}
+.q{font-size:20px;line-height:1.35;font-weight:500;letter-spacing:-.005em;margin:0;max-width:640px}
+.ctx{color:var(--muted);font-size:13px;margin:-8px 0 0}
+.opts{display:grid;grid-template-columns:repeat(var(--n,2),minmax(0,1fr));gap:8px}
+@media (max-width:560px){.opts.many{grid-template-columns:1fr 1fr}}
+.opt{all:unset;box-sizing:border-box;cursor:pointer;border:1px solid var(--control);border-radius:var(--radius-control);padding:12px 14px;display:flex;align-items:center;gap:10px;min-height:48px;font-weight:500}
+.opt:hover{background:var(--raised)}
+.opt kbd{font:500 11px var(--mono);color:var(--faint);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:none}
+.opt.on{border-color:var(--text);background:var(--raised);box-shadow:inset 0 0 0 1px var(--text)}
+.opt.truth{border-color:var(--positive);box-shadow:inset 0 0 0 1px var(--positive);background:var(--pill-positive-bg,#dcfae5)}
+.opt.wrong{border-color:var(--negative);box-shadow:inset 0 0 0 1px var(--negative);background:var(--pill-negative-bg,#ffedea)}
+.verdict{font-weight:600;font-size:15px}.verdict.ok{color:var(--positive)}.verdict.no{color:var(--negative)}
+.opt[disabled]{cursor:default}
+.conf{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.conf label{font-size:13px;color:var(--muted);flex:none}
+.conf input{flex:1;min-width:140px;accent-color:var(--text)}
+.conf output{font:500 15px var(--mono);width:44px;text-align:right}
+.go{all:unset;box-sizing:border-box;cursor:pointer;height:36px;padding:0 16px;border-radius:var(--radius-control);background:var(--primary);color:var(--on-primary);font-weight:500;display:inline-flex;align-items:center;gap:8px}
+.go[disabled]{opacity:.35;cursor:default}
+.go kbd{font:500 11px var(--mono);opacity:.7}
+.ghost{all:unset;cursor:pointer;height:36px;padding:0 14px;border-radius:var(--radius-control);border:1px solid var(--control);display:inline-flex;align-items:center;gap:8px;font-weight:500}
+.ghost:hover{background:var(--raised)}
+.actions{display:flex;gap:8px;align-items:center;margin-top:auto;flex-wrap:wrap}
+.actions .ev{margin-left:auto;font:12px var(--mono);color:var(--faint)}
+.reveal{border-top:1px solid var(--rule);padding-top:18px;display:flex;flex-direction:column;gap:12px;animation:in .35s ease}
+@keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.verdict{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.verdict b{font-size:28px;font-weight:400;letter-spacing:-.01em}
+.verdict .you{font-size:13px;color:var(--muted)}
+.why{font-size:15px;margin:0;max-width:640px}
+svg text{font-family:var(--font);fill:var(--muted);font-size:11px}
+svg .mono{font-family:var(--mono)}
+.nl{width:100%;height:auto;touch-action:none;cursor:pointer;display:block}
+
+/* side */
+.side{display:flex;flex-direction:column;gap:16px;min-width:0}
+.panel{border:1px solid var(--border);border-radius:var(--radius-card);padding:16px}
+.score{display:flex;gap:20px}
+.score div{display:flex;flex-direction:column}
+.score b{font-size:28px;font-weight:400;line-height:1.1}
+.score span{font-size:12px;color:var(--muted)}
+.cal{width:100%;height:auto;display:block;margin-top:12px}
+.keys{font-size:12px;color:var(--faint);display:grid;grid-template-columns:auto 1fr;gap:4px 10px}
+.keys kbd{font:500 11px var(--mono);color:var(--muted)}
+
+/* concepts */
+.strip{margin-top:28px}
+.strip .hd{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
+.strip .hd span{font-size:13px;color:var(--muted)}
+.concepts{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+@media (max-width:1000px){.concepts{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}}
+@media (max-width:480px){.concepts{grid-template-columns:1fr 1fr}}
+.concept{all:unset;box-sizing:border-box;cursor:pointer;border:1px solid var(--border);border-radius:var(--radius-card);padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.concept:hover{background:var(--raised)}
+.concept svg{width:100%;height:auto;display:block}
+.concept .t{font-weight:500;font-size:13px;display:flex;align-items:center;gap:6px}
+.concept .t i{margin-left:auto;display:flex;gap:3px}
+.concept .t i b{width:7px;height:7px;border-radius:50%;background:var(--active)}
+.concept .t i b.ok{background:var(--positive)}.concept .t i b.no{background:var(--negative)}
+dialog{border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);padding:24px;width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 32px)}
+dialog::backdrop{background:rgba(10,12,14,.45)}
+dialog .cv svg{width:100%;max-width:320px;max-height:110px;height:auto;display:block;margin:8px 0 16px}
+@media (max-width:560px){.nl text{font-size:17px}.reveal svg text{font-size:14px}}
+dialog .x{float:right}
+.cq{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.cq p{margin:0;font-weight:500;font-size:15px}
+.cq .opts{--n:1}
+.cq .res{font-size:13px;color:var(--muted)}
+
+/* caught up */
+.done-h{display:flex;align-items:baseline;gap:12px}
+.jobs{display:flex;flex-direction:column;gap:14px}
+.job .l{display:flex;gap:8px;align-items:baseline;font-size:13px;flex-wrap:wrap}
+.job .l b{font-weight:500;font-size:14px}
+.job .l .m{margin-left:auto;font:12px var(--mono);color:var(--muted)}
+.bar{height:14px;border-radius:3px;background:var(--active);overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--accent);transition:width .6s linear}
+.pend-list{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.pend-list div{display:flex;gap:8px;align-items:baseline}
+.pend-list .mono{color:var(--muted)}
+</style></head>
+<body>
+<div class="top">
+ <div class="brand"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 15 L7 6 L11 11 L16 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>arx <span id="proj">gsm8k-ft</span></div>
+ <div class="r"><button class="linkbtn" id="reset" title="Forget predictions">Reset</button></div>
+</div>
+<div class="sheet">
+ <div class="head"><h1>Since you last looked</h1><span class="since" id="since"></span><div class="pips" id="pips"></div></div>
+ <div class="layout">
+  <section class="stage" id="stage" aria-live="polite"></section>
+  <aside class="side">
+   <div class="panel">
+    <div class="score"><div><b id="hits">0/0</b><span>hits</span></div><div><b id="brier">–</b><span>Brier</span></div><div><b id="pendn">0</b><span>open</span></div></div>
+    <svg class="cal" id="cal" viewBox="0 0 268 200"></svg>
+   </div>
+   <div class="panel keys">
+    <kbd>1 2 3 4</kbd><span>answer</span>
+    <kbd>← →</kbd><span>move guess</span>
+    <kbd>↑ ↓</kbd><span>confidence</span>
+    <kbd>space</kbd><span>reveal, next</span>
+    <kbd>[ ]</kbd><span>previous, next card</span>
+   </div>
+  </aside>
+ </div>
+ <section class="strip">
+  <div class="hd"><h2>Concepts</h2><span id="cscore"></span></div>
+  <div class="concepts" id="concepts"></div>
+ </section>
+</div>
+<dialog id="dlg"></dialog>
+
+<script>
+/* data-proto: Cards are derived from the real gsm8k-ft ledger (decisions, gates, leaderboard, goals, tasks).
+   Questions, the "why" lines and the concept checks are written from those records' reason/change fields;
+   predictions and calibration do not exist in the ledger yet and live in localStorage only. */
+const KEY='arx-learn-v1';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pts=x=>(x>=0?'+':'−')+Math.abs(x).toFixed(2);
+let S={preds:{},concepts:{}};
+try{const v=JSON.parse(localStorage.getItem(KEY)||'null');if(v)S=Object.assign(S,v)}catch(e){}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+
+let D,CARDS=[],cur=0,ui={};
+
+fetch('../data/gsm8k-ft-state.json').then(r=>r.json()).then(d=>{D=d;build();render()}).catch(e=>{$('#stage').textContent='Could not load ledger: '+e});
+
+function lb(slice,m){const r=(D.leaderboard[slice]||{})[m];return r?r.score:null}
+function gateCheck(m,slice){for(const r of (D.gates[m]||{rungs:[]}).rungs)for(const c of r.checks)if(c.slice===slice)return c;return null}
+function dec(kind,m){return D.decisions.filter(x=>x.kind===kind&&x.model===m).pop()}
+function task(id){return D.tasks.find(t=>t.id===id)}
+
+function build(){
+ const champ=D.champion, DEV='gsm8k-test/dev-percent-base-v1', FULL='gsm8k-test/full';
+ const goal=Object.values(D.goals)[0], vb=goal.vs_baseline, N=goal.n;
+ const need=Math.ceil(goal.target*N), have=Math.round(goal.value*N);
+ const champDev=lb(DEV,champ);
+ const promo=D.decisions.find(x=>x.kind==='promote');
+ const c=[];
+
+ // 1. promotion
+ c.push({id:'promote-'+promo.model,w:100,t:promo.t,kind:['Promoted','acc'],
+  q:`${promo.model} replaced the RL adapter. Paired change on full?`,
+  ctx:'LoRA off, 1,024 output tokens. n = 1,319.',
+  type:'number',min:-4,max:10,step:.25,unit:'pts',tol:1.5,truth:vb.delta*100,start:0,
+  ev:goal.task,
+  viz:()=>ciViz(vb.delta*100,vb.lo*100,vb.hi*100,vb.wins,vb.losses,vb.n),
+  why:`It fixed ${vb.wins} problems and broke ${vb.losses}. The inherited adapter was hurting, and 512 tokens cut answers short.`});
+
+ // 2. goal
+ const traj=[['qwen3-4b-rl-archived','archived'],['qwen3-4b-rl-fresh-v1','fresh'],['percent-rlvr-v1','rlvr v1'],[champ,'champion']]
+  .map(([m,l])=>({l,v:Math.round(lb(FULL,m)*N)}));
+ c.push({id:'goal-'+goal.name,w:95,t:goal.created,kind:['Goal opened','acc'],
+  q:`How many of ${N.toLocaleString()} does the champion get right on full?`,
+  ctx:`Goal: ${need.toLocaleString()} for 96%.`,
+  type:'number',min:1100,max:1319,step:1,big:10,unit:'',tol:12,truth:have,start:1200,int:true,
+  ev:goal.task,
+  viz:()=>goalViz(traj,need,N),
+  why:`${need-have} more problems to go. The only full-run climb so far is the champion's +${vb.wins-vb.losses} net.`});
+
+ // 3. raw-sft-lr5e6 dev
+ const s5=gateCheck('raw-sft-lr5e6-v1',DEV), s5full=task('1026-044218-eval-ebe7');
+ c.push({id:'gate-raw-sft-lr5e6-dev',w:85,t:D.models['raw-sft-lr5e6-v1'].created,kind:['Gate · dev','pos'],
+  q:'Fresh LoRA SFT at lr 5e-6: is its dev gain above zero, at the lower 90% bound?',
+  ctx:`dev-percent-base, n = ${s5.n}. Champion averaged over ${s5.base_runs||13} runs.`,
+  type:'binary',opts:['Yes','No'],truth:s5.lo>0?0:1,ev:s5.cand_task,
+  viz:()=>ciViz(s5.delta*100,s5.lo*100,s5.hi*100,s5.wins,s5.losses,s5.n),
+  why:`It cleared by ${(s5.lo*100).toFixed(2)} pts. Its full run is at ${s5full.progress.done} of ${s5full.progress.total.toLocaleString()}.`});
+
+ // 4. 2048 dev
+ const s2=gateCheck('percent-base-2048-v1',DEV);
+ c.push({id:'gate-2048-dev',w:80,t:D.models['percent-base-2048-v1'].created,kind:['Gate · dev','pos'],
+  q:'2,048 tokens instead of 1,024. Is the dev gain real or noise?',
+  ctx:`dev-percent-base, n = ${s2.n}. Hypothesis: 34 full answers hit the 1,024 cap.`,
+  type:'binary',opts:['Real','Noise'],truth:s2.lo>0?0:1,ev:s2.cand_task,
+  viz:()=>ciViz(s2.delta*100,s2.lo*100,s2.hi*100,s2.wins,s2.losses,s2.n),
+  why:'The point gain passes the "better" rule, but the interval crosses zero. The full run decides.'});
+
+ // 5. lr 2e-5 collapse
+ const lr2=lb(DEV,'raw-sft-lr2e5-v1'), lr5=lb(DEV,'raw-sft-lr5e6-v1');
+ c.push({id:'rej-raw-sft-lr2e5',w:72,t:dec('rejected','raw-sft-lr2e5-v1').t,kind:['Rejected','neg'],
+  q:'Same SFT recipe at lr 2e-5, four times higher. Its dev score?',
+  ctx:`Champion ${(champDev*100).toFixed(1)}%. lr 5e-6 run ${(lr5*100).toFixed(1)}%. n = 185.`,
+  type:'number',min:50,max:100,step:.5,unit:'%',tol:3,truth:lr2*100,start:90,
+  ev:'1026-044439-eval-aafa',
+  viz:()=>barViz([['lr 5e-6',lr5],['champion',champDev],['lr 2e-5',lr2,1]],champDev),
+  why:`Raising the learning rate cost ${((champDev-lr2)*100).toFixed(0)} points against the champion.`});
+
+ // 6. inference tricks
+ const tricks=[['raw-vllm-vote5-v1','5-answer vote'],['raw-vllm-verify-v1','self-verify'],['raw-vllm-program-v1','arith. program'],['fresh-sft-vllm-vote5-v1','SFT + vote']];
+ const tv=tricks.map(([m,l])=>({m,l,v:lb(DEV,m),lat:D.leaderboard[DEV][m].latency_p50}));
+ const best=tv.reduce((a,b,i)=>b.v>tv[a].v?i:a,0);
+ c.push({id:'rej-inference-tricks',w:66,t:dec('rejected','raw-vllm-program-v1').t,kind:['4 rejected','neg'],
+  q:'Four inference-time tricks on dev. Which scored highest?',
+  ctx:`Champion ${(champDev*100).toFixed(1)}%, ${D.leaderboard[DEV][champ].latency_p50.toFixed(1)} s per problem.`,
+  type:'binary',opts:tricks.map(x=>x[1]),truth:best,ev:'1026-040757-eval-faaf',
+  viz:()=>barViz(tv.map((x,i)=>[`${x.l} · ${x.lat.toFixed(0)} s`,x.v,i===best?2:0]),champDev),
+  why:'All four rejected. None had a positive lower bound against its own vLLM baseline, and most were 4 to 5× slower.'});
+
+ // 7. thinking
+ const th=lb(DEV,'thinking4b-8192-v1'), thl=D.leaderboard[DEV]['thinking4b-8192-v1'].latency_p50, chl=D.leaderboard[DEV][champ].latency_p50;
+ c.push({id:'rej-thinking4b-8192',w:60,t:dec('rejected','thinking4b-8192-v1').t,kind:['Rejected','neg'],
+  q:'Qwen3-4B-Thinking with 8,192 tokens. Does it beat the champion on dev?',
+  ctx:'A separate checkpoint, not a fine-tune. n = 185.',
+  type:'binary',opts:['Yes','No'],truth:th>champDev?0:1,ev:'1026-043304-eval-c71c',
+  viz:()=>barViz([['champion · '+chl.toFixed(1)+' s',champDev],['thinking · '+thl.toFixed(0)+' s',th,1]],champDev),
+  why:`It lost ${((champDev-th)*100).toFixed(1)} points and was ${(thl/chl).toFixed(0)}× slower per problem.`});
+
+ // 8. rlvr v2
+ const rv=dec('rejected','percent-rlvr-v2'), g=k=>+rv.reason.match(new RegExp(`'${k}': (-?[\\d.]+)`))[1];
+ const rvd={delta:g('delta'),lo:g('lo'),hi:g('hi'),wins:g('wins'),losses:g('losses'),n:g('n')};
+ c.push({id:'rej-percent-rlvr-v2',w:50,t:rv.t,kind:['Rejected','neg'],
+  q:'192 GRPO steps on a percentage curriculum. Paired change on dev?',
+  ctx:'Against the old RL adapter. n = 185.',
+  type:'number',min:-4,max:8,step:.25,unit:'pts',tol:1,truth:rvd.delta*100,start:0,ev:'percent-rlvr-v2',
+  viz:()=>ciViz(rvd.delta*100,rvd.lo*100,rvd.hi*100,rvd.wins,rvd.losses,rvd.n),
+  why:`It moved ${rvd.wins+rvd.losses} problems in all. Too few to tell from zero.`});
+
+ // 9. open prediction: raw-sft-lr5e6 full
+ c.push({id:'open-raw-sft-lr5e6-full',w:45,t:s5full.created,kind:['Running','warn'],
+  q:`raw-sft-lr5e6 on full: will it beat the champion's ${have.toLocaleString()}?`,
+  ctx:`${s5full.progress.done} of ${s5full.progress.total.toLocaleString()} done.`,
+  type:'binary',opts:['Yes','No'],truth:null,ev:s5full.id,
+  viz:()=>'',why:'Logged. Scored when the run lands.'});
+
+ // 10. open prediction: time-rate hill
+ const tr=D.hills['time-rate'], trArch=lb(tr.target,'qwen3-4b-rl-archived');
+ c.push({id:'open-time-rate-champ',w:40,t:tr.created,kind:['Hill · no champion run','warn'],
+  q:'The champion has never run time-rate. Its score there?',
+  ctx:`n = ${D.slices[tr.target].n}. The archived model scored ${(trArch*100).toFixed(1)}%.`,
+  type:'number',min:70,max:100,step:.5,unit:'%',tol:2,truth:null,start:Math.round(trArch*100),ev:tr.target,
+  viz:()=>'',why:'Logged. Scored when the baseline eval lands.'});
+
+ CARDS=c.sort((a,b)=>b.w-a.w);
+ const first=Math.min(...CARDS.filter(x=>x.truth!=null).map(x=>x.t));
+ $('#since').textContent='since '+new Date(first*1000).toLocaleString([], {weekday:'short',hour:'2-digit',minute:'2-digit'})+' · '+CARDS.length+' changes';
+ const firstOpen=CARDS.findIndex(x=>!S.preds[x.id]);cur=firstOpen<0?CARDS.length:firstOpen;
+ buildConcepts(have,need,N,vb);
+}
+
+/* ---------- visuals */
+function ciViz(d,lo,hi,w,l,n){
+ const W=560,H=128,L=16,R=W-16,a=Math.min(-2,Math.floor(lo-1)),b=Math.max(2,Math.ceil(hi+1)),x=v=>L+(v-a)/(b-a)*(R-L);
+ let t='';for(let v=a;v<=b;v++){if((b-a)>10&&v%2)continue;t+=`<line x1="${x(v)}" x2="${x(v)}" y1="20" y2="62" stroke="var(--grid)"/><text x="${x(v)}" y="76" text-anchor="middle">${v>0?'+':''}${v}</text>`}
+ const col=lo>0?'var(--positive)':hi<0?'var(--negative)':'var(--muted)';
+ const sq=(k,c,o)=>Array.from({length:Math.min(k,60)},(_,i)=>`<rect x="${o+i*9}" y="100" width="7" height="7" rx="1" fill="${c}"/>`).join('');
+ const ox=L, ox2=L+Math.min(w,60)*9+18;
+ return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="paired delta ${d.toFixed(2)} points, 90% interval ${lo.toFixed(2)} to ${hi.toFixed(2)}">${t}
+ <line x1="${x(0)}" x2="${x(0)}" y1="14" y2="66" stroke="var(--text)" stroke-width="1.5"/>
+ <line x1="${x(lo)}" x2="${x(hi)}" y1="41" y2="41" stroke="${col}" stroke-width="8" stroke-linecap="round" opacity=".35"/>
+ <circle cx="${x(d)}" cy="41" r="6" fill="${col}"/>
+ <text x="${x(d)}" y="22" text-anchor="middle" style="fill:var(--text);font-weight:500" class="mono">${pts(d)} [${pts(lo)}, ${pts(hi)}]</text>
+ ${sq(w,'var(--positive)',ox)}${sq(l,'var(--negative)',ox2)}
+ <text x="${ox}" y="124">${w} fixed</text><text x="${ox2}" y="124">${l} broken${w>60||l>60?' · 1 square = 1 problem, first 60':''}</text>
+ <text x="${R}" y="124" text-anchor="end">pts · n = ${n.toLocaleString()}</text></svg>`;
+}
+function barViz(rows,ref){
+ const W=560,rh=28,H=rows.length*rh+22,L=150,R=W-50,a=.5,b=1,x=v=>L+(Math.max(a,v)-a)/(b-a)*(R-L);
+ let s='';rows.forEach(([lab,v,hl],i)=>{const y=i*rh+6,c=hl===1?'var(--negative)':hl===2?'var(--positive)':'var(--control)';
+  s+=`<text x="${L-8}" y="${y+14}" text-anchor="end" ${hl?'style="fill:var(--text)"':''}>${esc(lab)}</text><rect x="${L}" y="${y+2}" width="${x(v)-L}" height="16" rx="2" fill="${c}"/><text x="${x(v)+6}" y="${y+14}" class="mono" style="fill:var(--text)">${(v*100).toFixed(1)}</text>`});
+ s+=`<line x1="${x(ref)}" x2="${x(ref)}" y1="2" y2="${H-18}" stroke="var(--text)" stroke-dasharray="3 3"/>`;
+ [50,60,70,80,90,100].forEach(v=>s+=`<text x="${x(v/100)}" y="${H-4}" text-anchor="middle">${v}</text>`);
+ return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="dev scores">${s}</svg>`;
+}
+function goalViz(traj,need,N){
+ const W=560,H=108,L=16,R=W-16,a=1100,x=v=>L+(v-a)/(N-a)*(R-L);
+ let s=`<rect x="${L}" y="40" width="${R-L}" height="10" rx="2" fill="var(--active)"/>`;
+ const ch=traj[traj.length-1].v;
+ s+=`<rect x="${L}" y="40" width="${x(ch)-L}" height="10" rx="2" fill="var(--accent)"/>`;
+ s+=`<rect x="${x(ch)}" y="40" width="${x(need)-x(ch)}" height="10" fill="var(--warning)" opacity=".35"/>`;
+ s+=`<line x1="${x(need)}" x2="${x(need)}" y1="30" y2="60" stroke="var(--text)" stroke-width="1.5"/><text x="${x(need)}" y="24" text-anchor="middle" style="fill:var(--text)">${need.toLocaleString()} goal</text>`;
+ s+=`<text x="${(x(ch)+x(need))/2}" y="74" text-anchor="middle" style="fill:var(--warning);font-weight:500">${need-ch} more</text>`;
+ traj.forEach((p,i)=>{s+=`<circle cx="${x(p.v)}" cy="45" r="${i===traj.length-1?5:3}" fill="${i===traj.length-1?'var(--text)':'var(--muted)'}"/>`});
+ const lows=traj.slice(0,-1);s+=`<text x="${x(lows[0].v)}" y="92" class="mono">${lows.map(p=>p.v).join(' · ')}</text><text x="${x(lows[0].v)}" y="104">${lows.map(p=>p.l).join(' · ')}</text>`;
+ s+=`<text x="${x(ch)}" y="24" text-anchor="middle" style="fill:var(--text);font-weight:500" class="mono">${ch.toLocaleString()}</text>`;
+ s+=`<text x="${L}" y="74">1,100</text><text x="${R}" y="74" text-anchor="end">${N.toLocaleString()}</text>`;
+ return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="champion ${ch} of ${N}, goal ${need}">${s}</svg>`;
+}
+function numberLine(c,guess,revealed){
+ const W=560,H=74,L=16,R=W-16,x=v=>L+(v-c.min)/(c.max-c.min)*(R-L),span=c.max-c.min;
+ const stepT=span>100?20:span>20?5:span>10?2:1;
+ let s=`<line x1="${L}" x2="${R}" y1="36" y2="36" stroke="var(--control)" stroke-width="2"/>`;
+ for(let v=Math.ceil(c.min/stepT)*stepT;v<=c.max;v+=stepT)s+=`<line x1="${x(v)}" x2="${x(v)}" y1="31" y2="41" stroke="var(--control)"/><text x="${x(v)}" y="58" text-anchor="middle">${c.unit==='pts'&&v>0?'+':''}${v.toLocaleString()}</text>`;
+ if(c.unit==='pts')s+=`<line x1="${x(0)}" x2="${x(0)}" y1="24" y2="48" stroke="var(--text)"/>`;
+ s+=`<rect x="${x(guess-c.tol)}" y="28" width="${x(guess+c.tol)-x(guess-c.tol)}" height="16" rx="3" fill="var(--accent)" opacity=".18"/>`;
+ s+=`<circle cx="${x(guess)}" cy="36" r="7" fill="var(--accent)"/><text x="${x(guess)}" y="16" text-anchor="middle" class="mono" style="fill:var(--accent);font-weight:500">${fmt(c,guess)}</text>`;
+ if(revealed&&c.truth!=null){s+=`<line x1="${x(c.truth)}" x2="${x(c.truth)}" y1="22" y2="50" stroke="var(--text)" stroke-width="3"/><text x="${x(c.truth)}" y="70" text-anchor="middle" class="mono" style="fill:var(--text);font-weight:600">${fmt(c,c.truth)}</text>`}
+ return `<svg class="nl" id="nl" viewBox="0 0 ${W} ${H}" role="slider" aria-valuemin="${c.min}" aria-valuemax="${c.max}" aria-valuenow="${guess}" tabindex="0">${s}</svg>`;
+}
+const fmt=(c,v)=>c.unit==='pts'?pts(v):c.int?Math.round(v).toLocaleString():v.toFixed(1)+(c.unit||'');
+
+/* ---------- deck */
+function render(){
+ renderPips();renderScore();
+ if(cur>=CARDS.length)return renderDone();
+ const c=CARDS[cur],p=S.preds[c.id],rev=!!p;
+ if(!ui[c.id])ui[c.id]={choice:p?p.choice:null,guess:p?p.guess:c.start,conf:p?p.conf:70};
+ const u=ui[c.id];
+ let body='';
+ if(c.type==='binary'){
+  body=`<div class="opts ${c.opts.length>2?'many':''}" style="--n:${c.opts.length}">${c.opts.map((o,i)=>{
+   let cl=u.choice===i?' on':'';if(rev&&c.truth!=null){if(i===c.truth)cl+=' truth';else if(u.choice===i)cl+=' wrong'}
+   return `<button class="opt${cl}" data-i="${i}" ${rev?'disabled':''}><kbd>${i+1}</kbd>${esc(o)}</button>`}).join('')}</div>`;
+ }else body=numberLine(c,u.guess,rev);
+ const confLabel=c.type==='number'?`Sure it lands in the band`:`Sure`;
+ body+=`<div class="conf"><label for="cf">${confLabel}</label><input type="range" id="cf" min="50" max="100" step="5" value="${u.conf}" ${rev?'disabled':''}><output id="cfo">${u.conf}%</output></div>`;
+ let rv='';
+ if(rev){
+  const open=c.truth==null;
+  const verdict=open?'<span class="pill warn">Open</span>':p.hit?'<span class="pill pos">Hit</span>':'<span class="pill neg">Miss</span>';
+  const truthTxt=open?'':c.type==='binary'?esc(c.opts[c.truth]):fmt(c,c.truth);
+  const yours=c.type==='binary'?esc(c.opts[p.choice]):fmt(c,p.guess);
+  rv=`<div class="reveal"><div class="verdict">${verdict}${open?'':`<b>${truthTxt}</b>`}<span class="you">you: ${yours} at ${p.conf}%</span></div>${c.viz()}<p class="why">${esc(c.why)}</p></div>`;
+ }
+ const ready=c.type==='number'||u.choice!=null;
+ $('#stage').innerHTML=`<div class="kind"><span class="pill ${c.kind[1]}">${c.kind[0]}</span><span>${cur+1} of ${CARDS.length}</span></div>
+  <p class="q">${esc(c.q)}</p><p class="ctx">${esc(c.ctx)}</p>${body}${rv}
+  <div class="actions">${rev?`<button class="go" id="next">${cur===CARDS.length-1?'Finish':'Next'} <kbd>space</kbd></button>`:`<button class="go" id="commit" ${ready?'':'disabled'}>Reveal <kbd>space</kbd></button>`}
+  ${cur>0?'<button class="ghost" id="prev">Back</button>':''}<span class="ev">${esc(c.ev)}</span></div>`;
+ wire(c);
+}
+function wire(c){
+ const u=ui[c.id],rev=!!S.preds[c.id];
+ document.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{if(!rev){u.choice=+b.dataset.i;render()}});
+ const cf=$('#cf');cf.oninput=()=>{u.conf=+cf.value;$('#cfo').textContent=u.conf+'%'};
+ const nl=$('#nl');
+ if(nl&&!rev){const set=e=>{const r=nl.getBoundingClientRect(),f=(e.clientX-r.left)/r.width,L=16/560,R=1-L;
+   u.guess=snap(c,c.min+Math.min(1,Math.max(0,(f-L)/(R-L)))*(c.max-c.min));redrawNL(c)};
+  nl.onpointerdown=e=>{nl.setPointerCapture(e.pointerId);set(e);nl.onpointermove=set};nl.onpointerup=()=>nl.onpointermove=null}
+ $('#commit')&&($('#commit').onclick=commit);$('#next')&&($('#next').onclick=next);$('#prev')&&($('#prev').onclick=prev);
+}
+function redrawNL(c){const old=$('#nl');old.outerHTML=numberLine(c,ui[c.id].guess,false);wire(c)}
+function snap(c,v){v=Math.round(v/c.step)*c.step;return Math.min(c.max,Math.max(c.min,+v.toFixed(2)))}
+function commit(){
+ const c=CARDS[cur],u=ui[c.id];if(S.preds[c.id])return;if(c.type==='binary'&&u.choice==null)return;
+ const hit=c.truth==null?null:c.type==='binary'?u.choice===c.truth:Math.abs(u.guess-c.truth)<=c.tol;
+ S.preds[c.id]={choice:u.choice,guess:u.guess,conf:u.conf,hit,t:Date.now()};save();render();
+}
+function next(){if(cur<CARDS.length){cur++;render()}}
+function prev(){if(cur>0){cur--;render()}}
+function renderPips(){
+ $('#pips').innerHTML=CARDS.map((c,i)=>{const p=S.preds[c.id];const cl=i===cur?'cur':!p?'':p.hit==null?'pend':p.hit?'hit':'miss';
+  return `<button class="pip ${cl}" data-i="${i}" aria-label="card ${i+1}"></button>`}).join('');
+ document.querySelectorAll('.pip').forEach(b=>b.onclick=()=>{cur=+b.dataset.i;render()});
+}
+function renderScore(){
+ const ps=Object.values(S.preds),sc=ps.filter(p=>p.hit!=null);
+ const hits=sc.filter(p=>p.hit).length;
+ $('#hits').textContent=`${hits}/${sc.length}`;
+ $('#brier').textContent=sc.length?(sc.reduce((a,p)=>a+Math.pow(p.conf/100-(p.hit?1:0),2),0)/sc.length).toFixed(2):'–';
+ $('#pendn').textContent=ps.length-sc.length;
+ // calibration: stated confidence vs hit rate
+ const W=268,H=200,L=34,B=170,T=10,R=W-10,x=v=>L+(v-50)/50*(R-L),y=v=>B-v/100*(B-T);
+ let s='';[0,50,100].forEach(v=>s+=`<line x1="${L}" x2="${R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`);
+ [50,75,100].forEach(v=>s+=`<text x="${x(v)}" y="${B+16}" text-anchor="middle">${v}</text>`);
+ s+=`<line x1="${x(50)}" y1="${y(50)}" x2="${x(100)}" y2="${y(100)}" stroke="var(--control)" stroke-dasharray="4 4"/>`;
+ s+=`<text x="${(L+R)/2}" y="${H-2}" text-anchor="middle">confidence</text><text x="10" y="${(T+B)/2}" text-anchor="middle" transform="rotate(-90 10 ${(T+B)/2})">hit rate</text>`;
+ const bins=[[50,60],[60,70],[70,80],[80,90],[90,101]];
+ const pts_=bins.map(([a,b])=>{const g=sc.filter(p=>p.conf>=a&&p.conf<b);return g.length?{c:g.reduce((s,p)=>s+p.conf,0)/g.length,h:100*g.filter(p=>p.hit).length/g.length,n:g.length}:null}).filter(Boolean);
+ if(pts_.length>1)s+=`<polyline points="${pts_.map(p=>x(p.c)+','+y(p.h)).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="1.5"/>`;
+ pts_.forEach(p=>s+=`<circle cx="${x(p.c)}" cy="${y(p.h)}" r="${3+Math.sqrt(p.n)*2}" fill="var(--accent)" opacity=".85"><title>${p.n} at ~${p.c.toFixed(0)}%: ${p.h.toFixed(0)}% hit</title></circle>`);
+ $('#cal').innerHTML=s;
+}
+let timer;
+function renderDone(){
+ renderPips();
+ const open=CARDS.filter(c=>c.truth==null&&S.preds[c.id]);
+ const jobs=D.tasks.filter(t=>t.status==='stalled'&&t.kind==='eval'&&t.progress&&t.progress.total)
+  .map(t=>({id:t.id,title:t.title.split(' · ').slice(0,2).join(' · '),done:t.progress.done,total:t.progress.total,rate:(t.progress.done/Math.max(30,t.updated-t.created))}));
+ // data-proto: these evals are "stalled" in the snapshot; here they tick forward at their measured rate to show the live view.
+ const draw=()=>{$('#jobs').innerHTML=jobs.map(j=>{const pct=100*j.done/j.total,eta=(j.total-j.done)/j.rate;
+  return `<div class="job"><div class="l"><b>${esc(j.title)}</b><span class="m">${Math.floor(j.done).toLocaleString()}/${j.total.toLocaleString()} · ${(j.rate*60).toFixed(1)}/min · ${eta>3600?(eta/3600).toFixed(1)+' h':Math.ceil(eta/60)+' min'}</span></div><div class="bar"><i style="width:${pct}%"></i></div></div>`}).join('')};
+ $('#stage').innerHTML=`<div class="done-h"><h2 style="font-size:20px">You're caught up</h2><span class="since">${Object.values(S.preds).filter(p=>p.hit!=null).length} scored · ${open.length} waiting</span></div>
+  <div class="jobs" id="jobs"></div>
+  ${open.length?`<div class="pend-list">${open.map(c=>`<div><span class="pill warn">Open</span>${esc(c.q)}<span class="mono">${esc(c.type==='binary'?c.opts[S.preds[c.id].choice]:fmt(c,S.preds[c.id].guess))} · ${S.preds[c.id].conf}%</span></div>`).join('')}</div>`:''}
+  <div class="actions"><button class="ghost" id="prev">Back</button></div>`;
+ $('#prev').onclick=prev;draw();clearInterval(timer);
+ timer=setInterval(()=>{if(cur<CARDS.length)return clearInterval(timer);jobs.forEach(j=>j.done=Math.min(j.total,j.done+j.rate*2*(.7+Math.random()*.6)));draw()},2000);
+}
+
+/* ---------- concepts */
+let CONCEPTS=[];
+function buildConcepts(have,need,N,vb){
+ const pb=D.hills['percent-base'],ex=pb.examples[0];
+ const capHits=34,capWrong=29; // from percent-base-2048-v1 change: "34 cap hits, 29 wrong"
+ CONCEPTS=[
+  {id:'paired',t:'Paired delta',viz:miniPaired(vb),qs:[
+   {q:`${vb.wins} fixed, ${vb.losses} broken, n = ${N.toLocaleString()}. Paired delta?`,o:[`+${((vb.wins-vb.losses)/N*100).toFixed(1)} pts`,`+${(vb.wins/N*100).toFixed(1)} pts`,`+${((vb.wins+vb.losses)/N*100).toFixed(1)} pts`],a:0},
+   {q:'Two models both score 90%. Can their paired delta be non-zero?',o:['Yes','No'],a:1}]},
+  {id:'ladder',t:'The gate ladder',viz:miniLadder(),qs:[
+   {q:'A candidate passes dev. What runs next?',o:['random50','full','control'],a:0},
+   {q:'Which rung needs "better", not just "not worse"?',o:['random100','full','random50'],a:1}]},
+  {id:'ci',t:'Interval crosses zero',viz:miniCI(),qs:[
+   {q:'+1.62 pts, 90% interval [−0.54, +3.78]. Widen to the next rung?',o:['Yes','No'],a:1},
+   {q:'What narrows the interval most?',o:['More examples','Rerunning the same greedy eval'],a:0}]},
+  {id:'percent',t:'Percent-base failures',viz:miniPercent(ex),qs:[
+   {q:'$80k rises by 150%. New value?',o:['$200k','$120k','$230k'],a:0},
+   {q:`${pb.share.count} of ${pb.share.of} archived errors are in this category. All caused by the percent base?`,o:['Yes','Not proven'],a:1}]},
+  {id:'cap',t:'Truncation ceiling',viz:miniCap(capHits,capWrong,N),qs:[
+   {q:`At 1,024 tokens, ${capHits} full answers hit the cap. About how many were wrong?`,o:[`${capWrong}`,'10','34'],a:0},
+   {q:`If 2,048 tokens fixed all ${capWrong}, would the champion reach ${need.toLocaleString()}?`,o:['Yes',`No: ${have+capWrong} at best`],a:1}]},
+ ];
+ renderConcepts();
+}
+function renderConcepts(){
+ let ok=0,tot=0;
+ $('#concepts').innerHTML=CONCEPTS.map(c=>{const r=S.concepts[c.id]||[];
+  const dots=c.qs.map((_,i)=>{tot++;if(r[i]===true)ok++;return `<b class="${r[i]===true?'ok':r[i]===false?'no':''}"></b>`}).join('');
+  return `<button class="concept" data-id="${c.id}">${c.viz}<span class="t">${esc(c.t)}<i>${dots}</i></span></button>`}).join('');
+ $('#cscore').textContent=`${ok} of ${tot}`;
+ document.querySelectorAll('.concept').forEach(b=>b.onclick=()=>openConcept(b.dataset.id));
+}
+let dlgState=null;
+function openConcept(id){const c=CONCEPTS.find(x=>x.id===id);const r=S.concepts[id]||[];let qi=r.findIndex(v=>v==null);if(qi<0)qi=r.length<c.qs.length?r.length:0;dlgState={c,qi,ans:null};drawDlg();$('#dlg').showModal()}
+function drawDlg(){
+ const {c,qi,ans}=dlgState,q=c.qs[qi];
+ // shuffle each question's options once, so the answer is not always in the same slot
+ if(!q._shuf){const t=q.o[q.a],o=q.o.slice();for(let i=o.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[o[i],o[j]]=[o[j],o[i]]}q.o=o;q.a=o.indexOf(t);q._shuf=1}
+ $('#dlg').innerHTML=`<button class="ghost x" id="dx">Close</button><h2>${esc(c.t)}</h2><div class="cv">${c.viz}</div>
+  <div class="cq"><p>${esc(q.q)}</p><div class="opts">${q.o.map((o,i)=>{let cl='';if(ans!=null){if(i===q.a)cl=' truth';else if(i===ans)cl=' wrong'}
+   return `<button class="opt${cl}" data-i="${i}" ${ans!=null?'disabled':''}><kbd>${i+1}</kbd>${esc(o)}</button>`}).join('')}</div>
+  <div class="actions">${ans!=null?(ans===q.a?'<span class="verdict ok">✓ Right</span>':`<span class="verdict no">✗ Wrong · ${esc(q.o[q.a])}</span>`):''}<span class="res">${qi+1} of ${c.qs.length}</span>${ans!=null?`<button class="go" id="dn">${qi<c.qs.length-1?'Next':'Done'} <kbd>space</kbd></button>`:''}</div></div>`;
+ $('#dx').onclick=()=>$('#dlg').close();
+ document.querySelectorAll('#dlg .opt').forEach(b=>b.onclick=()=>answerConcept(+b.dataset.i));
+ $('#dn')&&($('#dn').onclick=advConcept);
+}
+function answerConcept(i){const st=dlgState;if(st.ans!=null||i>=st.c.qs[st.qi].o.length)return;st.ans=i;const r=S.concepts[st.c.id]||[];r[st.qi]=i===st.c.qs[st.qi].a;S.concepts[st.c.id]=r;save();drawDlg();renderConcepts()}
+function advConcept(){const st=dlgState;if(st.qi<st.c.qs.length-1){st.qi++;st.ans=null;drawDlg()}else $('#dlg').close()}
+
+function miniPaired(vb){let s='';const tot=96,w=Math.round(vb.wins/vb.n*tot*6),l=Math.round(vb.losses/vb.n*tot*6);
+ for(let i=0;i<tot;i++){const c=i<w?'var(--positive)':i<w+l?'var(--negative)':'var(--active)';s+=`<rect x="${(i%16)*10}" y="${Math.floor(i/16)*10}" width="8" height="8" rx="1" fill="${c}"/>`}
+ return `<svg viewBox="0 0 158 58">${s}</svg>`}
+function miniLadder(){const r=['dev','r50','r100','full'];let s=`<line x1="10" x2="150" y1="22" y2="22" stroke="var(--control)" stroke-width="2"/>`;
+ r.forEach((n,i)=>{const x=10+i*46.6;s+=`<circle cx="${x}" cy="22" r="6" fill="${i<3?'var(--positive)':'var(--surface)'}" stroke="${i<3?'var(--positive)':'var(--control)'}" stroke-width="2"/><text x="${x}" y="46" text-anchor="middle">${n}</text>`});
+ return `<svg viewBox="0 0 160 58">${s}</svg>`}
+function miniCI(){const rows=[[1.62,-.54,3.78],[1.70,.04,3.53],[.62,-1.12,2.33]],x=v=>80+v*16;let s=`<line x1="${x(0)}" x2="${x(0)}" y1="2" y2="56" stroke="var(--text)"/>`;
+ rows.forEach(([d,lo,hi],i)=>{const y=12+i*17,c=lo>0?'var(--positive)':'var(--muted)';s+=`<line x1="${x(lo)}" x2="${x(hi)}" y1="${y}" y2="${y}" stroke="${c}" stroke-width="5" stroke-linecap="round" opacity=".4"/><circle cx="${x(d)}" cy="${y}" r="3.5" fill="${c}"/>`});
+ return `<svg viewBox="0 0 160 58">${s}</svg>`}
+function miniPercent(){return `<svg viewBox="0 0 160 58"><rect x="4" y="22" width="40" height="14" rx="2" fill="var(--control)"/><text x="24" y="52" text-anchor="middle">80k</text>
+ <rect x="56" y="22" width="60" height="14" rx="2" fill="var(--negative)" opacity=".6"/><text x="86" y="14" text-anchor="middle" style="fill:var(--negative)">×1.5</text>
+ <rect x="56" y="40" width="100" height="10" rx="2" fill="var(--positive)" opacity=".7"/><text x="140" y="14" text-anchor="middle" style="fill:var(--positive)">×2.5</text></svg>`}
+function miniCap(h,w,N){const x=v=>4+v/N*152;return `<svg viewBox="0 0 160 58"><rect x="4" y="18" width="152" height="12" rx="2" fill="var(--active)"/><rect x="${x(N-h)}" y="18" width="${x(N)-x(N-h)}" height="12" fill="var(--warning)"/><rect x="${x(N-w)}" y="32" width="${x(N)-x(N-w)}" height="6" fill="var(--negative)"/><text x="4" y="52">${N.toLocaleString()}</text><text x="156" y="12" text-anchor="end">${h} at cap</text></svg>`}
+
+/* ---------- keys */
+document.addEventListener('keydown',e=>{
+ if(e.metaKey||e.ctrlKey||e.altKey)return;
+ const dlg=$('#dlg');
+ if(dlg.open){const n=+e.key;if(n>=1&&n<=4){answerConcept(n-1);e.preventDefault()}else if((e.key===' '||e.key==='Enter')&&dlgState.ans!=null){advConcept();e.preventDefault()}return}
+ if(e.key==='['){prev();e.preventDefault();return}
+ if(e.key===']'){next();e.preventDefault();return}
+ if(cur>=CARDS.length){if(e.key==='ArrowLeft'){prev();e.preventDefault()}return}
+ const c=CARDS[cur],u=ui[c.id],rev=!!S.preds[c.id];
+ if(e.key===' '||e.key==='Enter'){e.preventDefault();rev?next():commit();return}
+ if(rev){if(e.key==='ArrowRight'){next();e.preventDefault()}else if(e.key==='ArrowLeft'){prev();e.preventDefault()}return}
+ const n=+e.key;
+ if(c.type==='binary'&&n>=1&&n<=c.opts.length){u.choice=n-1;render();return}
+ if(e.key==='ArrowUp'||e.key==='ArrowDown'){u.conf=Math.min(100,Math.max(50,u.conf+(e.key==='ArrowUp'?5:-5)));$('#cf').value=u.conf;$('#cfo').textContent=u.conf+'%';e.preventDefault();return}
+ if(c.type==='number'&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){const st=(e.shiftKey?(c.big||4):1)*c.step*(c.big&&!e.shiftKey?5:1);u.guess=snap(c,u.guess+(e.key==='ArrowRight'?st:-st));redrawNL(c);e.preventDefault();return}
+ if(c.type==='binary'&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){u.choice=u.choice==null?0:(u.choice+(e.key==='ArrowRight'?1:c.opts.length-1))%c.opts.length;render();e.preventDefault()}
+});
+$('#reset').onclick=()=>{S={preds:{},concepts:{}};ui={};save();cur=0;render();renderConcepts()};
+</script>
+</body></html>

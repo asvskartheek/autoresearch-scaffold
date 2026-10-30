@@ -1,4 +1,19 @@
 'use strict';
+// a reason or note as people should read it (HTML): an inline Python dict of gate statistics reads as a sentence and
+// an absolute local path as its file name (full path on hover). Shared by the model, models and hill views.
+function reasonHTML(r){
+ const P=/(\{'[a-z_]+':[^{}]*\})|((?:~|\/(?:Users|home|private|tmp|var|mnt|data|workspace))\/[^\s,;)]+)/g;
+ let out='',i=0,m;
+ while((m=P.exec(String(r??'')))){
+  out+=esc(r.slice(i,m.index));i=P.lastIndex;
+  if(m[2]){const f=m[2].replace(/[.:]+$/,''),tail=m[2].slice(f.length);out+=`<span class="mono" title="${esc(f)}">${esc(f.split('/').filter(Boolean).pop()||f)}</span>${esc(tail)}`;continue}
+  let o;try{o=JSON.parse(m[1].replace(/'/g,'"').replace(/\bNone\b/g,'null').replace(/\bTrue\b/g,'true').replace(/\bFalse\b/g,'false'))}catch(e){out+=esc(m[1]);continue}
+  const rate=[o.cand,o.base,o.delta].every(v=>v==null||Math.abs(v)<=1),f=v=>v==null?'—':rate?pts(v):(v>0?'+':v<0?'−':'')+num(Math.abs(v)),u=rate?' pts':'';
+  const bits=[o.delta!=null?`paired Δ ${f(o.delta)}${u}`:'',o.lo!=null&&o.hi!=null?`90% CI ${f(o.lo)} to ${f(o.hi)}${u}`:'',o.wins!=null?`${o.wins} wins, ${o.losses??0} losses`:'',o.n!=null?`n ${o.n}`:''].filter(Boolean);
+  out+=bits.length?`(${bits.join(', ')})`:esc(m[1]);
+ }
+ return out+esc(String(r??'').slice(i));
+}
 // models: champion first, then candidates by how far up the ladder they are, then rejected with their reasons,
 // then planned / historical / retired. A search box and a status filter narrow every group in place (no re-render,
 // so typing keeps focus); lineage (parent -> child) closes the page. Everything sits in one block: no globals leak
@@ -9,26 +24,29 @@ const nextCell=(name,g)=>{
  if(!g||g.error)return g?.error?`<span class="neg">${esc(g.error)}</span>`:DASH;
  if(g.promotable)return cmd(`arx promote ${name}`);
  const r=rungsOf(g);
- if(r?.fail){const c=r.fail.checks.find(c=>c.state==='fail');return `<span class="neg">Fails ${esc(r.fail.rung)}</span>${c?`<span class="sub"> · ${esc(short(c.slice))} ${pts(c.delta)} pts</span>`:''}`}
+ if(r?.fail){const c=r.fail.checks.find(c=>c.state==='fail');return `<span class="neg">Fails ${esc(r.fail.rung)}</span>${c?`<span class="sub"> · ${esc(short(c.slice))} ${esc(sd(c.slice,c.delta))}</span>`:''}`}
  const n=g.next?.[0];if(!n)return DASH;
  return `<span class="sub">${n.model!==name?'Champion needs':'Needs'} a run on</span> <a class="ln ms-sl" href="#slices/${enc(n.slice)}">${esc(short(n.slice))}</a>${g.next.length>1?`<span class="faint"> +${g.next.length-1} more</span>`:''}`;
 };
-// a slice scores 0/1 per example unless it says `scale: continuous` (then a mean, with its unit, and no %)
-const bin=sl=>sl?.scale!=='continuous';
-const val=(v,sl)=>(Math.abs(v)>=10?v.toFixed(1):num(v,3))+(sl?.unit?' '+sl.unit:'');
-const score=(v,sl)=>bin(sl)?pct(v):esc(val(v,sl));
-const diff=(d,sl)=>bin(sl)?pts(d):(d>0?'+':d<0?'−':'')+esc(val(Math.abs(d),sl));
-// a figure on the primary dataset's full set, and its difference to the champion on the same slice and n
+// figures in the slice's own units (core sv/sd): a count of n on 0/1 slices, "387 ms" on continuous ones, never a %
+const score=(v,k,n)=>esc(sv(k,v,n));
+const diff=(d,k)=>esc(sd(k,d));
+// a figure on the primary dataset's full set, and its change against the champion: the gate's paired Δ with its 90%
+// interval ("Noisy" when it crosses zero) when the gate ran that slice; else the plain difference, marked unpaired
 function full(k){
- const L=S.state,f=fullScore(k),c=L.champion&&k!==L.champion?fullScore(L.champion):null,sl=L.slices[L.config.primary_dataset+'/full'];
- const v=f?(f.task?`<a href="#task/${enc(f.task)}">${score(f.score,sl)}</a>`:score(f.score,sl)):DASH;
- return {v,d:f&&c?`<span class="${f.score===c.score?'sub':better(f.score,c.score)?'pos':'neg'}">${diff(f.score-c.score,sl)}</span>`:DASH};
+ const L=S.state,f=fullScore(k),c=L.champion&&k!==L.champion?fullScore(L.champion):null,sl=L.config.primary_dataset+'/full';
+ const v=f?(f.task?`<a href="#task/${enc(f.task)}">${score(f.score,sl,f.n)}</a>`:score(f.score,sl,f.n)):DASH;
+ const g=L.gates[k],mis=boardHarnessMismatch(f,c),p=(g&&!g.error&&g.champion===L.champion?(g.rungs||[]).flatMap(r=>r.checks).find(x=>x.slice===sl&&x.delta!=null):null)||(mis?ownPair(f):null);
+ if(p){const noisy=p.lo<0&&0<p.hi,[x,y]=negSlice(sl)?[p.hi,p.lo]:[p.lo,p.hi];
+  return {v,d:`<div class="ms-pd"><span class="${noisy?'sub':p.delta>0?'pos':p.delta<0?'neg':'sub'}">${diff(p.delta,sl)}</span>${noisy?pill('Noisy','noisy'):''}</div>${p.lo!=null&&p.hi!=null?`<div class="sub ms-ci" title="90% interval of the paired difference, n ${p.n}">${diff(x,sl).replace(/ \S+$/,'')} to ${diff(y,sl)}</div>`:''}`}}
+ if(mis)return {v,d:'<span class="faint">Different harness</span>'};
+ return {v,d:f&&c?`<span class="${f.score===c.score?'sub':better(f.score,c.score)?'pos':'neg'}" title="Difference of the two full-set scores, not paired per example">${diff(f.score-c.score,sl)}</span><div class="faint ms-ci">unpaired</div>`:DASH};
 }
 // a model reads by its title; the id (what every command takes) sits under it in mono, with its phase
 const titled=(k,m)=>!!(m.title&&m.title!==k);
 const nameCell=(k,m,sub=true)=>{
  const t=titled(k,m),line=[m.phase?esc(m.phase):'',t?`<span class="ms-id"><span class="mono ms-kid">${esc(k)}</span>${copyBtn(k)}</span>`:''].filter(Boolean).join('<span class="faint"> · </span>');
- return `<div class="two">${t?`<a class="ms-nm" href="#model/${enc(k)}">${mn(k)}</a>`:`<span class="ms-id"><a class="ms-nm mono" href="#model/${enc(k)}">${esc(k)}</a>${copyBtn(k)}</span>`}${line?`<span class="sub ms-line">${line}</span>`:''}${sub&&!t&&m.change?`<span class="sub ms-ch">${esc(firstLine(m.change))}</span>`:''}</div>`;
+ return `<div class="two">${t?`<a class="ms-nm" href="#model/${enc(k)}">${esc(m.title)}</a>`:`<span class="ms-id"><a class="ms-nm mono" href="#model/${enc(k)}" title="${esc(k)}">${mn(k)}</a>${copyBtn(k)}</span>`}${line?`<span class="sub ms-line">${line}</span>`:''}${sub&&!t&&m.change?`<span class="sub ms-ch">${esc(firstLine(m.change))}</span>`:''}</div>`;
 };
 const parentCell=(k,p)=>p&&p!==k?`<a class="ms-par" href="#model/${enc(p)}" title="${esc(p)}">${mn(p)}</a>`:DASH;
 const hillCell=h=>{const x=S.state.hills[h];return h?`<a class="ms-hill" href="#hill/${enc(h)}">${esc(x?.title||h)}</a>`:DASH};
@@ -66,9 +84,9 @@ VIEWS.models=()=>{
  const L=S.state,models=L.models,gates=L.gates,champ=L.champion;
  const all=Object.entries(models),by=s=>all.filter(([,m])=>m.status===s);
  const prog=k=>{const r=rungsOf(gates[k]);return r?(gates[k].promotable?99:r.fail?-1:r.done):-2};
- const cands=by('candidate').sort((a,b)=>prog(b[0])-prog(a[0])||b[1].created-a[1].created);
+ const cands=by('candidate').filter(([k])=>!superseded(k)).sort((a,b)=>prog(b[0])-prog(a[0])||b[1].created-a[1].created);
  const rej=by('rejected').sort((a,b)=>b[1].created-a[1].created);
- const other=all.filter(([,m])=>!['champion','candidate','rejected'].includes(m.status)).sort((a,b)=>b[1].created-a[1].created);
+ const other=all.filter(([k,m])=>!['champion','candidate','rejected'].includes(m.status)||m.status==='candidate'&&superseded(k)).sort((a,b)=>b[1].created-a[1].created);
  const fullKey=L.config.primary_dataset+'/full',fullN=L.slices[fullKey]?.n,cf=champ?fullScore(champ):null;
  const promotable=cands.filter(([k])=>gates[k]?.promotable),failing=cands.filter(([k])=>rungsOf(gates[k])?.fail);
  const lead=cands[0],lr=lead&&rungsOf(gates[lead[0]]);
@@ -78,35 +96,35 @@ VIEWS.models=()=>{
  let finding;
  if(!champ)finding=`No champion yet. Register a baseline with <code>arx model add &lt;name&gt; --champion</code>; candidates climb against it.`;
  else{
-  finding=`${mlink(champ)} is champion${cf?` at <b>${score(cf.score,L.slices[fullKey])}</b> on ${esc(short(fullKey))} (n ${cf.n.toLocaleString()})`:''}. `;
+  finding=`${mlink(champ)} is champion${cf?` at <b>${score(cf.score,fullKey,cf.n)}</b> on ${esc(short(fullKey))} (n ${cf.n.toLocaleString()})`:''}. `;
   if(promotable.length)finding+=`${mlink(promotable[0][0])} has passed every rung and is ready to promote.`;
   else if(lr?.done)finding+=`Closest challenger: ${mlink(lead[0])}, ${lr.done} of ${lr.of} rungs passed${lr.pending?`; ${esc(lr.pending.rung)} is next`:''}.`;
   else if(cands.length)finding+=`${plural(cands.length,'candidate')} registered; none has passed a rung yet.`;
   else finding+=`No candidates are climbing.`;
  }
- const acts=promotable.length?cmd('arx promote '+promotable[0][0]):lead?`<a class="btn" href="#model/${enc(lead[0])}" title="${mn(lead[0])}">Open closest candidate</a>`:'';
+ const acts=promotable.length?cmd('arx promote '+promotable[0][0]):lead?`<a class="btn" href="#model/${enc(lead[0])}" title="${mnt(lead[0])}">Open closest candidate</a>`:'';
  const h=[page({title:'Models',crumbs:[['Models','#models']],finding,acts})];
  h.push(kpis([
-  ['Champion',cf?score(cf.score,L.slices[fullKey]):DASH,champ?`<a class="ms-kn" href="#model/${enc(champ)}" title="${esc(champ)}">${mn(champ)}</a>${cf?` · ${esc(short(fullKey))}, n ${cf.n.toLocaleString()}`:''}`:'No champion yet'],
+  ['Champion',cf?score(cf.score,fullKey,cf.n):DASH,champ?`<a class="ms-kn" href="#model/${enc(champ)}" title="${esc(champ)}">${mn(champ)}</a>${cf?` · ${esc(short(fullKey))}, n ${cf.n.toLocaleString()}`:''}`:'No champion yet'],
   ['Climbing',String(cands.length),cands.length?`${promotable.length} ready to promote · ${failing.length} failing a rung`:'none registered'],
   ['Rejected',String(rej.length),rej.length?'kept with their reasons':'none'],
-  ['Planned or archived',String(other.length),other.length?[...new Set(other.map(([,m])=>m.status))].join(' · '):'none'],
+  ['Planned, superseded or archived',String(other.length),other.length?[...new Set(other.map(([,m])=>m.status))].join(' · '):'none'],
  ]));
 
- const seg=[['all','All',all.length],['ladder','On the ladder',cands.length+(champ?1:0)],['rejected','Rejected',rej.length],['other','Planned or archived',other.length]];
+ const seg=[['all','All',all.length],['ladder','On the ladder',cands.length+(champ?1:0)],['rejected','Rejected',rej.length],['other','Other models',other.length]];
  h.push(`<div id="ms-root"><div class="ms-bar"><input id="ms-q" class="ms-q" type="search" placeholder="Search models, hills, reasons" aria-label="Search models" autocomplete="off" value="${esc(S.msQ||'')}" oninput="msSearch(this)" onfocus="S.msFocus=1" onblur="S.msFocus=0"><div class="seg" role="group" aria-label="Status">${seg.map(([f,l,n])=>`<button type="button" data-f="${f}" onclick="msFilter('${f}')">${l}<small>${n}</small></button>`).join('')}</div></div>`);
 
  const lh=new Set([champ,...cands.map(([k])=>k)].filter(k=>models[k]?.hill).map(k=>models[k].hill)),oneHill=lh.size===1?[...lh][0]:null;
  const fullHead=[`Full set${fullN!=null?` <span class="faint">n ${fullN.toLocaleString()}</span>`:''}`,'num'];
- const champRow=champ&&models[champ]?[row(champ,models[champ],[`<td>${nameCell(champ,models[champ])}</td>`,`<td>${st('champion','Champion')}</td>`,...(oneHill!=null?[]:[`<td>${hillCell(models[champ].hill)}</td>`]),`<td>${ladder(gates[champ],{compact:true})||DASH}</td>`,`<td class="sub">${models[champ].promoted?'Since '+stamp(models[champ].promoted):'Baseline'}</td>`,`<td class="num">${full(champ).v}</td>`,`<td class="num">${DASH}</td>`])]:[];
+ const champRow=champ&&models[champ]?[row(champ,models[champ],[`<td>${nameCell(champ,models[champ])}</td>`,`<td>${st('champion','Champion')}</td>`,...(oneHill!=null?[]:[`<td class="ms-hm">${hillCell(models[champ].hill)}</td>`]),`<td class="ms-hm">${ladder(gates[champ],{compact:true})||DASH}</td>`,`<td class="sub ms-hs">${models[champ].promoted?'Since '+stamp(models[champ].promoted):'Baseline'}</td>`,`<td class="num ms-hs">${full(champ).v}</td>`,`<td class="num">${DASH}</td>`])]:[];
  const candRows=cands.map(([k,m])=>{const f=full(k),r=rungsOf(gates[k]);
-  return row(k,m,[`<td>${nameCell(k,m)}</td>`,`<td>${gates[k]?.promotable?st('pass','Ready'):r?.fail?st('fail','Failing'):st('running','Climbing')}${r?`<div class="sub">${r.done} of ${r.of} rungs</div>`:''}</td>`,...(oneHill!=null?[]:[`<td>${hillCell(m.hill)}</td>`]),`<td>${ladder(gates[k],{compact:true})||DASH}</td>`,`<td class="ms-next">${nextCell(k,gates[k])}</td>`,`<td class="num">${f.v}</td>`,`<td class="num">${f.d}</td>`])});
- h.push(panel('On the ladder',(champRow.length||candRows.length)?table(['Model','Status',...(oneHill!=null?[]:['Hill']),'Gate','Next step',fullHead,['Δ vs champion','num']],[...champRow,...candRows]):empty('No models yet','Register one with <code>arx model add &lt;name&gt;</code>'),{meta:(champ?`paired against ${mlink(champ)}`:'')+(oneHill?` · every candidate climbs ${hillCell(oneHill)}`:''),cls:'section ms-ladder" data-grp="ladder'}));
+  return row(k,m,[`<td>${nameCell(k,m)}</td>`,`<td>${gates[k]?.promotable?st('pass','Ready'):r?.fail?st('fail','Failing'):st('running','Climbing')}${r?`<div class="sub">${r.done} of ${r.of} rungs</div>`:''}</td>`,...(oneHill!=null?[]:[`<td class="ms-hm">${hillCell(m.hill)}</td>`]),`<td class="ms-hm">${ladder(gates[k],{compact:true})||DASH}</td>`,`<td class="ms-next ms-hs">${nextCell(k,gates[k])}</td>`,`<td class="num ms-hs">${f.v}</td>`,`<td class="num">${f.d}</td>`])});
+ h.push(panel('On the ladder',(champRow.length||candRows.length)?table(['Model','Status',...(oneHill!=null?[]:[['Hill','ms-hm']]),['Gate','ms-hm'],['Next step','ms-hs'],[fullHead[0],'num ms-hs'],['Δ vs champion','num']],[...champRow,...candRows]):empty('No models yet','Register one with <code>arx model add &lt;name&gt;</code>'),{meta:(champ?`paired against ${mlink(champ)}`:'')+(oneHill?` · every candidate climbs ${hillCell(oneHill)}`:''),cls:'section ms-ladder" data-grp="ladder'}));
 
- h.push(panel('Rejected',rej.length?table(['Model','Why it was rejected','Parent',fullHead,['Δ pts vs champion','num']],rej.map(([k,m])=>{const f=full(k);
-  return row(k,m,[`<td>${nameCell(k,m,false)}</td>`,`<td class="ms-why">${m.reason?esc(m.reason):'<span class="dash">No reason recorded</span>'}</td>`,`<td>${parentCell(k,m.parent)}</td>`,`<td class="num">${f.v}</td>`,`<td class="num">${f.d}</td>`])})):empty('Nothing rejected','<code>arx reject &lt;name&gt; --reason "…"</code> keeps a failed candidate in the ledger'),{meta:rej.length?plural(rej.length,'model'):'',cls:'section" data-grp="rejected'}));
+ h.push(panel('Rejected',rej.length?table(['Model','Why it was rejected',['Parent','ms-hm'],[fullHead[0],'num ms-hs'],['Δ vs champion','num']],rej.map(([k,m])=>{const f=full(k);
+  return row(k,m,[`<td>${nameCell(k,m,false)}</td>`,`<td class="ms-why">${m.reason?reasonHTML(m.reason):'<span class="dash">No reason recorded</span>'}</td>`,`<td class="ms-hm">${parentCell(k,m.parent)}</td>`,`<td class="num ms-hs">${f.v}</td>`,`<td class="num">${f.d}</td>`])})):empty('Nothing rejected','<code>arx reject &lt;name&gt; --reason "…"</code> keeps a failed candidate in the ledger'),{meta:rej.length?plural(rej.length,'model'):'',cls:'section" data-grp="rejected'}));
 
- h.push(panel('Planned or archived',other.length?table(['Model','Status','Parent','Note'],other.map(([k,m])=>row(k,m,[`<td>${nameCell(k,m,false)}</td>`,`<td>${st(m.status)}</td>`,`<td>${parentCell(k,m.parent)}</td>`,`<td class="ms-why sub">${esc(m.reason||firstLine(m.change||''))||DASH}</td>`]))):empty('None','<code>arx model add &lt;name&gt; --status planned</code> records an idea before it runs'),{meta:other.length?plural(other.length,'model'):'',cls:'section" data-grp="other'}));
+ h.push(panel('Planned, superseded or archived',other.length?table(['Model','Status',['Parent','ms-hm'],'Note'],other.map(([k,m])=>row(k,m,[`<td>${nameCell(k,m,false)}</td>`,`<td>${superseded(k)?pill('Superseded','quiet'):st(m.status)}</td>`,`<td class="ms-hm">${parentCell(k,m.parent)}</td>`,`<td class="ms-why sub">${m.reason?reasonHTML(m.reason):esc(firstLine(m.change||''))||DASH}</td>`]))):empty('None','<code>arx model add &lt;name&gt; --status planned</code> records an idea before it runs'),{meta:other.length?plural(other.length,'model'):'',cls:'section" data-grp="other'}));
 
  h.push(`<section class="card section ms-nomatch" id="ms-nomatch" hidden>${empty('No models match','Clear the search or choose another status')}</section>`);
  const lin=lineage(models,gates);

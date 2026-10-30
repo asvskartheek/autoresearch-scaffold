@@ -130,7 +130,9 @@ layout. This holds for every paper, every figure and every widget.
       section (`<section data-block="system">`) near the top that names the starting champion and the champion and
       draws both systems side by side: what each added part does, how it works on one paraphrased example, and
       which errors it fixed. The first thing a reader wants is what the new system is and why it is better; a
-      paper that only reports the number fails them. A link to every
+      paper that only reports the number fails them. Each part is drawn, not labelled: where its input comes from,
+      what it outputs on the example (the readout on the sheet, the rows it finds), and its cost (latency, calls).
+      The same holds for a model's paper: a part named only in words is a part the reader cannot learn. A link to every
       internal hill paper (`<a class="internal" href="../<hill>" target="_top">`); "draft" while the goal is open,
       "abandoned" if it was. No dev-slice number is the claim.
 
@@ -173,12 +175,28 @@ Review loop:
 
 - Compare only on identical ID sets. Gates use paired deltas on the same IDs, never scores from different slices.
 - Errors, crashes and timeouts score 0. A partial run is never ranked.
+- A pooled side whose rows are at least 10% errors is flagged (`arx gate`, `arx goal status`, the dashboard): the
+  number still counts, but it mostly measures the harness. Fix the harness and re-run before reading it.
 - Report n, the paired delta and its 90% bootstrap interval. A delta whose interval spans 0 is shown as *noisy*;
   on 20–50 examples most deltas are. That is why the ladder widens before the claim does.
 - Re-run the champion when the harness, judge, data or tools change. Old numbers do not transfer (`arx baseline --replace`).
 - The target slice is used for development. It is never evidence of general improvement; the full rung is.
 - Never show gold answers, gold sources or judge rationale to the system being evaluated.
 - Primary KPIs travel together: score, cost per example, latency p50/p95. A win that triples cost is reported as such.
+
+## Harness contracts
+
+A run can declare the harness it was made with: `arx.evaluate(..., config={"baseline_contract": "<hash>"})`, where
+the hash covers what must match for two runs to be compared (inference engine and version, prompt, decoding, token
+budget, scorer). It lets a project change its harness without superseding older runs.
+
+- **Pooling.** Repeats of one model on one slice are pooled per example only when they declare the same contract.
+  A run that declares none pools only with runs that declare none.
+- **Gate.** Both sides use the candidate's latest contract: its runs under that contract, and the champion's runs
+  under the same one, never the champion's newest run under another harness.
+- **Mismatch.** If the champion has no run under the candidate's contract, the check is `need_baseline` and
+  `arx gate` names the champion run to do. The dashboard shows "Champion not run on this harness"; lists that
+  compare latest runs show "Different harness" instead of a delta.
 
 ## Why "not worse" on the middle rungs
 

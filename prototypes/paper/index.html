@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="en"><head data-keep><meta charset="utf-8" data-keep><meta name="viewport" content="width=device-width,initial-scale=1" data-keep>
+<title data-keep>Champion paper</title>
+<!-- data-proto: a "reference paper" for a champion does not exist in arx yet.
+     Real, read at runtime from ../data/ (state + hill json): every score, n, hash, run id, rule, threshold, latency,
+     model change and rejection reason, hill symptom and example, decision time.
+     Real but copied from task notes (strings, not structured fields): promotion-time CIs and fix/break counts on the
+     target (1026-015459-eval-e6a9) and full (1026-023024-eval-5116), cap hits (7 / 34), token counts (369,446 vs 96,157),
+     the 2.82x batch-seconds figure (audit 1026-031545-analysis-39e2).
+     Derived: per-problem cells outside dev-percent-base-v1 and control-ordinary-v1 (full per-id rows are not exported,
+     only counts), so the 1,034 "other" cells are placed by count only. Per-id cells on the two known slices use the
+     mean over every champion run (>= 0.5 counts as right), so they need not match the single full run cell for cell.
+     CIs computed in the page use a seeded paired bootstrap (2,000 resamples) like autoresearch/core.py:paired, with a
+     different RNG, so they can differ from the ledger in the second decimal. -->
+<style data-keep>
+:root{--ground:#f2f5f8;--surface:#fff;--raised:#f5f7f9;--active:#e4e9ee;--border:#e3e7eb;--rule:#eef1f4;--control:#cdd3d9;
+ --text:#131416;--muted:#5b6168;--faint:#6f767d;--accent:#1b6c80;--accent-soft:#e3f0f3;--primary:#16181a;--on-primary:#fff;
+ --positive:#1e7b4f;--negative:#c4242a;--warning:#92400e;--chart-1:#1b6c80;--chart-2:#2f70bb;--chart-3:#a86f0c;--grid:#e9edf0;
+ --pill-positive-bg:#dcfae5;--pill-negative-bg:#ffedea;--pill-warning-bg:#fff5db;--pill-neutral-bg:#ebeef1;
+ --cell-rr:#cfd6dc;--cell-ww:#6f767d;
+ --radius-card:8px;--radius-control:6px;--radius-chip:4px;
+ --font:"IBM Plex Sans",Inter,system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+ --ground:#0c0f12;--surface:#13171b;--raised:#1a1f24;--active:#232a31;--border:#232a30;--rule:#1c2227;--control:#3a434b;
+ --text:#eef1f3;--muted:#a3abb3;--faint:#8c959d;--accent:#5cb8cc;--accent-soft:#163038;--primary:#eef1f3;--on-primary:#0c0f12;
+ --positive:#4cc38a;--negative:#f07575;--warning:#e3a84f;--chart-1:#5cb8cc;--chart-2:#6aa1e6;--chart-3:#d9a441;--grid:#222930;
+ --pill-positive-bg:#14291e;--pill-negative-bg:#2e1a1d;--pill-warning-bg:#2b2215;--pill-neutral-bg:#222930;
+ --cell-rr:#2c343b;--cell-ww:#8c959d;color-scheme:dark}}
+:root[data-theme="dark"]{
+ --ground:#0c0f12;--surface:#13171b;--raised:#1a1f24;--active:#232a31;--border:#232a30;--rule:#1c2227;--control:#3a434b;
+ --text:#eef1f3;--muted:#a3abb3;--faint:#8c959d;--accent:#5cb8cc;--accent-soft:#163038;--primary:#eef1f3;--on-primary:#0c0f12;
+ --positive:#4cc38a;--negative:#f07575;--warning:#e3a84f;--chart-1:#5cb8cc;--chart-2:#6aa1e6;--chart-3:#d9a441;--grid:#222930;
+ --pill-positive-bg:#14291e;--pill-negative-bg:#2e1a1d;--pill-warning-bg:#2b2215;--pill-neutral-bg:#222930;
+ --cell-rr:#2c343b;--cell-ww:#8c959d;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+html,body{margin:0;background:var(--ground);color:var(--text);font:14.5px/1.45 var(--font);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer}
+code,.mono{font-family:var(--mono);font-size:.9em}
+a{color:var(--accent)}
+/* top bar */
+.bar{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--ground) 92%,transparent);backdrop-filter:blur(6px);border-bottom:1px solid var(--border)}
+.bar .in{max-width:1240px;margin:0 auto;padding:8px 16px;display:flex;align-items:center;gap:8px}
+.bar .crumb{font:500 12.5px var(--mono);color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+.bar .crumb b{color:var(--text);font-weight:600}
+.tb{border:1px solid var(--control);background:var(--surface);border-radius:var(--radius-control);height:30px;padding:0 10px;font-size:13px;font-weight:500;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.tb:hover{border-color:var(--accent)}
+.tb.pri{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+.tb svg{width:14px;height:14px}
+.chips{display:none;overflow-x:auto;gap:6px;padding:0 16px 8px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chips a{flex:none;font-size:12.5px;padding:4px 10px;border-radius:999px;background:var(--pill-neutral-bg);color:var(--muted);text-decoration:none}
+.chips a.on{background:var(--primary);color:var(--on-primary)}
+/* layout */
+.wrap{max-width:1240px;margin:0 auto;padding:0 16px;display:grid;grid-template-columns:200px minmax(0,1fr);gap:32px}
+.toc{position:sticky;top:58px;align-self:start;padding:28px 0;max-height:calc(100vh - 60px);overflow:auto}
+.toc a{display:flex;gap:8px;padding:5px 8px;border-radius:var(--radius-control);color:var(--muted);text-decoration:none;font-size:13.5px}
+.toc a b{font:500 11.5px var(--mono);color:var(--faint);width:18px;flex:none;padding-top:1px}
+.toc a:hover{background:var(--raised);color:var(--text)}
+.toc a.on{background:var(--surface);color:var(--text);box-shadow:inset 2px 0 0 var(--accent)}
+main{padding:28px 0 120px;min-width:0}
+@media (max-width:999px){.wrap{grid-template-columns:minmax(0,1fr)}.toc{display:none}.chips{display:flex}}
+@media (max-width:560px){section.s{padding:16px 14px 18px}.fig.sc{margin-right:-14px;padding-right:14px}.bar .tb span{display:none}.bar .tb.pri span{display:inline}h1{font-size:22px}}
+/* header */
+.head{margin:0 0 20px}
+.kick{font:500 12px var(--mono);color:var(--faint);letter-spacing:.02em}
+h1{font:600 26px/1.2 var(--font);margin:6px 0 10px;word-break:break-word}
+.facts{display:flex;flex-wrap:wrap;gap:6px}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;padding:3px 9px;border-radius:999px;background:var(--pill-neutral-bg);color:var(--muted);white-space:nowrap}
+.pill.pos{background:var(--pill-positive-bg);color:var(--positive)}.pill.neg{background:var(--pill-negative-bg);color:var(--negative)}.pill.warn{background:var(--pill-warning-bg);color:var(--warning)}
+/* sections */
+section.s{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);padding:20px 22px 22px;margin:0 0 16px;scroll-margin-top:64px}
+.s>.hd{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}
+.s>.hd b{font:600 12px var(--mono);color:var(--faint)}
+.s>.hd h2{font:600 17px/1.3 var(--font);margin:0;flex:1}
+.s>.hd .anc{opacity:0;border:0;background:none;color:var(--faint);font:500 12px var(--mono);padding:2px 6px;border-radius:4px}
+.s:hover>.hd .anc,.s>.hd .anc:focus{opacity:1}
+.s>.hd .anc:hover{background:var(--raised);color:var(--accent)}
+h3{font:600 13px var(--mono);color:var(--faint);margin:22px 0 8px;letter-spacing:.02em}
+.fig{margin:0 0 14px}
+.fig svg{display:block;width:100%;height:auto;overflow:visible}
+.cap{font-size:12.5px;color:var(--muted);margin-top:6px}
+@media (max-width:560px){.fig.sc{overflow-x:auto;margin-right:-22px;padding-right:22px;padding-bottom:10px}.fig.sc>svg{min-width:620px}}
+/* labelled facts */
+dl.f{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 16px;margin:0;font-size:14px}
+dl.f dt{font:500 12px var(--mono);color:var(--faint);padding-top:2px}
+dl.f dd{margin:0;min-width:0;word-break:break-word}
+@media (max-width:560px){dl.f{grid-template-columns:minmax(0,1fr);gap:0}dl.f dd{margin-bottom:8px}}
+/* evidence numbers */
+.ev{border:0;background:none;padding:0 1px;font:inherit;color:inherit;font-variant-numeric:tabular-nums;border-bottom:1px dotted var(--faint);cursor:pointer;border-radius:2px}
+.ev:hover,.ev.open{background:var(--accent-soft);color:var(--accent);border-bottom-color:var(--accent)}
+.pos{color:var(--positive)}.neg{color:var(--negative)}.warn{color:var(--warning)}.muted{color:var(--muted)}.faint{color:var(--faint)}
+/* svg text */
+svg text{font-family:var(--font);font-size:12px;fill:var(--text)}
+svg .t-m{fill:var(--muted)}svg .t-f{fill:var(--faint);font-family:var(--mono);font-size:11px}
+svg .t-b{font-weight:600}svg .t-big{font-size:15px;font-weight:600}
+svg .grid{stroke:var(--grid)}svg .axis{stroke:var(--control)}
+svg .f-pos{fill:var(--positive)}svg .f-neg{fill:var(--negative)}svg .f-acc{fill:var(--accent)}svg .f-mut{fill:var(--control)}svg .f-rr{fill:var(--cell-rr)}svg .f-ww{fill:var(--cell-ww)}
+svg .f-warn{fill:var(--warning)}svg .f-raised{fill:var(--raised)}svg .f-track{fill:var(--pill-neutral-bg)}
+svg .s-pos{stroke:var(--positive)}svg .s-acc{stroke:var(--accent)}svg .s-neg{stroke:var(--negative)}svg .s-text{stroke:var(--text)}svg .s-mut{stroke:var(--faint)}
+/* tables */
+.tw{overflow-x:auto;margin:0 -4px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font:500 11.5px var(--mono);color:var(--faint);white-space:nowrap;border-bottom-color:var(--border)}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.id{font:12px var(--mono);color:var(--muted);white-space:nowrap}
+tr.na td{color:var(--faint)}
+tr.me td{background:color-mix(in srgb,var(--accent) 6%,transparent)}
+/* pipeline */
+.pipe{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin-bottom:14px}
+.stg{flex:1 1 120px;min-width:0;border:1px solid var(--border);background:var(--raised);border-radius:var(--radius-card);padding:10px 11px;position:relative}
+.stg .k{font:500 11px var(--mono);color:var(--faint);margin-bottom:4px}
+.stg .v{font-size:13px;font-weight:500;word-break:break-word}
+.stg .was{font-size:12px;color:var(--negative);text-decoration:line-through;margin-top:3px}
+.stg.chg{border-color:var(--accent);background:var(--accent-soft)}
+.stg.chg .k:after{content:" · changed";color:var(--accent)}
+.arr{flex:none;width:14px;display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:12px}
+@media (max-width:700px){.pipe{flex-direction:column}.arr{width:auto;height:14px}.arr span{transform:rotate(90deg)}}
+/* seg control */
+.seg{display:inline-flex;background:var(--pill-neutral-bg);border-radius:var(--radius-control);padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{border:0;background:none;padding:5px 11px;border-radius:4px;font-size:13px;font-weight:500;color:var(--muted)}
+.seg button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.ctl{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
+.leg{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--muted);margin:8px 0 0}
+.leg button{border:0;background:none;padding:2px 4px;border-radius:4px;display:inline-flex;align-items:center;gap:6px;color:var(--muted)}
+.leg button.dim{opacity:.35}
+.leg i{width:10px;height:10px;border-radius:2px;display:inline-block}
+/* gate ladder */
+.ladder{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:start}
+.rung{border:1px solid var(--border);border-radius:var(--radius-card);background:var(--raised);padding:10px 12px}
+.rung .rh{display:flex;justify-content:space-between;align-items:baseline;gap:6px;margin-bottom:6px}
+.rung .rh b{font-size:14px}
+.chk{border-top:1px solid var(--rule);padding-top:8px;margin-top:8px}
+.chk:first-of-type{border-top:0;padding-top:0;margin-top:0}
+.chk .rl{font:500 11.5px var(--mono);color:var(--faint);word-break:break-word}
+.chk .ob{font-size:13px;margin:3px 0 4px}
+.chk svg{width:100%;height:30px}
+@media (max-width:760px){.ladder{grid-template-columns:minmax(0,1fr)}.rung{margin-left:0!important}}
+.after{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.after .stp{flex:1 1 200px;border:1px dashed var(--control);border-radius:var(--radius-card);padding:9px 12px;font-size:13px}
+.after .stp .k{font:500 11px var(--mono);color:var(--faint)}
+/* failure gallery */
+.hills{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:900px){.hills{grid-template-columns:minmax(0,1fr)}}
+.hc{border:1px solid var(--border);border-radius:var(--radius-card);padding:12px;background:var(--surface);min-width:0}
+.hc .ht{font-weight:600;font-size:14px;margin:4px 0 6px}
+.hc .sym{font-size:13px;color:var(--muted);margin-bottom:10px}
+.exm{border:1px solid var(--rule);border-radius:var(--radius-control);padding:9px 10px;margin:8px 0 0;background:var(--raised);font-size:13px}
+.exm .q{font-weight:500;margin-bottom:6px}
+.exm .row{display:grid;grid-template-columns:44px minmax(0,1fr);gap:6px;margin:3px 0;align-items:baseline}
+.exm .row span{font:500 11px var(--mono)}
+.exm .row code{font-size:12.5px;word-break:break-word}
+.exm .why{font-size:12.5px;color:var(--muted);margin-top:6px;border-top:1px dashed var(--border);padding-top:6px}
+.idchips{display:flex;flex-wrap:wrap;gap:4px}
+.idchips button{font:11.5px var(--mono);border:1px solid var(--border);background:var(--raised);border-radius:4px;padding:2px 6px;color:var(--muted)}
+.idchips button:hover{border-color:var(--accent);color:var(--accent)}
+/* lineage */
+.lin .grp{font:500 11.5px var(--mono);color:var(--faint);padding:10px 0 4px;border-top:1px solid var(--rule)}
+.lrow{display:grid;grid-template-columns:minmax(0,210px) 86px minmax(0,1fr);gap:10px;align-items:center;padding:3px 0;cursor:pointer;border-radius:4px}
+.lrow:hover{background:var(--raised)}
+.lrow .nm{font:12.5px var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lrow svg{height:18px;width:100%}
+.ldet{display:none;grid-column:1/-1;font-size:13px;padding:6px 10px 10px;border-left:2px solid var(--border);margin:2px 0 6px 4px}
+.lrow.open+.ldet{display:block}
+@media (max-width:560px){.lrow{grid-template-columns:minmax(0,1fr) 78px}.lrow svg{grid-column:1/-1}}
+.st{font-size:11.5px;padding:1px 7px;border-radius:999px;text-align:center;white-space:nowrap}
+.st.champion{background:var(--pill-positive-bg);color:var(--positive)}.st.rejected{background:var(--pill-negative-bg);color:var(--negative)}
+.st.candidate{background:var(--pill-warning-bg);color:var(--warning)}.st.retired,.st.historical,.st.planned{background:var(--pill-neutral-bg);color:var(--muted)}
+.spine{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.spine .nd{border:1px solid var(--border);border-radius:var(--radius-card);padding:7px 10px;background:var(--raised);font-size:12.5px;min-width:0}
+.spine .nd b{display:block;font:500 12px var(--mono);word-break:break-all}
+.spine .nd.me{border-color:var(--positive);background:var(--pill-positive-bg)}
+.spine .ar{color:var(--faint)}
+/* matrix */
+.mx td,.mx th{text-align:center}.mx td:first-child,.mx th:first-child{text-align:left}
+.ok{color:var(--positive);font-weight:600}.no{color:var(--negative);font-weight:600}.part{color:var(--warning);font-weight:600}
+/* code */
+pre{margin:0;background:var(--raised);border:1px solid var(--border);border-radius:var(--radius-control);padding:10px 12px;overflow-x:auto;font:12.5px/1.55 var(--mono);position:relative}
+.cb{position:relative;margin:0 0 10px}
+.cb .cp{position:absolute;top:6px;right:6px;height:24px;font-size:11.5px;padding:0 8px;border:1px solid var(--control);background:var(--surface);border-radius:4px}
+.cmt{color:var(--faint)}
+/* popover */
+#pop{position:fixed;z-index:50;width:min(380px,calc(100vw - 24px));background:var(--surface);border:1px solid var(--control);border-radius:var(--radius-card);box-shadow:0 10px 30px rgba(0,0,0,.18);padding:12px 14px;font-size:13px;display:none}
+#pop.show{display:block}
+#pop .pv{font:600 18px var(--font);margin-bottom:2px}
+#pop .pl{color:var(--muted);margin-bottom:8px}
+#pop dl.f{font-size:12.5px;gap:4px 12px}
+#pop dl.f dd{font-family:var(--mono);font-size:12px}
+#pop .pa{display:flex;gap:6px;margin-top:10px}
+#pop .x{position:absolute;top:6px;right:8px;border:0;background:none;color:var(--faint);font-size:16px}
+@media (max-width:560px){#pop{left:12px!important;right:12px;top:auto!important;bottom:12px;width:auto}}
+#tip{position:fixed;z-index:40;pointer-events:none;background:var(--primary);color:var(--on-primary);font:12px var(--mono);padding:5px 8px;border-radius:4px;display:none;white-space:pre}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--primary);color:var(--on-primary);padding:8px 14px;border-radius:var(--radius-control);font-size:13px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none}
+#toast.show{opacity:1}
+#load{padding:80px 0;color:var(--faint);font:13px var(--mono)}
+/* print */
+@media print{
+ :root,:root[data-theme="dark"]{--ground:#fff;--surface:#fff;--raised:#f6f7f8;--border:#d5dade;--rule:#e6e9ec;--control:#b9c0c6;--text:#111;--muted:#444;--faint:#666;
+  --accent:#1b6c80;--accent-soft:#e3f0f3;--positive:#1e7b4f;--negative:#c4242a;--warning:#92400e;--grid:#e3e7ea;--cell-rr:#cfd6dc;--cell-ww:#6f767d;
+  --pill-positive-bg:#dcfae5;--pill-negative-bg:#ffedea;--pill-warning-bg:#fff5db;--pill-neutral-bg:#eceff2;--primary:#111;--on-primary:#fff;color-scheme:light}
+ @page{margin:14mm 12mm}
+ html,body{background:#fff;font-size:11.5px}
+ .bar,.toc,.chips,.anc,.ctl,.cp,#pop,#tip,#toast,.noprint{display:none!important}
+ .wrap{display:block;padding:0;max-width:none}
+ main{padding:0}
+ section.s{border:0;border-top:1px solid #ccc;border-radius:0;padding:14px 0 6px;margin:0;break-inside:auto}
+ .fig,.rung,.hc,.exm,tr,pre,.stg{break-inside:avoid}
+ #flips,#lineage,#results,#failures{break-before:page}
+ .ev{border-bottom:0}
+ .ldet{display:block!important}
+ *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style></head><body data-keep>
+<div id="app" data-keep><div id="load">loading ledger…</div></div>
+<script id="snap" type="application/json" data-keep></script>
+<script id="main" data-keep>
+(async () => {
+const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmt = new Intl.NumberFormat("en-US");
+const N0 = x => fmt.format(Math.round(x));
+const pct = (x, d = 1) => x == null ? "—" : (x * 100).toFixed(d) + "%";
+const pts = (x, d = 1) => x == null ? "—" : (x >= 0 ? "+" : "−") + Math.abs(x * 100).toFixed(d);
+const sgn = (x, d = 1) => (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(d);
+const dt = t => { if (!t) return "—"; const d = new Date(t * 1000); return d.toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) + " UTC"; };
+const short = (h, n = 10) => h ? String(h).slice(0, n) + "…" : "—";
+
+/* ---------------- data ---------------- */
+let D;
+const snapEl = $("#snap");
+const SNAP = !!snapEl.textContent.trim();
+try {
+  if (SNAP) D = JSON.parse(snapEl.textContent);
+  else {
+    const get = u => fetch(u).then(r => { if (!r.ok) throw new Error(u + " " + r.status); return r.json(); });
+    const [s, hp, ht, hg] = await Promise.all(["../data/gsm8k-ft-state.json", "../data/hill-percent-base.json", "../data/hill-time-rate.json", "../data/hill-group-count.json"].map(get));
+    D = reduce(s, hp, ht, hg);
+  }
+} catch (e) { $("#load").textContent = "could not load ledger: " + e.message; return; }
+
+function reduce(s, hp, ht, hg) {
+  const CH = s.champion, PV = s.models[CH].parent;
+  const keepT = t => t.model === CH || t.model === PV || t.kind === "analysis" || t.kind === "benchmark";
+  const pick = (h, m) => Object.fromEntries(h.ids.map(i => [i, h.runs[m]?.[i]]));
+  return {
+    project: s.config.name, now: s.now, champion: CH, prev: PV,
+    config: { ladder: s.config.ladder, goal: s.config.goal, fresh_baseline: s.config.fresh_baseline, serving: s.config.champion_serving_requirement, provenance: s.config.baseline_provenance, kpis: s.config.kpis },
+    datasets: s.datasets, slices: s.slices, hills: s.hills, models: s.models, goals: s.goals, baseline: s.baseline, leaderboard: s.leaderboard, decisions: s.decisions,
+    tasks: s.tasks.filter(keepT).map(t => ({ id: t.id, kind: t.kind, title: t.title, description: t.description, status: t.status, created: t.created, ended: t.ended, model: t.model, slice: t.slice, slice_hash: t.slice_hash, note: t.note?.msg || null, summary: t.summary, config: t.config })),
+    rows: {
+      target: { slice: hp.target.slice, ids: hp.target.ids, ch: pick(hp.target, CH), pv: pick(hp.target, PV) },
+      control: { slice: hp.control.slice, ids: hp.control.ids, ch: pick(hp.control, CH), pv: pick(hp.control, PV) },
+      time: { slice: ht.target.slice, n: ht.target.ids.length, arch: Object.values(ht.target.runs["qwen3-4b-rl-archived"] || {}).reduce((a, b) => a + b, 0) },
+      group: { slice: hg.target.slice, n: hg.target.ids.length, arch: Object.values(hg.target.runs["qwen3-4b-rl-archived"] || {}).reduce((a, b) => a + b, 0) }
+    }
+  };
+}
+
+const CH = D.champion, PV = D.prev, M = D.models, SL = D.slices, LB = D.leaderboard, G = Object.values(D.goals)[0];
+const T = Object.fromEntries(D.tasks.map(t => [t.id, t]));
+const lb = (sl, m) => LB[sl]?.[m] || null;
+const runsOf = (m, sl) => D.tasks.filter(t => t.model === m && t.slice === sl && t.kind === "eval" && t.status === "done").sort((a, b) => a.created - b.created);
+const promoteDec = D.decisions.find(d => d.kind === "promote" && d.model === CH);
+const FULL = "gsm8k-test/full", TGT = D.rows.target.slice, CTL = D.rows.control.slice;
+const N = SL[FULL].n;
+
+/* paired bootstrap, seeded (mirrors core.paired) */
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function paired(c, b, iters = 2000) {
+  const ids = Object.keys(c).filter(i => c[i] != null && b[i] != null).sort();
+  const d = ids.map(i => c[i] - b[i]), n = d.length, r = rng(0), mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+  const boots = []; for (let k = 0; k < iters; k++) { let s = 0; for (let j = 0; j < n; j++) s += d[Math.floor(r() * n)]; boots.push(s / n); }
+  boots.sort((x, y) => x - y);
+  return { n, delta: mean(d), lo: boots[Math.floor(.05 * iters)], hi: boots[Math.floor(.95 * iters) - 1], wins: d.filter(x => x > 0).length, losses: d.filter(x => x < 0).length, cand: mean(ids.map(i => c[i])), base: mean(ids.map(i => b[i])) };
+}
+const PT = paired(D.rows.target.ch, D.rows.target.pv), PC = paired(D.rows.control.ch, D.rows.control.pv);
+const VB = G.vs_baseline;
+const FIX = VB.wins, BRK = VB.losses, NOW = Math.round(VB.cand * N), START = Math.round(VB.base * N), GOALN = D.config.goal.minimum_correct;
+const RR = NOW - FIX, WW = N - RR - FIX - BRK;
+
+/* ---------------- evidence registry ---------------- */
+const EV = {}; let evN = 0;
+function ev(v, o) { const k = "e" + (++evN); EV[k] = { v, ...o }; return `<button class="ev" data-ev="${k}">${esc(v)}</button>`; }
+const runLine = id => { const t = T[id]; if (!t) return esc(id); const s = t.summary || {}; return `${esc(id)}${t.model ? " · " + esc(t.model) : ""}${s.score != null ? " · " + pct(s.score) : ""}${t.ended ? " · " + dt(t.ended) : ""}`; };
+
+/* ---------------- shell ---------------- */
+const SECS = [["claim", "Claim"], ["system", "System"], ["data", "Data and slices"], ["results", "Results"], ["gates", "Gate ladder"], ["flips", "Fixed and broken"], ["failures", "Failures"], ["lineage", "Lineage"], ["cost", "Cost and latency"], ["unknown", "Not known"], ["reproduce", "Reproduce"]];
+const ICON = {
+  link: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6.5 9.5l3-3M7 4.5l1-1a2.5 2.5 0 013.5 3.5l-1 1M9 11.5l-1 1A2.5 2.5 0 014.5 9l1-1"/></svg>',
+  share: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 2v8M5 5l3-3 3 3M3 9v4h10V9"/></svg>',
+  print: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6V2h8v4M4 11H2V6h12v5h-2M4 9h8v5H4z"/></svg>',
+  theme: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11A5.5 5.5 0 008 2.5z" fill="currentColor"/></svg>'
+};
+const sec = (i, id, title, body) => `<section class="s" id="${id}"><div class="hd"><b>${String(i + 1).padStart(2, "0")}</b><h2>${title}</h2><button class="anc" data-anchor="${id}" title="Copy link to this section">#</button></div>${body}</section>`;
+
+const champModel = M[CH], prevModel = M[PV];
+const html = `
+<div class="bar"><div class="in">
+  <div class="crumb">${esc(D.project)} · paper · <b>${esc(CH)}</b></div>
+  <button class="tb" id="bLink" title="Copy a link to the section in view">${ICON.link}<span>Copy link</span></button>
+  <button class="tb pri" id="bShare" title="Download one self-contained HTML file">${ICON.share}<span>Share</span></button>
+  <button class="tb" id="bPrint" title="Print or save as PDF">${ICON.print}<span class="lbl">PDF</span></button>
+  <button class="tb" id="bTheme" title="Theme" aria-label="Theme">${ICON.theme}</button>
+</div><nav class="chips" id="chips">${SECS.map(([id, t]) => `<a href="#${id}" data-s="${id}">${t}</a>`).join("")}</nav></div>
+<div class="wrap">
+<nav class="toc" id="toc">${SECS.map(([id, t], i) => `<a href="#${id}" data-s="${id}"><b>${String(i + 1).padStart(2, "0")}</b>${t}</a>`).join("")}</nav>
+<main>
+<header class="head">
+  <div class="kick">champion · ${esc(D.project)} · goal ${esc(G.name)}</div>
+  <h1>${esc(CH)}</h1>
+  <div class="facts">
+    <span class="pill pos">champion since ${dt(promoteDec?.t || champModel.promoted)}</span>
+    <span class="pill">${esc(champModel.title)}</span>
+    <span class="pill">replaced ${esc(PV)}</span>
+    <span class="pill warn">goal open · ${N0(GOALN - NOW)} problems short</span>
+    <span class="pill">ledger as of ${dt(D.now)}</span>
+  </div>
+</header>
+${SECS.map(([id, t], i) => sec(i, id, t, `<div data-body="${id}"></div>`)).join("")}
+</main></div>
+<div id="pop" role="dialog"></div><div id="tip"></div><div id="toast"></div>`;
+$("#app").innerHTML = html;
+const body = id => $(`[data-body="${id}"]`);
+
+/* ================= 01 claim ================= */
+{
+  const narrow = innerWidth < 560, lo = 1100, hi = N, W = narrow ? 420 : 800, X = v => 20 + (v - lo) / (hi - lo) * (W - 40);
+  const bars = [["previous", PV, START, "f-mut"], ["champion", CH, NOW, "f-pos"]];
+  let s = `<svg viewBox="0 0 ${W} 170" role="img" aria-label="Correct answers on full, previous vs champion vs target">`;
+  for (let v = lo; v <= hi; v += narrow ? 100 : 50) s += `<line class="grid" x1="${X(v)}" x2="${X(v)}" y1="18" y2="128"/><text class="t-f" x="${X(v)}" y="146" text-anchor="middle">${N0(v)}</text>`;
+  if (X(hi) - X(Math.floor((hi - lo) / (narrow ? 100 : 50)) * (narrow ? 100 : 50) + lo) > 44) s += `<text class="t-f" x="${X(hi)}" y="146" text-anchor="middle">${N0(hi)}</text>`;
+  bars.forEach(([lab, m, v, c], i) => {
+    const y = 26 + i * 50;
+    s += `<rect class="f-track" x="${X(lo)}" y="${y}" width="${X(hi) - X(lo)}" height="34" rx="4"/><rect class="${c}" x="${X(lo)}" y="${y}" width="${X(v) - X(lo)}" height="34" rx="4"/>`;
+    s += `<text x="${X(v) - 10}" y="${y + 22}" text-anchor="end" class="t-big" style="fill:${i ? "#fff" : "var(--text)"}">${N0(v)}</text><text x="${X(v) + 10}" y="${y + 22}" class="t-m">${lab}${narrow ? "" : " · " + esc(m)}</text>`;
+  });
+  s += `<line class="s-text" x1="${X(GOALN)}" x2="${X(GOALN)}" y1="14" y2="130" stroke-dasharray="4 3"/><text x="${X(GOALN)}" y="10" text-anchor="middle" class="t-b">target ${N0(GOALN)} (96%)</text>`;
+  s += `<path d="M${X(NOW)} 118 H${X(GOALN)}" class="s-neg" stroke-width="2" marker-end=""/><text x="${(X(NOW) + X(GOALN)) / 2}" y="126" text-anchor="middle" class="t-f" style="fill:var(--negative)">${GOALN - NOW} short</text>`;
+  s += `<text class="t-f" x="${X(lo)}" y="164">correct of ${N0(N)} on ${FULL}${narrow ? "" : " · axis starts at " + N0(lo)}</text></svg>`;
+  const evFull = { label: "Champion on full", slice: FULL, hash: SL[FULL].hash, n: N, runs: runsOf(CH, FULL).map(t => t.id), src: ".research/goals.json › gsm8k-96.value (latest of " + G.runs + " runs)" };
+  const evPair = { label: "Paired delta vs " + PV + " on full", slice: FULL, hash: SL[FULL].hash, n: VB.n, runs: [G.task, lb(FULL, PV)?.task], src: ".research/goals.json › gsm8k-96.vs_baseline", note: `delta ${(VB.delta * 100).toFixed(2)} pts, 90% CI [${(VB.lo * 100).toFixed(2)}, ${(VB.hi * 100).toFixed(2)}], ${VB.wins} wins, ${VB.losses} losses` };
+  body("claim").innerHTML = `<div class="fig">${s}</div>
+  <dl class="f">
+    <dt>result</dt><dd>${ev(N0(NOW) + " / " + N0(N), evFull)} correct on ${FULL} (${pct(VB.cand)})</dd>
+    <dt>vs previous</dt><dd>${ev(pts(VB.delta, 1) + " pts", evPair)} paired, 90% CI ${ev("[" + pts(VB.lo) + ", " + pts(VB.hi) + "]", evPair)}, same ${N0(VB.n)} ids, same harness</dd>
+    <dt>churn</dt><dd><span class="pos">${ev(FIX + " fixed", evPair)}</span> · <span class="neg">${ev(BRK + " broken", evPair)}</span> · net ${sgn(FIX - BRK, 0)}</dd>
+    <dt>goal</dt><dd>${ev(N0(GOALN - NOW) + " more problems", { label: "Distance to goal", slice: FULL, n: N, src: "research.json › goal.minimum_correct = " + GOALN, note: "target " + D.config.goal.target + " → " + GOALN + " correct of " + N })} of ${N0(N)} to reach ${N0(GOALN)}</dd>
+    <dt>change</dt><dd>LoRA adapter off · max_new_tokens 512 → 1024 · no training</dd>
+    <dt>cost of it</dt><dd>${ev("3.84×", { label: "Generated tokens on full", slice: FULL, n: N, runs: ["1026-023024-eval-5116", "1026-031545-analysis-39e2"], src: "task notes", note: "369,446 generated tokens vs 96,157 baseline; 2.82× batch seconds" })} output tokens · p50 latency ${ev(lb(FULL, CH).latency_p50.toFixed(1) + " s", { label: "p50 latency on full", slice: FULL, n: N, runs: [lb(FULL, CH).task], src: ".research leaderboard › latency_p50" })} vs ${lb(FULL, PV).latency_p50.toFixed(1)} s</dd>
+  </dl>`;
+}
+
+/* ================= 02 system ================= */
+{
+  const sp = typeof champModel.serving_policy === "object" ? champModel.serving_policy : (() => { try { return JSON.parse(String(champModel.serving_policy).replace(/'/g, '"').replace(/\bFalse\b/g, "false").replace(/\bTrue\b/g, "true")); } catch { return {}; } })();
+  const fc = D.config.fresh_baseline.contract, gc = T["1026-023024-eval-5116"]?.config || {};
+  const st = [
+    ["input", "GSM8K test question", null],
+    ["prompt", "native chat template · user turn = question only", null],
+    ["weights", `${sp.base_model} @ ${short(sp.revision, 7)}`, null],
+    ["adapter", "disabled", `RL LoRA ${short(fc.adapter_sha256, 8)} on`],
+    ["decode", `greedy · ≤ ${sp.max_new_tokens} new tokens`, `greedy · ≤ ${fc.max_new_tokens} new tokens`],
+    ["parse", `final number · scorer ${short(gc.scorer_sha256, 8)}`, null],
+    ["score", "1 if equal to reference, else 0 · errors = 0", null]
+  ];
+  const pipe = st.map(([k, v, was], i) => `${i ? '<div class="arr"><span>→</span></div>' : ""}<div class="stg${was ? " chg" : ""}"><div class="k">${k}</div><div class="v">${esc(v)}</div>${was ? `<div class="was">${esc(was)}</div>` : ""}</div>`).join("");
+  const rows = [
+    ["base model", fc.model, sp.base_model], ["revision", fc.revision, sp.revision], ["adapter", "enabled · " + fc.adapter_sha256, "disabled (" + sp.adapter_mode + ") · same file"],
+    ["max_new_tokens", fc.max_new_tokens, sp.max_new_tokens], ["do_sample", String(fc.do_sample), String(sp.do_sample)], ["padding", fc.padding, sp.padding_side], ["prompt", fc.prompt, sp.prompt],
+    ["dtype", gc.model ? "bfloat16" : "—", sp.dtype], ["backend", sp.backend, sp.backend], ["versions", `transformers ${sp.transformers_version} · torch ${sp.torch_version} · peft ${sp.peft_version}`, "same"],
+    ["batch", `${gc.batch_size} · ${gc.batch_order}`, "same"], ["runner sha256", gc.runner_sha256, "same"], ["scorer sha256", gc.scorer_sha256, "same"], ["module sha256", gc.module_sha256, "same"],
+    ["policy fingerprint", "—", champModel.serving_policy_fingerprint]
+  ];
+  body("system").innerHTML = `<div class="pipe">${pipe}</div>
+  <div class="tw"><table><thead><tr><th>field</th><th>${esc(PV)}</th><th>${esc(CH)}</th></tr></thead><tbody>
+  ${rows.map(([k, a, b]) => { const chg = String(a) !== String(b) && b !== "same" && a !== "—"; return `<tr${chg ? ' class="me"' : ""}><td class="id">${k}</td><td class="mono" style="word-break:break-all">${esc(a)}</td><td class="mono" style="word-break:break-all">${chg ? "<b>" + esc(b) + "</b>" : esc(b)}</td></tr>`; }).join("")}
+  </tbody></table></div>
+  <h3>hypothesis, as registered</h3><dl class="f"><dt>change</dt><dd>${esc(champModel.change)}</dd><dt>hill</dt><dd>${esc(champModel.hill)}</dd><dt>registered</dt><dd>${dt(champModel.created)}</dd></dl>`;
+}
+
+/* ================= 03 data ================= */
+{
+  const tN = SL[TGT].n, trN = D.rows.time.n, gN = D.rows.group.n, oN = N - tN - trN - gN, cN = SL[CTL].n;
+  const W = 800, X = v => 10 + v / N * (W - 20);
+  const segs = [["percent", tN, "var(--chart-1)"], ["time-rate", trN, "var(--chart-2)"], ["group-count", gN, "var(--chart-3)"], ["other", oN, "var(--faint)"]];
+  let s = `<svg viewBox="0 0 ${W} 196" role="img" aria-label="How the 1,319 test problems split into slices">`, x = 0;
+  s += `<text class="t-f" x="10" y="12">${FULL} · ${N0(N)} · disjoint dev slices by input regex (priority percent → time → grouping)</text>`;
+  segs.forEach(([l, n, c]) => { s += `<rect x="${X(x)}" y="22" width="${X(x + n) - X(x) - 1}" height="40" style="fill:${c}" rx="3"/><text x="${X(x) + 6}" y="40" style="fill:#fff" class="t-b">${N0(n)}</text><text x="${X(x) + 6}" y="55" style="fill:#fff;font-size:11px">${l}</text>`; x += n; });
+  const cx = X(tN + trN + gN);
+  s += `<path d="M${cx} 66 v8 H${X(tN + trN + gN + cN) - 1} v-8" fill="none" class="s-acc"/><text x="${X(N)}" y="88" text-anchor="end" class="t-f" style="fill:var(--accent)">control-ordinary-v1 · ${cN} drawn from "other"</text>`;
+  s += `<text class="t-f" x="10" y="118">nested random slices, seed 42</text>`;
+  [["full", N], ["random100", 100], ["random50", 50]].forEach(([l, n], i) => { s += `<rect x="${X(0)}" y="${126 + i * 20}" width="${Math.max(X(n) - X(0), 3)}" height="14" rx="2" style="fill:var(--chart-1);opacity:${[.18, .55, 1][i]}"/><text x="${i ? Math.max(X(n), X(0) + 3) + 6 : X(0) + 6}" y="${137 + i * 20}" class="t-f">${l} · ${N0(n)}</text>`; });
+  s += `</svg>`;
+  const order = [FULL, "gsm8k-test/random100", "gsm8k-test/random50", CTL, TGT, "gsm8k-test/dev-time-rate-v1", "gsm8k-test/dev-group-count-v1"];
+  const ds = Object.values(D.datasets)[0];
+  body("data").innerHTML = `<div class="fig sc">${s}</div>
+  <dl class="f" style="margin-bottom:14px"><dt>dataset</dt><dd>${esc(ds.title)} · ${N0(ds.size)} problems</dd><dt>status</dt><dd class="warn">${esc(ds.description)}</dd><dt>metric</dt><dd>${esc(D.config.goal.metric)} · binary · higher is better</dd></dl>
+  <div class="tw"><table><thead><tr><th>slice</th><th>kind</th><th class="n">n</th><th>hash</th><th>role</th><th>what it measures</th></tr></thead><tbody>
+  ${order.map(k => { const v = SL[k], roles = D.baseline.roles[k] || []; return `<tr><td class="id">${esc(k.replace("gsm8k-test/", ""))}</td><td>${esc(v.kind)}</td><td class="n">${ev(N0(v.n), { label: k, slice: k, hash: v.hash, n: v.n, src: ".research/slices.json › " + k, note: "frozen " + dt(v.created) })}</td><td class="id">${esc(v.hash)}</td><td>${esc(roles.join(", "))}</td><td>${esc(v.description)}${v.metric ? `<div class="faint" style="font-size:12px">${esc(v.metric)}</div>` : ""}</td></tr>`; }).join("")}
+  </tbody></table></div>`;
+}
+
+/* ================= 04 results ================= */
+const RES = (() => {
+  const r = [];
+  const add = (sl, o) => r.push({ sl, n: SL[sl].n, ...o });
+  add(FULL, { ch: VB.cand, pv: VB.base, p: VB, chRuns: runsOf(CH, FULL).length, pvRuns: runsOf(PV, FULL).length, src: ".research/goals.json › vs_baseline", ids: [G.task, lb(FULL, PV).task] });
+  for (const sl of ["gsm8k-test/random100", "gsm8k-test/random50"]) { const a = lb(sl, CH), b = lb(sl, PV); add(sl, { ch: a.score, pv: b.score, p: { delta: a.score - b.score, lo: null, hi: null }, chRuns: runsOf(CH, sl).length, pvRuns: runsOf(PV, sl).length, src: "leaderboard (latest runs); per-id rows not exported", ids: [a.task, b.task] }); }
+  add(CTL, { ch: PC.cand, pv: PC.base, p: PC, chRuns: runsOf(CH, CTL).length, pvRuns: runsOf(PV, CTL).length, src: "hill-percent-base.json › control.runs (champion = mean over runs per id), paired in page", ids: [lb(CTL, CH).task, lb(CTL, PV).task] });
+  add(TGT, { ch: PT.cand, pv: PT.base, p: PT, chRuns: runsOf(CH, TGT).length, pvRuns: runsOf(PV, TGT).length, src: "hill-percent-base.json › target.runs (champion = mean over runs per id), paired in page", ids: [lb(TGT, CH).task, lb(TGT, PV).task] });
+  for (const [sl, k] of [["gsm8k-test/dev-time-rate-v1", "time"], ["gsm8k-test/dev-group-count-v1", "group"]]) add(sl, { ch: null, pv: null, arch: D.rows[k].arch / D.rows[k].n, p: null, chRuns: 0, pvRuns: 0, src: "baseline.need", ids: [lb(sl, "qwen3-4b-rl-archived")?.task] });
+  return r;
+})();
+{
+  const W = 800, L = 190, R = 70, lo = -4, hi = 14, X = v => L + (v - lo) / (hi - lo) * (W - L - R), rh = 30;
+  let s = `<svg viewBox="0 0 ${W} ${RES.length * rh + 40}" role="img" aria-label="Paired delta vs previous champion with 90% CI per slice">`;
+  for (let v = lo; v <= hi; v += 2) s += `<line class="${v ? "grid" : "s-text"}" x1="${X(v)}" x2="${X(v)}" y1="4" y2="${RES.length * rh + 6}" ${v ? "" : 'stroke-width="1"'}/><text class="t-f" x="${X(v)}" y="${RES.length * rh + 22}" text-anchor="middle">${v > 0 ? "+" : ""}${v}</text>`;
+  s += `<text class="t-f" x="${X(hi)}" y="${RES.length * rh + 36}" text-anchor="end">pts, champion − previous</text>`;
+  RES.forEach((r, i) => {
+    const y = 18 + i * rh;
+    s += `<text x="${L - 10}" y="${y + 4}" text-anchor="end" class="${r.p ? "" : "t-m"}">${esc(r.sl.replace("gsm8k-test/", ""))} <tspan class="t-f">n ${r.n}</tspan></text>`;
+    if (!r.p) { s += `<text x="${X(0) + 8}" y="${y + 4}" class="t-f">not run on champion</text>`; return; }
+    const d = r.p.delta * 100;
+    if (r.p.lo != null) s += `<line x1="${X(r.p.lo * 100)}" x2="${X(r.p.hi * 100)}" y1="${y}" y2="${y}" stroke-width="3" class="${r.p.lo > 0 ? "s-pos" : "s-mut"}" stroke-linecap="round"/>`;
+    s += `<circle cx="${X(d)}" cy="${y}" r="5" class="${r.p.lo == null ? "" : r.p.lo > 0 ? "f-pos" : "f-mut"}" ${r.p.lo == null ? 'style="fill:var(--surface);stroke:var(--text);stroke-width:1.5"' : ""}/>`;
+    s += `<text x="${W - R + 8}" y="${y + 4}" class="t-b">${sgn(d)}</text>`;
+  });
+  s += `</svg>`;
+  body("results").innerHTML = `<div class="fig sc">${s}<div class="leg"><span><i style="background:var(--positive)"></i>90% CI above 0</span><span><i style="background:var(--control)"></i>CI includes 0</span><span><i style="border:1.5px solid var(--text);border-radius:50%"></i>no per-id rows, no CI</span></div></div>
+  <div class="tw"><table><thead><tr><th>slice</th><th class="n">n</th><th class="n">champion</th><th class="n">previous</th><th class="n">Δ pts</th><th class="n">90% CI</th><th class="n">fixed / broken</th><th class="n">runs</th></tr></thead><tbody>
+  ${RES.map(r => {
+    const e = { label: r.sl, slice: r.sl, hash: SL[r.sl].hash, n: r.n, runs: r.ids.filter(Boolean), src: r.src, note: r.p?.lo != null ? `delta ${(r.p.delta * 100).toFixed(2)}, CI [${(r.p.lo * 100).toFixed(2)}, ${(r.p.hi * 100).toFixed(2)}]` : null };
+    if (!r.p) return `<tr class="na"><td class="id">${esc(r.sl.replace("gsm8k-test/", ""))}</td><td class="n">${r.n}</td><td class="n">not run</td><td class="n">not run</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">0</td></tr>`;
+    const k = v => (v * r.n).toFixed(Number.isInteger(+(v * r.n).toFixed(3)) ? 0 : 1);
+    return `<tr><td class="id">${esc(r.sl.replace("gsm8k-test/", ""))}</td><td class="n">${r.n}</td><td class="n">${ev(k(r.ch), e)} <span class="faint">${pct(r.ch)}</span></td><td class="n">${k(r.pv)} <span class="faint">${pct(r.pv)}</span></td>
+    <td class="n ${r.p.lo > 0 ? "pos" : ""}">${ev(pts(r.p.delta), e)}</td><td class="n">${r.p.lo != null ? ev("[" + pts(r.p.lo) + ", " + pts(r.p.hi) + "]", e) : '<span class="faint">no rows</span>'}</td>
+    <td class="n">${r.p.wins != null ? `<span class="pos">${r.p.wins}</span> / <span class="neg">${r.p.losses}</span>` : "—"}</td><td class="n">${r.chRuns} · ${r.pvRuns}</td></tr>`;
+  }).join("")}
+  </tbody></table></div>
+  <dl class="f" style="margin-top:12px"><dt>champion column</dt><dd>${CTL.replace("gsm8k-test/", "")} and ${TGT.replace("gsm8k-test/", "")}: mean over every champion run per id; others: latest run</dd><dt>runs</dt><dd>champion · previous</dd><dt>CI</dt><dd>paired bootstrap, 2,000 resamples, over ids</dd></dl>`;
+}
+
+/* ================= 05 gates ================= */
+{
+  const L = D.config.ladder;
+  const S = id => T[id]?.summary?.score;
+  const GT = { // promotion-time pairs (task ids from the ledger); CIs are from the task notes where the row is a string
+    dev: [{ sl: TGT, rule: "better", thr: 0, c: "1026-015459-eval-e6a9", b: "1026-015152-eval-a636", ci: [3.78, 11.89], fb: [18, 4], extra: "pre-registered: lower 90% CI > 0" },
+          { sl: CTL, rule: "not_worse", thr: -2, c: "1026-020414-eval-856a", b: "1026-020310-eval-30b4" }],
+    random50: [{ sl: "gsm8k-test/random50", rule: "not_worse", thr: -2, c: "1026-020803-eval-a7da", b: "1026-020727-eval-a66c" }],
+    random100: [{ sl: "gsm8k-test/random100", rule: "not_worse", thr: -1, c: "1026-021038-eval-e25f", b: "1026-020927-eval-8a7f" }],
+    full: [{ sl: FULL, rule: "better", thr: 0, c: "1026-023024-eval-5116", b: "1026-021402-eval-25f8", ci: [3.71, 6.75], fb: [106, 37] }]
+  };
+  const mini = (d, thr, ci) => { const lo = -6, hi = 14, X = v => 6 + (v - lo) / (hi - lo) * 188; return `<svg viewBox="0 0 200 30" preserveAspectRatio="none"><line class="grid" x1="6" x2="194" y1="15" y2="15"/><line class="s-mut" x1="${X(0)}" x2="${X(0)}" y1="6" y2="24"/><rect x="${X(lo)}" y="9" width="${X(thr) - X(lo)}" height="12" style="fill:var(--negative);opacity:.12"/><line class="s-neg" x1="${X(thr)}" x2="${X(thr)}" y1="5" y2="25" stroke-dasharray="2 2"/>${ci ? `<line class="s-pos" stroke-width="3" stroke-linecap="round" x1="${X(ci[0])}" x2="${X(ci[1])}" y1="15" y2="15"/>` : ""}<circle class="f-pos" cx="${X(d)}" cy="15" r="4.5"/></svg>`; };
+  const ld = L.map((r, i) => {
+    const ch = (GT[r.rung] || []).map(c => {
+      const n = SL[c.sl].n, a = S(c.c), b = S(c.b), d = (a - b) * 100;
+      const e = { label: `${r.rung} · ${c.sl}`, slice: c.sl, hash: SL[c.sl].hash, n, runs: [c.c, c.b], src: c.ci ? "task note on " + c.c : "task summaries", note: `${c.rule} ${c.thr >= 0 ? "> " + c.thr : "≥ " + c.thr} pts · observed ${sgn(d, 2)}${c.ci ? ` · CI [${c.ci.join(", ")}] · ${c.fb[0]} fixed / ${c.fb[1]} broken` : ""}` };
+      return `<div class="chk"><div class="rl">${esc(c.sl.replace("gsm8k-test/", ""))} · ${c.rule} ${c.thr >= 0 ? "> " + c.thr : "≥ " + c.thr} pts</div>
+      <div class="ob">${ev(Math.round(a * n) + " vs " + Math.round(b * n), e)} · <b class="pos">${ev(sgn(d) + " pts", e)}</b>${c.ci ? ` · CI ${ev("[+" + c.ci[0] + ", +" + c.ci[1] + "]", e)}` : ""} <span class="pos">✓</span></div>${mini(d, c.thr, c.ci)}${c.extra ? `<div class="rl">${c.extra} ✓</div>` : ""}</div>`;
+    }).join("");
+    const skipped = r.checks.filter(c => c.slice === "@hills.climbed").map(() => `<div class="chk"><div class="rl">@hills.climbed · not_worse −3 pts</div><div class="ob faint">no climbed hill yet · n/a</div></div>`).join("");
+    const t0 = (GT[r.rung] || [])[0]; const when = T[t0?.c]?.ended;
+    return `<div class="rung" style="margin-left:0"><div class="rh"><b>${i + 1} · ${r.rung}</b><span class="st champion">pass</span></div><div class="faint" style="font:11px var(--mono);margin-bottom:8px">${dt(when)}</div>${ch}${skipped}</div>`;
+  }).join("");
+  const au = T["1026-031545-analysis-39e2"];
+  body("gates").innerHTML = `<div class="ladder">${ld}</div>
+  <div class="leg"><span><i style="background:var(--positive)"></i>observed Δ and 90% CI</span><span><i style="background:var(--negative);opacity:.35"></i>fails below the dashed threshold</span><span>axis −6 to +14 pts</span></div>
+  <div class="after">
+    <div class="stp"><div class="k">audit · ${esc(au?.id)}</div>${esc(au?.note || "").replace(/^APPROVE/, '<b class="pos">APPROVE</b>')}</div>
+    <div class="stp"><div class="k">promote · ${dt(promoteDec?.t)}</div>${esc(CH)} replaced ${esc(promoteDec?.replaced)}</div>
+    <div class="stp"><div class="k">baseline after promote</div>${Object.keys(D.baseline.have).length} slices have champion runs · missing: ${D.baseline.need.map(x => `<code>${esc(x.replace("gsm8k-test/", ""))}</code>`).join(", ")}</div>
+  </div>`;
+}
+
+/* ================= 06 flips (1,319 cells) ================= */
+{
+  const cls = (c, b) => { const a = c >= .5, p = b >= .5; return a && !p ? "fix" : p && !a ? "brk" : a ? "rr" : "ww"; };
+  const known = [];
+  for (const k of ["target", "control"]) { const R = D.rows[k]; R.ids.forEach(id => known.push({ id, sl: R.slice, o: cls(R.ch[id], R.pv[id]), c: R.ch[id], b: R.pv[id], runs: runsOf(CH, R.slice).length })); }
+  const kc = o => known.filter(x => x.o === o).length;
+  const tot = { fix: FIX, brk: BRK, ww: WW, rr: RR };
+  const rest = []; for (const o of ["fix", "brk", "ww", "rr"]) for (let i = 0; i < Math.max(0, tot[o] - kc(o)); i++) rest.push({ id: null, sl: null, o });
+  const ORD = { fix: 0, brk: 1, ww: 2, rr: 3 }, COL = { fix: "f-pos", brk: "f-neg", ww: "f-ww", rr: "f-rr" }, LAB = { fix: "fixed", brk: "broken", ww: "both wrong", rr: "both right" };
+  let mode = "outcome", hide = new Set();
+  const all = [...known, ...rest];
+  const draw = () => {
+    const narrow = innerWidth < 560, cols = narrow ? 34 : 60, cs = 12, gap = 2, W = cols * (cs + gap);
+    let blocks;
+    if (mode === "outcome") blocks = [["all " + N0(N) + " problems, sorted by outcome", [...all].sort((a, b) => ORD[a.o] - ORD[b.o])]];
+    else blocks = [[TGT.replace("gsm8k-test/", "") + " · " + D.rows.target.ids.length + " · per id", known.filter(x => x.sl === TGT).sort((a, b) => ORD[a.o] - ORD[b.o])],
+                   [CTL.replace("gsm8k-test/", "") + " · " + D.rows.control.ids.length + " · per id", known.filter(x => x.sl === CTL).sort((a, b) => ORD[a.o] - ORD[b.o])],
+                   ["other " + N0(rest.length) + " · per-id rows not exported, placed by count", rest]];
+    let y = 0, out = "", idx = 0; window.__cells = [];
+    for (const [lab, cells] of blocks) {
+      out += `<text class="t-f" x="0" y="${y + 11}">${esc(lab)}</text>`; y += 18;
+      cells.forEach((c, i) => { const cx = (i % cols) * (cs + gap), cy = y + Math.floor(i / cols) * (cs + gap); window.__cells.push(c);
+        out += `<rect data-i="${idx++}" x="${cx}" y="${cy}" width="${cs}" height="${cs}" rx="2" class="${COL[c.o]}" style="${hide.has(c.o) ? "opacity:.12" : ""}${c.id ? "" : ";opacity:" + (hide.has(c.o) ? .08 : .82)}"/>${c.id && c.c > 0 && c.c < 1 ? `<circle cx="${cx + cs / 2}" cy="${cy + cs / 2}" r="2" style="fill:var(--surface)" pointer-events="none"/>` : ""}`; });
+      y += Math.ceil(cells.length / cols) * (cs + gap) + 12;
+    }
+    $("#grid").innerHTML = `<svg viewBox="0 -2 ${W} ${y}" role="img" aria-label="Every problem on full: fixed, broken, both right, both wrong">${out}</svg>`;
+  };
+  const evF = { label: "Fixed and broken on full", slice: FULL, hash: SL[FULL].hash, n: N, runs: [G.task, lb(FULL, PV).task], src: ".research/goals.json › vs_baseline.wins / losses" };
+  body("flips").innerHTML = `<div class="ctl"><div class="seg" id="fmode"><button class="on" data-m="outcome">by outcome</button><button data-m="slice">by slice</button></div></div>
+  <div class="fig" id="grid"></div>
+  <div class="leg" id="fleg">${["fix", "brk", "ww", "rr"].map(o => `<button data-o="${o}"><i class="${o}" style="background:${{ fix: "var(--positive)", brk: "var(--negative)", ww: "var(--cell-ww)", rr: "var(--cell-rr)" }[o]}"></i>${LAB[o]} · <b>${N0(tot[o])}</b></button>`).join("")}<span><i style="background:var(--surface);border:1px solid var(--control);border-radius:50%"></i>flips across champion runs</span></div>
+  <dl class="f" style="margin-top:12px">
+    <dt>net</dt><dd>${ev(FIX + " − " + BRK + " = " + sgn(FIX - BRK, 0), evF)} problems on ${FULL}</dd>
+    <dt>per id known</dt><dd>${known.length} of ${N0(N)} (two hill slices): <span class="pos">${kc("fix")} fixed</span>, <span class="neg">${kc("brk")} broken</span>, ${kc("ww")} both wrong</dd>
+    <dt>flaky</dt><dd>${ev(known.filter(x => x.c > 0 && x.c < 1).length + " ids", { label: "Ids whose champion score differs across runs", slice: TGT + " + " + CTL, n: known.length, src: "hill-percent-base.json, champion per-id mean strictly between 0 and 1", note: "runs mix transformers and vLLM engines" })} change answer across champion runs</dd>
+  </dl>`;
+  draw();
+  $("#fmode").onclick = e => { const b = e.target.closest("button"); if (!b) return; mode = b.dataset.m; $$("#fmode button").forEach(x => x.classList.toggle("on", x === b)); draw(); };
+  $("#fleg").onclick = e => { const b = e.target.closest("button[data-o]"); if (!b) return; const o = b.dataset.o; hide.has(o) ? hide.delete(o) : hide.add(o); b.classList.toggle("dim", hide.has(o)); draw(); };
+  const tip = $("#tip");
+  $("#grid").addEventListener("mousemove", e => { const r = e.target.closest("rect[data-i]"); if (!r) { tip.style.display = "none"; return; } const c = window.__cells[+r.dataset.i];
+    tip.textContent = c.id ? `${c.id}\n${c.sl.replace("gsm8k-test/", "")}\n${LAB[c.o]}\nchampion right in ${Math.round(c.c * c.runs)} of ${c.runs} runs\nprevious ${c.b ? "right" : "wrong"}` : `${LAB[c.o]}\nid not exported`;
+    tip.style.display = "block"; tip.style.left = Math.min(e.clientX + 12, innerWidth - 240) + "px"; tip.style.top = e.clientY + 14 + "px"; });
+  $("#grid").addEventListener("mouseleave", () => tip.style.display = "none");
+  $("#grid").addEventListener("click", e => { const r = e.target.closest("rect[data-i]"); if (!r) return; const c = window.__cells[+r.dataset.i]; if (!c.id) return;
+    openPop(r, { v: LAB[c.o], label: "Problem " + c.id, slice: c.sl, hash: SL[c.sl].hash, n: SL[c.sl].n, runs: [lb(c.sl, CH).task, lb(c.sl, PV).task], src: "hill-percent-base.json › runs[model][id]", note: `champion mean ${c.c.toFixed(2)} over ${c.runs} runs · previous ${c.b}` }); });
+  let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(draw, 150); });
+}
+
+/* ================= 07 failures ================= */
+{
+  const errs = N - NOW, cap = 29, capHits = 34;
+  const W = 800, X = v => v / errs * W;
+  let s = `<svg viewBox="0 0 ${W} 70" role="img" aria-label="Champion errors on full by kind"><text class="t-f" x="0" y="11">champion's ${errs} wrong answers on ${FULL}</text>
+  <rect x="0" y="20" width="${X(cap) - 1}" height="32" rx="3" class="f-neg"/><rect x="${X(cap)}" y="20" width="${W - X(cap)}" height="32" rx="3" class="f-ww"/>
+  <text x="8" y="41" style="fill:#fff" class="t-b">${cap} cut at 1,024 tokens</text><text x="${X(cap) + 8}" y="41" style="fill:#fff" class="t-b">${errs - cap} finished, wrong number</text>
+  <text class="t-f" x="0" y="68">${capHits} outputs hit the cap; ${capHits - cap} of them were still right</text></svg>`;
+  const H = D.hills, of = Object.values(H)[0].share.of, other = of - Object.values(H).reduce((a, h) => a + h.share.count, 0);
+  let s2 = `<svg viewBox="0 0 ${W} 62" role="img" aria-label="Archived errors split by hill"><text class="t-f" x="0" y="11">${of} archived errors (${esc(D.config.provenance.source.split("/").pop())}), disjoint input categories</text>`, x = 0;
+  const hc = { "percent-base": "var(--chart-1)", "time-rate": "var(--chart-2)", "group-count": "var(--chart-3)" };
+  [...Object.entries(H).map(([k, h]) => [k, h.share.count, hc[k]]), ["other", other, "var(--control)"]].forEach(([k, n, c]) => { const w = n / of * W; s2 += `<rect x="${x}" y="20" width="${w - 1}" height="28" rx="3" style="fill:${c}"/><text x="${x + 6}" y="38" style="fill:#fff;font-size:11.5px" class="t-b">${w > 70 ? k + " " + n : n}</text>`; x += w; });
+  s2 += `</svg>`;
+  const still = D.rows.target.ids.filter(i => D.rows.target.ch[i] < .5).map(i => ({ id: i, c: D.rows.target.ch[i], b: D.rows.target.pv[i] })).sort((a, b) => a.c - b.c);
+  const nR = runsOf(CH, TGT).length;
+  const card = (k, h) => {
+    const tr = SL[h.target], chs = lb(h.target, CH), arch = lb(h.target, "qwen3-4b-rl-archived");
+    return `<div class="hc"><div class="kick">${esc(k)} · ${h.status === "climbed" ? '<span class="pos">climbed</span>' : '<span class="warn">open</span>'}</div><div class="ht">${esc(h.title.replace(/\s*\[.*\]$/, ""))}</div>
+    <div class="sym">${esc(h.symptom)}</div>
+    <dl class="f" style="font-size:12.5px"><dt>share</dt><dd>${ev(h.share.count + " of " + h.share.of, { label: "Share of archived errors", slice: h.target, n: h.share.of, src: ".research/hills.json › " + k + ".share", note: h.share.of_what })} archived errors</dd>
+    <dt>target</dt><dd><code>${esc(h.target.replace("gsm8k-test/", ""))}</code> · n ${tr.n}</dd>
+    <dt>champion</dt><dd>${chs ? ev(Math.round(chs.score * tr.n) + " / " + tr.n, { label: "Champion on " + h.target, slice: h.target, hash: tr.hash, n: tr.n, runs: [chs.task], src: "leaderboard (latest run)" }) : '<span class="warn">not run</span>'}</dd>
+    <dt>archived</dt><dd>${arch ? Math.round(arch.score * tr.n) + " / " + tr.n : "—"}</dd></dl>
+    ${h.examples.map(x => `<div class="exm"><div class="q">${esc(x.input)}</div><div class="row"><span class="neg">wrong</span><code>${esc(x.wrong)}</code></div><div class="row"><span class="pos">right</span><code>${esc(x.right)}</code></div><div class="why">${esc(x.why)}</div></div>`).join("")}</div>`;
+  };
+  body("failures").innerHTML = `<div class="fig sc">${s}</div><div class="fig sc">${s2}</div>
+  <div class="hills">${Object.entries(H).map(([k, h]) => card(k, h)).join("")}</div>
+  <h3>still wrong on ${esc(TGT.replace("gsm8k-test/", ""))} · ${still.length} of ${D.rows.target.ids.length} ids · champion right in k of ${nR} runs</h3>
+  <div class="idchips">${still.map(x => `<button data-id="${x.id}" data-c="${x.c}" data-b="${x.b}">${x.id.slice(0, 8)} · ${Math.round(x.c * nR)}/${nR}${x.b ? " · was right" : ""}</button>`).join("")}</div>
+  <div class="cap">example texts are the hill's archived illustrations; per-id traces stay private</div>`;
+  $(".idchips").onclick = e => { const b = e.target.closest("button"); if (!b) return; openPop(b, { v: "wrong", label: "Problem " + b.dataset.id, slice: TGT, hash: SL[TGT].hash, n: SL[TGT].n, runs: [lb(TGT, CH).task], src: "hill-percent-base.json › target.runs", note: `champion mean ${(+b.dataset.c).toFixed(2)} over ${nR} runs · previous ${b.dataset.b}` }); };
+}
+
+/* ================= 08 lineage ================= */
+{
+  const chain = []; let m = CH; while (m && !chain.includes(m)) { chain.unshift(m); const p = M[m].parent; if (p === m) break; m = p; }
+  const fullS = k => lb(FULL, k)?.score;
+  const spine = chain.map((k, i) => `${i ? '<span class="ar">→</span>' : ""}<div class="nd${k === CH ? " me" : ""}"><b>${esc(k)}</b>${fullS(k) != null ? ev(Math.round(fullS(k) * N) + " / " + N0(N), { label: k + " on full", slice: FULL, n: N, runs: [lb(FULL, k).task], src: "leaderboard" }) : ""} · <span class="st ${M[k].status}">${M[k].status}</span></div>`).join("");
+  const kids = p => Object.entries(M).filter(([k, v]) => v.parent === p && k !== p).sort((a, b) => a[1].created - b[1].created);
+  const lo = .6, hi = 1, X = v => 4 + (v - lo) / (hi - lo) * 292;
+  const ref = [[lb(TGT, PV).score, "s-mut"], [lb(TGT, CH).score, "s-pos"]];
+  const row = (k, v) => { const sc = lb(TGT, k)?.score; return `<div class="lrow" data-k="${k}"><div class="nm" title="${esc(k)}">${esc(k)}</div><span class="st ${v.status}">${v.status}</span>
+    <svg viewBox="0 0 300 18" preserveAspectRatio="none"><line class="grid" x1="4" x2="296" y1="9" y2="9"/>${ref.map(([r, c]) => `<line class="${c}" x1="${X(r)}" x2="${X(r)}" y1="1" y2="17" stroke-dasharray="2 2"/>`).join("")}${sc != null ? `<circle cx="${X(sc)}" cy="9" r="5" class="${v.status === "champion" ? "f-pos" : v.status === "rejected" ? "f-neg" : v.status === "candidate" ? "f-warn" : "f-mut"}"/>` : `<text x="8" y="13" class="t-f">no run on target</text>`}</svg></div>
+    <div class="ldet"><dl class="f" style="font-size:12.5px"><dt>title</dt><dd>${esc(v.title)}</dd><dt>registered</dt><dd>${dt(v.created)}</dd>${sc != null ? `<dt>target</dt><dd>${ev(Math.round(sc * 185) + " / 185", { label: k + " on " + TGT, slice: TGT, hash: SL[TGT].hash, n: 185, runs: [lb(TGT, k).task], src: "leaderboard (latest run)" })} · p50 ${lb(TGT, k).latency_p50?.toFixed(1) ?? "—"} s</dd>` : ""}<dt>change</dt><dd>${esc(v.change)}</dd>${v.reason ? `<dt>${v.status === "rejected" ? "rejected" : "reason"}</dt><dd class="${v.status === "rejected" ? "neg" : ""}">${esc(v.reason)}</dd>` : ""}</dl></div>`; };
+  const groups = [...new Set(Object.values(M).map(v => v.parent))].filter(p => M[p]).sort((a, b) => M[a].created - M[b].created);
+  const counts = Object.values(M).reduce((a, v) => (a[v.status] = (a[v.status] || 0) + 1, a), {});
+  const axis = `<div class="lrow" style="cursor:default"><div></div><div></div><svg viewBox="0 0 300 18" preserveAspectRatio="none">${[.6, .7, .8, .9, 1].map(v => `<text x="${X(v)}" y="12" text-anchor="middle" class="t-f">${v * 100}%</text>`).join("")}</svg></div>`;
+  body("lineage").innerHTML = `<div class="spine">${spine}</div>
+  <div class="facts" style="margin-bottom:10px">${Object.entries(counts).map(([k, n]) => `<span class="st ${k}">${n} ${k}</span>`).join("")}</div>
+  <div class="lin">${axis}
+  ${groups.map(p => `<div class="grp">children of ${esc(p)}${p === PV ? " (previous champion)" : p === CH ? " (champion)" : ""} · score on ${esc(TGT.replace("gsm8k-test/", ""))}, n 185</div>${kids(p).map(([k, v]) => row(k, v)).join("")}`).join("")}
+  </div><div class="leg"><span><i style="background:var(--control)"></i>dashed: previous champion</span><span><i style="background:var(--positive)"></i>dashed: champion</span><span>click a row for its change and reason</span></div>`;
+  $(".lin").onclick = e => { if (e.target.closest(".ev")) return; const r = e.target.closest(".lrow[data-k]"); if (r) r.classList.toggle("open"); };
+}
+
+/* ================= 09 cost ================= */
+{
+  const sls = [FULL, "gsm8k-test/random100", "gsm8k-test/random50", CTL, TGT];
+  const W = 800, L = 170, hi = 60, X = v => L + Math.min(v, hi) / hi * (W - L - 30), rh = 40;
+  let s = `<svg viewBox="0 0 ${W} ${sls.length * rh + 34}" role="img" aria-label="Latency p50 and p95, previous vs champion">`;
+  for (let v = 0; v <= hi; v += 10) s += `<line class="grid" x1="${X(v)}" x2="${X(v)}" y1="0" y2="${sls.length * rh}"/><text class="t-f" x="${X(v)}" y="${sls.length * rh + 14}" text-anchor="middle">${v}s</text>`;
+  s += `<text class="t-f" x="${W - 30}" y="${sls.length * rh + 30}" text-anchor="end">s per question, batch 16 · dot p50, bar end p95</text>`;
+  sls.forEach((sl, i) => {
+    const y = 12 + i * rh; s += `<text x="${L - 10}" y="${y + 10}" text-anchor="end">${esc(sl.replace("gsm8k-test/", ""))}</text>`;
+    [[PV, 0, "s-mut", "f-mut"], [CH, 14, "s-acc", "f-acc"]].forEach(([m, dy, sc, fc]) => { const r = lb(sl, m); if (!r?.latency_p50) return;
+      s += `<line class="${sc}" stroke-width="4" stroke-linecap="round" x1="${X(r.latency_p50)}" x2="${X(r.latency_p95)}" y1="${y + dy}" y2="${y + dy}" opacity=".55"/><circle class="${fc}" cx="${X(r.latency_p50)}" cy="${y + dy}" r="4.5"/>`;
+      s += `<text class="t-f" x="${X(r.latency_p95) + 6}" y="${y + dy + 4}">${r.latency_p50.toFixed(1)} / ${r.latency_p95.toFixed(1)}</text>`; });
+  });
+  s += `</svg>`;
+  const tk = [["previous", 96157, "f-mut"], ["champion", 369446, "f-acc"]], TW = 800, TX = v => v / 400000 * (TW - 120);
+  let s2 = `<svg viewBox="0 0 ${TW} 70" role="img" aria-label="Generated tokens on full">`;
+  tk.forEach(([l, v, c], i) => { s2 += `<rect class="${c}" x="0" y="${i * 28 + 4}" width="${TX(v)}" height="20" rx="3"/><text x="${TX(v) + 8}" y="${i * 28 + 18}" class="t-b">${N0(v)} <tspan class="t-f">${l}</tspan></text>`; });
+  s2 += `</svg>`;
+  const cr = (sl, m) => lb(sl, m)?.cost;
+  body("cost").innerHTML = `<div class="fig sc">${s}<div class="leg"><span><i style="background:var(--control)"></i>${esc(PV)}</span><span><i style="background:var(--accent)"></i>${esc(CH)}</span></div></div>
+  <h3>generated tokens on full, n ${N0(N)}</h3><div class="fig sc">${s2}</div>
+  <dl class="f">
+    <dt>tokens</dt><dd>${ev("3.84×", { label: "Token ratio", slice: FULL, n: N, runs: ["1026-023024-eval-5116"], src: "task note", note: "369,446 vs 96,157 generated tokens" })} the previous champion</dd>
+    <dt>batch seconds</dt><dd>${ev("2.82×", { label: "Batch seconds ratio", slice: FULL, n: N, runs: ["1026-031545-analysis-39e2"], src: "audit note" })}</dd>
+    <dt>p50 · p95 on full</dt><dd>${ev(lb(FULL, CH).latency_p50.toFixed(1) + " · " + lb(FULL, CH).latency_p95.toFixed(1) + " s", { label: "Latency on full", slice: FULL, n: N, runs: [lb(FULL, CH).task, lb(FULL, PV).task], src: "leaderboard › latency_p50 / latency_p95", note: "previous " + lb(FULL, PV).latency_p50.toFixed(2) + " · " + lb(FULL, PV).latency_p95.toFixed(2) + " s" })} vs ${lb(FULL, PV).latency_p50.toFixed(1)} · ${lb(FULL, PV).latency_p95.toFixed(1)} s</dd>
+    <dt>$ per query</dt><dd class="warn">${cr(FULL, CH) == null ? "not recorded on any run (cost = null)" : cr(FULL, CH)}</dd>
+    <dt>H100 serving</dt><dd>${esc(D.config.serving.status)} · batch sizes ${D.config.serving.batch_sizes.join(", ")} · ${ev("1 completed run", { label: "H100 serving benchmark", runs: ["1026-032756-benchmark-7ebf", "1026-032353-benchmark-6bf4"], src: "tasks", note: (T["1026-032756-benchmark-7ebf"]?.note || "") + " · numbers not in the export" })}, numbers not exported</dd>
+  </dl>`;
+}
+
+/* ================= 10 not known ================= */
+{
+  const sls = [FULL, "gsm8k-test/random100", "gsm8k-test/random50", CTL, TGT, "gsm8k-test/dev-time-rate-v1", "gsm8k-test/dev-group-count-v1"];
+  const hasRows = sl => sl === TGT || sl === CTL;
+  const mk = v => v === 2 ? '<span class="ok">✓</span>' : v === 1 ? '<span class="part">~</span>' : '<span class="no">✗</span>';
+  const mx = sls.map(sl => { const c = runsOf(CH, sl).length, p = runsOf(PV, sl).length; const ci = sl === FULL || hasRows(sl);
+    return `<tr><td class="id">${esc(sl.replace("gsm8k-test/", ""))}</td><td>${mk(c ? 2 : 0)} <span class="faint">${c}</span></td><td>${mk(p ? 2 : 0)} <span class="faint">${p}</span></td><td>${mk(ci ? 2 : (c && p ? 1 : 0))}</td><td>${mk(hasRows(sl) ? 2 : 0)}</td><td>${mk(c > 1 ? 2 : c ? 1 : 0)}</td></tr>`; }).join("");
+  const items = [
+    ["not run", `champion on <code>dev-time-rate-v1</code> (500) and <code>dev-group-count-v1</code> (447); 118 of 168 archived errors sit there`],
+    ["no CI", "random50 and random100: per-id rows not in the export, only scores"],
+    ["engine mix", `champion target and control runs mix transformers SDPA and vLLM 0.11; ${runsOf(CH, TGT).filter(t => /vLLM/.test(t.title)).length} of ${runsOf(CH, TGT).length} target runs are vLLM`],
+    ["noise on full", `${runsOf(CH, FULL).length} champion runs on full, all ${N0(NOW)}; previous champion ${runsOf(PV, FULL).length} runs`],
+    ["test reuse", "gsm8k-test was used for development; it is not an untouched final test"],
+    ["cap", "34 outputs still hit 1,024 tokens on full; 2048 and 4096 candidates are open"],
+    ["cost", "$ per query not recorded; H100 serving numbers not exported"],
+    ["causes", "hill categories are input regexes, a discovery proxy, not verified causal labels"],
+    ["goal audit", "goal needs an independent audit and H100 serving reports for every promoted champion"]
+  ];
+  body("unknown").innerHTML = `<div class="tw"><table class="mx"><thead><tr><th>slice</th><th>champion runs</th><th>previous runs</th><th>paired CI</th><th>per-id rows here</th><th>repeated</th></tr></thead><tbody>${mx}</tbody></table></div>
+  <dl class="f" style="margin-top:14px">${items.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
+  <h3>open candidates against this champion</h3><div class="facts">${Object.entries(M).filter(([k, v]) => v.parent === CH && v.status === "candidate").map(([k]) => `<span class="pill warn">${esc(k)}</span>`).join("")}</div>`;
+}
+
+/* ================= 11 reproduce ================= */
+{
+  const sp = typeof champModel.serving_policy === "object" ? champModel.serving_policy : (() => { try { return JSON.parse(String(champModel.serving_policy).replace(/'/g, '"').replace(/\bFalse\b/g, "false").replace(/\bTrue\b/g, "true")); } catch { return {}; } })();
+  const gc = T["1026-023024-eval-5116"]?.config || {};
+  const cmd = `<span class="cmt"># where the champion stands, and the next run</span>
+arx gate ${CH}
+arx goal status ${G.name}
+<span class="cmt"># re-run the champion on every slice it lacks (dev-time-rate-v1, dev-group-count-v1)</span>
+arx baseline ${CH}
+<span class="cmt"># the harness is hash-pinned; dry-run first</span>
+arx run --manifest &lt;manifest.json&gt; --expected-sha256 ${gc.runner_sha256} --dry-run`;
+  const contract = JSON.stringify({ ...sp, batch_size: gc.batch_size, batch_order: gc.batch_order, runner_sha256: gc.runner_sha256, scorer_sha256: gc.scorer_sha256, module_sha256: gc.module_sha256, serving_policy_fingerprint: champModel.serving_policy_fingerprint }, null, 2);
+  const sls = [FULL, "gsm8k-test/random100", "gsm8k-test/random50", CTL, TGT];
+  body("reproduce").innerHTML = `<div class="cb"><pre id="c1">${cmd}</pre><button class="cp" data-c="c1">Copy</button></div>
+  <h3>serving contract</h3><div class="cb"><pre id="c2">${esc(contract)}</pre><button class="cp" data-c="c2">Copy</button></div>
+  <h3>every run behind this paper</h3>
+  <div class="tw"><table><thead><tr><th>slice</th><th>hash</th><th>model</th><th>run id</th><th class="n">score</th><th>ended</th></tr></thead><tbody>
+  ${sls.flatMap(sl => [CH, PV].flatMap(m => runsOf(m, sl).map(t => `<tr${m === CH ? ' class="me"' : ""}><td class="id">${esc(sl.replace("gsm8k-test/", ""))}</td><td class="id">${esc(SL[sl].hash)}</td><td class="id">${m === CH ? "champion" : "previous"}</td><td class="id">${esc(t.id)}</td><td class="n">${t.summary?.score != null ? pct(t.summary.score) : "—"}</td><td class="id">${dt(t.ended)}</td></tr>`))).join("")}
+  </tbody></table></div>
+  <h3>audits</h3><dl class="f">${D.tasks.filter(t => t.kind === "analysis" && /audit/i.test(t.title)).map(t => `<dt>${esc(t.id)}</dt><dd><b>${esc(t.title)}</b><div class="muted">${esc(t.note || "")}</div></dd>`).join("")}</dl>`;
+}
+
+/* ---------------- popover ---------------- */
+const pop = $("#pop"); let popFor = null;
+function openPop(anchor, e) {
+  $$(".ev.open").forEach(x => x.classList.remove("open")); anchor.classList?.add("open"); popFor = anchor;
+  const rows = [["slice", e.slice], ["hash", e.hash], ["n", e.n != null ? N0(e.n) : null], ["source", e.src], ["detail", e.note]].filter(r => r[1] != null && r[1] !== "");
+  pop.innerHTML = `<button class="x" aria-label="Close">×</button><div class="pv">${esc(e.v)}</div><div class="pl">${esc(e.label || "")}</div>
+  <dl class="f">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}${(e.runs || []).filter(Boolean).length ? `<dt>runs</dt><dd>${e.runs.filter(Boolean).map(id => `<div>${runLine(id)}</div>`).join("")}</dd>` : ""}</dl>
+  <div class="pa"><button class="tb" id="pCopy">Copy evidence</button></div>`;
+  pop.classList.add("show");
+  const r = anchor.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+  let left = Math.min(Math.max(12, r.left), innerWidth - pw - 12), top = r.bottom + 8; if (top + ph > innerHeight - 8) top = Math.max(8, r.top - ph - 8);
+  pop.style.left = left + "px"; pop.style.top = top + "px";
+  $("#pCopy").onclick = () => copy([e.v, e.label, ...rows.map(([k, v]) => k + ": " + v), ...(e.runs || []).filter(Boolean).map(id => "run: " + id)].join("\n"), "Evidence copied");
+  pop.querySelector(".x").onclick = closePop;
+}
+function closePop() { pop.classList.remove("show"); $$(".ev.open").forEach(x => x.classList.remove("open")); popFor = null; }
+document.addEventListener("click", e => {
+  const b = e.target.closest(".ev"); if (b) { e.stopPropagation(); if (popFor === b) return closePop(); return openPop(b, EV[b.dataset.ev]); }
+  if (!e.target.closest("#pop") && !e.target.closest("#grid rect") && !e.target.closest(".idchips button")) closePop();
+});
+addEventListener("keydown", e => { if (e.key === "Escape") closePop(); });
+addEventListener("scroll", () => { if (popFor && innerWidth > 560) closePop(); }, { passive: true });
+
+/* ---------------- toolbar ---------------- */
+const toast = m => { const t = $("#toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("show"), 1600); };
+async function copy(text, msg) { try { await navigator.clipboard.writeText(text); } catch { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); } catch {} ta.remove(); } toast(msg); }
+let cur = "claim";
+const linkTo = id => location.href.split("#")[0] + "#" + id;
+$("#bLink").onclick = () => copy(linkTo(cur), "Link to " + SECS.find(s => s[0] === cur)[1] + " copied");
+$$(".anc").forEach(b => b.onclick = () => { copy(linkTo(b.dataset.anchor), "Link copied"); history.replaceState(null, "", "#" + b.dataset.anchor); });
+$("#bPrint").onclick = () => { $$(".lrow").forEach(r => r.classList.add("open")); print(); };
+addEventListener("afterprint", () => $$(".lrow").forEach(r => r.classList.remove("open")));
+$("#bTheme").onclick = () => { const r = document.documentElement, dark = r.dataset.theme ? r.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches; r.dataset.theme = dark ? "light" : "dark"; try { localStorage.setItem("arx-paper-theme", r.dataset.theme); } catch {} };
+try { const t = localStorage.getItem("arx-paper-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+$("#bShare").onclick = () => {
+  const doc = document.documentElement.cloneNode(true);
+  doc.removeAttribute("data-theme");
+  [...doc.querySelector("head").children].forEach(n => { if (!n.hasAttribute("data-keep")) n.remove(); });
+  [...doc.querySelector("body").children].forEach(n => { if (!n.hasAttribute("data-keep")) n.remove(); });
+  [...doc.querySelector("body").attributes].forEach(a => { if (a.name !== "data-keep") doc.querySelector("body").removeAttribute(a.name); });
+  doc.querySelector("#app").innerHTML = '<div id="load">loading…</div>';
+  doc.querySelector("#snap").textContent = JSON.stringify(D).replace(/</g, "\\u003c");
+  const out = "<!doctype html>\n" + doc.outerHTML;
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([out], { type: "text/html" }));
+  a.download = `${CH}-paper-${new Date(D.now * 1000).toISOString().slice(0, 10)}.html`; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast(`Snapshot saved · ${(out.length / 1024).toFixed(0)} KB, no fetches`);
+};
+
+/* ---------------- scroll spy ---------------- */
+const spy = new IntersectionObserver(es => { es.forEach(e => { if (e.isIntersecting) { cur = e.target.id; $$("#toc a, #chips a").forEach(a => a.classList.toggle("on", a.dataset.s === cur)); const c = $(`#chips a[data-s="${cur}"]`); const ch = $("#chips"); if (c && ch.offsetParent) ch.scrollTo({ left: c.offsetLeft - ch.clientWidth / 2 + c.offsetWidth / 2, behavior: "smooth" }); } }); }, { rootMargin: "-80px 0px -65% 0px" });
+$$("section.s").forEach(s => spy.observe(s));
+if (location.hash && $(location.hash)) requestAnimationFrame(() => $(location.hash).scrollIntoView());
+if (SNAP) $(".crumb").insertAdjacentHTML("beforeend", ` · <span class="warn">snapshot ${dt(D.now)}</span>`);
+})();
+</script>
+</body></html>

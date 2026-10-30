@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Workbench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* tokens copied from autoresearch/web/app.css */
+:root{
+ --ground:#f2f5f8;--surface:#fff;--raised:#f5f7f9;--active:#e4e9ee;--border:#e3e7eb;--rule:#eef1f4;--control:#cdd3d9;
+ --text:#131416;--muted:#5b6168;--faint:#6f767d;
+ --accent:#1b6c80;--accent-soft:#e3f0f3;--primary:#16181a;--on-primary:#fff;
+ --positive:#1e7b4f;--negative:#c4242a;--warning:#92400e;
+ --chart-1:#1b6c80;--chart-2:#2f70bb;--chart-3:#a86f0c;--grid:#e9edf0;
+ --pill-positive-bg:#dcfae5;--pill-positive-ink:#04250e;--pill-negative-bg:#ffedea;--pill-negative-ink:#831c1e;
+ --pill-warning-bg:#fff5db;--pill-warning-ink:#7a3a0b;
+ --radius-card:8px;--radius-control:6px;--radius-chip:4px;--radius-sheet:16px;
+ --font:"IBM Plex Sans",Inter,system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+ color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+ --ground:#0c0f12;--surface:#13171b;--raised:#1a1f24;--active:#232a31;--border:#232a30;--rule:#1c2227;--control:#3a434b;
+ --text:#eef1f3;--muted:#a3abb3;--faint:#8c959d;--accent:#5cb8cc;--accent-soft:#163038;--primary:#eef1f3;--on-primary:#0c0f12;
+ --positive:#4cc38a;--negative:#f07575;--warning:#e3a84f;--chart-1:#5cb8cc;--chart-2:#6aa1e6;--chart-3:#d9a441;--grid:#222930;
+ --pill-positive-bg:#14291e;--pill-positive-ink:#6fd6a1;--pill-negative-bg:#2e1a1d;--pill-negative-ink:#f59a9a;
+ --pill-warning-bg:#2b2215;--pill-warning-ink:#e8b765;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--ground);color:var(--text);font:14px/1.45 var(--font);-webkit-font-smoothing:antialiased}
+.sheet{max-width:1180px;margin:8px auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sheet);padding:24px 28px 40px;min-height:calc(100vh - 16px)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+.top{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;padding-bottom:16px;border-bottom:1px solid var(--rule)}
+.top h1{font-size:22px;font-weight:600;margin:0;letter-spacing:-.01em}
+.top .line{font-size:15px;color:var(--muted)}
+.top .line b{color:var(--text);font-weight:600}
+.top .line .neg{color:var(--negative);font-weight:600}
+.speed{margin-left:auto;display:flex;gap:2px;background:var(--raised);border:1px solid var(--border);border-radius:var(--radius-control);padding:2px}
+.speed button{font:500 12px var(--mono);border:0;background:none;color:var(--muted);padding:4px 8px;border-radius:4px;cursor:pointer}
+.speed button.on{background:var(--surface);color:var(--text);box-shadow:0 0 0 1px var(--border)}
+
+.done-strip{display:flex;flex-wrap:wrap;gap:8px;padding:14px 0 2px}
+.done-strip:empty{display:none}
+.chip{max-width:100%;overflow:hidden;display:flex;align-items:baseline;gap:8px;padding:6px 11px;border:1px solid var(--border);border-radius:var(--radius-control);background:var(--raised);font-size:13px;white-space:nowrap;animation:chipIn .5s cubic-bezier(.2,.8,.2,1)}
+.chip .ok{color:var(--positive)}.chip .bad{color:var(--negative)}
+.chip .nm{font-weight:500}
+.chip .res,.chip .d,.chip .at{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.chip .d,.chip .at{font-size:12px}.chip .at{color:var(--faint)}
+.pos{color:var(--positive)}.neg{color:var(--negative)}.warn{color:var(--warning)}
+@keyframes chipIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+.jobs{display:flex;flex-direction:column;gap:12px;padding-top:14px}
+.job{border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface);transition:opacity .4s,transform .4s}
+.job.leaving{opacity:0;transform:translateY(-8px)}
+.job.stalled{border-color:var(--negative);background:var(--pill-negative-bg)}
+
+/* headline: what · x of N · ETA · health */
+.hl{display:flex;align-items:center;gap:12px;padding:14px 16px 0;min-width:0}
+.kind{flex:none;font-size:12px;color:var(--muted);border:1px solid var(--border);border-radius:var(--radius-chip);padding:0 6px;line-height:18px}
+.ttl{font-size:15px;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ttl .on{color:var(--muted);font-weight:400}
+.cnt{flex:none;font:14px var(--mono);font-variant-numeric:tabular-nums;color:var(--muted)}
+.cnt b{color:var(--text);font-weight:500}
+.eta{margin-left:auto;flex:none;font:500 15px var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.eta small{font-weight:400;font-size:12px;color:var(--faint);margin-right:6px}
+.hp{flex:none;display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.hp::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.hp.ok{background:var(--pill-positive-bg);color:var(--pill-positive-ink)}
+.hp.warn{background:var(--pill-warning-bg);color:var(--pill-warning-ink)}
+.hp.bad{background:var(--negative);color:#fff}
+.bar{position:relative;height:6px;margin:12px 16px 0;background:var(--active);border-radius:3px;overflow:hidden}
+.fill{position:absolute;inset:0 auto 0 0;width:0;background:var(--accent);transition:width .9s cubic-bezier(.3,.7,.3,1)}
+.job.stalled .fill{background:var(--negative);transition:none}
+
+/* long job: vital-sign panels */
+.vit{display:grid;grid-template-columns:1.7fr 1fr 1fr;grid-auto-rows:minmax(112px,auto);gap:1px;background:var(--rule);margin-top:14px;border-top:1px solid var(--rule);border-radius:0 0 var(--radius-card) var(--radius-card);overflow:hidden}
+.pn{background:var(--surface);padding:10px 14px 10px;min-width:0;display:flex;flex-direction:column}
+.job.stalled .pn{background:color-mix(in srgb,var(--pill-negative-bg) 55%,var(--surface))}
+.pn.main{grid-row:span 2}
+.pn .lb{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:8px}
+.pn .lb span:last-child{color:var(--faint)}
+.pn .big{font:500 18px var(--mono);font-variant-numeric:tabular-nums;margin:2px 0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pn .big small{font-size:12px;font-weight:400;color:var(--muted);margin-left:6px}
+.pn .ch{flex:1;min-height:44px;position:relative}
+.pn.main .ch{min-height:170px}
+.pn .ch svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.pn .mem{height:6px;background:var(--active);border-radius:3px;overflow:hidden;margin-top:6px}
+.pn .mem i{display:block;height:100%;background:var(--chart-2)}
+.fix{display:none;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 16px 0}
+.job.stalled .fix{display:flex}
+.fix code{font:13px var(--mono);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-control);padding:6px 10px;cursor:copy;overflow-wrap:anywhere}
+.fix button{font:500 13px var(--font);border:0;border-radius:var(--radius-control);background:var(--negative);color:#fff;padding:7px 12px;cursor:pointer}
+.fix .cp{font-size:12px;color:var(--faint)}
+
+/* short job: one compact row */
+.job.short .hl{padding:11px 16px}
+.job.short .vs{flex:none;font:13px var(--mono);font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
+.job.short .mini{flex:0 0 110px;height:6px;background:var(--active);border-radius:3px;overflow:hidden}
+.job.short .mini i{display:block;height:100%;width:0;background:var(--accent);transition:width .9s}
+
+svg text{font:10px var(--mono);fill:var(--faint)}
+.empty{padding:60px 0;text-align:center;color:var(--faint);font-size:15px}
+.replay{font:500 13px var(--font);background:var(--primary);color:var(--on-primary);border:0;border-radius:var(--radius-control);padding:8px 14px;cursor:pointer}
+
+@media (max-width:900px){.vit{grid-template-columns:1fr 1fr}.pn.main{grid-column:span 2;grid-row:auto}}
+@media (max-width:640px){
+ .sheet{margin:0;border-radius:0;border-left:0;border-right:0;padding:16px 16px 32px}
+ .speed{margin-left:0}
+ .hl{flex-wrap:wrap;row-gap:4px}
+ .ttl{flex:1 1 100%;order:-1;white-space:normal}
+ .vit{grid-template-columns:1fr}.pn.main{grid-column:auto}
+ .pn.main .ch{min-height:140px}
+ .job.short .mini{flex:1 1 100%;order:5}
+}
+</style>
+</head>
+<body>
+<main class="sheet">
+ <div class="top">
+  <h1>Workbench</h1>
+  <span class="line" id="topline">Loading…</span>
+  <div class="speed" id="speed"><button data-x="1">1×</button><button data-x="12" class="on">12×</button><button data-x="60">60×</button></div>
+ </div>
+ <div class="done-strip" id="strip"></div>
+ <div class="jobs" id="jobs"></div>
+</main>
+<script>
+'use strict';
+/* data-proto: a replay, not live data.
+   REAL (from prototypes/data): ten leaf tasks from gsm8k-ft-state.json / qwen-throughput-state.json, their progress.hist
+   beats, durations, titles, notes, summary scores, errors and p50/p95 latency; the leaderboard scores used as
+   comparators; and for the two training runs every logged metric row in tasks/<id>.json (loss, reward, grad_norm,
+   learning_rate, num_tokens, step_time), replayed at their real timestamps. vllm-gdn-bv16 tokens/s is its real spark.
+   DERIVED: the shared clock (t0 offsets/chaining so the tasks overlap like one live session); per-item correctness
+   inside evals (seeded shuffles that land exactly on the real final counts, paired with the comparator at ~3% discordance);
+   per-item latencies (lognormal fitted to the real p50/p95).
+   SIMULATED (ledger has none): GPU utilisation and memory, setup stages/bytes/download speed, generation tokens/s and
+   queue depth. GPU utilisation drops to ~0 once a job stops beating, which is what a dead worker looks like. */
+const SPEC=[
+ {src:'g',id:'1026-040635-eval-743b',t0:-900,cmp:{model:'qwen3-4b-rl-fresh-v1',label:'previous champion'}},
+ {src:'g',id:'1026-015519-train-2f1c',t0:-300,main:'reward',gpu:{mem:61.2,util:91}},
+ {src:'g',id:'1026-043304-eval-c71c',t0:-400},
+ {src:'g',id:'1026-045656-eval-5696',t0:-560,stall:true,cmp:{task:'1026-045329-eval-56cd',label:'its last run'}},
+ {src:'g',id:'1026-042046-data-7186',t0:-100,gen:{tps:3400,q:64}},
+ {src:'g',id:'1026-043538-train-2130',t0:-60,main:'loss',gpu:{mem:27.6,util:95}},
+ {src:'g',id:'1026-045411-setup-1b85',t0:-20},
+ {src:'g',id:'1026-045207-setup-9b9d',after:'1026-043538-train-2130',gap:3},
+ {src:'g',id:'1026-044439-eval-aafa',after:'1026-045207-setup-9b9d',gap:2},
+ {src:'q',id:'1024-035306-experiment-87b8',t0:200},
+];
+const LONG_S=240,STALL_S=600,QUIET_S=60,WIN_S=300,TICK_MS=250,GPU_MEM=80,Z=1.645;
+const UNIT={eval:'problems',train:'steps',data:'questions',experiment:'repeats'};
+
+// ---------- small helpers
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
+const n0=x=>Math.round(x).toLocaleString('en-US');
+const sgn=d=>(d>0?'+':d<0?'−':'±')+n0(Math.abs(d));
+const clock=ms=>new Date(ms).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+function span(s){if(s==null||!isFinite(s))return '—';s=Math.max(0,s);
+ if(s<60)return Math.round(s)+' s';if(s<3600){const m=Math.floor(s/60),r=Math.round(s%60);return m+' min'+(m<10&&r?' '+r+' s':'')}
+ const h=Math.floor(s/3600),m=Math.round(s%3600/60);return h+' h'+(m?' '+m+' min':'')}
+const perMin=r=>!isFinite(r)||r<=0?'—':r>=1?(r>=10?r.toFixed(0):r.toFixed(1))+'/s':(r*60>=10?(r*60).toFixed(0):(r*60).toFixed(1))+'/min';
+function rng(seed){let a=seed>>>0;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const hash=s=>[...s].reduce((h,c)=>Math.imul(h^c.charCodeAt(0),16777619),2166136261);
+const noise=(seed,x)=>{const a=Math.sin(seed*12.9898+x*78.233)*43758.5453;return a-Math.floor(a)}; // deterministic 0..1
+const shuffle=(a,r)=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+function wilson(k,n){if(!n)return [0,1];const p=k/n,d=1+Z*Z/n,c=(p+Z*Z/(2*n))/d,h=Z*Math.sqrt(p*(1-p)/n+Z*Z/(4*n*n))/d;return [c-h,c+h]}
+const ema=(pts,a=.15)=>{let e=null;return pts.map(([x,y])=>[x,e=e==null?y:e+(y-e)*a])};
+const sci=v=>v.toExponential(1).replace('e-','e−');
+
+// ---------- chart: line(s) on a fixed x domain so the line grows across as the job runs
+function chart(box,{xd,yd,lines=[],band=null,ref=null,yfmt=v=>v.toFixed(2),zero=false,min=null,max=null}){
+ const w=Math.max(60,box.clientWidth),h=Math.max(36,box.clientHeight);
+ const all=lines.flatMap(l=>l.pts.map(p=>p[1])).concat(band?band.flatMap(b=>[b[1],b[2]]):[]).concat(ref?[ref.y]:[]).concat(zero?[0]:[]);
+ if(!all.length){box.innerHTML='';return}
+ let [lo,hi]=yd||[Math.min(...all),Math.max(...all)];if(hi-lo<1e-12){hi+=Math.abs(hi)*.05||.5;lo-=Math.abs(lo)*.05||.5}
+ if(!yd){const p=(hi-lo)*.1;lo-=p;hi+=p;if(min!=null)lo=Math.max(lo,min);if(max!=null)hi=Math.min(hi,max)}
+ const L=0,R=w,T=10,B=h-2;
+ const X=x=>(L+(x-xd[0])/(xd[1]-xd[0]||1)*(R-L)).toFixed(1),Y=y=>(B-(y-lo)/(hi-lo)*(B-T)).toFixed(1);
+ const path=a=>a.map((p,i)=>(i?'L':'M')+X(p[0])+' '+Y(p[1])).join('');
+ let s=`<line x1="0" x2="${w}" y1="${Y(hi)}" y2="${Y(hi)}" stroke="var(--grid)"/><line x1="0" x2="${w}" y1="${Y(lo)}" y2="${Y(lo)}" stroke="var(--grid)"/>`;
+ s+=`<text x="0" y="${+Y(hi)-2}">${esc(yfmt(hi))}</text><text x="0" y="${+Y(lo)-2}">${esc(yfmt(lo))}</text>`;
+ if(zero&&lo<0&&hi>0)s+=`<line x1="0" x2="${w}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--faint)" stroke-opacity=".5"/>`;
+ if(band&&band.length>1)s+=`<path d="${band.map((b,i)=>(i?'L':'M')+X(b[0])+' '+Y(b[2])).join('')}${band.slice().reverse().map(b=>'L'+X(b[0])+' '+Y(b[1])).join('')}Z" fill="var(--chart-1)" fill-opacity=".14"/>`;
+ if(ref){s+=`<line x1="0" x2="${w}" y1="${Y(ref.y)}" y2="${Y(ref.y)}" stroke="var(--chart-3)" stroke-dasharray="3 3"/>`;if(ref.label)s+=`<text x="${w}" y="${+Y(ref.y)-3}" text-anchor="end" style="fill:var(--chart-3)">${esc(ref.label)}</text>`}
+ for(const l of lines){if(l.pts.length<1)continue;
+  s+=`<path d="${path(l.pts)}" fill="none" stroke="${l.color||'var(--chart-1)'}" stroke-width="${l.w||1.75}" stroke-opacity="${l.o??1}" stroke-linejoin="round"/>`;
+  if(l.dot){const p=l.pts.at(-1);s+=`<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="2.5" fill="${l.color||'var(--chart-1)'}"/>`}}
+ box.innerHTML=`<svg viewBox="0 0 ${w} ${h}" aria-hidden="true">${s}</svg>`;
+}
+
+// ---------- build jobs from the ledger
+let JOBS=[],STATE,CHAMP;
+async function load(){
+ const [g,q]=await Promise.all(['../data/gsm8k-ft-state.json','../data/qwen-throughput-state.json'].map(u=>fetch(u).then(r=>r.json())));
+ const trainIds=SPEC.filter(s=>/train/.test(s.id)).map(s=>s.id);
+ const tm=Object.fromEntries(await Promise.all(trainIds.map(async id=>[id,await fetch(`../data/tasks/${id}.json`).then(r=>r.json())])));
+ STATE={g,q};CHAMP=g.champion;
+ const byId={};for(const t of g.tasks)byId['g'+t.id]=t;for(const t of q.tasks)byId['q'+t.id]=t;
+ const lb=g.leaderboard;
+ const typical=(src,title)=>{const d=(src==='g'?g:q).tasks.filter(t=>t.title===title&&(t.status==='done'||t.status==='completed')&&t.ended).map(t=>t.ended-t.created).sort((a,b)=>a-b);return d.length?d[d.length>>1]:null};
+ for(const s of SPEC){
+  const t=byId[s.src+s.id],end=t.ended||t.heartbeat,dur=end-t.created,pr=t.progress||{},total=pr.total||null;
+  const j={spec:s,t,id:t.id,kind:t.kind,total,dur:s.stall?Infinity:dur,unit:UNIT[t.kind]||'',ev:[],start:null,ended:false,el:null,seed:hash(t.id)%1000};
+  if(t.kind==='train'){
+   const m=tm[t.id].metrics;j.rows=m.map(r=>({...r,rel:r.t-t.created}));j.ev=j.rows.map(r=>[r.rel,r.step]);
+  }else if(pr.hist&&pr.hist.length){
+   let ev=pr.hist.map(([ts,d])=>[ts-t.created,d]);
+   if(ev[0][1]>17){const [t1,d1]=ev[0],pre=[];for(let d=16;d<d1;d+=16)pre.push([t1*d/d1,d]);ev=pre.concat(ev)} // hist truncated at the front
+   j.ev=ev;
+  }
+  if(total&&!s.stall&&(!j.ev.length||j.ev.at(-1)[1]<total))j.ev.push([dur,total]);
+  if(s.stall&&pr.done>(j.ev.at(-1)?.[1]||0))j.ev.push([t.heartbeat-t.created+2,pr.done]);
+  if(!total)j.typ=typical(s.src,t.title)||dur;
+  if(t.kind==='eval')buildEval(j,s,t,lb,byId);
+  if(t.kind==='experiment')j.tps=j.ev.map(([x],i)=>[x,t.spark.y[i]]);
+  j.long=!!total&&(dur>=LONG_S||s.stall)&&(t.kind==='eval'||t.kind==='train');
+  j.etaHist=etaHistory(j);
+  JOBS.push(j);
+ }
+ const J=id=>JOBS.find(j=>j.id===id);
+ for(const j of JOBS)if(j.spec.t0!=null)j.start=j.spec.t0;
+ for(let k=0;k<4;k++)for(const j of JOBS)if(j.spec.after){const p=J(j.spec.after);if(p.start!=null)j.start=p.start+p.dur+j.spec.gap}
+}
+function buildEval(j,s,t,lb,byId){
+ const n=j.total,r=rng(hash(t.id));
+ const m=s.stall?t.progress.done:n,k=s.stall?Math.round(t.last.running_score*m):Math.round(t.summary.score*n);
+ let cm;
+ if(s.cmp?.task){const ct=byId['g'+s.cmp.task];cm={label:s.cmp.label,model:ct.model,right:Math.round(ct.summary.score*ct.summary.n)}}
+ else if(s.cmp?.model){const e=lb[t.slice][s.cmp.model];cm={label:s.cmp.label,model:s.cmp.model,right:Math.round(e.score*e.n)}}
+ else{const e=lb[t.slice][CHAMP];cm={label:'champion',model:CHAMP,right:Math.round(e.score*e.n)}}
+ const comp=shuffle(Array.from({length:n},(_,i)=>i<cm.right),r);
+ const cand=comp.slice(0,m),idx=[...cand.keys()];
+ const flip=(want,from,cnt)=>{for(const i of shuffle(idx.slice(),r)){if(!cnt)break;if(cand[i]===from&&comp[i]===from){cand[i]=want;cnt--}}};
+ const e=Math.round(.03*m);flip(false,true,e);flip(true,false,e);
+ let diff=k-cand.filter(Boolean).length;
+ for(const i of shuffle(idx.slice(),r)){if(!diff)break;if(diff>0&&!cand[i]){cand[i]=true;diff--}else if(diff<0&&cand[i]){cand[i]=false;diff++}}
+ const mu=Math.log(t.summary?.latency_p50||t.last?.latency_s||8),sig=Math.log((t.summary?.latency_p95||mu*1.4)/(t.summary?.latency_p50||1))/Z||.2;
+ const lat=Array.from({length:m},()=>{const u=Math.max(1e-6,r()),v=r();return Math.exp(mu+sig*Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v))});
+ j.cand=cand;j.comp=comp;j.cm=cm;j.lat=lat;j.errors=t.summary?.errors??0;j.finalRight=s.stall?null:k;
+}
+// at each beat: finish time predicted from the recent rate window -> how the ETA moved over the run
+function etaHistory(j){
+ if(!j.total)return [];const out=[];
+ j.ev.forEach(([x,d],i)=>{let k0=i;while(k0>0&&j.ev[k0-1][0]>=x-WIN_S)k0--;const dx=x-j.ev[k0][0],dd=d-j.ev[k0][1];
+  if(dx>5&&dd>0&&d<j.total)out.push([x,x+(j.total-d)*dx/dd])});
+ return out;
+}
+
+// ---------- job state at sim time T
+function at(j,T){
+ const rel=T-j.start;
+ if(rel<0)return null;
+ if(j.killed!=null)return {status:'failed',rel:j.killed-j.start};
+ if(rel>=j.dur)return {status:'done',rel:j.dur};
+ let i=-1;for(let k=0;k<j.ev.length;k++){if(j.ev[k][0]<=rel)i=k;else break}
+ const done=i>=0?j.ev[i][1]:0,beat=i>=0?j.ev[i][0]:0;
+ const silent=j.spec.stall?rel-beat:j.ev.length?rel-beat:rel%9;
+ let k0=i;while(k0>0&&j.ev[k0-1][0]>=beat-WIN_S)k0--;
+ const rate=i>k0&&beat-j.ev[k0][0]>5?(done-j.ev[k0][1])/(beat-j.ev[k0][0]):NaN;
+ const eh=j.etaHist.filter(p=>p[0]<=rel);
+ const finRel=eh.length?eh.at(-1)[1]:j.typ!=null?j.typ:null;
+ const old=eh.filter(p=>p[0]<=rel-WIN_S).at(-1);
+ const drift=eh.length&&old?eh.at(-1)[1]-old[1]:0;
+ let health=['healthy','ok'];
+ if(j.spec.stall&&silent>=STALL_S)health=['stalled','bad'];
+ else if(silent>=QUIET_S)health=[`quiet ${span(silent)}`,'warn'];
+ else if(drift>Math.max(120,.15*(finRel-rel)))health=[`ETA slipping ${span(drift)}`,'warn'];
+ return {status:health[1]==='bad'?'stalled':'running',rel,i,done,beat,silent,rate,eh,finRel,drift,health};
+}
+const doneAt=(j,rel)=>{let d=0;for(const [x,v] of j.ev){if(x<=rel)d=v;else break}return d};
+// simulated GPU: steady while beating, ~0 once silent for a minute
+function gpu(j,rel,s){
+ const base=j.spec.gpu||{mem:71.8,util:j.kind==='eval'?74:88},dead=s&&s.silent>QUIET_S&&j.spec.stall;
+ const pts=[];const t1=rel,t0=Math.max(0,rel-WIN_S*2);
+ for(let x=t0;x<=t1;x+=Math.max(2,(t1-t0)/60)){const quiet=j.spec.stall&&x-doneAt_beat(j,x)>QUIET_S;
+  const u=quiet?Math.max(0,2*noise(j.seed,x)):Math.min(100,base.util+(noise(j.seed,x)-.5)*(j.kind==='eval'?30:8));pts.push([x,u])}
+ return {pts,util:pts.at(-1)?.[1]??0,mem:dead?base.mem:base.mem+(noise(j.seed,Math.floor(rel/30))-.5)*.6};
+}
+const doneAt_beat=(j,rel)=>{let b=0;for(const [x] of j.ev){if(x<=rel)b=x;else break}return b};
+
+// ---------- titles / words
+function title(j){
+ const t=j.t;
+ if(t.kind==='eval'){const [m,sl]=t.title.split(' · ');return `${esc(m)} <span class="on">on ${esc(String(sl).replace('gsm8k-test/',''))}</span>`}
+ if(t.kind==='train'&&t.model)return `${esc(t.title)} <span class="on">→ ${esc(t.model)}</span>`;
+ if(t.kind==='experiment'&&t.parent){const p=STATE.q.tasks.find(x=>x.id===t.parent);return `${esc(p?.title||t.title)}`}
+ return esc(t.title);
+}
+const kindWord=k=>({eval:'Eval',train:'Train',data:'Generate',setup:'Setup',experiment:'Serve'})[k]||k;
+
+// ---------- DOM
+function makeRow(j){
+ const el=document.createElement('article');el.className='job '+(j.long?'long':'short');
+ const head=`<div class="hl"><span class="kind">${kindWord(j.kind)}</span><span class="ttl">${title(j)}</span>${j.long?'<span class="cnt"></span>':'<span class="mini"><i></i></span><span class="cnt"></span><span class="vs"></span>'}<span class="eta"></span><span class="hp"></span></div>`;
+ let body='';
+ if(j.long){
+  const P=(cls,lb)=>`<div class="pn ${cls}"><div class="lb"><span>${lb}</span><span class="sub"></span></div><div class="big"></div><div class="ch"></div>${cls.includes('gpu')?'<div class="mem"><i></i></div>':''}</div>`;
+  const panels=j.kind==='train'
+   ?[P('main m-main',j.spec.main==='reward'?'Reward':'Loss'),P('m-eta','Finish estimate'),P('m-tps','Tokens/s'),P('m-opt','Grad norm'),P('gpu m-gpu','GPU')]
+   :[P('main m-main','Score so far'),P('m-eta','Finish estimate'),P('m-pair','vs '+esc(j.cm.label)),P('m-lat','Latency'),P('gpu m-gpu','Throughput')];
+  body=`<div class="bar"><div class="fill"></div></div><div class="fix"><code title="Copy"></code><button type="button">End it</button><span class="cp"></span></div><div class="vit">${panels.join('')}</div>`;
+ }
+ el.innerHTML=head+body;
+ const q=s=>el.querySelector(s);
+ j.el=el;j.q={eta:q('.eta'),hp:q('.hp'),cnt:q('.cnt'),fill:q('.fill'),mini:q('.mini i'),vs:q('.vs')};
+ if(j.long){j.p={};for(const k of ['main','eta','tps','opt','gpu','pair','lat']){const pn=q('.m-'+k);if(pn)j.p[k]={big:pn.querySelector('.big'),sub:pn.querySelector('.sub'),ch:pn.querySelector('.ch'),mem:pn.querySelector('.mem i')}}
+  const cmd=`arx task finish ${j.id} --status failed`;q('.fix code').textContent=cmd;
+  q('.fix code').onclick=()=>{navigator.clipboard?.writeText(cmd).catch(()=>{});q('.fix .cp').textContent='copied'};
+  q('.fix button').onclick=()=>{j.killed=T;tick(true)}}
+ return el;
+}
+
+let T=0,SPEED=12,BASE=Date.now(),timer=null;
+const wall=simT=>BASE+simT*1000;
+
+function headline(j,s){
+ const q=j.q;
+ q.hp.className='hp '+s.health[1];q.hp.textContent=s.health[0];
+ if(s.status==='stalled')q.eta.innerHTML=`<small>no estimate</small>—`;
+ else if(s.finRel!=null&&s.finRel>s.rel)q.eta.innerHTML=`<small>${span(s.finRel-s.rel)} left</small>${clock(wall(j.start+s.finRel))}`;
+ else if(s.finRel!=null)q.eta.innerHTML=`<small>past usual</small>—`;
+ else q.eta.innerHTML=`<small>estimating</small>—`;
+ if(j.total){const f=Math.min(1,s.done/j.total);if(q.fill)q.fill.style.width=(f*100).toFixed(2)+'%';if(q.mini)q.mini.style.width=(f*100).toFixed(2)+'%';
+  q.cnt.innerHTML=`<b>${n0(s.done)}</b> of ${n0(j.total)} ${j.unit}`}
+ j.el.classList.toggle('stalled',s.status==='stalled');
+}
+
+// compact rows: the one or two vital signs that matter for this kind
+function compact(j,s){
+ const q=j.q,rel=s.rel;
+ if(j.kind==='setup'){ // simulated stages over the typical duration; Qwen3-4B bf16 weights ≈ 8.05 GB
+  const D=j.dur,f=rel/D,GB=8.05;let stage,frac,vs;
+  if(f<.45){frac=f/.45;const mbs=380+120*noise(j.seed,Math.floor(rel/3));stage='download';vs=`${(GB*frac).toFixed(2)} / ${GB} GB · ${n0(mbs)} MB/s`}
+  else if(f<.7){frac=(f-.45)/.25;stage='load weights';vs=`${n0(398*frac)} / 398 tensors`}
+  else if(f<.9){frac=(f-.7)/.2;stage='capture graphs';vs=`${Math.min(67,Math.round(67*frac))} / 67 sizes`}
+  else{frac=(f-.9)/.1;stage='warm up';vs='1 request'}
+  q.cnt.innerHTML=`<b>${stage}</b>`;q.vs.textContent=vs;q.mini.style.width=(f*100).toFixed(1)+'%';
+ }else if(j.kind==='data'){
+  const tps=j.spec.gen.tps*(.85+.3*noise(j.seed,Math.floor(rel/4))),rem=j.total-s.done,qd=Math.min(j.spec.gen.q,Math.ceil(rem/8)*4+Math.round(6*noise(j.seed,rel|0)));
+  q.vs.textContent=`${n0(tps)} tok/s · queue ${qd}`;
+ }else if(j.kind==='experiment'){
+  const p=j.tps.filter(p=>p[0]<=rel).at(-1);q.vs.textContent=p?`${n0(p[1])} tok/s · queue ${Math.max(0,Math.round(4*noise(j.seed,rel|0)))} · 128 running`:'warming up';
+ }else if(j.kind==='eval'){
+  const right=j.cand.slice(0,s.done).filter(Boolean).length,cr=j.comp.slice(0,s.done).filter(Boolean).length;
+  q.vs.innerHTML=`${n0(right)} right · <span class="${right-cr>0?'pos':right-cr<0?'neg':''}">${sgn(right-cr)} vs ${esc(j.cm.label)}</span> · ${perMin(s.rate)}`;
+ }else if(j.kind==='train'){q.vs.textContent=perMin(s.rate)}
+}
+
+function vitals(j,s){
+ const P=j.p,rel=s.rel;
+ // finish estimate history: predicted finish clock at each beat
+ if(s.eh.length){const last=s.eh.at(-1)[1];P.eta.big.innerHTML=s.status==='stalled'?`<span class="neg">none</span><small>last said ${clock(wall(j.start+last))}</small>`:`${clock(wall(j.start+last))}<small>${s.drift>=0?'+':'−'}${span(Math.abs(s.drift))} in 5 min</small>`;
+  P.eta.sub.textContent=`${s.eh.length} re-estimates`;
+  chart(P.eta.ch,{xd:[0,Math.max(rel,60)],lines:[{pts:s.eh.map(([x,f])=>[x,(f-s.eh[0][1])/60]),dot:true}],yfmt:v=>{const m=Math.round(v);return (m>0?'+':m<0?'−':'±')+Math.abs(m)+' min'}})}
+ else{P.eta.big.innerHTML='<small>estimating</small>';P.eta.ch.innerHTML=''}
+ const g=gpu(j,rel,s);
+ if(j.kind==='train'){
+  const rows=j.rows.filter(r=>r.rel<=rel),key=j.spec.main==='reward'?'rewards/correctness/mean':'loss';
+  const raw=rows.filter(r=>Number.isFinite(r[key])).map(r=>[r.step,r[key]]),sm=ema(raw,j.spec.main==='reward'?.08:.5);
+  P.main.big.innerHTML=sm.length?`${sm.at(-1)[1].toFixed(3)}<small>smoothed · raw ${raw.at(-1)[1].toFixed(3)}</small>`:'—';
+  P.main.sub.textContent=`step ${n0(s.done)}`;
+  chart(P.main.ch,{xd:[0,j.total],lines:[{pts:raw,w:1,o:.3},{pts:sm,dot:true}],yfmt:v=>v.toFixed(2)});
+  const tk=rows.filter(r=>Number.isFinite(r.num_tokens));const tps=tk.slice(1).map((r,i)=>[r.rel,(r.num_tokens-tk[i].num_tokens)/Math.max(.1,r.rel-tk[i].rel)]);
+  const st=rows.filter(r=>Number.isFinite(r.step_time)).at(-1);
+  P.tps.big.innerHTML=tps.length?`${n0(tps.at(-1)[1])}<small>${st?st.step_time.toFixed(1)+' s/step':perMin(s.rate)+' steps'}</small>`:'—';
+  chart(P.tps.ch,{xd:[Math.max(0,rel-WIN_S*2),Math.max(rel,1)],lines:[{pts:ema(tps,.4),dot:true}],min:0,yfmt:v=>n0(v)});
+  const gn=rows.filter(r=>Number.isFinite(r.grad_norm)).map(r=>[r.step,r.grad_norm]),lr=rows.filter(r=>Number.isFinite(r.learning_rate)).at(-1);
+  P.opt.big.innerHTML=gn.length?`${gn.at(-1)[1].toFixed(2)}<small>lr ${lr?sci(lr.learning_rate):'—'}</small>`:'—';
+  chart(P.opt.ch,{xd:[0,j.total],lines:[{pts:gn,w:1,o:.3,color:'var(--chart-2)'},{pts:ema(gn,.2),color:'var(--chart-2)',dot:true}],min:0,yfmt:v=>v.toFixed(1)});
+  P.gpu.big.innerHTML=`${Math.round(g.util)}%<small>${g.mem.toFixed(1)} / ${GPU_MEM} GB</small>`;P.gpu.sub.textContent='A100 80 GB';
+  chart(P.gpu.ch,{xd:[Math.max(0,rel-WIN_S*2),Math.max(rel,1)],yd:[0,100],lines:[{pts:g.pts,color:'var(--chart-2)',dot:true}],yfmt:v=>v.toFixed(0)+'%'});
+  P.gpu.mem.style.width=(g.mem/GPU_MEM*100)+'%';
+ }else{
+  // eval: running score + 90% Wilson band over items, comparator's final rate as reference
+  const beats=j.ev.filter(([x])=>x<=rel);const sc=[],band=[],pd=[],pdb=[];
+  let right=0,cr=0,b=0,c=0,lastD=0;
+  for(const [,d] of beats){for(let i=lastD;i<d&&i<j.cand.length;i++){right+=j.cand[i];cr+=j.comp[i];if(j.cand[i]&&!j.comp[i])b++;if(!j.cand[i]&&j.comp[i])c++}lastD=Math.min(d,j.cand.length);
+   if(!d)continue;const [lo,hi]=wilson(right,d);sc.push([d,right/d]);band.push([d,lo,hi]);
+   const se=Math.sqrt(Math.max(0,b+c-(b-c)**2/d));pd.push([d,b-c]);pdb.push([d,b-c-Z*se,b-c+Z*se])}
+  const d=lastD;
+  if(d){const [lo,hi]=wilson(right,d);P.main.big.innerHTML=`${n0(right)} of ${n0(d)}<small>${(100*right/d).toFixed(1)}% · 90% CI ${(100*lo).toFixed(1)}–${(100*hi).toFixed(1)}</small>`}else P.main.big.textContent='—';
+  P.main.sub.textContent=`${j.errors} errors`;
+  const ref=j.cm.right/j.total;
+  chart(P.main.ch,{xd:[0,j.total],band,lines:[{pts:sc,dot:true}],ref:{y:ref,label:`${j.cm.label} ${(100*ref).toFixed(1)}%`},min:0,max:1,yfmt:v=>(100*v).toFixed(0)+'%'});
+  if(pd.length){const l=pdb.at(-1);P.pair.big.innerHTML=`<span class="${b-c>0?'pos':b-c<0?'neg':''}">${sgn(b-c)}</span><small>CI ${sgn(Math.floor(l[1]))} to ${sgn(Math.ceil(l[2]))}</small>`;
+   P.pair.sub.textContent=`${b} won · ${c} lost`;
+   chart(P.pair.ch,{xd:[0,j.total],band:pdb,lines:[{pts:pd,dot:true}],zero:true,yfmt:v=>sgn(Math.round(v))})}
+  const L=j.lat.slice(0,d).slice().sort((a,b)=>a-b);
+  if(L.length){const p50=L[Math.floor(L.length*.5)],p95=L[Math.min(L.length-1,Math.floor(L.length*.95))];
+   P.lat.big.innerHTML=`${p50.toFixed(1)} s<small>p95 ${p95.toFixed(1)} s</small>`;P.lat.sub.textContent='p50';
+   const roll=[];for(let i=8;i<=d;i+=8){const w=j.lat.slice(Math.max(0,i-48),i).sort((a,b)=>a-b);roll.push([i,w[Math.floor(w.length*.5)],w[Math.floor(w.length*.95)]])}
+   chart(P.lat.ch,{xd:[0,j.total],lines:[{pts:roll.map(r=>[r[0],r[2]]),color:'var(--chart-3)',w:1.25},{pts:roll.map(r=>[r[0],r[1]]),dot:true}],min:0,yfmt:v=>v.toFixed(0)+' s'})}
+  const rt=beats.slice(1).map(([x,dd],i)=>[x,(dd-beats[i][1])/Math.max(1,x-beats[i][0])*60]);
+  P.gpu.big.innerHTML=`${s.status==='stalled'?'0':perMin(s.rate).replace('/min','').replace('/s','')}<small>${s.rate>=1?'problems/s':'problems/min'} · GPU ${Math.round(g.util)}%</small>`;
+  P.gpu.sub.textContent=`${g.mem.toFixed(0)} / ${GPU_MEM} GB`;
+  chart(P.gpu.ch,{xd:[0,Math.max(rel,1)],lines:[{pts:ema(rt,.3),dot:true},{pts:g.pts.map(([x,u])=>[x,u/100*Math.max(1,...rt.map(r=>r[1]))]),color:'var(--chart-2)',w:1,o:.5}],min:0,yfmt:v=>v.toFixed(0)+'/min'});
+  P.gpu.mem.style.width=(g.mem/GPU_MEM*100)+'%';
+ }
+}
+
+function result(j){
+ const t=j.t;
+ if(t.kind==='eval'){const cr=j.comp.filter(Boolean).length,d=j.finalRight-cr;return {res:`${n0(j.finalRight)} of ${n0(j.total)}`,d:{txt:`${sgn(d)} vs ${j.cm.label}`,cls:d>0?'pos':d<0?'neg':''}}}
+ if(t.kind==='train'){const key=j.spec.main==='reward'?'rewards/correctness/mean':'loss';const v=ema(j.rows.filter(r=>Number.isFinite(r[key])).map(r=>[r.step,r[key]]),.15).at(-1)[1];
+  return {res:`${j.spec.main} ${v.toFixed(2)}`,d:{txt:`${n0(j.total)} steps`,cls:''}}}
+ if(t.kind==='setup'){let m=null;try{m=JSON.parse(t.note.msg)}catch(e){}return {res:m?`${m.model.split('/').pop()} · ${(m.parameter_count/1e9).toFixed(2)} B`:'ready'}}
+ if(t.kind==='experiment')return {res:`${n0(t.last.tokens_per_second)} tok/s`,d:{txt:`${t.last.concurrent_sequences} seqs`,cls:''}};
+ return {res:`${n0(j.total)} of ${n0(j.total)}`};
+}
+function addChip(j,s){
+ const strip=$('#strip'),c=document.createElement('div');c.className='chip';
+ if(s.status==='failed')c.innerHTML=`<span class="bad">✕</span><span class="nm">${esc(j.t.model||j.t.title)}</span><span class="res">ended at ${n0(doneAt(j,s.rel))} of ${n0(j.total)}</span><span class="at">${clock(wall(T))}</span>`;
+ else{const r=result(j);c.innerHTML=`<span class="ok">✓</span><span class="nm">${esc(j.kind==='eval'?j.t.model:j.t.title)}</span><span class="res">${esc(r.res)}</span>${r.d?`<span class="d ${r.d.cls}">${esc(r.d.txt)}</span>`:''}<span class="at">${clock(wall(j.start+j.dur))}</span>`}
+ strip.prepend(c);while(strip.children.length>6)strip.lastChild.remove();
+}
+
+function tick(force){
+ if(!force)T+=SPEED*TICK_MS/1000;
+ const box=$('#jobs');let running=0,stalled=0,lastEnd=null;
+ for(const j of JOBS){
+  const s=at(j,T);if(!s)continue;
+  if(s.status==='done'||s.status==='failed'){
+   if(!j.ended){j.ended=true;if(j.el){const el=j.el;el.classList.add('leaving');setTimeout(()=>el.remove(),420)}addChip(j,s)}continue}
+  if(!j.el){const el=makeRow(j);
+   // long cards above compact rows; within each, keep arrival order (calm: rows don't reshuffle)
+   if(j.long){const firstShort=[...box.children].find(c=>c.classList.contains('short'));box.insertBefore(el,firstShort||null)}else box.appendChild(el)}
+  headline(j,s);
+  if(j.long)vitals(j,s);else compact(j,s);
+  if(s.status==='stalled'){stalled++;if(box.firstChild!==j.el)box.prepend(j.el)}
+  else{running++;if(s.finRel!=null)lastEnd=Math.max(lastEnd??-1e9,j.start+s.finRel)}
+ }
+ const parts=[];
+ if(stalled)parts.push(`<span class="neg">${stalled} stalled</span>`);
+ if(running)parts.push(`<b>${running} running</b>`+(lastEnd!=null?`, all done by <b class="mono">${clock(wall(lastEnd))}</b>`:''));
+ else if(!stalled)parts.push('Nothing running');
+ $('#topline').innerHTML=parts.join(' · ');
+ const pending=JOBS.some(j=>!j.ended);
+ if(!pending&&!box.querySelector('.empty')){box.innerHTML=`<div class="empty">Nothing running.<br><br><button class="replay" type="button">Replay</button></div>`;box.querySelector('.replay').onclick=restart}
+}
+function restart(){
+ T=0;BASE=Date.now();$('#jobs').innerHTML='';$('#strip').innerHTML='';
+ for(const j of JOBS){j.el=null;j.ended=false;j.killed=null}
+ tick(true);
+}
+$('#speed').onclick=e=>{const b=e.target.closest('button');if(!b)return;SPEED=+b.dataset.x;for(const x of $('#speed').children)x.classList.toggle('on',x===b)};
+addEventListener('resize',()=>tick(true));
+load().then(()=>{restart();timer=setInterval(tick,TICK_MS)}).catch(err=>{$('#topline').textContent='Could not load ../data: '+err.message;console.error(err)});
+</script>
+</body>
+</html>

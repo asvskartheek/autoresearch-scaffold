@@ -5,7 +5,7 @@ truth. Gate results are never stored; they are derived from finished eval tasks 
 """
 from __future__ import annotations
 
-import hashlib, json, math, os, random, shlex, signal, statistics, subprocess, sys, threading, time, uuid
+import contextlib, fcntl, hashlib, itertools, json, math, os, random, shlex, signal, statistics, subprocess, sys, threading, time, uuid
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 
@@ -22,6 +22,7 @@ def now() -> float:
     return time.time()
 
 
+_SCALES: dict = {}  # (ledger dir, slice) -> (slices.json version, scale inferred from its runs)
 _CACHE: dict = {}  # path -> (mtime_ns, size, parsed); the dashboard re-reads the same files on every poll
 
 
@@ -54,9 +55,21 @@ def _copy(o):
 
 def _write(p: Path, obj) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(p.suffix + ".tmp")
+    tmp = p.with_suffix(f"{p.suffix}.{os.getpid()}.{threading.get_ident()}.tmp")  # one per writer: no shared tmp to race on
     tmp.write_text(json.dumps(obj, indent=2, default=str))
     os.replace(tmp, p)
+
+
+@contextlib.contextmanager
+def locked(p: Path):
+    """Hold an exclusive lock on `p` (via `p.lock`) across processes and threads, for read-modify-write of a ledger file."""
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p.with_suffix(p.suffix + ".lock"), "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 
 def _append(p: Path, obj) -> None:
@@ -88,35 +101,81 @@ def ids_hash(ids) -> str:
 
 # ---------------------------------------------------------------- statistics
 
-def summarize(rows: list[dict]) -> dict:
+def summarize(rows: list[dict], continuous: bool = False) -> dict:
+    """On a 0/1 slice an errored row scores 0. On a continuous slice 0 can be the best value (minus ms), so errored rows
+    are left out of the mean and only counted in `errors`."""
     n = len(rows)
-    scores = [0.0 if r.get("error") else float(r.get("score") or 0) for r in rows]
+    if continuous:
+        scores = [float(r.get("score") or 0) for r in rows if not r.get("error")]
+    else:
+        scores = [0.0 if r.get("error") else float(r.get("score") or 0) for r in rows]
     lat = sorted(r["latency_s"] for r in rows if isinstance(r.get("latency_s"), (int, float)))
     costs = [r["cost"] for r in rows if isinstance(r.get("cost"), (int, float))]
     pct = lambda q: lat[min(len(lat) - 1, math.ceil(q * len(lat)) - 1)] if lat else None
-    return dict(n=n, score=statistics.mean(scores) if n else None, errors=sum(bool(r.get("error")) for r in rows),
+    extra = dict(errors_excluded=True) if continuous else {}  # marks a summary made under the continuous rule
+    return extra | dict(n=n, score=statistics.mean(scores) if scores else None, errors=sum(bool(r.get("error")) for r in rows),
                 cost=sum(costs) / n if costs and n else None, cost_total=sum(costs) if costs else None,
                 latency_p50=pct(0.5), latency_p95=pct(0.95), latency_mean=statistics.mean(lat) if lat else None)
 
 
-def per_id(rows: list[dict]) -> dict[str, float]:
-    """Mean score per example id; repeated samples of one id are averaged."""
+ERROR_SHARE_WARN = 0.1  # a pooled side with at least this share of errored rows is flagged (PROTOCOL.md § Rules of evidence)
+
+
+def pool_errors(rows: list[dict]) -> dict:
+    """How much of a pooled score is errors: rows pooled, rows errored, their share. Errors still count as 0 (or drop
+    out on a continuous slice); this only makes them visible wherever the pooled score is served."""
+    n, e = len(rows), sum(bool(r.get("error")) for r in rows)
+    return dict(pooled_rows=n, pooled_errors=e, error_share=e / n if n else None)
+
+
+def scale_of_rows(rows: list[dict]) -> str | None:
+    """The scale a run's scores show: "binary" when every non-errored score is 0 or 1, else "continuous"; None when
+    no row has a score to read (no rows, or every row errored)."""
+    vals = {r.get("score") for r in rows if not r.get("error")}
+    vals.discard(None)
+    if not vals:
+        return None
+    return "binary" if vals <= {0, 1} else "continuous"
+
+
+def per_id(rows: list[dict], continuous: bool = False) -> dict[str, float]:
+    """Mean score per example id; repeated samples of one id are averaged. On a continuous slice errored rows are
+    skipped (an id with only errors drops out of pairing) instead of scoring 0."""
     acc: dict[str, list[float]] = {}
     for r in rows:
+        if continuous and r.get("error"):
+            continue
         acc.setdefault(str(r["id"]), []).append(0.0 if r.get("error") else float(r.get("score") or 0))
     return {k: statistics.mean(v) for k, v in acc.items()}
 
 
+_BOOT: dict = {}  # (deltas, iters) -> (lo, hi): a bootstrap is a pure function of its deltas
+
+
 def paired(cand: dict[str, float], base: dict[str, float], sign: int = 1, iters: int = 2000) -> dict:
+    """Paired delta of cand over base on their shared ids, with a 90% bootstrap CI (seed 0, `iters` resamples).
+
+    The resamples draw exactly what `random.Random(0).choices(d, k=n)` draws, one draw `floor(random() * n)` per
+    pick, but run the whole draw-index-sum chain in C (islice/map/fsum) instead of a Python loop and
+    statistics.mean (about 3x faster), and remember each CI by its deltas, so the dashboard's next poll of the same
+    pair costs nothing."""
     ids = sorted(set(cand) & set(base))
     if not ids:
         return dict(n=0, delta=None, lo=None, hi=None, wins=0, losses=0)
     d = [sign * (cand[i] - base[i]) for i in ids]
-    rng = random.Random(0)
-    boots = sorted(statistics.mean(rng.choices(d, k=len(d))) for _ in range(iters))
-    return dict(n=len(ids), delta=statistics.mean(d), lo=boots[int(0.05 * iters)], hi=boots[int(0.95 * iters) - 1],
+    n, key = len(d), (tuple(d), iters)
+    ci = _BOOT.get(key)
+    if ci is None:
+        draws = iter(random.Random(0).random, None)  # an endless stream of the same floats choices() would use
+        pick, scale = d.__getitem__, float(n).__mul__
+        boots = sorted(math.fsum(map(pick, map(int, map(scale, itertools.islice(draws, n))))) / n for _ in range(iters))
+        ci = _BOOT[key] = (boots[int(0.05 * iters)], boots[int(0.95 * iters) - 1])
+        with contextlib.suppress(RuntimeError, StopIteration, KeyError):  # another thread may be trimming too
+            while len(_BOOT) > 512:  # the dashboard re-asks the same pairs every poll; keep the recent ones
+                _BOOT.pop(next(iter(_BOOT)))
+    return dict(n=n, delta=math.fsum(d) / n, lo=ci[0], hi=ci[1],
                 wins=sum(x > 0 for x in d), losses=sum(x < 0 for x in d),
-                cand=statistics.mean(cand[i] for i in ids), base=statistics.mean(base[i] for i in ids))
+                cand=math.fsum(cand[i] for i in ids) / n, base=math.fsum(base[i] for i in ids) / n)
 
 
 # ---------------------------------------------------------------- the project
@@ -139,6 +198,7 @@ class Project:
 
     def datasets(self) -> dict: return self._coll("datasets")
     def slices(self) -> dict: return self._coll("slices")
+
     def hills(self) -> dict: return self._coll("hills")
     def models(self) -> dict: return self._coll("models")
     def goals(self) -> dict: return self._coll("goals")
@@ -147,10 +207,11 @@ class Project:
         return next((k for k, m in self.models().items() if m.get("status") == "champion"), None)
 
     def _upsert(self, coll: str, key: str, **fields) -> dict:
-        data = self._coll(coll)
-        rec = {**data.get(key, {"created": now()}), **{k: v for k, v in fields.items() if v is not None}}
-        data[key] = rec
-        self._save(coll, data)
+        with locked(self.dir / f"{coll}.json"):
+            data = self._coll(coll)
+            rec = {**data.get(key, {"created": now()}), **{k: v for k, v in fields.items() if v is not None}}
+            data[key] = rec
+            self._save(coll, data)
         return rec
 
     def log_decision(self, kind: str, **fields) -> None:
@@ -249,18 +310,28 @@ class Project:
         if not g:
             raise SystemExit(f"unknown goal {name}")
         sl, kpi, sign = g["slice"], g.get("kpi", "score"), 1 if g.get("higher_is_better", True) else -1
-        cur = (self.slices().get(sl) or {}).get("hash")
+        slr = self.slices().get(sl) or {}
+        cur = slr.get("hash")
         model = (g.get("evidence") or {}).get("model") if g.get("status") == "achieved" else self.champion()
         value, ev = self._kpi(model, sl, kpi)
         vs = None
         if kpi == "score" and model and g.get("baseline") and g["baseline"] != model and self.latest_eval(g["baseline"], sl):
-            vs = paired(self.pooled_scores(model, sl), self.pooled_scores(g["baseline"], sl), sign)
+            mine, theirs = latest_shared(self.slice_evals(model, sl), self.slice_evals(g["baseline"], sl))
+            cont = self.is_continuous(sl)  # an errored row is never a perfect "minus ms" score
+            vs = paired(per_id([r for t in mine for r in self.rows(t["id"])], cont),
+                        per_id([r for t in theirs for r in self.rows(t["id"])], cont), sign)
         hills = {k: h.get("status") for k, h in self.hills().items() if h.get("goal") == name}
-        return dict(g, name=name, model=model, value=value, task=ev["id"] if ev else None,
-                    runs=len(self.slice_evals(model, sl)) if model else 0,
+        errs = pool_errors([r for t in self.score_runs(model, sl) for r in self.rows(t["id"])]) if model and ev else \
+            dict(pooled_rows=0, pooled_errors=0, error_share=None)
+        status = dict(g, name=name, model=model, value=value, task=ev["id"] if ev else None, **errs, errors=errs["pooled_errors"],
+                    runs=len(self.score_runs(model, sl)) if model else 0,
                     met=value is not None and sign * (value - g["target"]) >= 0,
                     gap=None if value is None else sign * (g["target"] - value), vs_baseline=vs, hills=hills,
-                    slice_changed=bool(cur and g.get("slice_hash") and cur != g["slice_hash"]))
+                    slice_changed=bool(cur and g.get("slice_hash") and cur != g["slice_hash"]),
+                    # how the slice's score reads: 0/1 per example (counts of n) or a continuous amount in `unit`
+                    scale=self.slice_scale(sl), unit=slr.get("unit"), metric=slr.get("metric"))
+
+        return goal_evidence_status(status, bool(self.latest_eval(g.get("baseline"), sl)))
 
     def achieve_goal(self, name, force=False, note=None) -> dict:
         st = self.goal_status(name)
@@ -324,13 +395,26 @@ class Project:
             t = _read(Path(d.path) / "task.json") if d.is_dir() else None
             if t:
                 out.append(self._liveness(t, stall))
+        for t in out:
+            self._fresh_summary(t, out)
         return sorted(out, key=lambda t: t.get("updated", 0), reverse=True)
 
     def task(self, tid: str) -> dict:
         t = _read(self.task_dir(tid) / "task.json")
         if not t:
             raise KeyError(tid)
-        return self._liveness(t)
+        return self._fresh_summary(self._liveness(t))
+
+    def _fresh_summary(self, t: dict, tasks: list[dict] | None = None) -> dict:
+        """A finished eval's summary as the current rule reads it. Runs on continuous slices summarised before errored
+        rows were left out of the mean (no `errors_excluded`) are recomputed from their rows on read; the ledger file
+        is never rewritten. Only runs with errors can differ, so clean ones cost nothing."""
+        s = t.get("summary")
+        if (t.get("kind") != "eval" or not isinstance(s, dict) or s.get("errors_excluded") or not s.get("errors")
+                or not t.get("slice") or t.get("status") == "running" or not self.is_continuous(t["slice"], tasks)):
+            return t
+        t["summary"] = s | summarize(self.rows(t["id"]), True)
+        return t
 
     def _stall(self) -> float:
         return 60 * self.config.get("stall_minutes", 10)
@@ -354,9 +438,17 @@ class Project:
         """Finished, complete eval tasks only; partial runs never count."""
         return [t for t in self.tasks() if t.get("kind") == "eval" and t.get("status") == "done" and t.get("complete")]
 
+    def _slice_field(self, slice_name: str, field: str):
+        """One field of one frozen slice, read from the parsed file without copying every slice's id list: the
+        dashboard asks this hundreds of times per poll on a project with a hundred slices."""
+        try:
+            return (_cached(self.dir / "slices.json", json.loads).get(slice_name) or {}).get(field)
+        except (OSError, ValueError):
+            return None
+
     def slice_evals(self, model: str, slice_name: str) -> list[dict]:
         """Every complete run of the model on the slice's current version, oldest first."""
-        h = self.slices().get(slice_name, {}).get("hash")
+        h = self._slice_field(slice_name, "hash")
         c = [t for t in self.evals() if t.get("model") == model and t.get("slice") == slice_name and t.get("slice_hash") == h
              and not t.get("superseded_by")]
         return sorted(c, key=lambda t: t.get("ended", 0))
@@ -376,9 +468,69 @@ class Project:
         c = self.slice_evals(model, slice_name)
         return c[-1] if c else None
 
-    def pooled_scores(self, model: str, slice_name: str) -> dict[str, float]:
-        """Per-id score averaged over every complete run: repeat runs tighten the estimate, none are dropped."""
-        return per_id([r for t in self.slice_evals(model, slice_name) for r in self.rows(t["id"])])
+    def score_runs(self, model: str, slice_name: str, reference_model: str | None = None) -> list[dict]:
+        """The model's complete runs made under the same declared harness (`config.baseline_contract`) as the
+        reference model's latest run on the slice (default: this model's own latest). Comparisons pass the candidate
+        as the reference for both sides. A run that declares no contract matches only runs that declare none."""
+        return same_contract(self.slice_evals(model, slice_name), self.latest_eval(reference_model or model, slice_name))
+
+    def pooled_scores(self, model: str, slice_name: str, reference_model: str | None = None) -> dict[str, float]:
+        """Per-id mean over compatible complete repeats; never pool across a declared harness change."""
+        return per_id([r for t in self.score_runs(model, slice_name, reference_model) for r in self.rows(t["id"])],
+                      continuous=self.is_continuous(slice_name))
+
+    def slice_scale(self, slice_name: str, tasks: list[dict] | None = None) -> str:
+        """"continuous" or "binary". The stored `scale`; for a slice frozen before `scale` existed, read off the newest
+        complete run's scores on it (any model): every score 0 or 1 is binary, anything else continuous. The one rule
+        the CLI, the gates and the dashboard share. `tasks` is the task list to infer from (default: every eval)."""
+        stored = self._slice_field(slice_name, "scale")
+        if stored:
+            return stored
+        # an inferred scale holds until slices.json changes (a long-lived dashboard must not keep a stale one); a slice
+        # with no scored run yet is not cached, so its first run decides
+        try:
+            st = os.stat(self.dir / "slices.json")
+            ver = (st.st_mtime_ns, st.st_size)
+        except OSError:
+            ver = None
+        key = (str(self.dir), slice_name)
+        hit = _SCALES.get(key)
+        if hit and hit[0] == ver:
+            return hit[1]
+        runs = [t for t in (self.evals() if tasks is None else tasks)
+                if t.get("kind") == "eval" and t.get("slice") == slice_name and t.get("ended") and t.get("status") == "done"]
+        for t in sorted(runs, key=lambda t: t.get("ended") or 0, reverse=True):
+            scale = scale_of_rows(self.rows(t["id"]))
+            if scale:
+                _SCALES[key] = (ver, scale)
+                return scale
+        return "binary"
+
+    def versus_champion(self, model: str, slice_name: str) -> dict | None:
+        """The model's paired delta vs the champion on one slice under the model's own latest harness, as the gate
+        pairs it: its runs under that contract against the champion's runs under the same one. None for the champion
+        itself or a model with no run; `state` "paired" (with paired()'s fields, runs and errors on each side),
+        "champion_other_harness" (the champion ran the slice, never under this harness) or "no_champion_run"."""
+        champ = self.champion()
+        mine = self.score_runs(model, slice_name)
+        if not champ or champ == model or not mine:
+            return None
+        theirs = self.score_runs(champ, slice_name, reference_model=model)
+        out = dict(champion=champ, baseline_contract=contract_of(mine[-1]), cand_runs=len(mine), base_runs=len(theirs))
+        if not theirs:
+            return out | dict(state="champion_other_harness" if self.slice_evals(champ, slice_name) else "no_champion_run")
+        cont = self.is_continuous(slice_name)
+        crows = [r for t in mine for r in self.rows(t["id"])]
+        brows = [r for t in theirs for r in self.rows(t["id"])]
+        ce, be = pool_errors(crows), pool_errors(brows)
+        sign = 1 if self.config.get("higher_is_better", True) else -1
+        return out | dict(state="paired", cand_task=mine[-1]["id"], base_task=theirs[-1]["id"],
+                          cand_errors=ce["pooled_errors"], base_errors=be["pooled_errors"],
+                          cand_error_share=ce["error_share"], base_error_share=be["error_share"],
+                          **paired(per_id(crows, cont), per_id(brows, cont), sign))
+
+    def is_continuous(self, slice_name: str, tasks: list[dict] | None = None) -> bool:
+        return self.slice_scale(slice_name, tasks) == "continuous"
 
     # gates -----------------------------------------------------------------------------
     def _resolve(self, ref: str, model: dict) -> list[str]:
@@ -403,7 +555,7 @@ class Project:
         if m.get("status") in ("rejected", "historical", "planned"):  # recorded decisions, not ladder candidates
             rung = dict(rung="decision", status="fail" if m["status"] == "rejected" else "locked",
                         checks=[dict(slice="-", rule="recorded", threshold=0, state=m["status"], reason=m.get("reason"))])
-            return dict(model=model_name, champion=champ, rungs=[rung], promotable=False, next=[])
+            return dict(model=model_name, champion=champ, rungs=[rung], promotable=False, next=[], ladder_slices=[])
         sign = 1 if cfg.get("higher_is_better", True) else -1
         rungs, blocked, next_runs = [], False, []
         for rung in cfg.get("ladder", []):
@@ -415,23 +567,50 @@ class Project:
                     continue
                 for sl in self._resolve(chk["slice"], m):
                     c = dict(slice=sl, rule=chk["rule"], threshold=chk.get("margin", 0) if chk["rule"] == "better" else -chk.get("tolerance", 0))
-                    ce, be = self.latest_eval(model_name, sl), self.latest_eval(champ, sl) if champ else None
+                    # both sides pool only the runs made under the candidate's latest declared harness
+                    cand_runs = self.score_runs(model_name, sl)
+                    base_runs = self.score_runs(champ, sl, reference_model=model_name) if champ else []
+                    ce, be = (cand_runs or [None])[-1], (base_runs or [None])[-1]
+                    cont = self.is_continuous(sl)
+                    if cont:  # margin / tolerance are a fraction of the champion's mean here, paired or not yet
+                        c |= dict(relative=True, threshold_fraction=c["threshold"])
+                    if contract_of(ce) is not None:
+                        c["baseline_contract"] = contract_of(ce)
                     if champ == model_name:
                         c["state"] = "champion"
+                        # the champion is not paired with itself: what it has on the slice, or that it has no run
+                        sc = per_id([row for t in cand_runs for row in self.rows(t["id"])], cont) if cand_runs else {}
+                        c |= dict(champion_runs=len(cand_runs), champion_task=ce["id"] if ce else None,
+                                  champion_score=sum(sc.values()) / len(sc) if sc else None)
                     elif not champ:
                         c["state"] = "no_champion"
                     elif not be:
                         c["state"] = "need_baseline"
+                        # the champion ran this slice, only under another harness: say so, never "not run"
+                        other = len(self.slice_evals(champ, sl))
+                        if other:
+                            c["harness_mismatch"], c["champion_runs_other_harness"] = True, other
                         next_runs.append((champ, sl))
                     elif not ce:
                         c["state"] = "need_run"
                         next_runs.append((model_name, sl))
                     else:
-                        p = paired(self.pooled_scores(model_name, sl), self.pooled_scores(champ, sl), sign)
+                        crows = [row for t in cand_runs for row in self.rows(t["id"])]
+                        brows = [row for t in base_runs for row in self.rows(t["id"])]
+                        p = paired(per_id(crows, cont), per_id(brows, cont), sign)
+                        ce_, be_ = pool_errors(crows), pool_errors(brows)
+                        c |= dict(cand_rows=ce_["pooled_rows"], cand_error_share=ce_["error_share"],
+                                  base_rows=be_["pooled_rows"], base_error_share=be_["error_share"],
+                                  error_warn=any((x["error_share"] or 0) >= ERROR_SHARE_WARN for x in (ce_, be_)))
+                        if cont and p.get("base") is not None:
+                            # margin / tolerance are written for 0/1 slices; on a continuous one read them as a
+                            # fraction of the champion's mean (0.05 on ~160 MB allows 8 MB), not as raw units
+                            c["threshold"] *= abs(p["base"])
                         ok = p["delta"] is not None and (p["delta"] > c["threshold"] if chk["rule"] == "better" else p["delta"] >= c["threshold"])
                         c |= dict(state="pass" if ok else "fail", noisy=p["lo"] is not None and p["lo"] < 0 < p["hi"],
                                   cand_task=ce["id"], base_task=be["id"],
-                                  cand_runs=len(self.slice_evals(model_name, sl)), base_runs=len(self.slice_evals(champ, sl)), **p)
+                                  cand_runs=len(cand_runs), base_runs=len(base_runs),
+                                  cand_errors=ce_["pooled_errors"], base_errors=be_["pooled_errors"], **p)
                     checks.append(c)
             states = {c["state"] for c in checks}
             if blocked:
@@ -450,7 +629,11 @@ class Project:
         for r in cfg.get("ladder", [])[len(rungs):]:
             rungs.append(dict(rung=r["rung"], status="locked", checks=[]))
         promotable = bool(rungs) and all(r["status"] in ("pass", "skipped") for r in rungs) and champ != model_name
-        return dict(model=model_name, champion=champ, rungs=rungs, promotable=promotable,
+        # the slices this ladder measures, one row each; [] when nothing resolves (a champion with no hill of its own
+        # on a ladder of @hill.* rungs), so a view hides its table instead of drawing a header alone
+        ladder_slices = [dict(rung=r["rung"], slice=c["slice"]) for r in rungs for c in r["checks"]
+                         if c.get("rule") not in ("manual", "recorded")]
+        return dict(model=model_name, champion=champ, rungs=rungs, promotable=promotable, ladder_slices=ladder_slices,
                     next=[dict(model=a, slice=b) for a, b in dict.fromkeys(next_runs)] if not any(r["status"] == "fail" for r in rungs) else [])
 
     def baseline_slices(self) -> dict[str, list[str]]:
@@ -475,8 +658,12 @@ class Project:
             runs = sorted((t for t in mine if t.get("slice") == sl and t.get("slice_hash") == slices[sl]["hash"]),
                           key=lambda t: t.get("ended", 0))
             if runs:
+                # the score the gates pair against: pooled over the runs under the latest run's harness
+                pool = same_contract(runs, runs[-1])
+                sc = per_id([r for t in pool for r in self.rows(t["id"])], self.is_continuous(sl))
                 s = runs[-1].get("summary") or {}
-                have[sl] = dict(task=runs[-1]["id"], score=s.get("score"), n=s.get("n"), ended=runs[-1].get("ended"), runs=len(runs))
+                have[sl] = dict(task=runs[-1]["id"], score=sum(sc.values()) / len(sc) if sc else None,
+                                latest_score=s.get("score"), n=s.get("n"), ended=runs[-1].get("ended"), runs=len(pool))
             else:
                 need.append(sl)
         return dict(model=model, have=have, need=need, roles=roles)
@@ -491,15 +678,23 @@ class Project:
         plan, cmd, slices = self.baseline_plan(model), self.config.get("baseline_cmd"), self.slices()
         rerun = rerun or replace
         todo = list(plan["roles"]) if rerun else plan["need"]
-        say(f"baseline for {model}: {len(plan['have'])} of {len(plan['roles'])} slices already run, {len(todo)} to run")
+        nh = len(plan["have"])
+        if replace:
+            say(f"baseline for {model}: {len(todo)} slices to run; the runs on {nh} of them are replaced once each fresh run completes")
+        elif rerun:
+            say(f"baseline for {model}: {len(todo)} slices to run; {nh} of them already run, pooled with the fresh runs")
+        else:
+            say(f"baseline for {model}: {nh} of {len(plan['roles'])} slices already run, {len(todo)} to run")
         what = lambda sl: ", ".join(plan["roles"][sl])
         verb = "would run" if dry and cmd else "run" if cmd else "missing"
+        again = "replace" if replace else "rerun"  # a slice that has runs is never "missing"
+        again = f"would {again}" if dry and cmd else again if cmd else f"to {again}"
         for sl, h in plan["have"].items():
             score = "—" if h["score"] is None else f"{h['score']:.3f}"
             pooled = f", {h['runs']} runs pooled" if h["runs"] > 1 else ""
-            say(f"  {verb if rerun else 'reused':<9} {sl:<28} {score}  n={h['n']}  {what(sl)}  ({h['task']}, {_ago(h['ended'])}{pooled})")
+            say(f"  {again if rerun else 'reused':<13} {sl:<28} {score}  n={h['n']}  {what(sl)}  ({h['task']}, {_ago(h['ended'])}{pooled})")
         for sl in plan["need"]:
-            say(f"  {verb:<9} {sl:<28} n={slices[sl]['n']}  {what(sl)}")
+            say(f"  {verb:<13} {sl:<28} n={slices[sl]['n']}  {what(sl)}")
         if not todo or dry:
             return plan
         if not cmd:
@@ -582,6 +777,70 @@ def _ago(t) -> str:
 
 _open: list["Task"] = []  # tasks running in this process, innermost last; new tasks nest under the top one
 
+# ---------- system vitals: one sampler thread per process writes GPU readings into every task open in it.
+# Rows carry `sys: true` and never touch `last`, the step counter or the heartbeat (a hung job must still go stalled).
+# Off with ARX_SAMPLE=0; skipped silently without nvidia-smi. ARX_SAMPLE_CMD swaps the command (tests, other tools):
+# it must print "util %, used MiB, total MiB" per GPU, one line each, like nvidia-smi's csv.
+_sampled: list["Task"] = []
+_sampler_lock = threading.Lock()
+_sampler: threading.Thread | None = None
+
+
+def _gpu_cmd() -> list[str] | None:
+    if os.environ.get("ARX_SAMPLE_CMD"):
+        return shlex.split(os.environ["ARX_SAMPLE_CMD"])
+    import shutil
+    exe = shutil.which("nvidia-smi")
+    return [exe, "--query-gpu=utilization.gpu,memory.used,memory.total", "--format=csv,noheader,nounits"] if exe else None
+
+
+def gpu_sample() -> dict | None:
+    """One reading over every GPU: mean utilisation (%), memory used and total (GB). None when nothing answers."""
+    cmd = _gpu_cmd()
+    if not cmd:
+        return None
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=10).stdout
+        rows = [[float(x) for x in line.split(",")[:3]] for line in out.strip().splitlines() if line.count(",") >= 2]
+    except Exception:
+        return None
+    if not rows:
+        return None
+    return dict(gpu_util=round(sum(r[0] for r in rows) / len(rows), 1), gpu_mem_gb=round(sum(r[1] for r in rows) / 1024, 2),
+                gpu_mem_total_gb=round(sum(r[2] for r in rows) / 1024, 2), gpus=len(rows))
+
+
+def _sample_loop():
+    global _sampler
+    period = max(1.0, float(os.environ.get("ARX_SAMPLE_S") or 15))
+    ok, misses = False, 0
+    while True:
+        time.sleep(period)  # first reading after one period: a short-lived `arx task start` never samples
+        with _sampler_lock:
+            tasks = [t for t in _sampled if t.meta.get("status") == "running"]
+            if not tasks or (not ok and misses >= 3):  # nothing open, or the command never answers: stop quietly
+                _sampled.clear()
+                _sampler = None
+                return
+        s = gpu_sample()
+        ok, misses = ok or bool(s), misses + (not s)
+        for t in tasks if s else ():
+            try:
+                t._sys(s)
+            except Exception:
+                pass
+
+
+def _sample(task: "Task") -> None:
+    global _sampler
+    if os.environ.get("ARX_SAMPLE", "1") == "0" or not _gpu_cmd():
+        return
+    with _sampler_lock:
+        _sampled.append(task)
+        if _sampler is None:
+            _sampler = threading.Thread(target=_sample_loop, name="arx-sampler", daemon=True)
+            _sampler.start()
+
 
 class BudgetExceeded(Exception):
     """Raised by `Task.check()` once a task (or one of its ancestors) has run out of time."""
@@ -601,7 +860,7 @@ class Task:
                  slice: str = None, agent: str = None, total: int = None, links: dict = None, config: dict = None,
                  tid: str = None, parent: str = None, budget_s: float = None):
         self.p = project
-        self.id = tid or f"{time.strftime('%m%d-%H%M%S')}-{kind}-{uuid.uuid4().hex[:4]}"
+        self.id = tid or self._claim(project, kind)
         self.dir = project.task_dir(self.id)
         self._lock = threading.Lock()
         self._step = 0
@@ -620,8 +879,25 @@ class Task:
                 self._env = os.environ.get("ARX_PARENT")
                 _open.append(self)
                 os.environ["ARX_PARENT"] = self.id
+            try:
+                _sample(self)
+            except Exception:  # vitals are a nicety; they never stop a task from starting
+                pass
         else:
             self.meta = _read(self.dir / "task.json")
+
+    @staticmethod
+    def _claim(project: Project, kind: str) -> str:
+        """A fresh id, its directory made atomically: two tasks started in the same second never share one."""
+        while True:
+            tid = f"{time.strftime('%m%d-%H%M%S')}-{kind}-{uuid.uuid4().hex[:4]}"
+            d = project.task_dir(tid)
+            d.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                d.mkdir()
+                return tid
+            except FileExistsError:
+                continue
 
     def _flush(self):
         self.meta["updated"] = self.meta["heartbeat"] = now()
@@ -679,6 +955,12 @@ class Task:
         with self._lock:
             self._flush()
 
+    def _sys(self, reading: dict):
+        """A system reading (see _sample_loop): appended to metrics with `sys: true`; no heartbeat, `last` untouched."""
+        with self._lock:
+            if self.meta.get("status") == "running":
+                _append(self.dir / "metrics.jsonl", dict(t=now(), step=self._step, sys=True, **reading))
+
     def add_row(self, row: dict):
         with self._lock:
             _append(self.dir / "rows.jsonl", row)
@@ -690,11 +972,18 @@ class Task:
                 want = set(self.p.slice(self.meta["slice"])["ids"])
                 got = {str(r["id"]) for r in rows}
                 self.meta["complete"] = got == want
-                self.meta["summary"] = summarize(rows) | {"missing": len(want - got)}
+                sl = self.meta["slice"]
+                # a slice frozen without `scale` and never run before: its first run's own scores decide
+                cont = self.p.is_continuous(sl) if (self.p._slice_field(sl, "scale") or any(
+                    t.get("slice") == sl for t in self.p.evals())) else scale_of_rows(rows) == "continuous"
+                self.meta["summary"] = summarize(rows, cont) | {"missing": len(want - got)}
             if summary:
                 self.meta["summary"] = self.meta.get("summary", {}) | summary
             self.meta["status"], self.meta["ended"] = status, now()
             self._flush()
+        with _sampler_lock:
+            if self in _sampled:
+                _sampled.remove(self)
         if self in _open:
             _open.remove(self)
             env = _open[-1].id if _open else self._env
@@ -717,7 +1006,7 @@ class Task:
         return False
 
 
-def evaluate(project: Project, model: str, slice: str, run_one, workers: int = 8, deadline_s: float = 3600,
+def evaluate(project: Project, model: str, slice: str, run_one, workers: int = 8, deadline_s: float | None = None,
              title: str = None, description: str = None, agent: str = None, repeats: int = 1, config: dict = None,
              parent: str = None) -> Task:
     """Run `run_one(example_id) -> {"score": float, "cost": .., "latency_s": .., ...}` on every id of a slice.
@@ -727,21 +1016,26 @@ def evaluate(project: Project, model: str, slice: str, run_one, workers: int = 8
     """
     sl = project.slice(slice)
     ids = [i for i in sl["ids"] for _ in range(repeats)]
-    t = Task(project, "eval", title or f"{model} on {sl['name']}", description, model=model, slice=sl["name"],
-             agent=agent, total=len(ids), parent=parent, budget_s=deadline_s,
-             config=(config or {}) | {"workers": workers, "deadline_s": deadline_s, "repeats": repeats})
+    if not title:  # how the Workbench says it: "LoRA r16 on dev60", not the raw ids
+        from .features import model_label  # features imports nothing from core; imported here to keep core light
+        title = f"{model_label(project, model) or model} on {sl['name'].split('/', 1)[-1]}"
+    t = Task(project, "eval", title, description, model=model, slice=sl["name"],
+             agent=agent, total=len(ids), parent=parent, budget_s=deadline_s,  # a budget only when the caller set one
+             config=(config or {}) | {"workers": workers, "deadline_s": deadline_s or 3600, "repeats": repeats})
+    end = now() + (deadline_s or 3600)  # with no budget, still stop after an hour; a budget or a parent's may be tighter
     start, done, total_score, stop = now(), 0, 0.0, False
     pool = ThreadPoolExecutor(workers)
     queue, futs = list(reversed(ids)), {}
     try:
         while queue or futs:
-            stop = stop or not t.ok()
+            stop = stop or not t.ok() or now() >= end
             while queue and not stop and len(futs) < workers:  # submit lazily so a spent budget stops new calls
                 i = queue.pop()
                 futs[pool.submit(_timed, run_one, i)] = i
             if not futs:
                 break
             secs = t.left()
+            secs = end - now() if secs is None else min(secs, end - now())
             fin, _ = wait(futs, timeout=None if secs is None else max(0.0, secs), return_when=FIRST_COMPLETED)
             if not fin:
                 stop = True
@@ -774,3 +1068,56 @@ def _timed(fn, i):
         return dict(id=str(i), latency_s=round(time.time() - t0, 3)) | out | {"id": str(i)}
     except Exception as e:  # an example that crashes is wrong, never skipped
         return dict(id=str(i), score=0.0, error=f"{type(e).__name__}: {e}"[:300], latency_s=round(time.time() - t0, 3))
+
+
+def contract_of(task: dict | None):
+    """The harness a run declares it was made with (`config.baseline_contract`); None when it declares none."""
+    return ((task or {}).get("config") or {}).get("baseline_contract")
+
+
+def same_contract(runs: list[dict], reference: dict | None) -> list[dict]:
+    """The runs made under the reference run's declared harness. Never pools across a declared harness change: a
+    reference without a contract keeps only the runs without one. No reference run: every run."""
+    if reference is None:
+        return runs
+    c = contract_of(reference)
+    return [t for t in runs if contract_of(t) == c]
+
+
+def latest_shared(mine: list[dict], theirs: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Both sides' runs under the most recent declared harness they both ran (newest of `mine` first), for a
+    comparison that is not a gate: a goal's champion vs its baseline. ([], []) when they share none."""
+    key = lambda t: json.dumps(contract_of(t), sort_keys=True, default=str)
+    have = {key(t) for t in theirs}
+    for t in reversed(mine):
+        if key(t) in have:
+            k = key(t)
+            return [x for x in mine if key(x) == k], [x for x in theirs if key(x) == k]
+    return [], []
+
+
+def goal_evidence_status(status, baseline_exists):
+    """One frozen achievement and explicit comparison scope for dashboard and references."""
+    sign = 1 if status.get("higher_is_better", True) else -1
+    if status.get("status") == "achieved" and status.get("evidence"):
+        frozen = status["evidence"]
+        status["current_observation"] = {key: status[key] for key in
+                                         ("model", "value", "task", "runs", "met", "gap", "vs_baseline")}
+        for key in ("model", "value", "task", "runs", "n", "vs_baseline"):
+            status[key] = frozen.get(key)
+        value = frozen.get("value")
+        status["met"] = value is not None and sign * (value - status["target"]) >= 0
+        status["gap"] = None if value is None else sign * (status["target"] - value)
+    if status.get("model") and status.get("model") == status.get("baseline"):
+        status["comparison_state"] = "same_model"
+    elif status.get("kpi", "score") != "score":
+        status["comparison_state"] = "unpaired"  # cost and latency are per-run summaries: nothing to pair
+    elif status.get("vs_baseline", None) and status["vs_baseline"].get("n"):
+        status["comparison_state"] = "paired"
+    elif not baseline_exists:
+        status["comparison_state"] = "missing_baseline"
+    elif status.get("value") is None:
+        status["comparison_state"] = "missing_measurement"
+    else:
+        status["comparison_state"] = "different_harness"
+    return status
