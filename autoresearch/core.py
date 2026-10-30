@@ -555,7 +555,7 @@ class Project:
         if m.get("status") in ("rejected", "historical", "planned"):  # recorded decisions, not ladder candidates
             rung = dict(rung="decision", status="fail" if m["status"] == "rejected" else "locked",
                         checks=[dict(slice="-", rule="recorded", threshold=0, state=m["status"], reason=m.get("reason"))])
-            return dict(model=model_name, champion=champ, rungs=[rung], promotable=False, next=[])
+            return dict(model=model_name, champion=champ, rungs=[rung], promotable=False, next=[], ladder_slices=[])
         sign = 1 if cfg.get("higher_is_better", True) else -1
         rungs, blocked, next_runs = [], False, []
         for rung in cfg.get("ladder", []):
@@ -629,7 +629,11 @@ class Project:
         for r in cfg.get("ladder", [])[len(rungs):]:
             rungs.append(dict(rung=r["rung"], status="locked", checks=[]))
         promotable = bool(rungs) and all(r["status"] in ("pass", "skipped") for r in rungs) and champ != model_name
-        return dict(model=model_name, champion=champ, rungs=rungs, promotable=promotable,
+        # the slices this ladder measures, one row each; [] when nothing resolves (a champion with no hill of its own
+        # on a ladder of @hill.* rungs), so a view hides its table instead of drawing a header alone
+        ladder_slices = [dict(rung=r["rung"], slice=c["slice"]) for r in rungs for c in r["checks"]
+                         if c.get("rule") not in ("manual", "recorded")]
+        return dict(model=model_name, champion=champ, rungs=rungs, promotable=promotable, ladder_slices=ladder_slices,
                     next=[dict(model=a, slice=b) for a, b in dict.fromkeys(next_runs)] if not any(r["status"] == "fail" for r in rungs) else [])
 
     def baseline_slices(self) -> dict[str, list[str]]:

@@ -353,5 +353,27 @@ class OldContinuousSummaries(unittest.TestCase):
         self.assertAlmostEqual(next(x for x in p.tasks() if x["id"] == t.id)["summary"]["score"], -2.0)
 
 
+class ChampionWithoutAHill(unittest.TestCase):
+    def test_ladder_slices_is_empty_when_nothing_resolves(self):
+        from autoresearch import server
+        ladder = [dict(rung="dev", checks=[dict(slice="@hill.target", rule="better"),
+                                           dict(slice="@hill.control", rule="not_worse", tolerance=0.05),
+                                           dict(slice="@hills.climbed", rule="not_worse", tolerance=0.03)])]
+        p = project(ladder)
+        p.add_slice("qa/full", ["x0", "x1"], kind="full")
+        p.add_model("v0", status="champion")
+        g = p.gate("v0")
+        self.assertEqual(g["ladder_slices"], [])
+        self.assertEqual(server._state(p)["gates"]["v0"]["ladder_slices"], [])
+
+    def test_ladder_slices_lists_what_resolves(self):
+        ladder = [dict(rung="dev", checks=[dict(slice="@hill.target", rule="better")]),
+                  dict(rung="full", checks=[dict(slice="qa/full", rule="better")])]
+        p = project(ladder)
+        p.add_slice("qa/full", ["x0", "x1"], kind="full")
+        p.add_model("v0", status="champion")
+        self.assertEqual(p.gate("v0")["ladder_slices"], [dict(rung="full", slice="qa/full")])
+
+
 if __name__ == "__main__":
     unittest.main()
