@@ -53,6 +53,7 @@ class Memory(unittest.TestCase):
         ks = {k["id"]: k for k in memory.knowledge("p-00aa11bb")}
         self.assertEqual(set(ks), {"paired", "ladder", "ci", f"model:{self.key}/cand"})
         self.assertEqual(ks["ladder"]["state"], "known")  # the check, minutes after the step, is the review that stands
+        self.assertEqual(ks[f"model:{self.key}/cand"]["state"], "shaky")  # a model is never due for review
         self.assertEqual(ks["paired"]["state"], "due"); self.assertEqual(ks["ci"]["state"], "due")  # the step was missed
 
     def test_teach_phases(self):

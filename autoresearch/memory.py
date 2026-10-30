@@ -446,9 +446,10 @@ def rebuild(con, who: str) -> int:
 
 
 def state_of(k: dict, now: float) -> str:
+    """A model is one candidate's result: nothing to review later, so never due (its general ideas carry the schedule)."""
     if not k.get("n"):
         return "untested"
-    if k.get("due") and k["due"] <= now:
+    if k.get("due") and k["due"] <= now and k.get("kind") != "model":
         return "due"
     return "known" if (k.get("mastery") or 0) >= 0.7 else "shaky"
 
