@@ -235,6 +235,9 @@ const here=()=>location.hash.slice(1)||'overview';
 // the person (people.js): one id per browser, a name they can change; every event carries both. at(html, thread): the
 // thread's author names count as mentionable too, so a mention made before a rename still reads as one
 const P=window.ARXP,me=()=>P?P.me().name:'',myId=()=>P?P.me().id:'',setMe=n=>P&&P.setName(n);
+// a share-link guest (server.py: any host but loopback) resolves only the threads they started
+const isGuest=m=>!m.agent&&!!(P&&(P.roster()[m.by]||{}).guest);  // written from a share link: a name alone is no identity
+const GUEST=!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname),mayResolve=c=>!GUEST||c.messages[0].by===myId();
 const at=(html,c)=>P?P.at(html,c?c.messages.map(m=>m.author).filter(Boolean):undefined):html,face=(m)=>m.agent?'<span class="px-face sm" style="--pc:var(--accent,#3b82f6)">AI</span>':P?P.face(m.by||m.author,m.author,'sm'):'';
 // a thread is for you when it @mentions you or you are in it, and someone else wrote since you last read it: reading it at
 // its latest message takes it out of For you until someone writes again
@@ -603,11 +606,11 @@ function thread(id,how){const c=all.find(t=>t.id===id);if(!c)return;
   if(r&&(r.top<top||r.bottom>innerHeight-8)){const el=anchorEl(c);if(el&&el.scrollIntoView&&!(r.bottom-r.top>innerHeight*.6))el.scrollIntoView({block:'center',behavior:'instant'});
    else scrollBy({top:r.top-top-24,behavior:'instant'});drawPins()}}
  closePop();open=id;const p=document.createElement('div');p.className='cm-pop';p.dataset.sig=tsig(c);
- const msg=m=>`<div class="cm-m"><div class="cm-who">${face(m)}${h(m.agent?'Agent':m.author)} · ${when(m.t)}</div><div class="cm-msg ${m.agent?'agent':''}${m.error?' err':''}">${m.agent?rich(m.body):at(linky(m.body),c)}</div></div>`;
+ const msg=m=>`<div class="cm-m"><div class="cm-who">${face(m)}${h(m.agent?'Agent':m.author)}${isGuest(m)?' <span class="cm-guest">guest</span>':''} · ${when(m.t)}</div><div class="cm-msg ${m.agent?'agent':''}${m.error?' err':''}">${m.agent?rich(m.body):at(linky(m.body),c)}</div></div>`;
  const seenBy=P?P.seenFaces(Object.fromEntries(Object.entries(c.seen||{}).filter(([k,t])=>t>=c.last_t)),myId()):'';
  const ag=stranded(c)?`<div class="cm-m"><div class="cm-who">Agent</div><div class="cm-msg cm-idle">No agent running · <code>arx answer</code></div></div>`:working(c)?`<div class="cm-m"><div class="cm-who">Agent</div><div class="cm-msg agent cm-busy"><span class="cm-dot"></span>${h(c.agent.note||(c.agent.status==='queued'?'Queued':'Working'))}${c.agent.task?` <a href="#task/${encodeURIComponent(c.agent.task)}">task</a>`:''}</div></div>`:'';
  p.innerHTML=`<div class="cm-anchor">${mine().indexOf(c)+1} · ${h(anchorText(c.anchor||{}))}</div><div class="cm-msgs">${c.messages.map(msg).join('')}${ag}</div>${seenBy?`<div class="cm-seen" title="Read the latest message">Seen ${seenBy}</div>`:''}
- <textarea placeholder="Reply"></textarea><div class="cm-row">${nameField()}<button class="cm-sm ln" title="Copy a link to this thread">Link</button><button class="cm-sm rs">${c.resolved?'Reopen':'Resolve'}</button><button class="cm-sm pri go">Reply</button></div>`;
+ <textarea placeholder="Reply"></textarea><div class="cm-row">${nameField()}<button class="cm-sm ln" title="Copy a link to this thread">Link</button>${mayResolve(c)?`<button class="cm-sm rs">${c.resolved?'Reopen':'Resolve'}</button>`:''}<button class="cm-sm pri go">Reply</button></div>`;
  if(p.querySelector('.cm-fig'))p.classList.add('wide');pops.append(p);fitFigs(p);const r=rectOf(c.anchor||{});
  if(r)placeBy(p,r);else Object.assign(p.style,{left:Math.max(12,innerWidth-p.offsetWidth-12)+'px',top:barBottom()+12+'px'});const ta=p.querySelector('textarea');ta.value=draft;
  const ms=p.querySelector('.cm-msgs');ms.scrollTop=how==='sent'?ms.scrollHeight:how==='again'&&ms0!=null?ms0:0;P&&P.complete(ta);
@@ -620,7 +623,7 @@ function thread(id,how){const c=all.find(t=>t.id===id);if(!c)return;
   try{const d=await (await fetch('api/share',{cache:'no-store'})).json();if(d.link)base=d.link}catch(_){}
   const url=base+(base.includes('?')?'&':'?')+'c='+encodeURIComponent(id)+'#'+c.route;
   try{await navigator.clipboard.writeText(url);b.textContent='Copied'}catch(_){prompt('Link',url)}setTimeout(()=>{b.textContent='Link'},1500)};
- p.querySelector('.rs').onclick=async()=>{if(p.dataset.busy)return;busy(p,true,'Reply');const ev=await post({kind:c.resolved?'reopen':'resolve',parent:id,author:me()||'you'});
+ if(p.querySelector('.rs'))p.querySelector('.rs').onclick=async()=>{if(p.dataset.busy)return;busy(p,true,'Reply');const ev=await post({kind:c.resolved?'reopen':'resolve',parent:id,author:me()||'you'});
   if(!ev)return p.isConnected&&failed(p);if(p.isConnected&&open===id)closePop()};
  p.querySelectorAll('textarea,input').forEach(f=>f.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))send();if(e.key==='Escape')closePop()})}
 function drawList(){const you=all.filter(forMe);$c('.cm-lst').classList.toggle('you',!!you.length);$c('.cm-lst').dataset.you=you.length||'';
@@ -644,7 +647,7 @@ window.ARXC={
  comment(el){setMode(!mode,el)},  // pick mode, starting on the focused item when there is one (Enter comments on it)
  step(d){const ts=mine().filter(t=>!t.resolved);if(!ts.length)return false;const i=ts.findIndex(t=>t.id===open);thread(ts[((i<0?(d>0?-1:0):i)+d+ts.length)%ts.length].id);return true},
  reply(el){const c=target2(el);if(!c)return false;if(open!==c.id)thread(c.id);const ta=pops.querySelector('textarea');ta&&focusLater(ta);return true},
- resolve(el){const c=target2(el);if(!c||c.resolved)return false;post({kind:'resolve',parent:c.id,author:me()||'you'}).then(()=>{if(open===c.id)closePop()});return true},
+ resolve(el){const c=target2(el);if(!c||c.resolved||!mayResolve(c))return false;post({kind:'resolve',parent:c.id,author:me()||'you'}).then(()=>{if(open===c.id)closePop()});return true},
  open:()=>open,has:el=>!!target2(el),count:()=>mine().filter(t=>!t.resolved).length,mode:()=>mode};
 addEventListener('hashchange',()=>{closePop();setMode(false);chip.style.display='none';setTimeout(()=>{drawPins();drawList()},0)});
 (S.afterRender=S.afterRender||[]).push(()=>{drawnFor=location.hash;drawPins()});

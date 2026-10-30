@@ -97,3 +97,4 @@
 .cm-it .px-face{vertical-align:middle;margin-right:6px}
 .cm-lst.you{position:relative}
 .cm-lst.you::after{content:attr(data-you);position:absolute;top:-6px;right:-6px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--accent);color:#fff;font-size:10px;line-height:16px;text-align:center}
+.cm-guest{flex:none;font-size:10.5px;font-weight:500;padding:0 5px;border-radius:4px;background:var(--active);color:var(--muted)}

@@ -8,7 +8,7 @@
 - Seen: comments.jsonl `seen` events {parent: thread, by}; a thread lists who saw it and when (comments.threads).
 - Mentions: `@Name` (or `@first` when the first name is unique) in a message; `mentioned(body, roster)` -> ids.
 
-GET /api/people -> {people: {id: {name, last}}, here: [{id, name, route, t}]}
+GET /api/people -> {people: {id: {name, last, guest?}}, here: [{id, name, route, t}]}
 POST /api/people {id, name, route} -> the same, after recording the beat
 """
 from __future__ import annotations
@@ -88,6 +88,22 @@ def who(d: dict) -> tuple[str | None, str | None]:
     return pid, (cur or {}).get("name") or clean_name(d.get("author")) or ("guest" if d.get("_remote") else "you")
 
 
+def guest_viewer(viewer) -> bool:
+    """A learner ID a share-link guest may read or write as: a browser ID, never a person made on this machine."""
+    if not isinstance(viewer, str) or not ID.fullmatch(viewer):
+        return False
+    cur = roster().get(viewer)
+    return not cur or bool(cur.get("remote"))
+
+
+def guest_refused(q: dict) -> bool:
+    """A learner route asked by a share-link guest for someone else's record, or for everyone's (no viewer)."""
+    return bool(getattr(features.REQUEST, "remote", False)) and not guest_viewer(q.get("viewer"))
+
+
+GUEST_REFUSED = (403, dict(error="use your guest learner ID"))
+
+
 def here(p) -> list[dict]:
     t = time.time()
     with _lock:
@@ -126,7 +142,8 @@ def mentioned(body: str, people: dict | None = None) -> list[str]:
 
 
 def view(p) -> dict:
-    return dict(people={k: dict(name=v.get("name"), last=v.get("last"), **({"aka": v["aka"]} if v.get("aka") else {}))
+    return dict(people={k: dict(name=v.get("name"), last=v.get("last"), **({"aka": v["aka"]} if v.get("aka") else {}),
+                                **({"guest": True} if v.get("remote") else {}))  # made on a share link
                         for k, v in members(p).items()}, here=here(p))
 
 

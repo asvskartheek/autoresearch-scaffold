@@ -175,12 +175,38 @@ class Remote(unittest.TestCase):
             dict(viewer=owner, kind="active", doc="brief", ms=100)]), cookie=token, origin=origin)
         self.assertEqual(code, 403)
 
+    def test_guest_reads_only_own_learning(self):
+        from autoresearch import course, people
+        owner, guest = "p-5555cafe", "p-6666cafe"
+        people.remember(owner, "Local reader", self.ka)
+        people.remember(guest, "Remote reader", self.ka, remote=True)
+        course.record(self.a, dict(viewer=owner, item="goal", hit=True))
+        base = f"/p/{self.ka}/api/"
+        for route in ("course", "brief", "teach", "predictions", "understanding"):
+            for q in (f"?viewer={owner}", "?viewer=Local%20reader", "?viewer=anon", ""):
+                self.assertEqual(self.req(base + route + q, cookie=self.tok)[0], 403, (route, q))
+            code, body, _ = self.req(base + route + f"?viewer={guest}", cookie=self.tok)
+            self.assertEqual(code, 200, (route, body))
+        self.assertEqual(json.loads(self.req(base + f"course?viewer={guest}", cookie=self.tok)[1])["memory"], {})
+        mem = json.loads(self.req(base + f"memory?viewer={owner}", cookie=self.tok)[1])
+        self.assertIsNone(mem["person"])  # memory answers a guest with nobody's record (memory.py)
+        local = json.loads(self.req(base + f"course?viewer={owner}", host="127.0.0.1")[1])
+        self.assertIn("goal", local["memory"])  # loopback still reads anyone's
+        from autoresearch import learn
+        learn.record(self.a, dict(viewer=owner, kind="active", doc="brief", ms=100))
+        snap = self.req(base + "export", cookie=self.tok)[1].decode()  # a guest's snapshot is no way around it
+        self.assertNotIn('"api/understanding"', snap)
+        self.assertIn('"api/understanding"', self.req(base + "export", host="127.0.0.1")[1].decode())
+
     def test_guest_cannot_rename(self):
         from autoresearch import people
         people.remember("p-0000aaaa", "Owner", self.ka)
         row = dict(id="p-0000aaaa", name="Pwned", route="overview")
         self.req(f"/p/{self.ka}/api/people", row, cookie=self.tok, origin=f"http://192.168.7.9:{self.port}")
         self.assertEqual(people.roster()["p-0000aaaa"]["name"], "Owner")
+        self.req(f"/p/{self.ka}/api/people", dict(id="p-0000dddd", name="Owner", route="overview"), cookie=self.tok, origin=f"http://192.168.7.9:{self.port}")
+        ps = people.view(self.a)["people"]  # same name, but the one from the share link says so
+        self.assertTrue(ps["p-0000dddd"].get("guest")); self.assertNotIn("guest", ps["p-0000aaaa"])
 
     def test_link(self):
         u = share.link(self.ka, 8890, "thread:cm-1234", self.tok)

@@ -543,7 +543,10 @@ def lessons(p: Project) -> list[dict]:
 
 @features.get("/api/course")
 def _get(p, path, q):
+    from . import people
     from .learn import aliases
+    if people.guest_refused(q):
+        return people.GUEST_REFUSED
     v = str(q.get("viewer") or "anon")[:60]
     mem = memory(rows(p, v, aliases(v)))
     return 200, dict(lessons=lessons(p), memory=mem, due=due(mem), intervals=list(INTERVALS))

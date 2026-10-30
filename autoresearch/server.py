@@ -471,8 +471,6 @@ HUMAN_KINDS = ("comment", "reply", "resolve", "reopen", "edit", "delete", "seen"
 
 
 LEARNING_WRITES = ("/api/course", "/api/teach", "/api/predictions", "/api/understanding")
-
-
 def guest_learning_allowed(path: str, body) -> bool:
     """A shared token identifies an access group, not an individual guest. Guest browser IDs remain
     self-asserted within that group, but cannot claim a local person's ID or legacy name-based history."""
@@ -483,14 +481,7 @@ def guest_learning_allowed(path: str, body) -> bool:
     rows = body.get("events") if path.startswith("/api/understanding") and "events" in body else [body]
     if not isinstance(rows, list):
         return False
-    roster = people.roster()
-    for row in rows:
-        viewer = row.get("viewer") if isinstance(row, dict) else None
-        if not isinstance(viewer, str) or not people.ID.fullmatch(viewer):
-            return False
-        if viewer in roster and not roster[viewer].get("remote"):
-            return False
-    return True
+    return all(isinstance(row, dict) and people.guest_viewer(row.get("viewer")) for row in rows)
 
 
 def human_event(p: Project, name: str, kind: str, d: dict) -> dict | None:

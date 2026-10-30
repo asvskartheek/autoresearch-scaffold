@@ -203,8 +203,9 @@ def snapshot_data(p, key: str | None = None, budget: int = TASK_BUDGET) -> dict:
     """Every read the dashboard makes, as embedded JSON: every task's detail, newest first, in full while `budget`
     lasts and cut (no per-example rows) after it."""
     data: dict = {}
-    for path in ("api/state", "api/tasks", "api/comments", "api/papers", "api/questions", "api/predictions",
-                 "api/understanding", "api/brief", "api/intake", "api/papers-missing"):
+    learner = ("api/predictions", "api/understanding", "api/brief")
+    guest = getattr(features.REQUEST, "remote", False)  # a share-link guest's snapshot carries nobody's learning record
+    for path in ("api/state", "api/tasks", "api/comments", "api/papers", "api/questions", "api/intake", "api/papers-missing") + (() if guest else learner):
         try:
             v = _get(p, path)
         except Exception:  # one feature failing to read never blocks the export

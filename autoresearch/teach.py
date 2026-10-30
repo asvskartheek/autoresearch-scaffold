@@ -556,6 +556,9 @@ def _post(p, path, body):
 
 @features.get("/api/teach")
 def _get(p, path, q):
+    from . import people
+    if people.guest_refused(q):
+        return people.GUEST_REFUSED
     v = str(q.get("viewer") or "anon")[:60]
     from .learn import predictions
     return 200, dict(profile=profile(attempts(p, v), predictions(p, v)), labels=LABEL)
