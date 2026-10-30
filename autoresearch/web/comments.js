@@ -236,6 +236,7 @@ const here=()=>location.hash.slice(1)||'overview';
 // thread's author names count as mentionable too, so a mention made before a rename still reads as one
 const P=window.ARXP,me=()=>P?P.me().name:'',myId=()=>P?P.me().id:'',setMe=n=>P&&P.setName(n);
 // a share-link guest (server.py: any host but loopback) resolves only the threads they started
+const isGuest=m=>!m.agent&&!!(P&&(P.roster()[m.by]||{}).guest);  // written from a share link: a name alone is no identity
 const GUEST=!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname),mayResolve=c=>!GUEST||c.messages[0].by===myId();
 const at=(html,c)=>P?P.at(html,c?c.messages.map(m=>m.author).filter(Boolean):undefined):html,face=(m)=>m.agent?'<span class="px-face sm" style="--pc:var(--accent,#3b82f6)">AI</span>':P?P.face(m.by||m.author,m.author,'sm'):'';
 // a thread is for you when it @mentions you or you are in it, and someone else wrote since you last read it: reading it at
@@ -605,7 +606,7 @@ function thread(id,how){const c=all.find(t=>t.id===id);if(!c)return;
   if(r&&(r.top<top||r.bottom>innerHeight-8)){const el=anchorEl(c);if(el&&el.scrollIntoView&&!(r.bottom-r.top>innerHeight*.6))el.scrollIntoView({block:'center',behavior:'instant'});
    else scrollBy({top:r.top-top-24,behavior:'instant'});drawPins()}}
  closePop();open=id;const p=document.createElement('div');p.className='cm-pop';p.dataset.sig=tsig(c);
- const msg=m=>`<div class="cm-m"><div class="cm-who">${face(m)}${h(m.agent?'Agent':m.author)} · ${when(m.t)}</div><div class="cm-msg ${m.agent?'agent':''}${m.error?' err':''}">${m.agent?rich(m.body):at(linky(m.body),c)}</div></div>`;
+ const msg=m=>`<div class="cm-m"><div class="cm-who">${face(m)}${h(m.agent?'Agent':m.author)}${isGuest(m)?' <span class="cm-guest">guest</span>':''} · ${when(m.t)}</div><div class="cm-msg ${m.agent?'agent':''}${m.error?' err':''}">${m.agent?rich(m.body):at(linky(m.body),c)}</div></div>`;
  const seenBy=P?P.seenFaces(Object.fromEntries(Object.entries(c.seen||{}).filter(([k,t])=>t>=c.last_t)),myId()):'';
  const ag=stranded(c)?`<div class="cm-m"><div class="cm-who">Agent</div><div class="cm-msg cm-idle">No agent running · <code>arx answer</code></div></div>`:working(c)?`<div class="cm-m"><div class="cm-who">Agent</div><div class="cm-msg agent cm-busy"><span class="cm-dot"></span>${h(c.agent.note||(c.agent.status==='queued'?'Queued':'Working'))}${c.agent.task?` <a href="#task/${encodeURIComponent(c.agent.task)}">task</a>`:''}</div></div>`:'';
  p.innerHTML=`<div class="cm-anchor">${mine().indexOf(c)+1} · ${h(anchorText(c.anchor||{}))}</div><div class="cm-msgs">${c.messages.map(msg).join('')}${ag}</div>${seenBy?`<div class="cm-seen" title="Read the latest message">Seen ${seenBy}</div>`:''}

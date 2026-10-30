@@ -204,6 +204,9 @@ class Remote(unittest.TestCase):
         row = dict(id="p-0000aaaa", name="Pwned", route="overview")
         self.req(f"/p/{self.ka}/api/people", row, cookie=self.tok, origin=f"http://192.168.7.9:{self.port}")
         self.assertEqual(people.roster()["p-0000aaaa"]["name"], "Owner")
+        self.req(f"/p/{self.ka}/api/people", dict(id="p-0000dddd", name="Owner", route="overview"), cookie=self.tok, origin=f"http://192.168.7.9:{self.port}")
+        ps = people.view(self.a)["people"]  # same name, but the one from the share link says so
+        self.assertTrue(ps["p-0000dddd"].get("guest")); self.assertNotIn("guest", ps["p-0000aaaa"])
 
     def test_link(self):
         u = share.link(self.ka, 8890, "thread:cm-1234", self.tok)

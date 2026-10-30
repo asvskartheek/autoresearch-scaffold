@@ -8,7 +8,7 @@
 - Seen: comments.jsonl `seen` events {parent: thread, by}; a thread lists who saw it and when (comments.threads).
 - Mentions: `@Name` (or `@first` when the first name is unique) in a message; `mentioned(body, roster)` -> ids.
 
-GET /api/people -> {people: {id: {name, last}}, here: [{id, name, route, t}]}
+GET /api/people -> {people: {id: {name, last, guest?}}, here: [{id, name, route, t}]}
 POST /api/people {id, name, route} -> the same, after recording the beat
 """
 from __future__ import annotations
@@ -142,7 +142,8 @@ def mentioned(body: str, people: dict | None = None) -> list[str]:
 
 
 def view(p) -> dict:
-    return dict(people={k: dict(name=v.get("name"), last=v.get("last"), **({"aka": v["aka"]} if v.get("aka") else {}))
+    return dict(people={k: dict(name=v.get("name"), last=v.get("last"), **({"aka": v["aka"]} if v.get("aka") else {}),
+                                **({"guest": True} if v.get("remote") else {}))  # made on a share link
                         for k, v in members(p).items()}, here=here(p))
 
 
